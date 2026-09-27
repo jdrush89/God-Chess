@@ -207,6 +207,16 @@ body::before {
 .turn-notice p { margin: 0; color: #777981; }
 .turn-notice.check { border-bottom-color: rgba(201,79,61,.55); background: rgba(137,39,30,.12); }
 .turn-notice.check strong, .turn-notice.check p { color: #e4a094; }
+.connection-warning {
+  min-height: 42px; display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 8px 18px; color: #f1b3aa; background: rgba(122,42,35,.24); border-bottom: 1px solid rgba(211,95,84,.38);
+  font-size: 10px;
+}
+.connection-warning svg { flex: 0 0 auto; }
+.connection-warning button {
+  margin-left: 8px; padding: 5px 8px; color: #f4d4ce; background: transparent;
+  border: 1px solid rgba(229,139,128,.45); cursor: pointer; font-size: 8px; text-transform: uppercase;
+}
 .game-layout {
   display: grid; grid-template-columns: minmax(0, 790px) 350px; gap: 30px;
   width: min(1190px, calc(100% - 48px)); margin: 24px auto 40px; align-items: start;
@@ -499,7 +509,7 @@ body::before {
 .history-drawer p { display: grid; grid-template-columns: 24px 1fr; gap: 9px; margin: 0; padding: 12px 2px; border-bottom: 1px solid rgba(255,255,255,.04); color: #95969b; font-size: 11px; line-height: 1.4; }
 .history-drawer p span { color: #4e5058; }
 .modal-backdrop { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 24px; background: rgba(5,6,9,.82); backdrop-filter: blur(8px); }
-.rules-modal, .gameover-modal, .save-game-modal, .graveyard-modal {
+.rules-modal, .gameover-modal, .save-game-modal, .graveyard-modal, .start-game-modal {
   width: min(760px, 100%); max-height: calc(100vh - 48px); overflow: auto; padding: 38px;
   background: linear-gradient(145deg, #1b1d25, #101218); border: 1px solid rgba(198,161,91,.35);
   box-shadow: 0 40px 100px rgba(0,0,0,.55); text-align: center;
@@ -511,6 +521,57 @@ body::before {
 .save-game-modal { width: min(460px, 100%); }
 .save-game-actions { display: grid; gap: 10px; margin-top: 28px; }
 .save-game-actions .secondary-button { width: 100%; }
+.start-game-modal { width: min(680px, 100%); position: relative; }
+.start-game-modal h2 { margin: 9px 0 24px; font: 600 28px "Cinzel"; }
+.game-mode-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.game-mode-grid > button {
+  min-height: 132px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 9px;
+  padding: 18px 12px; color: #aaa9a5; background: #101219; border: 1px solid #2d3038; cursor: pointer;
+}
+.game-mode-grid > button:hover, .game-mode-grid > button.active {
+  color: #f0e4c8; border-color: rgba(198,161,91,.65); background: rgba(198,161,91,.08);
+}
+.game-mode-grid strong { font: 600 13px "Cinzel"; }
+.game-mode-grid span { color: #74767d; font-size: 9px; line-height: 1.45; }
+.difficulty-control, .online-setup {
+  margin-top: 18px; padding: 18px; text-align: left; background: rgba(5,6,9,.35); border: 1px solid var(--line);
+}
+.difficulty-control > div { display: flex; justify-content: space-between; align-items: baseline; }
+.difficulty-control span, .online-setup label {
+  color: #9c9b98; font-size: 9px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+}
+.difficulty-control strong { color: var(--gold-bright); font: 600 22px "Cinzel"; }
+.difficulty-control input { width: 100%; accent-color: var(--gold); }
+.difficulty-control small { color: #696b72; font-size: 9px; }
+.start-match-button { margin-top: 18px; }
+.online-tabs { display: grid; grid-template-columns: 1fr 1fr; margin-bottom: 16px; }
+.online-tabs button {
+  height: 36px; color: #777982; background: #0d0f14; border: 1px solid #2c2e36; cursor: pointer;
+  font-size: 9px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+}
+.online-tabs button.active { color: #f0dba8; border-color: var(--gold); background: rgba(198,161,91,.09); }
+.online-setup label { display: grid; gap: 7px; margin-bottom: 13px; }
+.online-setup input {
+  width: 100%; height: 42px; padding: 0 13px; color: #ece7dc; background: #0b0d12;
+  border: 1px solid #30333b; outline: none;
+}
+.online-setup input:focus { border-color: var(--gold); }
+.online-setup .room-code-input { font: 600 20px "Cinzel"; letter-spacing: .3em; text-align: center; }
+.online-lobby { display: grid; justify-items: center; gap: 11px; text-align: center; }
+.online-lobby > svg { color: var(--gold-bright); }
+.online-lobby > span { color: #787a81; font-size: 8px; font-weight: 700; letter-spacing: .2em; }
+.online-lobby h3 { margin: 0; font: 600 18px "Cinzel"; }
+.online-lobby p { margin: 0 0 5px; color: #85868d; font-size: 11px; }
+.room-code {
+  display: flex; align-items: center; gap: 10px; padding: 7px 13px; color: #fff0c7; background: #101219;
+  border: 1px solid rgba(198,161,91,.5); font: 600 25px "Cinzel"; letter-spacing: .24em; cursor: pointer;
+}
+.online-error { margin: 13px 0 0; color: #e58b80; font-size: 10px; text-align: center; }
+.leave-room-button { display: block; margin: 12px auto 0; }
+.spin { animation: spin .9s linear infinite; }
+.input-locked .game-layout, .input-locked .draft-layout { pointer-events: none; }
+.input-locked .game-layout, .input-locked .draft-layout { filter: saturate(.84); }
+@keyframes spin { to { transform: rotate(360deg); } }
 .graveyard-modal { position: relative; width: min(610px, 100%); }
 .graveyard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 9px; margin-top: 26px; }
 .graveyard-piece {
@@ -530,6 +591,13 @@ body::before {
 .rule-columns p, .rules-note p { color: #84858c; font-size: 11px; line-height: 1.6; margin: 0; }
 .rules-note { display: flex; gap: 13px; align-items: center; padding: 16px; background: rgba(198,161,91,.07); border-left: 2px solid var(--gold); }
 .rules-note svg { color: var(--gold); flex: 0 0 auto; }
+.printable-links { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 12px; }
+.printable-links a {
+  display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px;
+  color: #d9c18c; border: 1px solid rgba(198,161,91,.28); text-decoration: none;
+  font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+}
+.printable-links a:hover { color: #fff1ca; border-color: var(--gold); background: rgba(198,161,91,.07); }
 .gameover-modal { width: min(500px, 100%); }
 .gameover-modal .primary-button { margin-top: 26px; }
 
@@ -570,6 +638,7 @@ body::before {
   .turn-notice p { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .god-list { grid-template-columns: 1fr; }
   .action-panel { border-left: 0; border-right: 0; }
-  .rules-modal, .gameover-modal, .save-game-modal { padding: 28px 18px; }
+  .rules-modal, .gameover-modal, .save-game-modal, .start-game-modal { padding: 28px 18px; }
+  .game-mode-grid { grid-template-columns: 1fr; }
   .rule-columns { grid-template-columns: 1fr; }
 }

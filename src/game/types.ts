@@ -1,4 +1,5 @@
 export type Color = "white" | "black";
+export type GameMode = "local" | "ai" | "online";
 export type OrbColor = Color;
 export type PieceType = "king" | "queen" | "rook" | "bishop" | "knight" | "pawn";
 export type Square = string;
@@ -132,6 +133,10 @@ export interface CaptureAnimation {
 
 export interface GameState {
   phase: "draft" | "play" | "upgrade" | "gameover";
+  gameMode: GameMode;
+  aiDifficulty: number;
+  aiColor?: Color;
+  onlineHostColor?: Color;
   board: Record<Square, Piece>;
   players: Record<Color, PlayerState>;
   activeColor: Color;

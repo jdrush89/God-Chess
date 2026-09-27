@@ -1,24 +1,35 @@
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
   ArrowLeft,
+  Bot,
   BookOpen,
   ChevronRight,
+  Copy,
   Crown,
+  Download,
+  Globe2,
   History,
   Info,
+  LoaderCircle,
   RotateCcw,
   Save,
   Shield,
   Skull,
   Sparkles,
   Swords,
+  Users,
+  Wifi,
   X,
   Zap,
 } from "lucide-react";
 import { allSquares, isInCheck } from "./game/chess";
-import { createGame, gameReducer } from "./game/engine";
+import { chooseAiPlan, isAiTurn } from "./game/ai";
+import { createGame, gameReducer, type GameAction } from "./game/engine";
 import { abilityLevel, GOD_BY_ID, GODS } from "./game/gods";
-import type { Ability, CaptureAnimation, Color, GameState, GodId, OrbAnimation, OrbColor, Piece, Square } from "./game/types";
+import type { Ability, CaptureAnimation, Color, GameMode, GameState, GodId, OrbAnimation, OrbColor, Piece, Square } from "./game/types";
+import { useOnlineGame, type OnlineGameState } from "./multiplayer/useOnlineGame";
+
+type GameDispatch = (action: GameAction) => void;
 
 const PIECES: Record<Color, Record<Piece["type"], string>> = {
   white: { king: "♔", queen: "♕", rook: "♖", bishop: "♗", knight: "♘", pawn: "♙" },
@@ -93,6 +104,8 @@ const loadSavedGame = (): SavedGame | undefined => {
     saved.state.nextOrbAnimationId ??= 1;
     saved.state.captureAnimations = [];
     saved.state.nextCaptureAnimationId ??= 1;
+    saved.state.gameMode ??= "local";
+    saved.state.aiDifficulty ??= 5;
     return saved as SavedGame;
   } catch (error) {
     console.error("Unable to load the saved God Chess game.", error);
@@ -368,7 +381,15 @@ function AbilityRules({
   );
 }
 
-function DraftScreen({ state, dispatch }: { state: GameState; dispatch: React.Dispatch<Parameters<typeof gameReducer>[1]> }) {
+function DraftScreen({
+  state,
+  dispatch,
+  inputDisabled = false,
+}: {
+  state: GameState;
+  dispatch: GameDispatch;
+  inputDisabled?: boolean;
+}) {
   const [inspected, setInspected] = useState<GodId>(state.draft.available[0]);
   const [godPreviewLevel, setGodPreviewLevel] = useState<number>();
   const activePlayer = state.players[state.activeColor];
@@ -379,7 +400,7 @@ function DraftScreen({ state, dispatch }: { state: GameState; dispatch: React.Di
   }, [inspected]);
 
   return (
-    <main className="draft-page">
+    <main className={`draft-page ${inputDisabled ? "input-locked" : ""}`}>
       <header className="topbar draft-topbar">
         <Brand />
         <div className="draft-turn">
@@ -463,7 +484,7 @@ function DraftScreen({ state, dispatch }: { state: GameState; dispatch: React.Di
           <button
             className="primary-button"
             onClick={() => dispatch({ type: "draft", godId: currentGod.id })}
-            disabled={!state.draft.available.includes(currentGod.id)}
+            disabled={inputDisabled || !state.draft.available.includes(currentGod.id)}
           >
             Claim {currentGod.name}<ChevronRight size={17} />
           </button>
@@ -575,7 +596,7 @@ function ChessBoard({
   onInspectSquare,
 }: {
   state: GameState;
-  dispatch: React.Dispatch<Parameters<typeof gameReducer>[1]>;
+  dispatch: GameDispatch;
   onInspectSquare: (square: Square) => void;
 }) {
   const displaySquares = useMemo(() => [...allSquares].sort((a, b) => Number(b[1]) - Number(a[1]) || a.localeCompare(b)), []);
@@ -743,7 +764,7 @@ function ActionPanel({
   onCloseInspection,
 }: {
   state: GameState;
-  dispatch: React.Dispatch<Parameters<typeof gameReducer>[1]>;
+  dispatch: GameDispatch;
   inspectedGodId?: GodId;
   onInspectGod: (godId: GodId) => void;
   onCloseInspection: () => void;
@@ -986,7 +1007,7 @@ function UpgradePanel({
   onCloseGod,
 }: {
   state: GameState;
-  dispatch: React.Dispatch<Parameters<typeof gameReducer>[1]>;
+  dispatch: GameDispatch;
   selectedGodId?: GodId;
   onSelectGod: (godId: GodId) => void;
   onCloseGod: () => void;
@@ -1144,6 +1165,14 @@ function RulesModal({ onClose }: { onClose: () => void }) {
           </article>
         </div>
         <div className="rules-note"><Shield size={18} /><p>Unless a power says <strong>teleport</strong>, every move must obey that piece’s legal chess movement. Capture the enemy king to win.</p></div>
+        <div className="printable-links">
+          <a href="./printables/god-chess-god-boards.pdf" target="_blank" rel="noreferrer">
+            <Download size={16} /> God boards
+          </a>
+          <a href="./printables/god-chess-marker-tokens.pdf" target="_blank" rel="noreferrer">
+            <Download size={16} /> Marker tokens
+          </a>
+        </div>
       </section>
     </div>
   );
@@ -1169,6 +1198,157 @@ function SaveGamePrompt({
           <button className="primary-button" onClick={onResume}>Resume game</button>
           <button className="secondary-button" onClick={onNewGame}>Start a new game</button>
         </div>
+      </section>
+    </div>
+  );
+}
+
+function StartGamePrompt({
+  online,
+  canCancel,
+  onStart,
+  onHost,
+  onJoin,
+  onStartOnline,
+  onCancel,
+  onDisconnect,
+}: {
+  online: OnlineGameState;
+  canCancel: boolean;
+  onStart: (mode: Exclude<GameMode, "online">, difficulty: number) => void;
+  onHost: (name: string) => void;
+  onJoin: (code: string, name: string) => void;
+  onStartOnline: () => void;
+  onCancel: () => void;
+  onDisconnect: () => void;
+}) {
+  const [mode, setMode] = useState<GameMode>("local");
+  const [difficulty, setDifficulty] = useState(7);
+  const [onlineAction, setOnlineAction] = useState<"host" | "join">("host");
+  const [playerName, setPlayerName] = useState("Player");
+  const [roomCode, setRoomCode] = useState("");
+
+  const chooseMode = (nextMode: GameMode) => {
+    if (mode === "online" && nextMode !== "online") onDisconnect();
+    setMode(nextMode);
+  };
+
+  return (
+    <div className="modal-backdrop">
+      <section className="start-game-modal">
+        {canCancel && <button className="close-button" onClick={onCancel}><X size={20} /></button>}
+        <p className="eyebrow">CHOOSE YOUR MATCH</p>
+        <h2>How will you play?</h2>
+        <div className="game-mode-grid">
+          <button className={mode === "local" ? "active" : ""} onClick={() => chooseMode("local")}>
+            <Users size={24} />
+            <strong>Local duel</strong>
+            <span>Two players share this device.</span>
+          </button>
+          <button className={mode === "ai" ? "active" : ""} onClick={() => chooseMode("ai")}>
+            <Bot size={24} />
+            <strong>Divine AI</strong>
+            <span>Challenge a computer opponent.</span>
+          </button>
+          <button className={mode === "online" ? "active" : ""} onClick={() => chooseMode("online")}>
+            <Globe2 size={24} />
+            <strong>Online versus</strong>
+            <span>Host or join with a room code.</span>
+          </button>
+        </div>
+
+        {mode === "ai" && (
+          <div className="difficulty-control">
+            <div>
+              <span>AI difficulty</span>
+              <strong>{difficulty}</strong>
+            </div>
+            <input
+              type="range"
+              min="1"
+              max="10"
+              value={difficulty}
+              onChange={(event) => setDifficulty(Number(event.target.value))}
+            />
+            <small>{difficulty * 10}% chance to choose its highest-scoring turn</small>
+          </div>
+        )}
+
+        {mode === "online" && (
+          <div className="online-setup">
+            {online.role === "none" ? (
+              <>
+                <div className="online-tabs">
+                  <button className={onlineAction === "host" ? "active" : ""} onClick={() => setOnlineAction("host")}>
+                    Host
+                  </button>
+                  <button className={onlineAction === "join" ? "active" : ""} onClick={() => setOnlineAction("join")}>
+                    Join
+                  </button>
+                </div>
+                <label>
+                  Display name
+                  <input maxLength={24} value={playerName} onChange={(event) => setPlayerName(event.target.value)} />
+                </label>
+                {onlineAction === "join" && (
+                  <label>
+                    Room code
+                    <input
+                      className="room-code-input"
+                      maxLength={5}
+                      value={roomCode}
+                      onChange={(event) => setRoomCode(event.target.value.toUpperCase().replace(/[^A-Z2-9]/g, ""))}
+                    />
+                  </label>
+                )}
+                <button
+                  className="primary-button"
+                  disabled={online.connecting || !playerName.trim() || (onlineAction === "join" && roomCode.length !== 5)}
+                  onClick={() => onlineAction === "host" ? onHost(playerName) : onJoin(roomCode, playerName)}
+                >
+                  {online.connecting
+                    ? <><LoaderCircle className="spin" size={17} /> Connecting</>
+                    : onlineAction === "host"
+                      ? "Create room"
+                      : "Join room"}
+                </button>
+              </>
+            ) : online.role === "host" ? (
+              <div className="online-lobby">
+                <Wifi size={24} />
+                <span>ROOM CODE</span>
+                <button
+                  className="room-code"
+                  onClick={() => online.roomCode && navigator.clipboard.writeText(online.roomCode)}
+                  title="Copy room code"
+                >
+                  {online.roomCode}<Copy size={15} />
+                </button>
+                <p>{online.guest ? `${online.guest.name} joined the room.` : "Waiting for another player to join..."}</p>
+                <button className="primary-button" disabled={!online.guest} onClick={onStartOnline}>
+                  Start online game
+                </button>
+              </div>
+            ) : (
+              <div className="online-lobby">
+                <Wifi size={24} />
+                <span>JOINED ROOM {online.roomCode}</span>
+                <h3>Waiting for the host</h3>
+                <p>The game will begin when the host starts the match.</p>
+              </div>
+            )}
+            {online.error && <p className="online-error">{online.error}</p>}
+            {online.role !== "none" && (
+              <button className="text-button leave-room-button" onClick={onDisconnect}>Leave room</button>
+            )}
+          </div>
+        )}
+
+        {mode !== "online" && (
+          <button className="primary-button start-match-button" onClick={() => onStart(mode, difficulty)}>
+            {mode === "ai" ? "Challenge the AI" : "Begin local duel"}
+          </button>
+        )}
       </section>
     </div>
   );
@@ -1214,10 +1394,18 @@ function GameScreen({
   state,
   dispatch,
   onSave,
+  onRestart,
+  inputDisabled = false,
+  onlineRoomCode,
+  onlineError,
 }: {
   state: GameState;
-  dispatch: React.Dispatch<Parameters<typeof gameReducer>[1]>;
+  dispatch: GameDispatch;
   onSave: () => boolean;
+  onRestart: () => void;
+  inputDisabled?: boolean;
+  onlineRoomCode?: string;
+  onlineError?: string;
 }) {
   const [rulesOpen, setRulesOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -1446,32 +1634,45 @@ function GameScreen({
   };
 
   return (
-    <main className="game-page">
+    <main className={`game-page ${inputDisabled ? "input-locked" : ""}`}>
       <header className="topbar">
         <Brand />
         <div className="game-meta">
           <span>ROUND <strong>{state.round}</strong></span>
           <i />
           <span>TURN <strong>{state.turn}</strong></span>
+          {onlineRoomCode && <><i /><span>ROOM <strong>{onlineRoomCode}</strong></span></>}
         </div>
         <div className="header-actions">
-          <button onClick={handleSave}>
-            <Save size={18} />
-            <span>{saveStatus === "saved" ? "Saved" : saveStatus === "error" ? "Save failed" : "Save"}</span>
-          </button>
+          {state.gameMode !== "online" && (
+            <button onClick={handleSave}>
+              <Save size={18} />
+              <span>{saveStatus === "saved" ? "Saved" : saveStatus === "error" ? "Save failed" : "Save"}</span>
+            </button>
+          )}
           <button onClick={() => setHistoryOpen(!historyOpen)}><History size={18} /><span>History</span></button>
           <button onClick={() => setRulesOpen(true)}><BookOpen size={18} /><span>Rules</span></button>
-          <button onClick={() => dispatch({ type: "restart" })}><RotateCcw size={18} /><span>Restart</span></button>
+          <button onClick={onRestart}><RotateCcw size={18} /><span>New game</span></button>
         </div>
       </header>
 
+      {onlineError && (
+        <div className="connection-warning">
+          <Wifi size={16} />
+          <strong>Connection lost.</strong>
+          <span>{onlineError}</span>
+          <button onClick={onRestart}>Return to game setup</button>
+        </div>
+      )}
       <div className={`turn-notice ${kingInCheck ? "check" : ""}`}>
         <span className={`turn-dot ${state.activeColor}`} />
         <strong>{colorLabel(state.activeColor)}</strong>
         <p>
           {kingInCheck
             ? `Your King is in check. Move the King, capture the attacker, or block the attack. ${state.notice}`
-            : state.notice}
+            : inputDisabled
+              ? `${state.players[state.activeColor].name} is choosing...`
+              : state.notice}
         </p>
       </div>
 
@@ -1582,7 +1783,7 @@ function GameScreen({
             <p className="eyebrow">THE DIVINE GAME ENDS</p>
             <h2>{state.winner ? `${colorLabel(state.winner)} is victorious` : "Stalemate"}</h2>
             <p>{state.winner ? `${state.players[state.winner].name} has conquered the opposing pantheon.` : "Neither pantheon can make a legal move."}</p>
-            <button className="primary-button" onClick={() => dispatch({ type: "restart" })}>Begin a new game</button>
+            <button className="primary-button" onClick={onRestart}>Begin a new game</button>
           </section>
         </div>
       )}
@@ -1592,32 +1793,163 @@ function GameScreen({
 
 export default function App() {
   const [savedGame] = useState(loadSavedGame);
-  const [awaitingStartChoice, setAwaitingStartChoice] = useState(Boolean(savedGame));
-  const [state, dispatch] = useReducer(gameReducer, undefined, () => createGame());
+  const [startView, setStartView] = useState<"save" | "setup" | "none">(
+    savedGame ? "save" : "setup",
+  );
+  const [setupCanCancel, setSetupCanCancel] = useState(false);
+  const [state, baseDispatch] = useReducer(gameReducer, undefined, () => createGame());
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const aiPlan = useRef<GameAction[]>([]);
+
+  const receiveState = (next: GameState) => {
+    stateRef.current = next;
+    baseDispatch({ type: "load-game", state: next });
+  };
+  const applyRemoteAction = (action: GameAction) => {
+    const next = gameReducer(stateRef.current, action);
+    receiveState(next);
+    return next;
+  };
+  const [online, onlineActions] = useOnlineGame({
+    getState: () => stateRef.current,
+    applyRemoteAction,
+    receiveState,
+  });
+
+  const dispatch: GameDispatch = (action) => {
+    const current = stateRef.current;
+    if (current.gameMode === "online" && online.started) {
+      const hostColor = current.onlineHostColor;
+      const localColor = online.role === "host"
+        ? hostColor
+        : hostColor === "white"
+          ? "black"
+          : "white";
+      if (!localColor || current.activeColor !== localColor) return;
+      if (online.role === "peer") {
+        onlineActions.sendAction(action);
+        return;
+      }
+      if (online.role === "host") {
+        const next = gameReducer(current, action);
+        receiveState(next);
+        onlineActions.syncState(next);
+        return;
+      }
+    }
+    const next = gameReducer(current, action);
+    receiveState(next);
+  };
 
   useEffect(() => {
-    if (awaitingStartChoice) return;
+    if (startView !== "none" || state.gameMode === "online") return;
     const timer = window.setTimeout(() => saveGameState(state), 120);
     return () => window.clearTimeout(timer);
-  }, [awaitingStartChoice, state]);
+  }, [startView, state]);
+
+  useEffect(() => {
+    if (startView !== "none" || !isAiTurn(state)) {
+      aiPlan.current = [];
+      return;
+    }
+    if (!aiPlan.current.length) aiPlan.current = chooseAiPlan(state);
+    const action = aiPlan.current[0];
+    if (!action) return;
+    const timer = window.setTimeout(() => {
+      aiPlan.current = aiPlan.current.slice(1);
+      dispatch(action);
+    }, 520);
+    return () => window.clearTimeout(timer);
+  }, [startView, state]);
+
+  useEffect(() => {
+    if (online.started) setStartView("none");
+  }, [online.started]);
 
   const resumeGame = () => {
-    if (savedGame) dispatch({ type: "load-game", state: savedGame.state });
-    setAwaitingStartChoice(false);
+    if (savedGame) receiveState(savedGame.state);
+    setStartView("none");
   };
   const startNewGame = () => {
     window.localStorage.removeItem(SAVE_KEY);
-    dispatch({ type: "restart" });
-    setAwaitingStartChoice(false);
+    setSetupCanCancel(false);
+    setStartView("setup");
   };
+  const beginGame = (mode: Exclude<GameMode, "online">, difficulty: number) => {
+    onlineActions.disconnect();
+    window.localStorage.removeItem(SAVE_KEY);
+    receiveState(createGame(undefined, { mode, aiDifficulty: difficulty }));
+    aiPlan.current = [];
+    setStartView("none");
+  };
+  const startHostedGame = () => {
+    if (!online.guest) return;
+    const next = createGame(undefined, {
+      mode: "online",
+      hostName: online.hostName,
+      guestName: online.guest.name,
+    });
+    receiveState(next);
+    onlineActions.startGame(next);
+    setStartView("none");
+  };
+  const openNewGame = () => {
+    if (state.gameMode === "online") {
+      onlineActions.disconnect();
+      setSetupCanCancel(false);
+    } else {
+      setSetupCanCancel(true);
+    }
+    setStartView("setup");
+  };
+
+  const localOnlineColor = state.onlineHostColor
+    ? online.role === "host"
+      ? state.onlineHostColor
+      : state.onlineHostColor === "white"
+        ? "black"
+        : "white"
+    : undefined;
+  const inputDisabled =
+    isAiTurn(state) ||
+    (
+      state.gameMode === "online" &&
+      (!online.started || localOnlineColor !== state.activeColor || online.awaitingSync)
+    );
 
   return (
     <>
       {state.phase === "draft"
-        ? <DraftScreen state={state} dispatch={dispatch} />
-        : <GameScreen state={state} dispatch={dispatch} onSave={() => Boolean(saveGameState(state))} />}
-      {awaitingStartChoice && savedGame && (
+        ? <DraftScreen state={state} dispatch={dispatch} inputDisabled={inputDisabled} />
+        : (
+          <GameScreen
+            state={state}
+            dispatch={dispatch}
+            inputDisabled={inputDisabled}
+            onlineRoomCode={online.roomCode}
+            onlineError={online.error}
+            onRestart={openNewGame}
+            onSave={() => Boolean(saveGameState(state))}
+          />
+        )}
+      {startView === "save" && savedGame && (
         <SaveGamePrompt savedAt={savedGame.savedAt} onResume={resumeGame} onNewGame={startNewGame} />
+      )}
+      {startView === "setup" && (
+        <StartGamePrompt
+          online={online}
+          canCancel={setupCanCancel}
+          onStart={beginGame}
+          onHost={(name) => void onlineActions.hostGame(name)}
+          onJoin={(code, name) => void onlineActions.joinGame(code, name)}
+          onStartOnline={startHostedGame}
+          onCancel={() => {
+            onlineActions.disconnect();
+            setStartView("none");
+          }}
+          onDisconnect={onlineActions.disconnect}
+        />
       )}
     </>
   );

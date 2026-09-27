@@ -1,0 +1,114 @@
+import type { GameAction } from "../game/engine";
+import type { GameState } from "../game/types";
+import { generateRoomCode, NetworkManager } from "./network";
+import type { NetworkMessage, OnlinePlayer, PeerMessage } from "./types";
+
+interface HostCallbacks {
+  getState: () => GameState;
+  applyRemoteAction: (action: GameAction) => GameState;
+  onGuestJoined: (guest: OnlinePlayer) => void;
+  onGuestLeft: () => void;
+  onError: (error: string) => void;
+}
+
+const remoteActionIsAllowed = (action: GameAction) =>
+  !["load-game", "new-game", "restart"].includes(action.type);
+
+export class MultiplayerHost {
+  private network: NetworkManager;
+  private callbacks: HostCallbacks;
+  private guest: OnlinePlayer | null = null;
+  private started = false;
+  readonly roomCode = generateRoomCode();
+
+  constructor(
+    private hostName: string,
+    callbacks: HostCallbacks,
+  ) {
+    this.callbacks = callbacks;
+    this.network = new NetworkManager({
+      onMessage: (peerId, message) => this.handleMessage(peerId, message),
+      onPeerConnected: () => {},
+      onPeerDisconnected: (peerId) => {
+        if (this.guest?.id !== peerId) return;
+        this.guest = null;
+        this.callbacks.onGuestLeft();
+        this.network.broadcast({ type: "guest_left" });
+      },
+      onStatusChange: () => {},
+      onError: callbacks.onError,
+    });
+  }
+
+  get guestPlayer() {
+    return this.guest;
+  }
+
+  async start() {
+    await this.network.hostRoom(this.roomCode);
+    return this.roomCode;
+  }
+
+  startGame(state: GameState) {
+    if (!this.guest) throw new Error("A second player must join before the game can start.");
+    this.started = true;
+    this.network.broadcast({ type: "game_start", state });
+  }
+
+  syncState(state: GameState) {
+    if (this.started) this.network.broadcast({ type: "state_sync", state });
+  }
+
+  stop() {
+    this.network.disconnect();
+    this.guest = null;
+    this.started = false;
+  }
+
+  private handleMessage(peerId: string, message: NetworkMessage) {
+    if (message.type === "join_request") {
+      this.handleJoin(peerId, message);
+      return;
+    }
+    if (
+      message.type !== "game_action" ||
+      !message.action ||
+      typeof message.action.type !== "string" ||
+      this.guest?.id !== peerId ||
+      !this.started
+    ) return;
+    const state = this.callbacks.getState();
+    const guestColor = state.onlineHostColor === "white" ? "black" : "white";
+    if (state.activeColor !== guestColor || !remoteActionIsAllowed(message.action)) {
+      this.syncState(state);
+      return;
+    }
+    const next = this.callbacks.applyRemoteAction(message.action);
+    this.syncState(next);
+  }
+
+  private handleJoin(peerId: string, message: Extract<PeerMessage, { type: "join_request" }>) {
+    if (this.started) {
+      this.network.send(peerId, { type: "join_rejected", reason: "That game has already started." });
+      return;
+    }
+    if (this.guest && this.guest.id !== peerId) {
+      this.network.send(peerId, { type: "join_rejected", reason: "That room already has two players." });
+      return;
+    }
+    const name = message.playerName.trim().slice(0, 24) || "Guest";
+    this.guest = { id: peerId, name };
+    this.network.send(peerId, {
+      type: "join_accepted",
+      player: this.guest,
+      roomCode: this.roomCode,
+    });
+    this.network.broadcast({
+      type: "lobby_state",
+      hostName: this.hostName,
+      guest: this.guest,
+      roomCode: this.roomCode,
+    });
+    this.callbacks.onGuestJoined(this.guest);
+  }
+}

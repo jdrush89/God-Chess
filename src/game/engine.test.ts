@@ -10,6 +10,16 @@ import {
 } from "./chess";
 import { createGame, gameReducer } from "./engine";
 import { GOD_BY_ID } from "./gods";
+import type { Color, Piece, PieceType } from "./types";
+
+const testPiece = (type: PieceType, color: Color, id: string): Piece => ({
+  id,
+  type,
+  color,
+  controller: color,
+  hasMoved: false,
+  status: {},
+});
 
 const createPreparedShotTurn = (level: 1 | 2 | 3 = 1) => {
   let state = createGame(1);
@@ -76,6 +86,23 @@ describe("chess movement", () => {
 });
 
 describe("game flow", () => {
+  it("assigns AI and online players to their randomized colors", () => {
+    const aiGame = createGame(2, { mode: "ai", aiDifficulty: 8 });
+    expect(aiGame.aiColor).toBe("white");
+    expect(aiGame.players.white.name).toBe("Divine AI");
+    expect(aiGame.players.black.name).toBe("Player 1");
+    expect(aiGame.aiDifficulty).toBe(8);
+
+    const onlineGame = createGame(2, {
+      mode: "online",
+      hostName: "Athena",
+      guestName: "Hermes",
+    });
+    expect(onlineGame.onlineHostColor).toBe("black");
+    expect(onlineGame.players.white.name).toBe("Hermes");
+    expect(onlineGame.players.black.name).toBe("Athena");
+  });
+
   it("uses the 1-2-2-1 snake draft and begins with white", () => {
     let state = createGame(1);
     const picks = ["ares", "medusa", "midas", "death", "artemis", "chiron"] as const;
@@ -356,6 +383,86 @@ describe("game flow", () => {
     expect(GOD_BY_ID.quetzacoatl.abilities[0].summary).toContain(
       "1 black orb if you fly over any number of black pieces",
     );
+  });
+
+  it("flies a carrier over blockers and drops a friendly pawn to capture", () => {
+    let state = createGame(1);
+    (["quetzacoatl", "chiron", "teles", "death", "artemis", "midas"] as const).forEach((godId) => {
+      state = gameReducer(state, { type: "draft", godId });
+    });
+    state.board = {
+      a1: testPiece("king", "white", "white-king"),
+      h8: testPiece("king", "black", "black-king"),
+      a2: testPiece("rook", "white", "carrier"),
+      b2: testPiece("pawn", "white", "passenger"),
+      a3: testPiece("knight", "white", "blocker"),
+      a4: testPiece("bishop", "black", "target"),
+    };
+    state.players.white.orbs.black = 3;
+
+    state = gameReducer(state, { type: "select-god", godId: "quetzacoatl" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "air-strike" });
+    state = gameReducer(state, { type: "square", square: "a2" });
+    expect(state.legalTargets).toEqual(["b2"]);
+    state = gameReducer(state, { type: "square", square: "b2" });
+    expect(state.legalTargets).toContain("a5");
+    expect(state.legalTargets).not.toContain("a4");
+    state = gameReducer(state, { type: "square", square: "a5" });
+    expect(state.legalTargets).toEqual(["a4"]);
+    state = gameReducer(state, { type: "square", square: "a4" });
+
+    expect(state.board.a5?.id).toBe("carrier");
+    expect(state.board.a4?.id).toBe("passenger");
+    expect(state.board.b2).toBeUndefined();
+    expect(state.players.black.graveyard.at(-1)?.piece.id).toBe("target");
+    expect(state.players.white.orbs.black).toBe(0);
+    expect(state.activeColor).toBe("black");
+  });
+
+  it("expands Air Strike passenger types at levels 2 and 3", () => {
+    const setup = (level: 1 | 2 | 3, passengerType: PieceType) => {
+      let state = createGame(1);
+      (["quetzacoatl", "chiron", "teles", "death", "artemis", "midas"] as const).forEach((godId) => {
+        state = gameReducer(state, { type: "draft", godId });
+      });
+      state.board = {
+        a1: testPiece("king", "white", "white-king"),
+        h8: testPiece("king", "black", "black-king"),
+        d4: testPiece("rook", "white", "carrier"),
+        e4: testPiece(passengerType, "white", "passenger"),
+      };
+      state.players.white.upgrades["air-strike"] = level;
+      state.players.white.orbs.black = 3;
+      state = gameReducer(state, { type: "select-god", godId: "quetzacoatl" });
+      state = gameReducer(state, { type: "select-ability", abilityId: "air-strike" });
+      return gameReducer(state, { type: "square", square: "d4" });
+    };
+
+    expect(setup(1, "knight").pending?.step).toBe("source");
+    expect(setup(2, "knight").legalTargets).toContain("e4");
+    expect(setup(2, "queen").pending?.step).toBe("source");
+    expect(setup(3, "queen").legalTargets).toContain("e4");
+  });
+
+  it("rejects Air Strike routes whose carried piece would expose its King", () => {
+    let state = createGame(1);
+    (["quetzacoatl", "chiron", "teles", "death", "artemis", "midas"] as const).forEach((godId) => {
+      state = gameReducer(state, { type: "draft", godId });
+    });
+    state.board = {
+      e1: testPiece("king", "white", "white-king"),
+      h8: testPiece("king", "black", "black-king"),
+      d1: testPiece("rook", "white", "carrier"),
+      e2: testPiece("pawn", "white", "passenger"),
+      e8: testPiece("rook", "black", "attacker"),
+    };
+    state.players.white.orbs.black = 3;
+    state = gameReducer(state, { type: "select-god", godId: "quetzacoatl" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "air-strike" });
+    state = gameReducer(state, { type: "square", square: "d1" });
+
+    expect(state.pending?.step).toBe("source");
+    expect(state.legalTargets).toEqual([]);
   });
 
   it("grants the caster another turn after Enchant", () => {

@@ -18,6 +18,7 @@ import {
 import { abilityLevel, GOD_BY_ID, GODS } from "./gods";
 import type {
   Color,
+  GameMode,
   GameState,
   GodId,
   GravePiece,
@@ -45,6 +46,7 @@ export type GameAction =
   | { type: "pass" }
   | { type: "cancel" }
   | { type: "upgrade"; abilityId: string }
+  | { type: "new-game"; mode: GameMode; aiDifficulty: number }
   | { type: "restart" };
 
 const log = (state: GameState, entry: string) => {
@@ -53,12 +55,39 @@ const log = (state: GameState, entry: string) => {
 
 const colorName = (color: Color) => color[0].toUpperCase() + color.slice(1);
 
-export const createGame = (whitePlayer: 1 | 2 = Math.random() < 0.5 ? 1 : 2): GameState => ({
+export const createGame = (
+  whitePlayer: 1 | 2 = Math.random() < 0.5 ? 1 : 2,
+  options: {
+    mode?: GameMode;
+    aiDifficulty?: number;
+    hostName?: string;
+    guestName?: string;
+  } = {},
+): GameState => {
+  const gameMode = options.mode ?? "local";
+  const aiDifficulty = Math.max(1, Math.min(10, Math.round(options.aiDifficulty ?? 5)));
+  const aiColor = gameMode === "ai" ? (whitePlayer === 2 ? "white" : "black") : undefined;
+  const onlineHostColor = gameMode === "online" ? (whitePlayer === 1 ? "white" : "black") : undefined;
+  const whiteName = gameMode === "ai" && aiColor === "white"
+    ? "Divine AI"
+    : gameMode === "online"
+      ? (onlineHostColor === "white" ? options.hostName ?? "Host" : options.guestName ?? "Guest")
+      : `Player ${whitePlayer}`;
+  const blackName = gameMode === "ai" && aiColor === "black"
+    ? "Divine AI"
+    : gameMode === "online"
+      ? (onlineHostColor === "black" ? options.hostName ?? "Host" : options.guestName ?? "Guest")
+      : `Player ${whitePlayer === 1 ? 2 : 1}`;
+  return {
   phase: "draft",
+  gameMode,
+  aiDifficulty,
+  aiColor,
+  onlineHostColor,
   board: createInitialBoard(),
   players: {
     white: {
-      name: `Player ${whitePlayer}`,
+      name: whiteName,
       color: "white",
       gods: [],
       orbs: { white: 0, black: 0 },
@@ -66,7 +95,7 @@ export const createGame = (whitePlayer: 1 | 2 = Math.random() < 0.5 ? 1 : 2): Ga
       upgrades: {},
     },
     black: {
-      name: `Player ${whitePlayer === 1 ? 2 : 1}`,
+      name: blackName,
       color: "black",
       gods: [],
       orbs: { white: 0, black: 0 },
@@ -92,9 +121,16 @@ export const createGame = (whitePlayer: 1 | 2 = Math.random() < 0.5 ? 1 : 2): Ga
   nextOrbAnimationId: 1,
   captureAnimations: [],
   nextCaptureAnimationId: 1,
-  history: [`Player ${whitePlayer} was chosen for White.`],
+  history: [
+    gameMode === "ai"
+      ? `${aiColor === "white" ? "Divine AI" : "Player 1"} was chosen for White.`
+      : gameMode === "online"
+        ? `${whiteName} was chosen for White.`
+      : `Player ${whitePlayer} was chosen for White.`,
+  ],
   notice: "White drafts first. Choose a god.",
-});
+  };
+};
 
 const cloneState = (state: GameState): GameState => structuredClone(state);
 
@@ -390,6 +426,82 @@ const compelledLuredSquares = (state: GameState) =>
     })
     .map(([square]) => square);
 
+const airStrikePassengerTypes = (level: number): PieceType[] =>
+  level === 1
+    ? ["pawn"]
+    : level === 2
+      ? ["pawn", "knight", "bishop"]
+      : ["pawn", "knight", "bishop", "rook", "queen", "king"];
+
+const airStrikePassengerSquares = (state: GameState, carrierSquare: Square) => {
+  const allowedTypes = airStrikePassengerTypes(currentLevel(state, "air-strike"));
+  return adjacentSquares(carrierSquare).filter((square) => {
+    const passenger = state.board[square];
+    return (
+      passenger?.controller === state.activeColor &&
+      allowedTypes.includes(passenger.type) &&
+      !passenger.status.hardened &&
+      !passenger.status.frozen &&
+      !passenger.status.gazing &&
+      !passenger.status.movedThisTurn
+    );
+  });
+};
+
+const airStrikeDropTargets = (
+  state: GameState,
+  carrierSquare: Square,
+  carrierDestination: Square,
+  passengerSquare: Square,
+) => {
+  const passenger = state.board[passengerSquare];
+  if (!passenger) return [];
+  return flightPathSquares(carrierSquare, carrierDestination).filter((dropSquare) => {
+    const board = structuredClone(state.board);
+    delete board[passengerSquare];
+    const afterCarrier = applyMove(board, { from: carrierSquare, to: carrierDestination }, state.enPassant).board;
+    const occupant = afterCarrier[dropSquare];
+    if (occupant?.controller === state.activeColor || occupant?.status.hardened) return false;
+    delete afterCarrier[dropSquare];
+    afterCarrier[dropSquare] = {
+      ...passenger,
+      hasMoved: true,
+      status: { ...passenger.status, movedThisTurn: true },
+    };
+    return !isInCheck(afterCarrier, state.activeColor, state.bananas);
+  });
+};
+
+const airStrikeLandingTargets = (
+  state: GameState,
+  carrierSquare: Square,
+  passengerSquare: Square,
+) => {
+  const carrier = state.board[carrierSquare];
+  if (!carrier) return [];
+  const board = structuredClone(state.board);
+  delete board[passengerSquare];
+  const targets = pseudoTargets(board, carrierSquare, {
+    enPassant: state.enPassant,
+    ignoreBlockers: true,
+    noCapture: true,
+    bananas: state.bananas,
+  }).filter((target) => {
+    if (board[target]) return false;
+    if (carrier.type === "king" && distance(carrierSquare, target) > 1) return false;
+    return airStrikeDropTargets(state, carrierSquare, target, passengerSquare).length > 0;
+  });
+  if (!carrier.status.luredBy) return targets;
+  const queen = Object.entries(state.board).find(
+    ([, target]) => target.controller === carrier.status.luredBy && target.type === "queen",
+  )?.[0];
+  if (!queen) return targets;
+  const closer = targets.filter(
+    (target) => distance(target, queen) < distance(carrierSquare, queen),
+  );
+  return closer.length ? closer : targets;
+};
+
 const sourceIsAllowed = (state: GameState, square: Square) => {
   const piece = state.board[square];
   if (!piece || piece.status.gazing) return false;
@@ -410,7 +522,13 @@ const sourceIsAllowed = (state: GameState, square: Square) => {
   if (abilityId === "air-lift" || abilityId === "march-home" || abilityId === "escort") {
     return piece.controller === color && piece.type === "king";
   }
-  if (abilityId === "air-strike") return piece.controller === color && piece.type === "bishop";
+  if (abilityId === "air-strike") {
+    return (
+      piece.controller === color &&
+      airStrikePassengerSquares(state, square)
+        .some((passenger) => airStrikeLandingTargets(state, square, passenger).length > 0)
+    );
+  }
   if (abilityId === "slither") return piece.controller === color && piece.type === "queen";
   if (abilityId === "military-funding") return piece.controller === color && piece.type === "pawn";
   if (abilityId === "charge") return piece.controller === color && piece.type === "knight";
@@ -451,9 +569,6 @@ const sourceTargets = (state: GameState, square: Square) => {
   }
   if (abilityId === "air-lift") {
     return constrainLure(allSquares.filter((target) => !state.board[target] && distance(square, target) <= level + 2));
-  }
-  if (abilityId === "air-strike") {
-    return constrainLure(legalTargets(state.board, square, { maxDistance: level, bananas: state.bananas }));
   }
   if (abilityId === "charge") {
     return constrainLure(legalTargets(state.board, square, { forceType: "rook", bananas: state.bananas }));
@@ -1007,16 +1122,6 @@ const executeMovement = (state: GameState, from: Square, to: Square) => {
   delete state.board[result.to].status.luredBy;
   recordMoveCapture(state, result.captured);
 
-  if (abilityId === "air-strike" && state.pending?.step !== "second") {
-    state.pending = { godId: state.selectedGod!, abilityId, step: "second", source: result.to, movedPieceId: moving.id };
-    state.selectedSquare = result.to;
-    state.legalTargets = legalTargets(state.board, result.to, {
-      enPassant: state.enPassant,
-      bananas: state.bananas,
-    });
-    state.notice = "Air Strike: move the bishop a second time.";
-    return;
-  }
   if (abilityId === "slither") {
     const unlimited = currentLevel(state, abilityId) >= 3;
     const remaining = unlimited ? -1 : (state.pending?.movesRemaining ?? currentLevel(state, abilityId) + 1) - 1;
@@ -1303,6 +1408,81 @@ const handleSquare = (state: GameState, square: Square) => {
     }
     return;
   }
+  if (state.pending?.abilityId === "air-strike") {
+    if (state.pending.step === "source") {
+      if (!sourceIsAllowed(state, square)) return;
+      const passengers = airStrikePassengerSquares(state, square)
+        .filter((passenger) => airStrikeLandingTargets(state, square, passenger).length > 0);
+      state.pending = { ...state.pending, step: "air-strike-passenger", source: square };
+      state.selectedSquare = square;
+      state.legalTargets = passengers;
+      state.notice = "Air Strike: choose an adjacent friendly piece to pick up.";
+    } else if (
+      state.pending.step === "air-strike-passenger" &&
+      state.pending.source &&
+      state.legalTargets.includes(square)
+    ) {
+      const destinations = airStrikeLandingTargets(state, state.pending.source, square);
+      if (!destinations.length) {
+        state.notice = "That passenger leaves no valid flight and drop route. Choose another adjacent piece.";
+        return;
+      }
+      state.pending = {
+        ...state.pending,
+        step: "air-strike-destination",
+        selected: [square],
+        movedPieceId: state.board[square]?.id,
+      };
+      state.legalTargets = destinations;
+      state.notice = "Air Strike: choose an empty landing space for the carrier.";
+    } else if (
+      state.pending.step === "air-strike-destination" &&
+      state.pending.source &&
+      state.pending.selected?.[0] &&
+      state.legalTargets.includes(square)
+    ) {
+      const carrierSquare = state.pending.source;
+      const passengerSquare = state.pending.selected[0];
+      state.pending = { ...state.pending, step: "air-strike-drop", destination: square };
+      state.selectedSquare = square;
+      state.legalTargets = airStrikeDropTargets(
+        state,
+        carrierSquare,
+        square,
+        passengerSquare,
+      );
+      state.notice = "Air Strike: choose a crossed space to drop the passenger.";
+    } else if (
+      state.pending.step === "air-strike-drop" &&
+      state.pending.source &&
+      state.pending.destination &&
+      state.pending.selected?.[0] &&
+      state.legalTargets.includes(square)
+    ) {
+      const carrierSquare = state.pending.source;
+      const carrierDestination = state.pending.destination;
+      const passengerSquare = state.pending.selected[0];
+      const passenger = state.board[passengerSquare];
+      if (!passenger) return;
+      delete state.board[passengerSquare];
+      const result = moveDirect(state, carrierSquare, carrierDestination);
+      if (!result) return;
+      delete state.board[result.to].status.luredBy;
+      if (state.board[square]) captureAt(state, square, state.activeColor);
+      const passengerStatus = { ...passenger.status, movedThisTurn: true };
+      delete passengerStatus.luredBy;
+      state.board[square] = {
+        ...passenger,
+        hasMoved: true,
+        status: passengerStatus,
+      };
+      finishTurn(
+        state,
+        `${colorName(state.activeColor)} used Air Strike, landing on ${result.to} and dropping the ${passenger.type} on ${square}.`,
+      );
+    }
+    return;
+  }
   if (state.pending?.step === "march-companion" && state.pending.source) {
     if (!state.legalTargets.includes(square)) return;
     const companions = square === state.pending.source ? [] : [square];
@@ -1472,7 +1652,7 @@ const handleSquare = (state: GameState, square: Square) => {
       }
       executeMovement(state, state.selectedSquare, square);
     }
-    else if (!["second", "slither", "escort-move"].includes(state.pending.step) && sourceIsAllowed(state, square)) {
+    else if (!["slither", "escort-move"].includes(state.pending.step) && sourceIsAllowed(state, square)) {
       const targets = sourceTargets(state, square);
       if (!targets.length) {
         state.selectedSquare = undefined;
@@ -1599,7 +1779,23 @@ const upgradeAbility = (state: GameState, abilityId: string) => {
 };
 
 export const gameReducer = (state: GameState, action: GameAction): GameState => {
-  if (action.type === "restart") return createGame();
+  if (action.type === "new-game") {
+    return createGame(undefined, { mode: action.mode, aiDifficulty: action.aiDifficulty });
+  }
+  if (action.type === "restart") {
+    const hostName = state.onlineHostColor
+      ? state.players[state.onlineHostColor].name
+      : undefined;
+    const guestName = state.onlineHostColor
+      ? state.players[opposite(state.onlineHostColor)].name
+      : undefined;
+    return createGame(undefined, {
+      mode: state.gameMode,
+      aiDifficulty: state.aiDifficulty,
+      hostName,
+      guestName,
+    });
+  }
   if (action.type === "load-game") return structuredClone(action.state);
   const previousOrbs = {
     white: { ...state.players.white.orbs },
@@ -1704,7 +1900,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
   }
   else if (action.type === "upgrade" && next.phase === "upgrade") upgradeAbility(next, action.abilityId);
   else if (action.type === "cancel" && next.phase === "play") {
-    const progressed = next.pending && ["second", "slither", "funding", "banana", "hire"].includes(next.pending.step);
+    const progressed = next.pending && ["slither", "funding", "banana", "hire"].includes(next.pending.step);
     if (progressed) {
       finishTurn(next, `${colorName(next.activeColor)} completed ${abilityName(next, next.selectedAbility!)}.`);
     } else {

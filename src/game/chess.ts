@@ -95,6 +95,7 @@ const pawnMoves = (
   attacksOnly: boolean,
   enPassant?: Square,
   bananas: Banana[] = [],
+  ignoreBlockers = false,
 ) => {
   const [file, rank] = coords(from);
   const direction = piece.color === "white" ? 1 : -1;
@@ -108,8 +109,8 @@ const pawnMoves = (
   }
   if (attacksOnly) return targets;
   const one = squareAt(file, rank + direction);
-  if (one && !board[one]) {
-    targets.push(one);
+  if (one && (!board[one] || ignoreBlockers)) {
+    if (!board[one]) targets.push(one);
     const two = squareAt(file, rank + direction * 2);
     const stoppedAtOne = bananas.some((banana) => banana.square === one && banana.owner !== piece.controller);
     if (!piece.hasMoved && !stoppedAtOne && two && !board[two]) targets.push(two);
@@ -142,7 +143,15 @@ export const pseudoTargets = (
   const diagonal: [number, number][] = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
   const straight: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
   if (type === "pawn") {
-    targets = pawnMoves(board, from, piece, Boolean(options.attacksOnly), options.enPassant, options.bananas);
+    targets = pawnMoves(
+      board,
+      from,
+      piece,
+      Boolean(options.attacksOnly),
+      options.enPassant,
+      options.bananas,
+      options.ignoreBlockers,
+    );
   } else if (type === "knight") {
     const jumps = [[1, 2], [2, 1], [2, -1], [1, -2], [-1, -2], [-2, -1], [-2, 1], [-1, 2]];
     targets = jumps

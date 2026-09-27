@@ -6,22 +6,25 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "printables": "node scripts/generate-printables.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^4.3.4",
     "lucide-react": "^0.468.0",
-    "vite": "^6.0.5",
-    "typescript": "~5.7.2",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "simple-peer-light": "^9.10.0",
+    "typescript": "~5.7.2",
+    "vite": "^6.0.5"
   },
   "devDependencies": {
     "@testing-library/react": "^16.1.0",
     "@types/react": "^19.0.3",
     "@types/react-dom": "^19.0.2",
     "jsdom": "^25.0.1",
+    "pdfkit": "^0.20.2",
     "vitest": "^2.1.8"
   }
 }

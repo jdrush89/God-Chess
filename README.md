@@ -2,9 +2,17 @@
 
 A local two-player strategy game that combines legal chess movement with a
 snake-drafted pantheon of gods, shared orb economies, resting turns, status
-effects, and ability upgrades.
+effects, and ability upgrades. Play locally, against a difficulty-adjustable
+AI, or online through host-authoritative WebRTC rooms with five-character codes.
 
 Play the latest version at [jdrush89.github.io/God-Chess](https://jdrush89.github.io/God-Chess/).
+
+## Printables
+
+- [God boards](https://jdrush89.github.io/God-Chess/printables/god-chess-god-boards.pdf) - one full-color US Letter landscape board per god.
+- [Marker tokens](https://jdrush89.github.io/God-Chess/printables/god-chess-marker-tokens.pdf) - cut-out rest, ability-level, orb, and status markers.
+
+Regenerate both PDFs with `npm run printables`.
 
 ## Run locally
 
@@ -21,6 +29,7 @@ then walks both players through the `1-2-2-1` draft.
 - `npm run dev` starts the development server.
 - `npm test` runs the game-engine tests.
 - `npm run build` type-checks and creates a production build.
+- `npm run printables` regenerates the printable god boards and marker sheets.
 
 Every push to `main` runs the test suite, builds the game, and deploys the
 result to GitHub Pages.

@@ -28,10 +28,10 @@ export const GODS: God[] = [
         "The King may teleport within 4 spaces.",
         "The King may teleport within 5 spaces.",
       ], { white: 3 }),
-      ability("air-strike", "Air Strike", "Move a Bishop one space. Then move the same Bishop again.", "multi-move", [
-        "First move is limited to 1 space.",
-        "The Bishop may move up to 2 spaces in the first move.",
-        "The Bishop may move up to 3 spaces in the first move.",
+      ability("air-strike", "Air Strike", "Move a piece that is adjacent to a friendly pawn. The piece picks up the pawn and may fly as it moves. The moved piece must land on an empty space, but may drop the pawn at any point during the flight, capturing any enemy piece it lands on.", "multi-move", [
+        "Pick up an adjacent friendly pawn.",
+        "You may also pick up an adjacent friendly knight or bishop.",
+        "You may pick up any adjacent friendly piece.",
       ], { black: 3 }),
     ],
   },
