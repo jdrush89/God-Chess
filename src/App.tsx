@@ -386,10 +386,12 @@ function AbilityRules({
 function DraftScreen({
   state,
   dispatch,
+  onSaveAndQuit,
   inputDisabled = false,
 }: {
   state: GameState;
   dispatch: GameDispatch;
+  onSaveAndQuit?: () => void;
   inputDisabled?: boolean;
 }) {
   const [inspected, setInspected] = useState<GodId>(state.draft.available[0]);
@@ -409,6 +411,11 @@ function DraftScreen({
           <span className={`turn-dot ${state.activeColor}`} />
           {activePlayer.name} · {state.activeColor} picks
         </div>
+        {onSaveAndQuit && (
+          <div className="header-actions">
+            <button onClick={onSaveAndQuit}><Save size={18} /><span>Save & quit</span></button>
+          </div>
+        )}
       </header>
 
       <section className="draft-hero">
@@ -1397,7 +1404,7 @@ function GraveyardModal({
 function GameScreen({
   state,
   dispatch,
-  onSave,
+  onSaveAndQuit,
   onRestart,
   inputDisabled = false,
   onlineRoomCode,
@@ -1405,7 +1412,7 @@ function GameScreen({
 }: {
   state: GameState;
   dispatch: GameDispatch;
-  onSave: () => boolean;
+  onSaveAndQuit: () => void;
   onRestart: () => void;
   inputDisabled?: boolean;
   onlineRoomCode?: string;
@@ -1413,7 +1420,6 @@ function GameScreen({
 }) {
   const [rulesOpen, setRulesOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "error">("idle");
   const [inspectedGodId, setInspectedGodId] = useState<GodId>();
   const [inspectedSquare, setInspectedSquare] = useState<Square>();
   const [graveyardColor, setGraveyardColor] = useState<Color>();
@@ -1440,13 +1446,11 @@ function GameScreen({
     black: state.players.black.graveyard.length,
   });
   const animationTimers = useRef<number[]>([]);
-  const saveConfirmationTimer = useRef<number | undefined>(undefined);
   const orbAnimationKey = (state.orbAnimations ?? []).map((event) => event.id).join(",");
   const captureAnimationKey = (state.captureAnimations ?? []).map((event) => event.id).join(",");
 
   useEffect(() => () => {
     animationTimers.current.forEach((timer) => window.clearTimeout(timer));
-    if (saveConfirmationTimer.current) window.clearTimeout(saveConfirmationTimer.current);
   }, []);
 
   useEffect(() => {
@@ -1631,12 +1635,6 @@ function GameScreen({
     }
     setInspectedGodId(godId);
   };
-  const handleSave = () => {
-    setSaveStatus(onSave() ? "saved" : "error");
-    if (saveConfirmationTimer.current) window.clearTimeout(saveConfirmationTimer.current);
-    saveConfirmationTimer.current = window.setTimeout(() => setSaveStatus("idle"), 1600);
-  };
-
   return (
     <main className={`game-page ${inputDisabled ? "input-locked" : ""}`}>
       <header className="topbar">
@@ -1649,9 +1647,9 @@ function GameScreen({
         </div>
         <div className="header-actions">
           {state.gameMode !== "online" && (
-            <button onClick={handleSave}>
+            <button onClick={onSaveAndQuit}>
               <Save size={18} />
-              <span>{saveStatus === "saved" ? "Saved" : saveStatus === "error" ? "Save failed" : "Save"}</span>
+              <span>Save & quit</span>
             </button>
           )}
           <button onClick={() => setHistoryOpen(!historyOpen)}><History size={18} /><span>History</span></button>
@@ -1796,7 +1794,7 @@ function GameScreen({
 }
 
 export default function App() {
-  const [savedGame] = useState(loadSavedGame);
+  const [savedGame, setSavedGame] = useState(loadSavedGame);
   const [startView, setStartView] = useState<"menu" | "setup" | "none">("menu");
   const [setupCanCancel, setSetupCanCancel] = useState(false);
   const [setupReturnView, setSetupReturnView] = useState<"menu" | "none">("menu");
@@ -1849,6 +1847,23 @@ export default function App() {
     receiveState(next);
   };
 
+  const saveCurrentGame = () => {
+    const savedAt = saveGameState(stateRef.current);
+    if (!savedAt) return false;
+    setSavedGame({
+      version: 1,
+      savedAt,
+      state: structuredClone(stateRef.current),
+    });
+    return true;
+  };
+
+  const saveAndQuit = () => {
+    if (!saveCurrentGame()) return;
+    aiPlan.current = [];
+    setStartView("menu");
+  };
+
   useEffect(() => {
     if (startView !== "none" || state.gameMode === "online") return;
     const timer = window.setTimeout(() => saveGameState(state), 120);
@@ -1888,6 +1903,7 @@ export default function App() {
   const beginGame = (mode: Exclude<GameMode, "online">, difficulty: number) => {
     onlineActions.disconnect();
     window.localStorage.removeItem(SAVE_KEY);
+    setSavedGame(undefined);
     receiveState(createGame(undefined, { mode, aiDifficulty: difficulty }));
     aiPlan.current = [];
     setStartView("none");
@@ -1895,6 +1911,7 @@ export default function App() {
   const startHostedGame = () => {
     if (!online.guest) return;
     window.localStorage.removeItem(SAVE_KEY);
+    setSavedGame(undefined);
     const next = createGame(undefined, {
       mode: "online",
       hostName: online.hostName,
@@ -1936,7 +1953,14 @@ export default function App() {
   return (
     <>
       {state.phase === "draft"
-        ? <DraftScreen state={state} dispatch={dispatch} inputDisabled={inputDisabled} />
+        ? (
+          <DraftScreen
+            state={state}
+            dispatch={dispatch}
+            inputDisabled={inputDisabled}
+            onSaveAndQuit={state.gameMode === "online" ? undefined : saveAndQuit}
+          />
+        )
         : (
           <GameScreen
             state={state}
@@ -1945,7 +1969,7 @@ export default function App() {
             onlineRoomCode={online.roomCode}
             onlineError={online.error}
             onRestart={openNewGame}
-            onSave={() => Boolean(saveGameState(state))}
+            onSaveAndQuit={saveAndQuit}
           />
         )}
       {startView === "setup" && (

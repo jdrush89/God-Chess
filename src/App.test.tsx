@@ -47,4 +47,15 @@ describe("game startup", () => {
     expect(screen.getByText(/player 2 · black picks/i)).toBeTruthy();
     expect(screen.getByRole("button", { name: /quetzacoatl sky w/i })).toBeTruthy();
   });
+
+  it("saves and quits a new game back to the main menu", () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /^new game$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /begin local duel/i }));
+    fireEvent.click(screen.getByRole("button", { name: /save & quit/i }));
+
+    expect(screen.getByRole("img", { name: /god chess/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /resume game/i })).toBeTruthy();
+    expect(window.localStorage.getItem(SAVE_KEY)).toBeTruthy();
+  });
 });
