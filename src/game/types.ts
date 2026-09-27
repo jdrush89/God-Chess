@@ -131,6 +131,23 @@ export interface CaptureAnimation {
   total: number;
 }
 
+export interface ActionPresentation {
+  id: number;
+  kind: "god" | "ability" | "move" | "upgrade-preview" | "upgrade";
+  color: Color;
+  godId: GodId;
+  abilityId?: string;
+  piece?: Piece;
+  from?: Square;
+  to?: Square;
+}
+
+export interface UpgradePreview {
+  color: Color;
+  godId: GodId;
+  abilityId?: string;
+}
+
 export interface GameState {
   phase: "draft" | "play" | "upgrade" | "gameover";
   gameMode: GameMode;
@@ -158,9 +175,13 @@ export interface GameState {
   nextOrbAnimationId: number;
   captureAnimations: CaptureAnimation[];
   nextCaptureAnimationId: number;
+  presentation?: ActionPresentation;
+  nextPresentationId: number;
+  upgradePreview?: UpgradePreview;
   bonusTurn?: Color;
   winner?: Color;
   history: string[];
+  lastAction?: string;
   notice: string;
 }
 

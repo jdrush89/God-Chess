@@ -17,6 +17,7 @@ import {
   Skull,
   Sparkles,
   Swords,
+  Trash2,
   Users,
   Wifi,
   X,
@@ -26,7 +27,7 @@ import { allSquares, isInCheck } from "./game/chess";
 import { chooseAiPlan, isAiTurn } from "./game/ai";
 import { createGame, gameReducer, type GameAction } from "./game/engine";
 import { abilityLevel, GOD_BY_ID, GODS } from "./game/gods";
-import type { Ability, CaptureAnimation, Color, GameMode, GameState, GodId, OrbAnimation, OrbColor, Piece, Square } from "./game/types";
+import type { Ability, ActionPresentation, CaptureAnimation, Color, GameMode, GameState, GodId, OrbAnimation, OrbColor, Piece, Square } from "./game/types";
 import { onlineInputDisabled, useOnlineGame, type OnlineGameState } from "./multiplayer/useOnlineGame";
 
 type GameDispatch = (action: GameAction) => void;
@@ -52,6 +53,7 @@ const GOD_PORTRAITS: Record<GodId, string> = {
 };
 
 const TITLE_ART = new URL("./assets/title/god-chess-title.jpg", import.meta.url).href;
+const GAME_VERSION = import.meta.env.VITE_GAME_VERSION || "dev";
 
 type OrbTotals = Record<Color, Record<OrbColor, number>>;
 
@@ -69,6 +71,16 @@ interface CaptureFlight extends CaptureAnimation {
   deltaY: number;
 }
 
+interface MoveFlight {
+  id: string;
+  piece: Piece;
+  size: number;
+  startX: number;
+  startY: number;
+  deltaX: number;
+  deltaY: number;
+}
+
 const orbTotals = (state: GameState): OrbTotals => ({
   white: { ...state.players.white.orbs },
   black: { ...state.players.black.orbs },
@@ -76,57 +88,118 @@ const orbTotals = (state: GameState): OrbTotals => ({
 
 const orbTargetKey = (player: Color, orb: OrbColor) => `${player}-${orb}`;
 
-const SAVE_KEY = "god-chess-save-v1";
+const SAVE_KEY = "god-chess-saves-v2";
+const LEGACY_SAVE_KEY = "god-chess-save-v1";
 
 interface SavedGame {
-  version: 1;
+  version: 2;
+  id: string;
   savedAt: string;
   state: GameState;
 }
 
-const loadSavedGame = (): SavedGame | undefined => {
+const prepareSavedState = (state: GameState) => {
+  const savedState = structuredClone(state);
+  savedState.orbAnimations = [];
+  savedState.nextOrbAnimationId ??= 1;
+  savedState.captureAnimations = [];
+  savedState.nextCaptureAnimationId ??= 1;
+  savedState.presentation = undefined;
+  savedState.nextPresentationId ??= 1;
+  savedState.gameMode ??= "local";
+  savedState.aiDifficulty ??= 5;
+  return savedState;
+};
+
+const saveId = () => globalThis.crypto?.randomUUID?.() ??
+  `save-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+const persistSavedGames = (games: SavedGame[]) => {
+  window.localStorage.setItem(SAVE_KEY, JSON.stringify(games));
+};
+
+const loadSavedGames = (): SavedGame[] => {
   try {
     const raw = window.localStorage.getItem(SAVE_KEY);
-    if (!raw) return undefined;
-    const saved = JSON.parse(raw) as Partial<SavedGame>;
-    if (
-      saved.version !== 1 ||
-      !saved.savedAt ||
-      !saved.state ||
-      !["draft", "play", "upgrade", "gameover"].includes(saved.state.phase) ||
-      !saved.state.board ||
-      !saved.state.players?.white ||
-      !saved.state.players?.black
-    ) {
-      console.warn("Ignoring an invalid God Chess save.");
-      window.localStorage.removeItem(SAVE_KEY);
-      return undefined;
+    const decoded = raw ? JSON.parse(raw) as unknown : [];
+    const parsed = Array.isArray(decoded) ? decoded as Partial<SavedGame>[] : [];
+    const games = parsed.flatMap((saved): SavedGame[] => {
+      if (
+        saved.version !== 2 ||
+        !saved.id ||
+        !saved.savedAt ||
+        !saved.state ||
+        !["draft", "play", "upgrade", "gameover"].includes(saved.state.phase) ||
+        !saved.state.board ||
+        !saved.state.players?.white ||
+        !saved.state.players?.black
+      ) return [];
+      return [{
+        version: 2,
+        id: saved.id,
+        savedAt: saved.savedAt,
+        state: prepareSavedState(saved.state),
+      }];
+    });
+    const legacyRaw = window.localStorage.getItem(LEGACY_SAVE_KEY);
+    if (legacyRaw) {
+      const legacy = JSON.parse(legacyRaw) as {
+        version?: number;
+        savedAt?: string;
+        state?: GameState;
+      };
+      if (legacy.version === 1 && legacy.savedAt && legacy.state?.board && legacy.state.players?.white && legacy.state.players?.black) {
+        games.push({
+          version: 2,
+          id: saveId(),
+          savedAt: legacy.savedAt,
+          state: prepareSavedState(legacy.state),
+        });
+        persistSavedGames(games);
+      }
+      window.localStorage.removeItem(LEGACY_SAVE_KEY);
     }
-    saved.state.orbAnimations = [];
-    saved.state.nextOrbAnimationId ??= 1;
-    saved.state.captureAnimations = [];
-    saved.state.nextCaptureAnimationId ??= 1;
-    saved.state.gameMode ??= "local";
-    saved.state.aiDifficulty ??= 5;
-    return saved as SavedGame;
+    return games.sort((a, b) => b.savedAt.localeCompare(a.savedAt));
   } catch (error) {
-    console.error("Unable to load the saved God Chess game.", error);
-    return undefined;
+    console.error("Unable to load saved God Chess games.", error);
+    return [];
   }
 };
 
-const saveGameState = (state: GameState) => {
+const saveGameState = (games: SavedGame[], id: string, state: GameState) => {
   try {
-    const savedState = structuredClone(state);
-    savedState.orbAnimations = [];
-    savedState.captureAnimations = [];
-    const savedAt = new Date().toISOString();
-    window.localStorage.setItem(SAVE_KEY, JSON.stringify({ version: 1, savedAt, state: savedState } satisfies SavedGame));
-    return savedAt;
+    const saved: SavedGame = {
+      version: 2,
+      id,
+      savedAt: new Date().toISOString(),
+      state: prepareSavedState(state),
+    };
+    const next = [saved, ...games.filter((game) => game.id !== id)]
+      .sort((a, b) => b.savedAt.localeCompare(a.savedAt));
+    persistSavedGames(next);
+    return next;
   } catch (error) {
     console.error("Unable to save the God Chess game.", error);
     return undefined;
   }
+};
+
+const shuffled = <T,>(items: T[]) => {
+  const next = [...items];
+  for (let index = next.length - 1; index > 0; index -= 1) {
+    const swap = Math.floor(Math.random() * (index + 1));
+    [next[index], next[swap]] = [next[swap], next[index]];
+  }
+  return next;
+};
+
+const aiActionDelay = (action: GameAction) => {
+  if (action.type === "select-god") return 1100;
+  if (action.type === "select-ability") return 1500;
+  if (action.type === "preview-upgrade") return 900;
+  if (action.type === "upgrade") return 2200;
+  if (action.type === "square") return 950;
+  return 750;
 };
 
 const statusLabels: [keyof Piece["status"], string][] = [
@@ -423,6 +496,20 @@ function DraftScreen({
         <p className="eyebrow">THE PANTHEON AWAITS</p>
         <h1>Choose your gods.</h1>
         <p>Each player claims three divine allies in a 1–2–2–1 snake draft.</p>
+        <button
+          className="auto-draft-button"
+          disabled={inputDisabled || state.draft.pickIndex >= state.draft.order.length}
+          onClick={() => dispatch({
+            type: "auto-draft",
+            godIds: shuffled(state.draft.available).slice(
+              0,
+              state.draft.order.length - state.draft.pickIndex,
+            ),
+          })}
+        >
+          <Sparkles size={15} />
+          Auto-draft remaining gods
+        </button>
         <div className="draft-progress">
           {state.draft.order.map((color, index) => (
             <div className={`draft-pip ${index < state.draft.pickIndex ? "done" : ""} ${index === state.draft.pickIndex ? "current" : ""}`} key={index}>
@@ -590,10 +677,13 @@ function PlayerBar({
   );
 }
 
-function PieceView({ piece }: { piece: Piece }) {
+function PieceView({ piece, moving = false }: { piece: Piece; moving?: boolean }) {
   const statuses = statusLabels.filter(([key]) => Boolean(piece.status[key]));
   return (
-    <span className={`chess-piece ${piece.color} ${piece.status.hired ? "hired" : ""}`}>
+    <span
+      className={`chess-piece ${piece.color} ${piece.status.hired ? "hired" : ""} ${moving ? "moving-placeholder" : ""}`}
+      data-piece-id={piece.id}
+    >
       {PIECES[piece.color][piece.type]}
       {statuses.length > 0 && <i className="status-marker" title={statuses.map(([, label]) => label).join(", ")}>{statuses.length}</i>}
     </span>
@@ -604,10 +694,12 @@ function ChessBoard({
   state,
   dispatch,
   onInspectSquare,
+  movingPieceIds,
 }: {
   state: GameState;
   dispatch: GameDispatch;
   onInspectSquare: (square: Square) => void;
+  movingPieceIds: Set<string>;
 }) {
   const displaySquares = useMemo(() => [...allSquares].sort((a, b) => Number(b[1]) - Number(a[1]) || a.localeCompare(b)), []);
   return (
@@ -636,7 +728,7 @@ function ChessBoard({
                 {rank === "1" && <span className="file-label">{file}</span>}
                 {legal && !piece && <span className="move-dot" />}
                 {banana && <span className="banana" title="Banana peel">⌁</span>}
-                {piece && <PieceView piece={piece} />}
+                {piece && <PieceView piece={piece} moving={movingPieceIds.has(piece.id)} />}
               </button>
             );
           })}
@@ -716,6 +808,7 @@ function AbilityCard({
   disabled,
   footerLabel,
   footerAction,
+  highlighted = false,
   showCost = true,
   onClick,
 }: {
@@ -727,12 +820,13 @@ function AbilityCard({
   disabled: boolean;
   footerLabel?: string;
   footerAction?: string;
+  highlighted?: boolean;
   showCost?: boolean;
   onClick: () => void;
 }) {
   return (
     <div
-      className={`ability-card ${active ? "active" : ""} ${disabled ? "disabled" : ""} ${!selectable && !disabled ? "read-only" : ""}`}
+      className={`ability-card ${active ? "active" : ""} ${highlighted ? "opponent-selecting" : ""} ${disabled ? "disabled" : ""} ${!selectable && !disabled ? "read-only" : ""}`}
       role={selectable ? "button" : undefined}
       tabIndex={selectable ? 0 : undefined}
       aria-disabled={disabled || undefined}
@@ -771,21 +865,24 @@ function ActionPanel({
   state,
   dispatch,
   inspectedGodId,
+  presentation,
   onInspectGod,
   onCloseInspection,
 }: {
   state: GameState;
   dispatch: GameDispatch;
   inspectedGodId?: GodId;
+  presentation?: ActionPresentation;
   onInspectGod: (godId: GodId) => void;
   onCloseInspection: () => void;
 }) {
   const player = state.players[state.activeColor];
-  const presentedGodId = inspectedGodId ?? state.selectedGod;
+  const presentedGodId = inspectedGodId ?? presentation?.godId ?? state.selectedGod;
   const selectedGod = presentedGodId ? GOD_BY_ID[presentedGodId] : undefined;
-  const inspectedOwner: Color = inspectedGodId && state.players.black.gods.includes(inspectedGodId) ? "black" : "white";
-  const presentedPlayer = inspectedGodId ? state.players[inspectedOwner] : player;
-  const readOnly = Boolean(inspectedGodId);
+  const inspectedOwner: Color = presentation?.color ??
+    (inspectedGodId && state.players.black.gods.includes(inspectedGodId) ? "black" : "white");
+  const presentedPlayer = inspectedGodId || presentation ? state.players[inspectedOwner] : player;
+  const readOnly = Boolean(inspectedGodId || presentation);
   const presentedGodResting = Boolean(selectedGod && state.rested.includes(selectedGod.id));
   const inspectingOwnGod = readOnly && inspectedOwner === state.activeColor;
   const [godPreviewLevel, setGodPreviewLevel] = useState<number>();
@@ -872,7 +969,10 @@ function ActionPanel({
         </>
       ) : (
         <>
-          <div className="chosen-god" style={{ "--accent": selectedGod.accent } as React.CSSProperties}>
+          <div
+            className={`chosen-god ${presentation?.kind === "god" ? "opponent-selecting" : ""}`}
+            style={{ "--accent": selectedGod.accent } as React.CSSProperties}
+          >
             <GodPortrait godId={selectedGod.id} className="god-hero-portrait" />
             <div><span>{selectedGod.domain}</span><h3>{selectedGod.name}</h3><p>{selectedGod.epithet}</p></div>
             <button
@@ -886,8 +986,12 @@ function ActionPanel({
           </div>
           {readOnly && (
             <div className={`inspection-banner ${presentedGodResting ? "resting" : ""}`}>
-              <BookOpen size={14} />
-              {presentedGodResting && inspectingOwnGod
+              {presentation ? <Swords size={14} /> : <BookOpen size={14} />}
+              {presentation
+                ? `${colorLabel(presentation.color)} selected ${presentation.abilityId
+                  ? selectedGod.abilities.find((ability) => ability.id === presentation.abilityId)?.name ?? "an ability"
+                  : selectedGod.name}`
+                : presentedGodResting && inspectingOwnGod
                 ? `${selectedGod.name} is resting · abilities are unavailable`
                 : `Viewing ${colorLabel(inspectedOwner)}’s god · abilities are read-only${presentedGodResting ? " · resting" : ""}`}
             </div>
@@ -904,7 +1008,8 @@ function ActionPanel({
                 ability={item}
                 level={abilityLevel(presentedPlayer.upgrades, item.id)}
                 previewLevel={godPreviewLevel}
-                active={!readOnly && state.selectedAbility === item.id}
+                active={(!readOnly && state.selectedAbility === item.id) || presentation?.abilityId === item.id}
+                highlighted={presentation?.abilityId === item.id}
                 selectable={!readOnly && canAfford(item) && (item.id !== "lure" || hasQueen)}
                 disabled={presentedGodResting || (!readOnly && (!canAfford(item) || (item.id === "lure" && !hasQueen)))}
                 footerAction={!readOnly && item.id === "lure" && !hasQueen ? "REQUIRES QUEEN" : undefined}
@@ -1014,21 +1119,25 @@ function UpgradePanel({
   state,
   dispatch,
   selectedGodId,
+  presentation,
   onSelectGod,
   onCloseGod,
 }: {
   state: GameState;
   dispatch: GameDispatch;
   selectedGodId?: GodId;
+  presentation?: ActionPresentation;
   onSelectGod: (godId: GodId) => void;
   onCloseGod: () => void;
 }) {
   const [godPreviewLevel, setGodPreviewLevel] = useState<number>();
   const [selectedAbilityId, setSelectedAbilityId] = useState<string>();
-  const selectedGod = selectedGodId ? GOD_BY_ID[selectedGodId] : undefined;
-  const selectedOwner: Color = selectedGodId && state.players.black.gods.includes(selectedGodId) ? "black" : "white";
+  const presentedGodId = presentation?.godId ?? selectedGodId ?? state.upgradePreview?.godId;
+  const selectedGod = presentedGodId ? GOD_BY_ID[presentedGodId] : undefined;
+  const selectedOwner: Color = presentation?.color ??
+    (presentedGodId && state.players.black.gods.includes(presentedGodId) ? "black" : "white");
   const selectedPlayer = state.players[selectedOwner];
-  const readOnly = selectedOwner !== state.activeColor;
+  const readOnly = Boolean(presentation) || selectedOwner !== state.activeColor;
   const defaultGodPreviewLevel = selectedGod
     ? Math.min(...selectedGod.abilities.map((ability) => abilityLevel(selectedPlayer.upgrades, ability.id)))
     : 1;
@@ -1036,9 +1145,12 @@ function UpgradePanel({
   useEffect(() => {
     setGodPreviewLevel(undefined);
     setSelectedAbilityId(undefined);
-  }, [selectedGodId, state.activeColor]);
+  }, [presentedGodId, state.activeColor]);
 
-  const selectedAbility = selectedGod?.abilities.find((ability) => ability.id === selectedAbilityId);
+  const presentedAbilityId = presentation?.abilityId ??
+    (state.upgradePreview?.godId === presentedGodId ? state.upgradePreview?.abilityId : undefined) ??
+    selectedAbilityId;
+  const selectedAbility = selectedGod?.abilities.find((ability) => ability.id === presentedAbilityId);
   const selectedAbilityLevel = selectedAbility
     ? abilityLevel(selectedPlayer.upgrades, selectedAbility.id)
     : undefined;
@@ -1082,7 +1194,10 @@ function UpgradePanel({
         </>
       ) : (
         <>
-          <div className="chosen-god" style={{ "--accent": selectedGod.accent } as React.CSSProperties}>
+          <div
+            className={`chosen-god ${presentation && !presentation.abilityId ? "opponent-selecting" : ""}`}
+            style={{ "--accent": selectedGod.accent } as React.CSSProperties}
+          >
             <GodPortrait godId={selectedGod.id} className="god-hero-portrait" />
             <div><span>{selectedGod.domain}</span><h3>{selectedGod.name}</h3><p>{selectedGod.epithet}</p></div>
             <button
@@ -1096,7 +1211,13 @@ function UpgradePanel({
           </div>
           <div className={`inspection-banner ${readOnly ? "" : "upgrade-ready"}`}>
             {readOnly ? <BookOpen size={14} /> : <Zap size={14} />}
-            {readOnly
+            {presentation
+              ? `${colorLabel(presentation.color)} ${presentation.kind === "upgrade" ? "upgraded" : "selected"} ${
+                presentation.abilityId
+                  ? selectedGod.abilities.find((ability) => ability.id === presentation.abilityId)?.name ?? "an ability"
+                  : selectedGod.name
+              }`
+              : readOnly
               ? `Viewing ${state.players[selectedOwner].name}’s god · abilities are read-only`
               : "Select an ability, review its levels, then confirm the upgrade"}
           </div>
@@ -1115,12 +1236,20 @@ function UpgradePanel({
                   ability={ability}
                   level={level}
                   previewLevel={godPreviewLevel}
-                  active={selectedAbilityId === ability.id}
+                  active={presentedAbilityId === ability.id}
+                  highlighted={presentation?.abilityId === ability.id}
                   selectable={canUpgrade}
                   disabled={!readOnly && level >= 3}
                   footerLabel={`CURRENT LVL ${level}`}
                   footerAction={readOnly ? "VIEW ONLY" : level >= 3 ? "MAX LEVEL" : `SELECT LVL ${level + 1}`}
-                  onClick={() => setSelectedAbilityId(ability.id)}
+                  onClick={() => {
+                    setSelectedAbilityId(ability.id);
+                    dispatch({
+                      type: "preview-upgrade",
+                      godId: selectedGod.id,
+                      abilityId: ability.id,
+                    });
+                  }}
                   key={ability.id}
                 />
               );
@@ -1189,28 +1318,95 @@ function RulesModal({ onClose }: { onClose: () => void }) {
 }
 
 function MainMenu({
-  savedAt,
-  onResume,
+  savedGames,
+  onLoad,
+  onDelete,
   onNewGame,
 }: {
-  savedAt?: string;
-  onResume: () => void;
+  savedGames: SavedGame[];
+  onLoad: (game: SavedGame) => void;
+  onDelete: (id: string) => void;
   onNewGame: () => void;
 }) {
+  const [loadOpen, setLoadOpen] = useState(false);
+  useEffect(() => {
+    if (!savedGames.length) setLoadOpen(false);
+  }, [savedGames.length]);
   return (
     <section className="main-menu-screen">
       <img className="main-menu-art" src={TITLE_ART} alt="God Chess" />
       <div className="main-menu-shade" />
+      <span className="game-version">Version {GAME_VERSION}</span>
       <div className="main-menu-actions">
         <p className="eyebrow">THE DIVINE GAME</p>
         <div>
           <button className="primary-button" onClick={onNewGame}>New game</button>
-          {savedAt && (
-            <button className="secondary-button" onClick={onResume}>Resume game</button>
+          {savedGames.length > 0 && (
+            <button className="secondary-button" onClick={() => setLoadOpen(true)}>Load game</button>
           )}
         </div>
-        {savedAt && <small>Saved {new Date(savedAt).toLocaleString()}</small>}
+        {savedGames.length > 0 && (
+          <small>{savedGames.length} saved game{savedGames.length === 1 ? "" : "s"}</small>
+        )}
       </div>
+      {loadOpen && (
+        <div className="load-game-backdrop" onMouseDown={() => setLoadOpen(false)}>
+          <section className="load-game-library" onMouseDown={(event) => event.stopPropagation()}>
+            <button className="close-button" onClick={() => setLoadOpen(false)} aria-label="Close saved games">
+              <X size={20} />
+            </button>
+            <p className="eyebrow">SAVED PANTHEONS</p>
+            <h2>Load game</h2>
+            <div className="saved-game-list">
+              {savedGames.map((game) => (
+                <article className="saved-game-card" key={game.id}>
+                  <button
+                    className="saved-game-load"
+                    onClick={() => onLoad(game)}
+                    aria-label={`Load saved game from ${new Date(game.savedAt).toLocaleString()}`}
+                  >
+                    <div className="saved-game-meta">
+                      <strong>{new Date(game.savedAt).toLocaleString()}</strong>
+                      <span>{game.state.gameMode === "ai" ? "Divine AI" : "Local duel"} · Round {game.state.round} · Turn {game.state.turn}</span>
+                    </div>
+                    {(["white", "black"] as const).map((color) => (
+                      <div className="saved-pantheon" key={color}>
+                        <span className={`player-crest ${color}`}>{color[0].toUpperCase()}</span>
+                        <div>
+                          <strong>{game.state.players[color].name}</strong>
+                          <small>{color}</small>
+                        </div>
+                        <div className="saved-gods">
+                          {game.state.players[color].gods.length
+                            ? game.state.players[color].gods.map((godId) => (
+                              <span
+                                className="saved-god"
+                                title={GOD_BY_ID[godId].name}
+                                aria-label={GOD_BY_ID[godId].name}
+                                key={godId}
+                              >
+                                <GodSigil godId={godId} size="small" />
+                              </span>
+                            ))
+                            : <em>No gods drafted</em>}
+                        </div>
+                      </div>
+                    ))}
+                  </button>
+                  <button
+                    className="delete-save-button"
+                    onClick={() => onDelete(game.id)}
+                    aria-label={`Delete saved game from ${new Date(game.savedAt).toLocaleString()}`}
+                    title="Delete saved game"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </article>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
     </section>
   );
 }
@@ -1408,6 +1604,7 @@ function GameScreen({
   onSaveAndQuit,
   onRestart,
   inputDisabled = false,
+  opponentColor,
   onlineRoomCode,
   onlineError,
 }: {
@@ -1416,6 +1613,7 @@ function GameScreen({
   onSaveAndQuit: () => void;
   onRestart: () => void;
   inputDisabled?: boolean;
+  opponentColor?: Color;
   onlineRoomCode?: string;
   onlineError?: string;
 }) {
@@ -1434,6 +1632,9 @@ function GameScreen({
   }));
   const [captureFlights, setCaptureFlights] = useState<CaptureFlight[]>([]);
   const [arrivingGraveyards, setArrivingGraveyards] = useState<Set<Color>>(() => new Set());
+  const [moveFlights, setMoveFlights] = useState<MoveFlight[]>([]);
+  const [movingPieceIds, setMovingPieceIds] = useState<Set<string>>(() => new Set());
+  const [opponentPresentation, setOpponentPresentation] = useState<ActionPresentation>();
   const processedOrbAnimations = useRef(new Set((state.orbAnimations ?? []).map((event) => event.id)));
   const processedCaptureAnimations = useRef(new Set((state.captureAnimations ?? []).map((event) => event.id)));
   const pendingOrbArrivals = useRef<Record<string, number>>({});
@@ -1447,8 +1648,15 @@ function GameScreen({
     black: state.players.black.graveyard.length,
   });
   const animationTimers = useRef<number[]>([]);
+  const previousPieceSquares = useRef(new Map(
+    Object.entries(state.board).map(([square, piece]) => [piece.id, square]),
+  ));
   const orbAnimationKey = (state.orbAnimations ?? []).map((event) => event.id).join(",");
   const captureAnimationKey = (state.captureAnimations ?? []).map((event) => event.id).join(",");
+  const boardPositionKey = Object.entries(state.board)
+    .map(([square, piece]) => `${piece.id}:${square}`)
+    .sort()
+    .join(",");
 
   useEffect(() => () => {
     animationTimers.current.forEach((timer) => window.clearTimeout(timer));
@@ -1457,6 +1665,65 @@ function GameScreen({
   useEffect(() => {
     if (state.phase === "upgrade") setInspectedGodId(undefined);
   }, [state.activeColor, state.phase]);
+
+  useEffect(() => {
+    const event = state.presentation;
+    if (!event || event.color !== opponentColor) return;
+    setInspectedGodId(undefined);
+    setOpponentPresentation(event);
+    const duration = event.kind === "upgrade"
+      ? 2400
+      : event.kind === "upgrade-preview"
+        ? 2000
+        : event.kind === "ability"
+          ? 1600
+          : event.kind === "god"
+            ? 1300
+            : 1000;
+    const timer = window.setTimeout(() => {
+      setOpponentPresentation((current) => current?.id === event.id ? undefined : current);
+    }, duration);
+    return () => window.clearTimeout(timer);
+  }, [opponentColor, state.presentation?.id]);
+
+  useLayoutEffect(() => {
+    const current = new Map(Object.entries(state.board).map(([square, piece]) => [piece.id, square]));
+    const previous = previousPieceSquares.current;
+    previousPieceSquares.current = current;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    const flights = [...current.entries()].flatMap(([pieceId, destination]): MoveFlight[] => {
+      const source = previous.get(pieceId);
+      if (!source || source === destination) return [];
+      const piece = state.board[destination];
+      const sourceElement = document.querySelector<HTMLElement>(`[data-square="${source}"]`);
+      const destinationElement = document.querySelector<HTMLElement>(`[data-square="${destination}"]`);
+      if (!piece || !sourceElement || !destinationElement) return [];
+      const sourceRect = sourceElement.getBoundingClientRect();
+      const destinationRect = destinationElement.getBoundingClientRect();
+      const startX = sourceRect.left + sourceRect.width / 2;
+      const startY = sourceRect.top + sourceRect.height / 2;
+      return [{
+        id: `${pieceId}-${source}-${destination}-${state.turn}`,
+        piece,
+        size: Math.min(65, sourceRect.width * .82),
+        startX,
+        startY,
+        deltaX: destinationRect.left + destinationRect.width / 2 - startX,
+        deltaY: destinationRect.top + destinationRect.height / 2 - startY,
+      }];
+    });
+    if (!flights.length) return;
+    const ids = new Set(flights.map((flight) => flight.piece.id));
+    setMoveFlights((currentFlights) => [...currentFlights, ...flights]);
+    setMovingPieceIds((currentIds) => new Set([...currentIds, ...ids]));
+    const timer = window.setTimeout(() => {
+      const flightIds = new Set(flights.map((flight) => flight.id));
+      setMoveFlights((currentFlights) => currentFlights.filter((flight) => !flightIds.has(flight.id)));
+      setMovingPieceIds((currentIds) => new Set([...currentIds].filter((id) => !ids.has(id))));
+    }, 900);
+    animationTimers.current.push(timer);
+  }, [boardPositionKey]);
 
   useLayoutEffect(() => {
     const actualTotals = orbTotals(state);
@@ -1637,7 +1904,7 @@ function GameScreen({
     setInspectedGodId(godId);
   };
   return (
-    <main className={`game-page ${inputDisabled ? "input-locked" : ""}`}>
+    <main className={`game-page ${state.lastAction ? "has-last-action" : ""} ${inputDisabled || opponentPresentation ? "input-locked" : ""}`}>
       <header className="topbar">
         <Brand />
         <div className="game-meta">
@@ -1678,8 +1945,22 @@ function GameScreen({
               : state.notice}
         </p>
       </div>
+      {state.lastAction && (
+        <div className="last-action-notice" aria-live="polite">
+          <Swords size={15} />
+          <span>Last action</span>
+          <strong>{state.lastAction}</strong>
+        </div>
+      )}
 
       <div className="game-layout">
+        <div className="piece-info-column">
+          <SquareInfoPanel
+            state={state}
+            square={inspectedSquare}
+            onClose={() => setInspectedSquare(undefined)}
+          />
+        </div>
         <section className="board-column">
           <PlayerBar
             state={state}
@@ -1691,7 +1972,12 @@ function GameScreen({
             displayedGraveyardCount={displayedGraveyards.black}
             graveyardArriving={arrivingGraveyards.has("black")}
           />
-          <ChessBoard state={state} dispatch={dispatch} onInspectSquare={setInspectedSquare} />
+          <ChessBoard
+            state={state}
+            dispatch={dispatch}
+            onInspectSquare={setInspectedSquare}
+            movingPieceIds={movingPieceIds}
+          />
           <PlayerBar
             state={state}
             color="white"
@@ -1709,23 +1995,35 @@ function GameScreen({
               state={state}
               dispatch={dispatch}
               selectedGodId={inspectedGodId}
-              onSelectGod={setInspectedGodId}
-              onCloseGod={() => setInspectedGodId(undefined)}
+              presentation={opponentPresentation}
+              onSelectGod={(godId) => {
+                setInspectedGodId(godId);
+                if (state.players[state.activeColor].gods.includes(godId)) {
+                  dispatch({ type: "preview-upgrade", godId });
+                }
+              }}
+              onCloseGod={() => {
+                setInspectedGodId(undefined);
+                dispatch({ type: "preview-upgrade" });
+              }}
             />
           ) : (
             <ActionPanel
               state={state}
               dispatch={dispatch}
               inspectedGodId={inspectedGodId}
+              presentation={opponentPresentation}
               onInspectGod={setInspectedGodId}
               onCloseInspection={() => setInspectedGodId(undefined)}
             />
           )}
-          <SquareInfoPanel
-            state={state}
-            square={inspectedSquare}
-            onClose={() => setInspectedSquare(undefined)}
-          />
+          <div className="side-square-info">
+            <SquareInfoPanel
+              state={state}
+              square={inspectedSquare}
+              onClose={() => setInspectedSquare(undefined)}
+            />
+          </div>
         </div>
       </div>
 
@@ -1768,11 +2066,33 @@ function GameScreen({
           </span>
         </div>
       ))}
+      {moveFlights.map((flight) => (
+        <div
+          className="move-flight"
+          style={{
+            left: `${flight.startX}px`,
+            top: `${flight.startY}px`,
+            "--move-flight-x": `${flight.deltaX}px`,
+            "--move-flight-y": `${flight.deltaY}px`,
+            "--move-flight-size": `${flight.size}px`,
+          } as React.CSSProperties}
+          key={flight.id}
+          aria-hidden="true"
+        >
+          <span className="move-flight-path">
+            <span className={`move-flight-piece ${flight.piece.color}`}>
+              {PIECES[flight.piece.color][flight.piece.type]}
+            </span>
+          </span>
+        </div>
+      ))}
 
       {historyOpen && (
         <aside className="history-drawer">
           <div><h3><History size={18} /> Chronicle</h3><button onClick={() => setHistoryOpen(false)}><X size={18} /></button></div>
-          {state.history.map((entry, index) => <p key={`${entry}-${index}`}><span>{state.turn - index}</span>{entry}</p>)}
+          {state.history.map((entry, index) => (
+            <p key={`${entry}-${index}`}><span>{index === 0 ? "LATEST" : `${index + 1}`}</span>{entry}</p>
+          ))}
         </aside>
       )}
       {graveyardColor && (
@@ -1795,15 +2115,14 @@ function GameScreen({
 }
 
 export default function App() {
-  const [savedGame, setSavedGame] = useState(loadSavedGame);
+  const [savedGames, setSavedGames] = useState(loadSavedGames);
+  const savedGamesRef = useRef(savedGames);
+  savedGamesRef.current = savedGames;
+  const activeSaveId = useRef<string | undefined>(undefined);
   const [startView, setStartView] = useState<"menu" | "setup" | "none">("menu");
   const [setupCanCancel, setSetupCanCancel] = useState(false);
   const [setupReturnView, setSetupReturnView] = useState<"menu" | "none">("menu");
-  const [state, baseDispatch] = useReducer(
-    gameReducer,
-    undefined,
-    () => savedGame ? structuredClone(savedGame.state) : createGame(),
-  );
+  const [state, baseDispatch] = useReducer(gameReducer, undefined, () => createGame());
   const stateRef = useRef(state);
   stateRef.current = state;
   const aiPlan = useRef<GameAction[]>([]);
@@ -1826,12 +2145,7 @@ export default function App() {
   const dispatch: GameDispatch = (action) => {
     const current = stateRef.current;
     if (current.gameMode === "online" && online.started) {
-      const hostColor = current.onlineHostColor;
-      const localColor = online.role === "host"
-        ? hostColor
-        : hostColor === "white"
-          ? "black"
-          : "white";
+      const localColor = online.localColor;
       if (!localColor || current.activeColor !== localColor) return;
       if (online.role === "peer") {
         onlineActions.sendAction(action);
@@ -1849,13 +2163,13 @@ export default function App() {
   };
 
   const saveCurrentGame = () => {
-    const savedAt = saveGameState(stateRef.current);
-    if (!savedAt) return false;
-    setSavedGame({
-      version: 1,
-      savedAt,
-      state: structuredClone(stateRef.current),
-    });
+    if (stateRef.current.gameMode === "online") return false;
+    const id = activeSaveId.current ?? saveId();
+    const next = saveGameState(savedGamesRef.current, id, stateRef.current);
+    if (!next) return false;
+    activeSaveId.current = id;
+    savedGamesRef.current = next;
+    setSavedGames(next);
     return true;
   };
 
@@ -1867,7 +2181,7 @@ export default function App() {
 
   useEffect(() => {
     if (startView !== "none" || state.gameMode === "online") return;
-    const timer = window.setTimeout(() => saveGameState(state), 120);
+    const timer = window.setTimeout(() => saveCurrentGame(), 120);
     return () => window.clearTimeout(timer);
   }, [startView, state]);
 
@@ -1882,7 +2196,7 @@ export default function App() {
     const timer = window.setTimeout(() => {
       aiPlan.current = aiPlan.current.slice(1);
       dispatch(action);
-    }, 520);
+    }, aiActionDelay(action));
     return () => window.clearTimeout(timer);
   }, [startView, state]);
 
@@ -1890,11 +2204,18 @@ export default function App() {
     if (online.started) setStartView("none");
   }, [online.started]);
 
-  const resumeGame = () => {
-    if (!savedGame) return;
-    receiveState(structuredClone(savedGame.state));
+  const loadGame = (game: SavedGame) => {
+    activeSaveId.current = game.id;
+    receiveState(structuredClone(game.state));
     aiPlan.current = [];
     setStartView("none");
+  };
+  const deleteSavedGame = (id: string) => {
+    const next = savedGamesRef.current.filter((game) => game.id !== id);
+    persistSavedGames(next);
+    savedGamesRef.current = next;
+    setSavedGames(next);
+    if (activeSaveId.current === id) activeSaveId.current = undefined;
   };
   const startNewGame = () => {
     setSetupCanCancel(true);
@@ -1903,16 +2224,14 @@ export default function App() {
   };
   const beginGame = (mode: Exclude<GameMode, "online">, difficulty: number) => {
     onlineActions.disconnect();
-    window.localStorage.removeItem(SAVE_KEY);
-    setSavedGame(undefined);
+    activeSaveId.current = saveId();
     receiveState(createGame(undefined, { mode, aiDifficulty: difficulty }));
     aiPlan.current = [];
     setStartView("none");
   };
   const startHostedGame = () => {
     if (!online.guest) return;
-    window.localStorage.removeItem(SAVE_KEY);
-    setSavedGame(undefined);
+    activeSaveId.current = undefined;
     const next = createGame(undefined, {
       mode: "online",
       hostName: online.hostName,
@@ -1939,9 +2258,21 @@ export default function App() {
       state.gameMode === "online" &&
       onlineInputDisabled(online, state.activeColor)
     );
+  const opponentColor = state.gameMode === "ai"
+    ? state.aiColor
+    : state.gameMode === "online" && online.localColor
+      ? (online.localColor === "white" ? "black" : "white")
+      : undefined;
 
   if (startView === "menu") {
-    return <MainMenu savedAt={savedGame?.savedAt} onResume={resumeGame} onNewGame={startNewGame} />;
+    return (
+      <MainMenu
+        savedGames={savedGames}
+        onLoad={loadGame}
+        onDelete={deleteSavedGame}
+        onNewGame={startNewGame}
+      />
+    );
   }
 
   return (
@@ -1960,6 +2291,7 @@ export default function App() {
             state={state}
             dispatch={dispatch}
             inputDisabled={inputDisabled}
+            opponentColor={opponentColor}
             onlineRoomCode={online.roomCode}
             onlineError={online.error}
             onRestart={openNewGame}

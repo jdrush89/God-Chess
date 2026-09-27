@@ -115,6 +115,19 @@ describe("game flow", () => {
     expect(state.activeColor).toBe("white");
   });
 
+  it("auto-drafts every remaining slot in the supplied random order", () => {
+    let state = gameReducer(createGame(1), { type: "draft", godId: "ares" });
+    state = gameReducer(state, {
+      type: "auto-draft",
+      godIds: ["medusa", "midas", "death", "artemis", "chiron"],
+    });
+
+    expect(state.phase).toBe("play");
+    expect(state.players.white.gods).toEqual(["ares", "death", "artemis"]);
+    expect(state.players.black.gods).toEqual(["medusa", "midas", "chiron"]);
+    expect(new Set([...state.players.white.gods, ...state.players.black.gods]).size).toBe(6);
+  });
+
   it("rests a god after its action and passes the turn", () => {
     let state = createGame(1);
     (["ares", "medusa", "midas", "death", "artemis", "chiron"] as const).forEach((godId) => {
@@ -127,6 +140,53 @@ describe("game flow", () => {
     expect(state.rested).toContain("ares");
     expect(state.activeColor).toBe("black");
     expect(state.board.e4?.type).toBe("pawn");
+    expect(state.lastAction).toBe("White used Threaten with Ares: Pawn at e2 -> e4.");
+    expect(state.history[0]).toBe(state.lastAction);
+    expect(state.presentation).toMatchObject({
+      kind: "move",
+      color: "white",
+      godId: "ares",
+      abilityId: "threaten",
+      from: "e2",
+      to: "e4",
+      piece: { type: "pawn" },
+    });
+  });
+
+  it("previews and records an opponent upgrade with its god and ability names", () => {
+    let state = createGame(1);
+    (["ares", "medusa", "midas", "death", "artemis", "chiron"] as const).forEach((godId) => {
+      state = gameReducer(state, { type: "draft", godId });
+    });
+    state.phase = "upgrade";
+    state.activeColor = "white";
+    state.upgradeQueue = ["white", "black"];
+
+    state = gameReducer(state, {
+      type: "preview-upgrade",
+      godId: "ares",
+      abilityId: "threaten",
+    });
+    expect(state.upgradePreview).toEqual({
+      color: "white",
+      godId: "ares",
+      abilityId: "threaten",
+    });
+    expect(state.presentation).toMatchObject({
+      kind: "upgrade-preview",
+      color: "white",
+      godId: "ares",
+      abilityId: "threaten",
+    });
+
+    state = gameReducer(state, { type: "upgrade", abilityId: "threaten" });
+    expect(state.lastAction).toBe("White upgraded Threaten with Ares to level 2.");
+    expect(state.presentation).toMatchObject({
+      kind: "upgrade",
+      color: "white",
+      godId: "ares",
+      abilityId: "threaten",
+    });
   });
 
   it("allows Construction moves at any normal distance and rewards only one-square moves", () => {

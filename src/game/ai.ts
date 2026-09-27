@@ -323,11 +323,26 @@ export const chooseAiPlan = (
 ): GameAction[] => {
   const color = state.activeColor;
   const plans = searchPlans(state, color);
-  if (!plans.length) return availableActions(state).slice(0, 1);
-  const optimalChance = Math.max(0.1, Math.min(1, state.aiDifficulty / 10));
-  if (random() < optimalChance || plans.length === 1) return plans[0].actions;
-  const alternative = plans[1 + Math.floor(random() * Math.max(1, plans.length - 1))];
-  return (alternative ?? plans[0]).actions;
+  let actions: GameAction[];
+  if (!plans.length) {
+    actions = availableActions(state).slice(0, 1);
+  } else {
+    const optimalChance = Math.max(0.1, Math.min(1, state.aiDifficulty / 10));
+    if (random() < optimalChance || plans.length === 1) {
+      actions = plans[0].actions;
+    } else {
+      const alternative = plans[1 + Math.floor(random() * Math.max(1, plans.length - 1))];
+      actions = (alternative ?? plans[0]).actions;
+    }
+  }
+  if (state.phase !== "upgrade" || actions[0]?.type !== "upgrade") return actions;
+  const abilityId = actions[0].abilityId;
+  const godId = state.players[state.activeColor].gods.find((candidate) =>
+    GOD_BY_ID[candidate].abilities.some((ability) => ability.id === abilityId),
+  );
+  return godId
+    ? [{ type: "preview-upgrade", godId, abilityId }, ...actions]
+    : actions;
 };
 
 export const isAiTurn = (state: GameState) =>

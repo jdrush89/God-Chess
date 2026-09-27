@@ -31,6 +31,7 @@ import { opposite } from "./types";
 
 export type GameAction =
   | { type: "draft"; godId: GodId }
+  | { type: "auto-draft"; godIds: GodId[] }
   | { type: "load-game"; state: GameState }
   | { type: "select-god"; godId: GodId }
   | { type: "clear-god" }
@@ -45,6 +46,7 @@ export type GameAction =
   | { type: "siphon"; amount: 0 | 1 | 2 }
   | { type: "pass" }
   | { type: "cancel" }
+  | { type: "preview-upgrade"; godId?: GodId; abilityId?: string }
   | { type: "upgrade"; abilityId: string }
   | { type: "new-game"; mode: GameMode; aiDifficulty: number }
   | { type: "restart" };
@@ -54,6 +56,25 @@ const log = (state: GameState, entry: string) => {
 };
 
 const colorName = (color: Color) => color[0].toUpperCase() + color.slice(1);
+const pieceName = (piece: Piece) => piece.type[0].toUpperCase() + piece.type.slice(1);
+
+const present = (
+  state: GameState,
+  event: Omit<NonNullable<GameState["presentation"]>, "id" | "color">,
+) => {
+  state.presentation = {
+    ...event,
+    id: state.nextPresentationId,
+    color: state.activeColor,
+  };
+  state.nextPresentationId += 1;
+};
+
+const abilityDescription = (state: GameState, detail: string) => {
+  const god = GOD_BY_ID[state.selectedGod!];
+  const ability = god.abilities.find((candidate) => candidate.id === state.selectedAbility);
+  return `${colorName(state.activeColor)} used ${ability?.name ?? state.selectedAbility} with ${god.name}${detail}.`;
+};
 
 export const createGame = (
   whitePlayer: 1 | 2 = Math.random() < 0.5 ? 1 : 2,
@@ -121,6 +142,7 @@ export const createGame = (
   nextOrbAnimationId: 1,
   captureAnimations: [],
   nextCaptureAnimationId: 1,
+  nextPresentationId: 1,
   history: [
     gameMode === "ai"
       ? `${aiColor === "white" ? "Divine AI" : "Player 1"} was chosen for White.`
@@ -361,6 +383,7 @@ const resolveStartOfTurn = (state: GameState) => {
 const finishTurn = (state: GameState, description: string) => {
   if (state.selectedGod && !state.rested.includes(state.selectedGod)) state.rested.push(state.selectedGod);
   log(state, description);
+  state.lastAction = description;
   state.selectedGod = undefined;
   state.selectedAbility = undefined;
   state.selectedSquare = undefined;
@@ -1099,7 +1122,15 @@ const executeMovement = (state: GameState, from: Square, to: Square) => {
   if (abilityId === "stealth") {
     delete state.board[from];
     state.stealth[state.activeColor].push({ piece: moving, destination: to, returnOnTurn: state.turn + 2 });
-    finishTurn(state, `${colorName(state.activeColor)} used Stealth from ${from} to ${to}.`);
+    present(state, {
+      kind: "move",
+      godId: state.selectedGod!,
+      abilityId,
+      piece: moving,
+      from,
+      to,
+    });
+    finishTurn(state, abilityDescription(state, `: ${pieceName(moving)} at ${from} -> ${to}`));
     return;
   }
 
@@ -1122,6 +1153,14 @@ const executeMovement = (state: GameState, from: Square, to: Square) => {
   if (moving.status.hardened && !result.captured) delete state.board[result.to].status.hardened;
   delete state.board[result.to].status.luredBy;
   recordMoveCapture(state, result.captured);
+  present(state, {
+    kind: "move",
+    godId: state.selectedGod!,
+    abilityId,
+    piece: moving,
+    from,
+    to: result.to,
+  });
 
   if (abilityId === "slither") {
     const unlimited = currentLevel(state, abilityId) >= 3;
@@ -1160,7 +1199,7 @@ const executeMovement = (state: GameState, from: Square, to: Square) => {
 
   const pending = resolveMoveEffect(state, abilityId, result.from, result.to, moving, result.captured, boardBefore);
   if (pending === "pending") return;
-  finishTurn(state, `${colorName(state.activeColor)} used ${abilityName(state, abilityId)}: ${from} → ${result.to}.`);
+  finishTurn(state, abilityDescription(state, `: ${pieceName(moving)} at ${from} -> ${result.to}`));
 };
 
 const executeMarchHome = (state: GameState, kingSquare: Square, companionSquares: Square[]) => {
@@ -1175,6 +1214,14 @@ const executeMarchHome = (state: GameState, kingSquare: Square, companionSquares
 
   const result = moveDirect(state, kingSquare, destination, true);
   if (!result) return;
+  present(state, {
+    kind: "move",
+    godId: state.selectedGod!,
+    abilityId: state.selectedAbility,
+    piece: king,
+    from: kingSquare,
+    to: destination,
+  });
   for (const { square, piece } of companions) {
     const [file, rank] = coords(square);
     const target = squareAt(file + toFile - fromFile, rank + toRank - fromRank);
@@ -1183,7 +1230,7 @@ const executeMarchHome = (state: GameState, kingSquare: Square, companionSquares
     delete state.board[square];
     state.board[target] = { ...piece, hasMoved: true };
   }
-  finishTurn(state, `${colorName(state.activeColor)} used March Home and returned the King to ${destination}.`);
+  finishTurn(state, abilityDescription(state, `: ${pieceName(king)} at ${kingSquare} -> ${destination}`));
 };
 
 const abilityName = (state: GameState, abilityId: string) =>
@@ -1252,7 +1299,10 @@ const chooseTarget = (state: GameState, square: Square) => {
     }
     resolveRage(state, square, false);
   }
-  finishTurn(state, `${colorName(state.activeColor)} used ${abilityName(state, abilityId)} on ${square}.`);
+  finishTurn(
+    state,
+    abilityDescription(state, piece ? ` on ${pieceName(piece)} at ${square}` : ` on ${square}`),
+  );
 };
 
 const chooseGravePiece = (state: GameState, pieceId: string) => {
@@ -1285,7 +1335,7 @@ const completeSpecialTarget = (state: GameState, square: Square) => {
           ? "kangus"
           : state.turn + 1,
     });
-    finishTurn(state, `${colorName(state.activeColor)} left a banana peel on ${square}.`);
+    finishTurn(state, abilityDescription(state, `: placed a banana peel on ${square}`));
   } else if (pending.step === "hire") {
     const piece = state.board[square];
     if (piece) {
@@ -1299,7 +1349,10 @@ const completeSpecialTarget = (state: GameState, square: Square) => {
       piece.controller = state.activeColor;
       piece.status.hired = true;
     }
-    finishTurn(state, `${colorName(state.activeColor)} hired the piece on ${square}.`);
+    finishTurn(
+      state,
+      abilityDescription(state, piece ? `: hired ${pieceName(piece)} at ${square}` : ` on ${square}`),
+    );
   } else if (pending.step === "revive-place" && pending.movedPieceId) {
     const graveyard = state.players[state.activeColor].graveyard;
     const index = graveyard.findIndex((entry) => entry.piece.id === pending.movedPieceId);
@@ -1318,7 +1371,7 @@ const completeSpecialTarget = (state: GameState, square: Square) => {
       state.notice = "Resurrect: spend 2 additional white orbs to revive a second piece, or finish.";
       return;
     }
-    finishTurn(state, `${colorName(state.activeColor)} resurrected a ${grave.piece.type} on ${square}.`);
+    finishTurn(state, abilityDescription(state, `: revived ${pieceName(grave.piece)} on ${square}`));
   } else if (pending.step === "monument-base") {
     const needed = 4 - currentLevel(state, abilityId);
     if (needed === 1) {
@@ -1333,7 +1386,7 @@ const completeSpecialTarget = (state: GameState, square: Square) => {
         hasMoved: true,
         status: {},
       };
-      finishTurn(state, `${colorName(state.activeColor)} sacrificed 1 pawn and raised a Monument on ${square}.`);
+      finishTurn(state, abilityDescription(state, `: sacrificed 1 pawn and raised a rook on ${square}`));
     } else {
       state.pending = {
         ...pending,
@@ -1373,7 +1426,10 @@ const completeSpecialTarget = (state: GameState, square: Square) => {
       hasMoved: true,
       status: {},
     };
-    finishTurn(state, `${colorName(state.activeColor)} sacrificed ${needed} pawns and raised a Monument on ${pending.destination}.`);
+    finishTurn(
+      state,
+      abilityDescription(state, `: sacrificed ${needed} pawns and raised a rook on ${pending.destination}`),
+    );
   }
 };
 
@@ -1479,7 +1535,10 @@ const handleSquare = (state: GameState, square: Square) => {
       };
       finishTurn(
         state,
-        `${colorName(state.activeColor)} used Air Strike, landing on ${result.to} and dropping the ${passenger.type} on ${square}.`,
+        abilityDescription(
+          state,
+          `: ${pieceName(state.board[result.to])} landed on ${result.to} and dropped ${pieceName(passenger)} on ${square}`,
+        ),
       );
     }
     return;
@@ -1537,7 +1596,7 @@ const handleSquare = (state: GameState, square: Square) => {
         }
       }
     }
-    finishTurn(state, `${colorName(state.activeColor)} spread Poison Cloud across the selected area.`);
+    finishTurn(state, abilityDescription(state, " across the selected area"));
     return;
   }
   if (state.pending?.step === "cull-choice" && state.pending.movedPieceId) {
@@ -1552,7 +1611,7 @@ const handleSquare = (state: GameState, square: Square) => {
     } else {
       moveDirect(state, attackerSquare, square);
     }
-    finishTurn(state, `${colorName(state.activeColor)} completed Cull the Weak on ${square}.`);
+    finishTurn(state, abilityDescription(state, ` on ${square}`));
     return;
   }
   if (state.pending?.step === "mount-rider" && state.pending.destination) {
@@ -1604,7 +1663,13 @@ const handleSquare = (state: GameState, square: Square) => {
       });
     const destinations = adjacentSquares(state.pending.destination, false).filter((target) => !state.board[target]);
     if (movedRiders.length >= level || !remainingRiders.length || !destinations.length) {
-      finishTurn(state, `${colorName(state.activeColor)} used Mount with ${movedRiders.length} rider${movedRiders.length === 1 ? "" : "s"}.`);
+      finishTurn(
+        state,
+        abilityDescription(
+          state,
+          `: moved with ${movedRiders.length} rider${movedRiders.length === 1 ? "" : "s"}`,
+        ),
+      );
     } else {
       state.pending = {
         ...state.pending,
@@ -1759,11 +1824,19 @@ const draftGod = (state: GameState, godId: GodId) => {
 
 const upgradeAbility = (state: GameState, abilityId: string) => {
   const player = state.players[state.activeColor];
-  const ownsAbility = player.gods.some((godId) => GOD_BY_ID[godId].abilities.some((ability) => ability.id === abilityId));
+  const godId = player.gods.find((candidate) =>
+    GOD_BY_ID[candidate].abilities.some((ability) => ability.id === abilityId),
+  );
+  const ownsAbility = Boolean(godId);
   const current = player.upgrades[abilityId] ?? 1;
-  if (!ownsAbility || current >= 3) return;
+  if (!ownsAbility || !godId || current >= 3) return;
+  const ability = GOD_BY_ID[godId].abilities.find((candidate) => candidate.id === abilityId)!;
   player.upgrades[abilityId] = (current + 1) as 2 | 3;
-  log(state, `${colorName(state.activeColor)} upgraded ${abilityId} to level ${current + 1}.`);
+  const description = `${colorName(state.activeColor)} upgraded ${ability.name} with ${GOD_BY_ID[godId].name} to level ${current + 1}.`;
+  log(state, description);
+  state.lastAction = description;
+  present(state, { kind: "upgrade", godId, abilityId });
+  state.upgradePreview = undefined;
   state.upgradeQueue.shift();
   if (state.upgradeQueue.length) {
     state.activeColor = state.upgradeQueue[0];
@@ -1815,8 +1888,20 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
   next.nextOrbAnimationId ??= 1;
   next.captureAnimations ??= [];
   next.nextCaptureAnimationId ??= 1;
+  next.nextPresentationId ??= 1;
   if (action.type === "draft" && next.phase === "draft") draftGod(next, action.godId);
-  else if (action.type === "select-god" && next.phase === "play") selectGod(next, action.godId);
+  else if (action.type === "auto-draft" && next.phase === "draft") {
+    for (const godId of action.godIds) {
+      if (next.phase !== "draft") break;
+      draftGod(next, godId);
+    }
+  }
+  else if (action.type === "select-god" && next.phase === "play") {
+    selectGod(next, action.godId);
+    if (next.selectedGod === action.godId) {
+      present(next, { kind: "god", godId: action.godId });
+    }
+  }
   else if (action.type === "clear-god" && next.phase === "play" && next.selectedGod) {
     if (next.selectedAbility) refundCost(next);
     next.selectedGod = undefined;
@@ -1829,6 +1914,13 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
   else if (action.type === "select-ability" && next.phase === "play") {
     if (next.selectedAbility) refundCost(next);
     activateAbility(next, action.abilityId);
+    if (next.selectedGod && next.selectedAbility === action.abilityId) {
+      present(next, {
+        kind: "ability",
+        godId: next.selectedGod,
+        abilityId: action.abilityId,
+      });
+    }
   } else if (action.type === "square" && next.phase === "play") handleSquare(next, action.square);
   else if (action.type === "grave" && next.pending?.step === "grave") chooseGravePiece(next, action.pieceId);
   else if (action.type === "marked-execute" && next.pending?.step === "marked-choice" && next.pending.movedPieceId) {
@@ -1839,13 +1931,16 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
       sendCapturedPieceToGraveyard(next, doomed, square);
       addOrbs(next, next.activeColor, 0, 5);
     }
-    finishTurn(next, `${colorName(next.activeColor)} executed the marked piece and gained 5 black orbs.`);
+    finishTurn(next, abilityDescription(next, ": executed the marked piece and gained 5 black orbs"));
   }
   else if (action.type === "rage-resolve" && next.pending?.step === "rage-choice" && next.pending.destination) {
     resolveRage(next, next.pending.destination, action.spareFriendly);
     finishTurn(
       next,
-      `${colorName(next.activeColor)} unleashed Rage and ${action.spareFriendly ? "spared friendly pieces" : "captured every adjacent piece"}.`,
+      abilityDescription(
+        next,
+        `: ${action.spareFriendly ? "spared friendly pieces" : "captured every adjacent piece"}`,
+      ),
     );
   }
   else if (action.type === "barter" && next.pending?.step === "barter-choice") {
@@ -1862,9 +1957,9 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
         const landedOn = squareColor(next.pending.destination);
         addOrbs(next, next.activeColor, landedOn === "white" ? 1 : 0, landedOn === "black" ? 1 : 0);
       }
-      finishTurn(next, `${colorName(next.activeColor)} completed Barter by giving a ${action.give} orb.`);
+      finishTurn(next, abilityDescription(next, `: gave a ${action.give} orb to complete the trade`));
     } else {
-      finishTurn(next, `${colorName(next.activeColor)} declined the Barter trade.`);
+      finishTurn(next, abilityDescription(next, ": declined the trade"));
     }
   }
   else if (action.type === "resurrect-more" && next.pending?.step === "resurrect-more") {
@@ -1877,7 +1972,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
         next.notice = "Choose the second piece from your graveyard.";
       }
     } else {
-      finishTurn(next, `${colorName(next.activeColor)} completed Resurrect with one revived piece.`);
+      finishTurn(next, abilityDescription(next, ": completed with one revived piece"));
     }
   }
   else if (action.type === "harden-choice" && next.pending?.step === "harden-decision" && next.pending.source) {
@@ -1897,13 +1992,37 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
     const stolen = Math.min(action.amount, next.players[enemy].orbs.white);
     addOrbs(next, enemy, -stolen, 0);
     addOrbs(next, next.activeColor, stolen, 0);
-    finishTurn(next, `${colorName(next.activeColor)} stole ${stolen} white orb${stolen === 1 ? "" : "s"} with Siphon.`);
+    finishTurn(
+      next,
+      abilityDescription(next, `: stole ${stolen} white orb${stolen === 1 ? "" : "s"}`),
+    );
+  }
+  else if (action.type === "preview-upgrade" && next.phase === "upgrade") {
+    if (!action.godId) {
+      next.upgradePreview = undefined;
+    } else if (next.players[next.activeColor].gods.includes(action.godId)) {
+      const validAbility = action.abilityId
+        ? GOD_BY_ID[action.godId].abilities.some((ability) => ability.id === action.abilityId)
+        : true;
+      if (validAbility) {
+        next.upgradePreview = {
+          color: next.activeColor,
+          godId: action.godId,
+          abilityId: action.abilityId,
+        };
+        present(next, {
+          kind: "upgrade-preview",
+          godId: action.godId,
+          abilityId: action.abilityId,
+        });
+      }
+    }
   }
   else if (action.type === "upgrade" && next.phase === "upgrade") upgradeAbility(next, action.abilityId);
   else if (action.type === "cancel" && next.phase === "play") {
     const progressed = next.pending && ["slither", "funding", "banana", "hire"].includes(next.pending.step);
     if (progressed) {
-      finishTurn(next, `${colorName(next.activeColor)} completed ${abilityName(next, next.selectedAbility!)}.`);
+      finishTurn(next, abilityDescription(next, ": completed the action"));
     } else {
       refundCost(next);
       next.selectedAbility = undefined;
@@ -1921,21 +2040,21 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
       next.notice = "A Lured piece must move closer to the opposing Queen this turn if possible.";
     } else if (next.selectedAbility === "construction") {
       addOrbs(next, next.activeColor, 2, 0);
-      finishTurn(next, `${colorName(next.activeColor)} held position with Construction and gained 2 white orbs.`);
+      finishTurn(next, abilityDescription(next, ": held position and gained 2 white orbs"));
     } else if (next.selectedAbility === "marked") {
       if (next.pending?.step === "marked-choice") {
-        finishTurn(next, `${colorName(next.activeColor)} left the moved piece marked for Death.`);
+        finishTurn(next, abilityDescription(next, ": left the moved piece marked for Death"));
       } else {
         const reward = currentLevel(next, "marked") >= 2 ? 1 : 0;
         if (reward) addOrbs(next, next.activeColor, 1, 0);
-        finishTurn(next, `${colorName(next.activeColor)} let Death wait${reward ? " and gained 1 white orb" : ""}.`);
+        finishTurn(next, abilityDescription(next, `: waited${reward ? " and gained 1 white orb" : ""}`));
       }
     } else if (next.pending?.step === "slither") {
-      finishTurn(next, `${colorName(next.activeColor)} completed Slither.`);
+      finishTurn(next, abilityDescription(next, ": completed the movement"));
     } else if (next.pending?.step === "mount-rider") {
-      finishTurn(next, `${colorName(next.activeColor)} completed Mount.`);
+      finishTurn(next, abilityDescription(next, ": completed the mounted movement"));
     } else if (next.pending?.step === "funding") {
-      finishTurn(next, `${colorName(next.activeColor)} completed Military Funding.`);
+      finishTurn(next, abilityDescription(next, ": completed the pawn movement"));
     } else if (next.pending?.step === "hex-target" && next.pending.selected?.length) {
       next.pending.step = "source";
       next.legalTargets = [];
