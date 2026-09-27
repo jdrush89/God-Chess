@@ -1,0 +1,408 @@
+import { describe, expect, it } from "vitest";
+import {
+  createInitialBoard,
+  flightPathSquares,
+  isInCheck,
+  legalTargets,
+  lineOfSight,
+  lineOfSightSquares,
+  pathSquares,
+} from "./chess";
+import { createGame, gameReducer } from "./engine";
+import { GOD_BY_ID } from "./gods";
+
+const createPreparedShotTurn = (level: 1 | 2 | 3 = 1) => {
+  let state = createGame(1);
+  (["artemis", "chiron", "teles", "death", "ares", "midas"] as const).forEach((godId) => {
+    state = gameReducer(state, { type: "draft", godId });
+  });
+  state.players.white.orbs.black = 3;
+  state.players.white.upgrades.snipe = level;
+
+  state = gameReducer(state, { type: "select-god", godId: "artemis" });
+  state = gameReducer(state, { type: "select-ability", abilityId: "snipe" });
+  state = gameReducer(state, { type: "square", square: "e2" });
+  state = gameReducer(state, { type: "square", square: "e4" });
+
+  state = gameReducer(state, { type: "select-god", godId: "chiron" });
+  state = gameReducer(state, { type: "select-ability", abilityId: "gallop" });
+  state = gameReducer(state, { type: "square", square: "d7" });
+  return gameReducer(state, { type: "square", square: "d5" });
+};
+
+describe("chess movement", () => {
+  it("generates standard opening pawn and knight moves", () => {
+    const board = createInitialBoard();
+    expect(legalTargets(board, "e2")).toEqual(expect.arrayContaining(["e3", "e4"]));
+    expect(legalTargets(board, "b1")).toEqual(expect.arrayContaining(["a3", "c3"]));
+    expect(legalTargets(board, "a1")).toHaveLength(0);
+  });
+
+  it("does not trace intermediate squares for a knight jump", () => {
+    expect(pathSquares("b8", "c6")).toEqual([]);
+    expect(pathSquares("g1", "f3")).toEqual([]);
+  });
+
+  it("traces the spaces a flying knight passes over", () => {
+    expect(flightPathSquares("b8", "c6")).toEqual(["b7", "c7"]);
+    expect(flightPathSquares("g1", "f3")).toEqual(["g2", "f2"]);
+  });
+
+  it("supports line of sight at non-chess angles", () => {
+    const board = createInitialBoard();
+    Object.keys(board).forEach((square) => delete board[square]);
+    expect(lineOfSightSquares("a1", "c4").length).toBeGreaterThan(0);
+    expect(lineOfSight(board, "a1", "c4")).toBe(true);
+    board.b2 = {
+      id: "blocker",
+      type: "pawn",
+      color: "white",
+      controller: "white",
+      hasMoved: false,
+      status: {},
+    };
+    expect(lineOfSight(board, "a1", "c4")).toBe(false);
+  });
+
+  it("does not allow a move that exposes the king", () => {
+    const board = createInitialBoard();
+    delete board.e2;
+    delete board.e7;
+    delete board.e8;
+    board.e8 = { ...board.d8, id: "black-rook-test", type: "rook" };
+    board.e2 = { ...board.a2, id: "white-blocker-test", type: "rook" };
+    expect(legalTargets(board, "e2")).not.toContain("d2");
+  });
+});
+
+describe("game flow", () => {
+  it("uses the 1-2-2-1 snake draft and begins with white", () => {
+    let state = createGame(1);
+    const picks = ["ares", "medusa", "midas", "death", "artemis", "chiron"] as const;
+    picks.forEach((godId) => {
+      state = gameReducer(state, { type: "draft", godId });
+    });
+    expect(state.players.white.gods).toEqual(["ares", "death", "artemis"]);
+    expect(state.players.black.gods).toEqual(["medusa", "midas", "chiron"]);
+    expect(state.phase).toBe("play");
+    expect(state.activeColor).toBe("white");
+  });
+
+  it("rests a god after its action and passes the turn", () => {
+    let state = createGame(1);
+    (["ares", "medusa", "midas", "death", "artemis", "chiron"] as const).forEach((godId) => {
+      state = gameReducer(state, { type: "draft", godId });
+    });
+    state = gameReducer(state, { type: "select-god", godId: "ares" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "threaten" });
+    state = gameReducer(state, { type: "square", square: "e2" });
+    state = gameReducer(state, { type: "square", square: "e4" });
+    expect(state.rested).toContain("ares");
+    expect(state.activeColor).toBe("black");
+    expect(state.board.e4?.type).toBe("pawn");
+  });
+
+  it("allows Construction moves at any normal distance and rewards only one-square moves", () => {
+    const newAnubisGame = () => {
+      let game = createGame(1);
+      (["anubis", "medusa", "midas", "death", "artemis", "chiron"] as const).forEach((godId) => {
+        game = gameReducer(game, { type: "draft", godId });
+      });
+      game = gameReducer(game, { type: "select-god", godId: "anubis" });
+      return gameReducer(game, { type: "select-ability", abilityId: "construction" });
+    };
+
+    let longMove = newAnubisGame();
+    longMove = gameReducer(longMove, { type: "square", square: "e2" });
+    expect(longMove.legalTargets).toEqual(expect.arrayContaining(["e3", "e4"]));
+    longMove = gameReducer(longMove, { type: "square", square: "e4" });
+    expect(longMove.board.e4?.type).toBe("pawn");
+    expect(longMove.players.white.orbs.black).toBe(0);
+
+    let shortMove = newAnubisGame();
+    shortMove = gameReducer(shortMove, { type: "square", square: "e2" });
+    shortMove = gameReducer(shortMove, { type: "square", square: "e3" });
+    expect(shortMove.board.e3?.type).toBe("pawn");
+    expect(shortMove.players.white.orbs.black).toBe(1);
+  });
+
+  it("records a captured piece flight to its owner's graveyard", () => {
+    let state = createGame(1);
+    (["ares", "chiron", "teles", "death", "artemis", "midas"] as const).forEach((godId) => {
+      state = gameReducer(state, { type: "draft", godId });
+    });
+
+    state = gameReducer(state, { type: "select-god", godId: "ares" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "threaten" });
+    state = gameReducer(state, { type: "square", square: "e2" });
+    state = gameReducer(state, { type: "square", square: "e4" });
+
+    state = gameReducer(state, { type: "select-god", godId: "chiron" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "gallop" });
+    state = gameReducer(state, { type: "square", square: "d7" });
+    state = gameReducer(state, { type: "square", square: "d5" });
+
+    state = gameReducer(state, { type: "select-god", godId: "death" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "marked" });
+    state = gameReducer(state, { type: "square", square: "e4" });
+    state = gameReducer(state, { type: "square", square: "d5" });
+
+    expect(state.players.black.graveyard).toHaveLength(1);
+    expect(state.captureAnimations.at(-1)).toMatchObject({
+      player: "black",
+      source: "d5",
+      total: 1,
+      piece: { type: "pawn", color: "black" },
+    });
+  });
+
+  it("does not allow Lure without a controlled Queen", () => {
+    let state = createGame(1);
+    (["teles", "chiron", "midas", "death", "artemis", "medusa"] as const).forEach((godId) => {
+      state = gameReducer(state, { type: "draft", godId });
+    });
+    delete state.board.d1;
+    state.players.white.orbs.white = 2;
+
+    state = gameReducer(state, { type: "select-god", godId: "teles" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "lure" });
+
+    expect(state.selectedAbility).toBeUndefined();
+    expect(state.players.white.orbs.white).toBe(2);
+    expect(state.notice).toBe("Lure requires you to control a Queen.");
+  });
+
+  it("allows Banana Peel to block a line attack on the King", () => {
+    let state = createGame(1);
+    (["kangus", "chiron", "teles", "death", "artemis", "midas"] as const).forEach((godId) => {
+      state = gameReducer(state, { type: "draft", godId });
+    });
+    const whiteKing = state.board.e1;
+    const whiteBishop = state.board.c1;
+    const blackKing = state.board.e8;
+    const blackRook = state.board.a8;
+    state.board = {
+      e1: whiteKing,
+      c1: whiteBishop,
+      a8: blackKing,
+      e8: blackRook,
+    };
+    state.players.white.orbs.white = 1;
+    expect(isInCheck(state.board, "white", state.bananas)).toBe(true);
+
+    state = gameReducer(state, { type: "select-god", godId: "kangus" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "banana-peel" });
+    state = gameReducer(state, { type: "square", square: "c1" });
+    expect(state.legalTargets).toContain("d2");
+
+    state = gameReducer(state, { type: "square", square: "d2" });
+    expect(state.legalTargets).toEqual(["e2"]);
+    state = gameReducer(state, { type: "square", square: "e2" });
+
+    expect(state.bananas).toEqual(expect.arrayContaining([
+      expect.objectContaining({ square: "e2", owner: "white" }),
+    ]));
+    expect(isInCheck(state.board, "white", state.bananas)).toBe(false);
+  });
+
+  it("offers and resolves a prepared Snipe shot at the start of the next turn", () => {
+    let state = createPreparedShotTurn();
+    expect(state.pending).toMatchObject({ abilityId: "snipe-shot", step: "snipe-source" });
+    expect(state.legalTargets).toContain("e4");
+
+    state = gameReducer(state, { type: "square", square: "e4" });
+    expect(state.pending?.step).toBe("snipe-target");
+    expect(state.legalTargets).toContain("d5");
+
+    state = gameReducer(state, { type: "square", square: "d5" });
+    expect(state.board.d5).toBeUndefined();
+    expect(state.board.e4?.status.prepared).toBeUndefined();
+    expect(state.players.black.graveyard.at(-1)?.piece.type).toBe("pawn");
+  });
+
+  it("applies the prepared-shot expiration rules for each Snipe level", () => {
+    let levelOne = createPreparedShotTurn(1);
+    levelOne = gameReducer(levelOne, { type: "pass" });
+    expect(levelOne.board.e4?.status.prepared).toBeUndefined();
+
+    let levelTwo = createPreparedShotTurn(2);
+    levelTwo = gameReducer(levelTwo, { type: "pass" });
+    expect(levelTwo.board.e4?.status.prepared).toMatchObject({ level: 2 });
+    levelTwo.rested = levelTwo.rested.filter((godId) => godId !== "artemis");
+    levelTwo = gameReducer(levelTwo, { type: "select-god", godId: "artemis" });
+    expect(levelTwo.board.e4?.status.prepared).toBeUndefined();
+
+    let levelThree = createPreparedShotTurn(3);
+    levelThree = gameReducer(levelThree, { type: "pass" });
+    levelThree.rested = levelThree.rested.filter((godId) => godId !== "artemis");
+    levelThree = gameReducer(levelThree, { type: "select-god", godId: "artemis" });
+    expect(levelThree.board.e4?.status.prepared).toMatchObject({ level: 3 });
+  });
+
+  it("refunds an unused paid ability when cancelled", () => {
+    let state = createGame(1);
+    (["ares", "medusa", "midas", "death", "artemis", "chiron"] as const).forEach((godId) => {
+      state = gameReducer(state, { type: "draft", godId });
+    });
+    state.players.white.orbs.white = 2;
+    state = gameReducer(state, { type: "select-god", godId: "artemis" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "stealth" });
+    expect(state.players.white.orbs.white).toBe(0);
+    state = gameReducer(state, { type: "cancel" });
+    expect(state.players.white.orbs.white).toBe(2);
+  });
+
+  it("refunds an unused paid ability when switching gods", () => {
+    let state = createGame(1);
+    (["artemis", "medusa", "midas", "death", "ares", "chiron"] as const).forEach((godId) => {
+      state = gameReducer(state, { type: "draft", godId });
+    });
+    state.players.white.orbs.white = 2;
+    state = gameReducer(state, { type: "select-god", godId: "artemis" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "stealth" });
+    expect(state.players.white.orbs.white).toBe(0);
+
+    state = gameReducer(state, { type: "select-god", godId: "ares" });
+
+    expect(state.players.white.orbs.white).toBe(2);
+    expect(state.selectedGod).toBe("ares");
+    expect(state.selectedAbility).toBeUndefined();
+  });
+
+  it("allows inspecting a god and returning to god selection", () => {
+    let state = createGame(1);
+    (["ares", "medusa", "midas", "death", "artemis", "chiron"] as const).forEach((godId) => {
+      state = gameReducer(state, { type: "draft", godId });
+    });
+    state = gameReducer(state, { type: "select-god", godId: "ares" });
+    expect(state.selectedGod).toBe("ares");
+    state = gameReducer(state, { type: "clear-god" });
+    expect(state.selectedGod).toBeUndefined();
+    expect(state.rested).not.toContain("ares");
+    expect(state.activeColor).toBe("white");
+  });
+
+  it("completes a normal black pawn move", () => {
+    let state = createGame(1);
+    (["ares", "medusa", "midas", "death", "artemis", "chiron"] as const).forEach((godId) => {
+      state = gameReducer(state, { type: "draft", godId });
+    });
+    state = gameReducer(state, { type: "select-god", godId: "ares" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "threaten" });
+    state = gameReducer(state, { type: "square", square: "e2" });
+    state = gameReducer(state, { type: "square", square: "e4" });
+    state = gameReducer(state, { type: "select-god", godId: "medusa" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "captivate" });
+    state = gameReducer(state, { type: "square", square: "e7" });
+    state = gameReducer(state, { type: "square", square: "e5" });
+    expect(state.board.e5?.color).toBe("black");
+    expect(state.activeColor).toBe("white");
+    expect(state.rested).toEqual(expect.arrayContaining(["ares", "medusa"]));
+  });
+
+  it("counts a non-capturing knight as flying for Quetzacoatl", () => {
+    let state = createGame(1);
+    (["ares", "quetzacoatl", "midas", "death", "artemis", "medusa"] as const).forEach((godId) => {
+      state = gameReducer(state, { type: "draft", godId });
+    });
+    state = gameReducer(state, { type: "select-god", godId: "ares" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "threaten" });
+    state = gameReducer(state, { type: "square", square: "e2" });
+    state = gameReducer(state, { type: "square", square: "e4" });
+    state = gameReducer(state, { type: "select-god", godId: "quetzacoatl" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "flight" });
+    state = gameReducer(state, { type: "square", square: "b8" });
+    state = gameReducer(state, { type: "square", square: "c6" });
+    expect(state.players.black.orbs.black).toBe(1);
+    expect(state.orbAnimations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ player: "black", orb: "black", amount: 1, total: 1, source: "c6" }),
+    ]));
+    expect(state.board.c6?.type).toBe("knight");
+  });
+
+  it("caps Flight level 1 at one orb of each crossed piece color", () => {
+    let state = createGame(1);
+    (["ares", "quetzacoatl", "midas", "death", "artemis", "medusa"] as const).forEach((godId) => {
+      state = gameReducer(state, { type: "draft", godId });
+    });
+    state = gameReducer(state, { type: "select-god", godId: "ares" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "threaten" });
+    state = gameReducer(state, { type: "square", square: "e2" });
+    state = gameReducer(state, { type: "square", square: "e4" });
+    state = gameReducer(state, { type: "select-god", godId: "quetzacoatl" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "flight" });
+    state = gameReducer(state, { type: "square", square: "b8" });
+    state = gameReducer(state, { type: "square", square: "c6" });
+    expect(state.players.black.orbs).toEqual({ white: 0, black: 1 });
+  });
+
+  it("adds one orb per friendly crossed piece at Flight level 3", () => {
+    let state = createGame(1);
+    (["quetzacoatl", "chiron", "midas", "death", "artemis", "medusa"] as const).forEach((godId) => {
+      state = gameReducer(state, { type: "draft", godId });
+    });
+    state.players.white.upgrades.flight = 3;
+    state = gameReducer(state, { type: "select-god", godId: "quetzacoatl" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "flight" });
+    state = gameReducer(state, { type: "square", square: "b1" });
+    state = gameReducer(state, { type: "square", square: "c3" });
+    expect(state.players.white.orbs.white).toBe(3);
+  });
+
+  it("documents Flight's capped level 1 reward explicitly", () => {
+    expect(GOD_BY_ID.quetzacoatl.abilities[0].summary).toContain(
+      "Gain 1 white orb if you fly over any number of white pieces",
+    );
+    expect(GOD_BY_ID.quetzacoatl.abilities[0].summary).toContain(
+      "1 black orb if you fly over any number of black pieces",
+    );
+  });
+
+  it("grants the caster another turn after Enchant", () => {
+    let state = createGame(1);
+    (["teles", "chiron", "midas", "death", "artemis", "medusa"] as const).forEach((godId) => {
+      state = gameReducer(state, { type: "draft", godId });
+    });
+    state.players.white.orbs.black = 4;
+    state = gameReducer(state, { type: "select-god", godId: "teles" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "enchant" });
+    state = gameReducer(state, { type: "square", square: "b8" });
+    state = gameReducer(state, { type: "square", square: "c6" });
+    expect(state.activeColor).toBe("white");
+    expect(state.board.c6?.color).toBe("black");
+    expect(state.rested).toContain("teles");
+  });
+
+  it("does not leave a persistent Charge buff at level 1", () => {
+    let state = createGame(1);
+    (["chiron", "teles", "midas", "death", "artemis", "medusa"] as const).forEach((godId) => {
+      state = gameReducer(state, { type: "draft", godId });
+    });
+    delete state.board.b2;
+    state.players.white.orbs.black = 4;
+    state = gameReducer(state, { type: "select-god", godId: "chiron" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "charge" });
+    state = gameReducer(state, { type: "square", square: "b1" });
+    state = gameReducer(state, { type: "square", square: "b3" });
+    expect(state.board.b3?.type).toBe("knight");
+    expect(Object.values(state.board).some((piece) => piece.status.chargeUntil)).toBe(false);
+  });
+
+  it("completes a black knight move without path traversal", () => {
+    let state = createGame(1);
+    (["ares", "chiron", "midas", "death", "artemis", "medusa"] as const).forEach((godId) => {
+      state = gameReducer(state, { type: "draft", godId });
+    });
+    state = gameReducer(state, { type: "select-god", godId: "ares" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "threaten" });
+    state = gameReducer(state, { type: "square", square: "e2" });
+    state = gameReducer(state, { type: "square", square: "e4" });
+    state = gameReducer(state, { type: "select-god", godId: "chiron" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "gallop" });
+    state = gameReducer(state, { type: "square", square: "b8" });
+    state = gameReducer(state, { type: "square", square: "c6" });
+    expect(state.board.c6?.type).toBe("knight");
+    expect(state.board.b8).toBeUndefined();
+    expect(state.activeColor).toBe("white");
+  });
+});
