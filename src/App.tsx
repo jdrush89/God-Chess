@@ -1797,7 +1797,11 @@ export default function App() {
     savedGame ? "save" : "setup",
   );
   const [setupCanCancel, setSetupCanCancel] = useState(false);
-  const [state, baseDispatch] = useReducer(gameReducer, undefined, () => createGame());
+  const [state, baseDispatch] = useReducer(
+    gameReducer,
+    undefined,
+    () => savedGame ? structuredClone(savedGame.state) : createGame(),
+  );
   const stateRef = useRef(state);
   stateRef.current = state;
   const aiPlan = useRef<GameAction[]>([]);
@@ -1868,7 +1872,9 @@ export default function App() {
   }, [online.started]);
 
   const resumeGame = () => {
-    if (savedGame) receiveState(savedGame.state);
+    if (!savedGame) return;
+    receiveState(structuredClone(savedGame.state));
+    aiPlan.current = [];
     setStartView("none");
   };
   const startNewGame = () => {
