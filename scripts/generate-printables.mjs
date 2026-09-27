@@ -184,11 +184,6 @@ const drawGodBoard = (doc, god, pageIndex) => {
   doc.save().fillOpacity(0.72).rect(0, heroHeight - 78, boardWidth, 78).fill("#07090d").restore();
   doc.rect(0, heroHeight - 5, boardWidth, 5).fill(god.accent);
 
-  doc.fillColor(mix(god.accent, "#ffffff", 0.4)).font("Helvetica-Bold").fontSize(7)
-    .text(`GOD CHESS  /  ${god.domain.toUpperCase()}`, 28, 24, {
-      width: 430,
-      characterSpacing: 1.5,
-    });
   doc.fillColor("#fffaf0").font("Times-Bold").fontSize(35)
     .text(god.name.toUpperCase(), 27, heroHeight - 71, { width: 560 });
   doc.fillColor("#d8d0bd").font("Times-Italic").fontSize(13)
