@@ -48,7 +48,7 @@ const mix = (first, second, amount) => {
   return `#${["r", "g", "b"].map((key) => channel(key).toString(16).padStart(2, "0")).join("")}`;
 };
 
-const drawCoverImage = (doc, imagePath, x, y, width, height) => {
+const drawCoverImage = (doc, imagePath, x, y, width, height, verticalPosition = 0.5) => {
   const image = doc.openImage(imagePath);
   const scale = Math.max(width / image.width, height / image.height);
   const renderedWidth = image.width * scale;
@@ -58,7 +58,7 @@ const drawCoverImage = (doc, imagePath, x, y, width, height) => {
   doc.image(
     image,
     x + (width - renderedWidth) / 2,
-    y + (height - renderedHeight) / 2,
+    y + (height - renderedHeight) * verticalPosition,
     { width: renderedWidth, height: renderedHeight },
   );
   doc.restore();
@@ -179,7 +179,7 @@ const drawGodBoard = (doc, god, pageIndex) => {
   const heroHeight = 218;
   const deep = mix(god.accent, "#090b12", 0.86);
   doc.rect(0, 0, boardWidth, boardHeight).fill("#0d0f15");
-  drawCoverImage(doc, imagePath, 0, 0, boardWidth, heroHeight);
+  drawCoverImage(doc, imagePath, 0, 0, boardWidth, heroHeight, 0);
   doc.save().fillOpacity(0.46).rect(0, 0, boardWidth, heroHeight).fill(deep).restore();
   doc.save().fillOpacity(0.72).rect(0, heroHeight - 78, boardWidth, 78).fill("#07090d").restore();
   doc.rect(0, heroHeight - 5, boardWidth, 5).fill(god.accent);
