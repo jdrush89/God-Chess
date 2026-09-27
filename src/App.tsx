@@ -51,6 +51,8 @@ const GOD_PORTRAITS: Record<GodId, string> = {
   ares: new URL("./assets/gods/ares.jpg", import.meta.url).href,
 };
 
+const TITLE_ART = new URL("./assets/title/god-chess-title.jpg", import.meta.url).href;
+
 type OrbTotals = Record<Color, Record<OrbColor, number>>;
 
 interface OrbFlight extends OrbAnimation {
@@ -1178,28 +1180,30 @@ function RulesModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-function SaveGamePrompt({
+function MainMenu({
   savedAt,
   onResume,
   onNewGame,
 }: {
-  savedAt: string;
+  savedAt?: string;
   onResume: () => void;
   onNewGame: () => void;
 }) {
   return (
-    <div className="modal-backdrop">
-      <section className="save-game-modal">
-        <div className="save-game-icon"><Save size={28} /></div>
-        <p className="eyebrow">A GAME AWAITS</p>
-        <h2>Resume your saved game?</h2>
-        <p>Your last position was saved on {new Date(savedAt).toLocaleString()}.</p>
-        <div className="save-game-actions">
-          <button className="primary-button" onClick={onResume}>Resume game</button>
-          <button className="secondary-button" onClick={onNewGame}>Start a new game</button>
+    <section className="main-menu-screen">
+      <img className="main-menu-art" src={TITLE_ART} alt="God Chess" />
+      <div className="main-menu-shade" />
+      <div className="main-menu-actions">
+        <p className="eyebrow">THE DIVINE GAME</p>
+        <div>
+          <button className="primary-button" onClick={onNewGame}>New game</button>
+          {savedAt && (
+            <button className="secondary-button" onClick={onResume}>Resume game</button>
+          )}
         </div>
-      </section>
-    </div>
+        {savedAt && <small>Saved {new Date(savedAt).toLocaleString()}</small>}
+      </div>
+    </section>
   );
 }
 
@@ -1793,10 +1797,9 @@ function GameScreen({
 
 export default function App() {
   const [savedGame] = useState(loadSavedGame);
-  const [startView, setStartView] = useState<"save" | "setup" | "none">(
-    savedGame ? "save" : "setup",
-  );
+  const [startView, setStartView] = useState<"menu" | "setup" | "none">("menu");
   const [setupCanCancel, setSetupCanCancel] = useState(false);
+  const [setupReturnView, setSetupReturnView] = useState<"menu" | "none">("menu");
   const [state, baseDispatch] = useReducer(
     gameReducer,
     undefined,
@@ -1878,8 +1881,8 @@ export default function App() {
     setStartView("none");
   };
   const startNewGame = () => {
-    window.localStorage.removeItem(SAVE_KEY);
-    setSetupCanCancel(false);
+    setSetupCanCancel(true);
+    setSetupReturnView("menu");
     setStartView("setup");
   };
   const beginGame = (mode: Exclude<GameMode, "online">, difficulty: number) => {
@@ -1891,6 +1894,7 @@ export default function App() {
   };
   const startHostedGame = () => {
     if (!online.guest) return;
+    window.localStorage.removeItem(SAVE_KEY);
     const next = createGame(undefined, {
       mode: "online",
       hostName: online.hostName,
@@ -1907,6 +1911,7 @@ export default function App() {
     } else {
       setSetupCanCancel(true);
     }
+    setSetupReturnView("none");
     setStartView("setup");
   };
 
@@ -1924,6 +1929,10 @@ export default function App() {
       (!online.started || localOnlineColor !== state.activeColor || online.awaitingSync)
     );
 
+  if (startView === "menu") {
+    return <MainMenu savedAt={savedGame?.savedAt} onResume={resumeGame} onNewGame={startNewGame} />;
+  }
+
   return (
     <>
       {state.phase === "draft"
@@ -1939,9 +1948,6 @@ export default function App() {
             onSave={() => Boolean(saveGameState(state))}
           />
         )}
-      {startView === "save" && savedGame && (
-        <SaveGamePrompt savedAt={savedGame.savedAt} onResume={resumeGame} onNewGame={startNewGame} />
-      )}
       {startView === "setup" && (
         <StartGamePrompt
           online={online}
@@ -1952,7 +1958,7 @@ export default function App() {
           onStartOnline={startHostedGame}
           onCancel={() => {
             onlineActions.disconnect();
-            setStartView("none");
+            setStartView(setupReturnView);
           }}
           onDisconnect={onlineActions.disconnect}
         />

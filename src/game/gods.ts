@@ -13,7 +13,7 @@ export const GODS: God[] = [
   {
     id: "quetzacoatl",
     name: "Quetzacoatl",
-    epithet: "The Primeval Sky-Talon",
+    epithet: "The Feathered Serpent",
     domain: "Sky",
     accent: "#62c8a9",
     symbol: "Q",

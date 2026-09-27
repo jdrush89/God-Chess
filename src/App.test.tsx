@@ -22,7 +22,8 @@ describe("game startup", () => {
     }));
 
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /start a new game/i }));
+    expect(screen.getByRole("img", { name: /god chess/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^new game$/i }));
 
     expect(screen.getByRole("button", { name: /two players share this device/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /divine ai/i })).toBeTruthy();

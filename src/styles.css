@@ -509,6 +509,27 @@ body::before {
 .history-drawer p { display: grid; grid-template-columns: 24px 1fr; gap: 9px; margin: 0; padding: 12px 2px; border-bottom: 1px solid rgba(255,255,255,.04); color: #95969b; font-size: 11px; line-height: 1.4; }
 .history-drawer p span { color: #4e5058; }
 .modal-backdrop { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 24px; background: rgba(5,6,9,.82); backdrop-filter: blur(8px); }
+.main-menu-screen {
+  position: fixed; z-index: 60; inset: 0; overflow: hidden; display: grid; place-items: end center;
+  background: #07090d;
+}
+.main-menu-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.main-menu-shade {
+  position: absolute; inset: 0;
+  background:
+    linear-gradient(to bottom, rgba(4,5,8,.02) 44%, rgba(4,5,8,.42) 68%, rgba(4,5,8,.94) 100%),
+    radial-gradient(circle at center, transparent 30%, rgba(3,4,7,.2) 100%);
+}
+.main-menu-actions {
+  position: relative; width: min(440px, calc(100% - 32px)); margin-bottom: clamp(24px, 5vh, 58px);
+  padding: 20px 24px; text-align: center; background: rgba(7,9,13,.78);
+  border: 1px solid rgba(218,181,105,.38); box-shadow: 0 24px 70px rgba(0,0,0,.55);
+  backdrop-filter: blur(10px);
+}
+.main-menu-actions > div { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.main-menu-actions > div > button:only-child { grid-column: 1 / -1; }
+.main-menu-actions .eyebrow { margin: 0 0 13px; color: #cfb06d; }
+.main-menu-actions small { display: block; margin-top: 11px; color: #8d8b85; font-size: 8px; letter-spacing: .08em; text-transform: uppercase; }
 .rules-modal, .gameover-modal, .save-game-modal, .graveyard-modal, .start-game-modal {
   width: min(760px, 100%); max-height: calc(100vh - 48px); overflow: auto; padding: 38px;
   background: linear-gradient(145deg, #1b1d25, #101218); border: 1px solid rgba(198,161,91,.35);
@@ -615,6 +636,9 @@ body::before {
 }
 
 @media (max-width: 640px) {
+  .main-menu-art { object-position: center top; }
+  .main-menu-actions { margin-bottom: 18px; padding: 16px; }
+  .main-menu-actions > div { grid-template-columns: 1fr; }
   .topbar { height: 64px; padding: 0 16px; }
   .brand-subtitle, .game-meta, .header-actions span { display: none; }
   .header-actions button { padding: 8px; }
