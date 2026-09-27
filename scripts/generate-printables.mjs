@@ -12,6 +12,11 @@ const boardWidth = 11 * pt;
 const boardHeight = 8.5 * pt;
 const letterWidth = 8.5 * pt;
 const letterHeight = 11 * pt;
+const portraitVerticalPositions = {
+  quetzacoatl: 0.12,
+  salem: 0.12,
+  kangus: 0.2,
+};
 
 const ability = (id, name, summary, kind, details, cost) => ({
   id,
@@ -179,7 +184,15 @@ const drawGodBoard = (doc, god, pageIndex) => {
   const heroHeight = 218;
   const deep = mix(god.accent, "#090b12", 0.86);
   doc.rect(0, 0, boardWidth, boardHeight).fill("#0d0f15");
-  drawCoverImage(doc, imagePath, 0, 0, boardWidth, heroHeight, 0);
+  drawCoverImage(
+    doc,
+    imagePath,
+    0,
+    0,
+    boardWidth,
+    heroHeight,
+    portraitVerticalPositions[god.id] ?? 0,
+  );
   doc.save().fillOpacity(0.46).rect(0, 0, boardWidth, heroHeight).fill(deep).restore();
   doc.save().fillOpacity(0.72).rect(0, heroHeight - 78, boardWidth, 78).fill("#07090d").restore();
   doc.rect(0, heroHeight - 5, boardWidth, 5).fill(god.accent);
