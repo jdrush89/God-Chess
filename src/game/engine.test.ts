@@ -153,6 +153,54 @@ describe("game flow", () => {
     });
   });
 
+  it("resolves Escort simultaneously before checking the King's final safety", () => {
+    let state = createGame(1);
+    state.phase = "play";
+    state.players.white.gods = ["leonidas"];
+    state.players.white.orbs.black = 1;
+    state.board = {
+      a8: testPiece("king", "black", "black-king"),
+      e4: testPiece("king", "white", "white-king"),
+      f4: testPiece("rook", "white", "white-escort"),
+      g4: testPiece("rook", "black", "black-attacker"),
+    };
+
+    state = gameReducer(state, { type: "select-god", godId: "leonidas" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "escort" });
+    state = gameReducer(state, { type: "square", square: "e4" });
+    state = gameReducer(state, { type: "square", square: "f4" });
+
+    expect(state.legalTargets).toContain("f4");
+
+    state = gameReducer(state, { type: "square", square: "f4" });
+
+    expect(state.board.f4).toMatchObject({ id: "white-king", type: "king" });
+    expect(state.board.g4).toMatchObject({ id: "white-escort", type: "rook" });
+    expect(state.players.black.graveyard.at(-1)?.piece.id).toBe("black-attacker");
+    expect(isInCheck(state.board, "white", state.bananas)).toBe(false);
+    expect(state.activeColor).toBe("black");
+  });
+
+  it("rejects an Escort destination when the completed formation leaves the King in check", () => {
+    let state = createGame(1);
+    state.phase = "play";
+    state.players.white.gods = ["leonidas"];
+    state.players.white.orbs.black = 1;
+    state.board = {
+      a8: testPiece("king", "black", "black-king"),
+      e4: testPiece("king", "white", "white-king"),
+      f4: testPiece("rook", "white", "white-escort"),
+      f8: testPiece("rook", "black", "black-attacker"),
+    };
+
+    state = gameReducer(state, { type: "select-god", godId: "leonidas" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "escort" });
+    state = gameReducer(state, { type: "square", square: "e4" });
+    state = gameReducer(state, { type: "square", square: "f4" });
+
+    expect(state.legalTargets).not.toContain("f4");
+  });
+
   it("previews and records an opponent upgrade with its god and ability names", () => {
     let state = createGame(1);
     (["ares", "medusa", "midas", "death", "artemis", "chiron"] as const).forEach((godId) => {

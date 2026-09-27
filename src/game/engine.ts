@@ -558,6 +558,79 @@ const sourceIsAllowed = (state: GameState, square: Square) => {
   return piece.controller === color;
 };
 
+interface EscortLanding {
+  from: Square;
+  to: Square;
+  piece: Piece;
+}
+
+interface EscortPlan {
+  kingDestination: Square;
+  landings: EscortLanding[];
+  slippedOn?: Square;
+}
+
+const escortPlan = (state: GameState, kingSquare: Square, requestedDestination: Square): EscortPlan | undefined => {
+  const king = state.board[kingSquare];
+  if (!king || king.type !== "king") return undefined;
+  const selectedIds = new Set(state.pending?.selected ?? []);
+  const companions = adjacentSquares(kingSquare)
+    .map((square) => ({ from: square, piece: state.board[square] }))
+    .filter((entry): entry is { from: Square; piece: Piece } =>
+      Boolean(entry.piece && selectedIds.has(entry.piece.id)),
+    );
+  if (!companions.length) return undefined;
+
+  const slippedOn = bananaOnMovePath(state, kingSquare, requestedDestination, king.controller);
+  const kingDestination = slippedOn ?? requestedDestination;
+  const [fromFile, fromRank] = coords(kingSquare);
+  const [toFile, toRank] = coords(kingDestination);
+  const dx = toFile - fromFile;
+  const dy = toRank - fromRank;
+  const distanceMoved = Math.max(Math.abs(dx), Math.abs(dy));
+  const level = currentLevel(state, "escort");
+  if (
+    distanceMoved < 1 ||
+    distanceMoved > (level >= 3 ? 2 : 1) ||
+    (dx !== 0 && dy !== 0 && Math.abs(dx) !== Math.abs(dy))
+  ) {
+    return undefined;
+  }
+
+  const landings: EscortLanding[] = [
+    { from: kingSquare, to: kingDestination, piece: king },
+  ];
+  for (const companion of companions) {
+    const [file, rank] = coords(companion.from);
+    const destination = squareAt(file + dx, rank + dy);
+    if (!destination) return undefined;
+    landings.push({ ...companion, to: destination });
+  }
+
+  const simulated = structuredClone(state.board);
+  for (const landing of landings) delete simulated[landing.from];
+  for (const landing of landings) {
+    const occupant = simulated[landing.to];
+    if (
+      occupant?.status.hardened ||
+      (landing.piece.type === "king" && occupant?.controller === king.controller)
+    ) {
+      return undefined;
+    }
+    delete simulated[landing.to];
+    simulated[landing.to] = {
+      ...landing.piece,
+      hasMoved: true,
+      status: { ...landing.piece.status, movedThisTurn: true },
+    };
+  }
+  const remainingBananas = slippedOn
+    ? state.bananas.filter((banana) => banana.square !== slippedOn)
+    : state.bananas;
+  if (isInCheck(simulated, king.controller, remainingBananas)) return undefined;
+  return { kingDestination, landings, slippedOn };
+};
+
 const sourceTargets = (state: GameState, square: Square) => {
   const abilityId = state.selectedAbility!;
   const level = currentLevel(state, abilityId);
@@ -622,10 +695,17 @@ const sourceTargets = (state: GameState, square: Square) => {
     return [piece.color === "white" ? "e1" : "e8"];
   }
   if (abilityId === "escort") {
+    const board = structuredClone(state.board);
+    for (const selectedId of state.pending?.selected ?? []) {
+      const selectedSquare = findSquareById(board, selectedId);
+      if (selectedSquare) delete board[selectedSquare];
+    }
     return constrainLure(
-      level >= 3
-        ? legalTargets(state.board, square, { forceType: "queen", maxDistance: 2, bananas: state.bananas })
-        : legalTargets(state.board, square, { enPassant: state.enPassant, bananas: state.bananas }),
+      pseudoTargets(board, square, {
+        forceType: level >= 3 ? "queen" : "king",
+        maxDistance: level >= 3 ? 2 : 1,
+        bananas: state.bananas,
+      }).filter((target) => Boolean(escortPlan(state, square, target))),
     );
   }
   if (abilityId === "slither") {
@@ -1011,22 +1091,6 @@ const resolveMoveEffect = (
     const backward = (toRank - fromRank) * forward < 0;
     const sideways = toRank === fromRank;
     if (backward || (level >= 3 && sideways)) addOrbs(state, color, 1, 0);
-  } else if (abilityId === "escort") {
-    const dx = Math.sign(toFile - fromFile);
-    const dy = Math.sign(toRank - fromRank);
-    const allies = adjacentSquares(from)
-      .map((square) => [square, state.board[square]] as const)
-      .filter(([, piece]) => piece?.controller === color && piece.id !== moving.id)
-      .filter(([, piece]) => Boolean(piece && state.pending?.selected?.includes(piece.id)));
-    for (const [square, ally] of allies) {
-      if (!ally) continue;
-      const [file, rank] = coords(square);
-      const destination = squareAt(file + dx * distance(from, to), rank + dy * distance(from, to));
-      if (!destination) continue;
-      if (state.board[destination]) captureAt(state, destination, color);
-      delete state.board[square];
-      state.board[destination] = { ...ally, hasMoved: true };
-    }
   } else if (abilityId === "captivate") {
     const originalBoard = boardBefore ?? state.board;
     const beforeQueens = Object.entries(originalBoard).filter(
@@ -1114,10 +1178,46 @@ const resolveMoveEffect = (
   return undefined;
 };
 
+const executeEscort = (state: GameState, from: Square, requestedTo: Square) => {
+  const plan = escortPlan(state, from, requestedTo);
+  if (!plan) return;
+  const king = state.board[from];
+  for (const landing of plan.landings) delete state.board[landing.from];
+  for (const landing of plan.landings) {
+    if (state.board[landing.to]) captureAt(state, landing.to, state.activeColor);
+    state.board[landing.to] = {
+      ...landing.piece,
+      hasMoved: true,
+      status: { ...landing.piece.status, movedThisTurn: true },
+    };
+  }
+  if (plan.slippedOn) {
+    state.bananas = state.bananas.filter((banana) => banana.square !== plan.slippedOn);
+    log(state, `${king.type} slipped on a banana peel at ${plan.slippedOn}.`);
+  }
+  present(state, {
+    kind: "move",
+    godId: state.selectedGod!,
+    abilityId: "escort",
+    piece: king,
+    from,
+    to: plan.kingDestination,
+  });
+  finishTurn(
+    state,
+    abilityDescription(state, `: ${pieceName(king)} at ${from} -> ${plan.kingDestination}`),
+  );
+};
+
 const executeMovement = (state: GameState, from: Square, to: Square) => {
   const abilityId = state.selectedAbility!;
   const moving = state.board[from];
   if (!moving) return;
+
+  if (abilityId === "escort") {
+    executeEscort(state, from, to);
+    return;
+  }
 
   if (abilityId === "stealth") {
     delete state.board[from];
