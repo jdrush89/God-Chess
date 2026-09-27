@@ -21,7 +21,7 @@ export const GODS: God[] = [
       ability("flight", "Flight", "Move a piece. When moving, you may fly over any piece. You may not capture pieces if you fly. Gain 1 white orb if you fly over any number of white pieces and 1 black orb if you fly over any number of black pieces.", "move", [
         "Gain at most 1 orb of each color from flying.",
         "You get 1 orb of the matching color from each enemy piece you fly over.",
-        "You get 1 orb of the matching color from each friendly piece you fly over if you don’t move horizontally.",
+        "You get 1 orb of the matching color from each friendly piece you fly over if the move is not entirely horizontal.",
       ]),
       ability("air-lift", "Air Lift", "Teleport the King to an empty space within 3 spaces.", "teleport", [
         "Range 3.",

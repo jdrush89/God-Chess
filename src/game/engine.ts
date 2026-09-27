@@ -878,10 +878,11 @@ const resolveMoveEffect = (
     const enemyBlack = level >= 2
       ? crossed.filter((piece) => piece.controller !== color && piece.color === "black").length
       : 0;
-    const friendlyWhite = level >= 3 && toRank !== fromRank
+    const movedOnlyHorizontally = toRank === fromRank;
+    const friendlyWhite = level >= 3 && !movedOnlyHorizontally
       ? crossed.filter((piece) => piece.controller === color && piece.color === "white").length
       : 0;
-    const friendlyBlack = level >= 3 && toRank !== fromRank
+    const friendlyBlack = level >= 3 && !movedOnlyHorizontally
       ? crossed.filter((piece) => piece.controller === color && piece.color === "black").length
       : 0;
     addOrbs(

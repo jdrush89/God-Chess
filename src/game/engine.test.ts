@@ -363,16 +363,17 @@ describe("game flow", () => {
     expect(state.players.black.orbs).toEqual({ white: 0, black: 1 });
   });
 
-  it("adds one orb per friendly crossed piece at Flight level 3", () => {
+  it("grants Flight level 3's full benefit to a knight moving two files and one rank", () => {
     let state = createGame(1);
     (["quetzacoatl", "chiron", "midas", "death", "artemis", "medusa"] as const).forEach((godId) => {
       state = gameReducer(state, { type: "draft", godId });
     });
     state.players.white.upgrades.flight = 3;
+    delete state.board.d2;
     state = gameReducer(state, { type: "select-god", godId: "quetzacoatl" });
     state = gameReducer(state, { type: "select-ability", abilityId: "flight" });
     state = gameReducer(state, { type: "square", square: "b1" });
-    state = gameReducer(state, { type: "square", square: "c3" });
+    state = gameReducer(state, { type: "square", square: "d2" });
     expect(state.players.white.orbs.white).toBe(3);
   });
 
