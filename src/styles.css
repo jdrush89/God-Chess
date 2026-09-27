@@ -476,7 +476,8 @@ body::before {
 .level-pips i.filled { background: var(--gold); }
 .ability-footer { display: flex; justify-content: space-between; align-items: center; }
 .ability-footer > span { color: #65676e; font-size: 8px; font-weight: 700; letter-spacing: .12em; }
-.ability-footer > div { display: flex; gap: 8px; }
+.ability-footer-meta { display: flex; align-items: center; gap: 10px; }
+.ability-cost { display: flex; gap: 8px; }
 .upgrade-tag { color: var(--gold); font-size: 8px; letter-spacing: .09em; }
 .upgrade-confirmation { padding: 0 12px 15px; }
 .free-tag { color: #688f7f; font-size: 7px; font-weight: 700; letter-spacing: .13em; }

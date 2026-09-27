@@ -1,11 +1,27 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import App from "./App";
 import { createGame, gameReducer } from "./game/engine";
 
 const SAVE_KEY = "god-chess-save-v1";
+
+beforeAll(() => {
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: () => undefined,
+      removeListener: () => undefined,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      dispatchEvent: () => false,
+    }),
+  });
+});
 
 afterEach(() => {
   cleanup();
@@ -57,5 +73,29 @@ describe("game startup", () => {
     expect(screen.getByRole("img", { name: /god chess/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /resume game/i })).toBeTruthy();
     expect(window.localStorage.getItem(SAVE_KEY)).toBeTruthy();
+  });
+
+  it("shows ability orb costs while choosing an upgrade", () => {
+    let savedState = createGame(1);
+    (["quetzacoatl", "chiron", "midas", "death", "artemis", "medusa"] as const).forEach((godId) => {
+      savedState = gameReducer(savedState, { type: "draft", godId });
+    });
+    savedState.phase = "upgrade";
+    savedState.activeColor = "white";
+    savedState.upgradeQueue = ["white", "black"];
+    window.localStorage.setItem(SAVE_KEY, JSON.stringify({
+      version: 1,
+      savedAt: new Date().toISOString(),
+      state: savedState,
+    }));
+
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /resume game/i }));
+    const quetzButtons = screen.getAllByRole("button", { name: /quetzacoatl/i });
+    fireEvent.click(quetzButtons.at(-1)!);
+
+    const airLiftCard = screen.getByText("Air Lift").closest(".ability-card");
+    expect(airLiftCard).toBeTruthy();
+    expect(within(airLiftCard as HTMLElement).getByLabelText("3 white orbs")).toBeTruthy();
   });
 });

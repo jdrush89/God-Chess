@@ -267,6 +267,7 @@ function Orb({
     <span
       className={`orb-count ${small ? "small" : ""} ${arriving ? "arriving" : ""}`}
       data-orb-target={targetPlayer ? `${targetPlayer}-${color}` : undefined}
+      aria-label={`${count} ${color} orb${count === 1 ? "" : "s"}`}
     >
       <i className={`orb ${color}`} />
       <strong>{count}</strong>
@@ -751,15 +752,16 @@ function AbilityCard({
       <AbilityRules ability={ability} level={level} previewLevelOverride={previewLevel} />
       <div className="ability-footer">
         <span>{footerLabel ?? `LVL ${level}`}</span>
-        {footerAction
-          ? <b className="upgrade-tag">{footerAction}</b>
-          : showCost && (
-            <div>
+        <div className="ability-footer-meta">
+          {showCost && (
+            <div className="ability-cost">
               {ability.cost?.white ? <Orb color="white" count={ability.cost.white} small /> : null}
               {ability.cost?.black ? <Orb color="black" count={ability.cost.black} small /> : null}
               {!ability.cost && <span className="free-tag">GENERATES</span>}
             </div>
           )}
+          {footerAction && <b className="upgrade-tag">{footerAction}</b>}
+        </div>
       </div>
     </div>
   );
@@ -1118,7 +1120,6 @@ function UpgradePanel({
                   disabled={!readOnly && level >= 3}
                   footerLabel={`CURRENT LVL ${level}`}
                   footerAction={readOnly ? "VIEW ONLY" : level >= 3 ? "MAX LEVEL" : `SELECT LVL ${level + 1}`}
-                  showCost={false}
                   onClick={() => setSelectedAbilityId(ability.id)}
                   key={ability.id}
                 />
