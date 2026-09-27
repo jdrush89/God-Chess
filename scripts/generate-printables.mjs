@@ -16,6 +16,8 @@ const portraitVerticalPositions = {
   quetzacoatl: 0.12,
   salem: 0.12,
   kangus: 0.2,
+  death: 0.12,
+  leonidas: 0.12,
 };
 
 const ability = (id, name, summary, kind, details, cost) => ({
