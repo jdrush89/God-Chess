@@ -1,12 +1,12 @@
 import type { GameAction } from "../game/engine";
-import type { GameState } from "../game/types";
+import type { Color, GameState } from "../game/types";
 import { NetworkManager } from "./network";
 import type { HostMessage, NetworkMessage, OnlinePlayer } from "./types";
 
 interface PeerCallbacks {
   onJoinAccepted: (player: OnlinePlayer, roomCode: string) => void;
   onLobbyState: (hostName: string, guest?: OnlinePlayer) => void;
-  onGameStart: (state: GameState) => void;
+  onGameStart: (state: GameState, guestColor: Color) => void;
   onStateSync: (state: GameState) => void;
   onRejected: (reason: string) => void;
   onDisconnected: () => void;
@@ -51,7 +51,7 @@ export class MultiplayerPeer {
         this.callbacks.onLobbyState(message.hostName, message.guest);
         break;
       case "game_start":
-        this.callbacks.onGameStart(message.state);
+        this.callbacks.onGameStart(message.state, message.guestColor);
         break;
       case "state_sync":
         this.callbacks.onStateSync(message.state);

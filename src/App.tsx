@@ -27,7 +27,7 @@ import { chooseAiPlan, isAiTurn } from "./game/ai";
 import { createGame, gameReducer, type GameAction } from "./game/engine";
 import { abilityLevel, GOD_BY_ID, GODS } from "./game/gods";
 import type { Ability, CaptureAnimation, Color, GameMode, GameState, GodId, OrbAnimation, OrbColor, Piece, Square } from "./game/types";
-import { useOnlineGame, type OnlineGameState } from "./multiplayer/useOnlineGame";
+import { onlineInputDisabled, useOnlineGame, type OnlineGameState } from "./multiplayer/useOnlineGame";
 
 type GameDispatch = (action: GameAction) => void;
 
@@ -1933,18 +1933,11 @@ export default function App() {
     setStartView("setup");
   };
 
-  const localOnlineColor = state.onlineHostColor
-    ? online.role === "host"
-      ? state.onlineHostColor
-      : state.onlineHostColor === "white"
-        ? "black"
-        : "white"
-    : undefined;
   const inputDisabled =
     isAiTurn(state) ||
     (
       state.gameMode === "online" &&
-      (!online.started || localOnlineColor !== state.activeColor || online.awaitingSync)
+      onlineInputDisabled(online, state.activeColor)
     );
 
   if (startView === "menu") {

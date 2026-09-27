@@ -1,5 +1,5 @@
 import type { GameAction } from "../game/engine";
-import type { GameState } from "../game/types";
+import type { Color, GameState } from "../game/types";
 import { generateRoomCode, NetworkManager } from "./network";
 import type { NetworkMessage, OnlinePlayer, PeerMessage } from "./types";
 
@@ -19,6 +19,7 @@ export class MultiplayerHost {
   private callbacks: HostCallbacks;
   private guest: OnlinePlayer | null = null;
   private started = false;
+  private hostColor?: Color;
   readonly roomCode = generateRoomCode();
 
   constructor(
@@ -51,8 +52,15 @@ export class MultiplayerHost {
 
   startGame(state: GameState) {
     if (!this.guest) throw new Error("A second player must join before the game can start.");
+    if (!state.onlineHostColor) throw new Error("The online game has no host color.");
     this.started = true;
-    this.network.broadcast({ type: "game_start", state });
+    this.hostColor = state.onlineHostColor;
+    this.network.broadcast({
+      type: "game_start",
+      state,
+      hostColor: this.hostColor,
+      guestColor: this.hostColor === "white" ? "black" : "white",
+    });
   }
 
   syncState(state: GameState) {
@@ -63,6 +71,7 @@ export class MultiplayerHost {
     this.network.disconnect();
     this.guest = null;
     this.started = false;
+    this.hostColor = undefined;
   }
 
   private handleMessage(peerId: string, message: NetworkMessage) {
@@ -78,7 +87,7 @@ export class MultiplayerHost {
       !this.started
     ) return;
     const state = this.callbacks.getState();
-    const guestColor = state.onlineHostColor === "white" ? "black" : "white";
+    const guestColor = this.hostColor === "white" ? "black" : "white";
     if (state.activeColor !== guestColor || !remoteActionIsAllowed(message.action)) {
       this.syncState(state);
       return;

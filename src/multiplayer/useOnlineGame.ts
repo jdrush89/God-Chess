@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { GameAction } from "../game/engine";
-import type { GameState } from "../game/types";
+import type { Color, GameState } from "../game/types";
 import { MultiplayerHost } from "./host";
 import { MultiplayerPeer } from "./peer";
 import type { OnlinePlayer } from "./types";
@@ -15,6 +15,7 @@ export interface OnlineGameState {
   connecting: boolean;
   started: boolean;
   awaitingSync: boolean;
+  localColor?: Color;
   error?: string;
 }
 
@@ -30,6 +31,9 @@ const initialState: OnlineGameState = {
   started: false,
   awaitingSync: false,
 };
+
+export const onlineInputDisabled = (state: OnlineGameState, activeColor: Color) =>
+  !state.started || state.localColor !== activeColor || state.awaitingSync;
 
 export const useOnlineGame = (callbacks: OnlineCallbacks) => {
   const [state, setState] = useState(initialState);
@@ -55,6 +59,7 @@ export const useOnlineGame = (callbacks: OnlineCallbacks) => {
         ...current,
         guest: undefined,
         started: false,
+        localColor: undefined,
         error: current.started ? "The other player disconnected." : undefined,
       })),
       onError: (error) => setState((current) => ({ ...current, error, connecting: false })),
@@ -107,13 +112,14 @@ export const useOnlineGame = (callbacks: OnlineCallbacks) => {
         hostName,
         guest,
       })),
-      onGameStart: (gameState) => {
+      onGameStart: (gameState, guestColor) => {
         callbacksRef.current.receiveState(gameState);
         setState((current) => ({
           ...current,
           started: true,
           connecting: false,
           awaitingSync: false,
+          localColor: guestColor,
         }));
       },
       onStateSync: (gameState) => {
@@ -133,6 +139,7 @@ export const useOnlineGame = (callbacks: OnlineCallbacks) => {
       onDisconnected: () => setState((current) => ({
         ...current,
         started: false,
+        localColor: undefined,
         error: "The host disconnected.",
       })),
       onError: (error) => setState((current) => ({ ...current, error, connecting: false })),
@@ -154,7 +161,11 @@ export const useOnlineGame = (callbacks: OnlineCallbacks) => {
 
   const startGame = useCallback((gameState: GameState) => {
     hostRef.current?.startGame(gameState);
-    setState((current) => ({ ...current, started: true }));
+    setState((current) => ({
+      ...current,
+      started: true,
+      localColor: gameState.onlineHostColor,
+    }));
   }, []);
 
   const syncState = useCallback((gameState: GameState) => {
