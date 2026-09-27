@@ -63,6 +63,7 @@ const ray = (
   ignoreBlockers = false,
   noCapture = false,
   bananas: Banana[] = [],
+  includeFriendlyTargets = false,
 ) => {
   const [file, rank] = coords(from);
   const moves: Square[] = [];
@@ -78,10 +79,26 @@ const ray = (
         continue;
       }
       if (ignoreBlockers) {
-        if (!noCapture && occupying.controller !== color) moves.push(target);
+        if (
+          !noCapture &&
+          (
+            (occupying.controller !== color && !occupying.status.hardened) ||
+            (occupying.controller === color && includeFriendlyTargets)
+          )
+        ) {
+          moves.push(target);
+        }
         continue;
       }
-      if (!noCapture && occupying.controller !== color && !occupying.status.hardened) moves.push(target);
+      if (
+        !noCapture &&
+        (
+          (occupying.controller !== color && !occupying.status.hardened) ||
+          (occupying.controller === color && includeFriendlyTargets)
+        )
+      ) {
+        moves.push(target);
+      }
       break;
     }
   }
@@ -127,6 +144,7 @@ export interface MoveOptions {
   maxDistance?: number;
   forceType?: PieceType;
   bananas?: Banana[];
+  includeFriendlyTargets?: boolean;
 }
 
 export const pseudoTargets = (
@@ -157,15 +175,19 @@ export const pseudoTargets = (
     targets = jumps
       .map(([dx, dy]) => squareAt(file + dx, rank + dy))
       .filter((square): square is Square => Boolean(square))
-      .filter((square) => !board[square] || (board[square].controller !== piece.controller && !board[square].status.hardened));
+      .filter((square) =>
+        !board[square] ||
+        (board[square].controller !== piece.controller && !board[square].status.hardened) ||
+        (board[square].controller === piece.controller && options.includeFriendlyTargets),
+      );
   } else if (type === "bishop") {
-    targets = ray(board, from, piece.controller, diagonal, options.maxDistance, options.ignoreBlockers, options.noCapture, options.bananas);
+    targets = ray(board, from, piece.controller, diagonal, options.maxDistance, options.ignoreBlockers, options.noCapture, options.bananas, options.includeFriendlyTargets);
   } else if (type === "rook") {
-    targets = ray(board, from, piece.controller, straight, options.maxDistance, options.ignoreBlockers, options.noCapture, options.bananas);
+    targets = ray(board, from, piece.controller, straight, options.maxDistance, options.ignoreBlockers, options.noCapture, options.bananas, options.includeFriendlyTargets);
   } else if (type === "queen") {
-    targets = ray(board, from, piece.controller, [...diagonal, ...straight], options.maxDistance, options.ignoreBlockers, options.noCapture, options.bananas);
+    targets = ray(board, from, piece.controller, [...diagonal, ...straight], options.maxDistance, options.ignoreBlockers, options.noCapture, options.bananas, options.includeFriendlyTargets);
   } else {
-    targets = ray(board, from, piece.controller, [...diagonal, ...straight], 1, false, options.noCapture, options.bananas);
+    targets = ray(board, from, piece.controller, [...diagonal, ...straight], 1, false, options.noCapture, options.bananas, options.includeFriendlyTargets);
     if (!piece.hasMoved && !options.attacksOnly && !options.forceType) {
       for (const side of ["king", "queen"] as const) {
         if (canCastle(board, piece.controller, side, options.bananas)) targets.push(side === "king" ? `g${piece.color === "white" ? "1" : "8"}` : `c${piece.color === "white" ? "1" : "8"}`);
@@ -178,7 +200,7 @@ export const pseudoTargets = (
   }
   return targets.filter((target) => {
     const occupant = board[target];
-    return !occupant || occupant.controller !== piece.controller;
+    return !occupant || occupant.controller !== piece.controller || options.includeFriendlyTargets;
   });
 };
 

@@ -1,4 +1,4 @@
-import { allSquares, coords, isInCheck, pieceValue } from "./chess";
+import { allSquares, coords, isInCheck, pieceValue, pseudoTargets } from "./chess";
 import { gameReducer, type GameAction } from "./engine";
 import { GOD_BY_ID } from "./gods";
 import type { Color, GameState, GodId, Piece } from "./types";
@@ -50,6 +50,52 @@ const centerValue = (square: string) => {
   return (3.5 - Math.abs(3.5 - file) + 3.5 - Math.abs(3.5 - rank)) * 0.06;
 };
 
+const controlMap = (state: GameState, color: Color) => {
+  const controlled = new Map<string, number[]>();
+  for (const [square, piece] of Object.entries(state.board)) {
+    if (piece.controller !== color) continue;
+    for (const target of pseudoTargets(state.board, square, {
+      attacksOnly: true,
+      bananas: state.bananas,
+      includeFriendlyTargets: true,
+    })) {
+      const values = controlled.get(target) ?? [];
+      values.push(pieceValue(piece.type));
+      controlled.set(target, values);
+    }
+  }
+  return controlled;
+};
+
+const tacticalPositionValue = (state: GameState, color: Color) => {
+  const friendlyControl = controlMap(state, color);
+  const enemyControl = controlMap(state, opposite(color));
+  let score = 0;
+
+  for (const [square, piece] of Object.entries(state.board)) {
+    if (piece.type === "king" || piece.status.hardened) continue;
+    const friendly = piece.controller === color;
+    const attackers = (friendly ? enemyControl : friendlyControl).get(square) ?? [];
+    if (!attackers.length) continue;
+    const defenders = (friendly ? friendlyControl : enemyControl).get(square) ?? [];
+    const value = pieceValue(piece.type);
+    const cheapestAttacker = Math.min(...attackers);
+    if (friendly) {
+      const hangingRisk = defenders.length ? 0 : value * 3 + 0.75;
+      const badExchangeRisk = defenders.length ? Math.max(0, value - cheapestAttacker) * 1.4 : 0;
+      const overloadedRisk = Math.max(0, attackers.length - defenders.length) * value * 0.4;
+      score -= hangingRisk + badExchangeRisk + overloadedRisk;
+    } else {
+      const basicPressure = attackers.length * value * 0.12;
+      const undefendedPressure = defenders.length ? 0 : value * 0.25;
+      const coordinatedPressure = Math.max(0, attackers.length - 1) * value * 0.7;
+      score += basicPressure + undefendedPressure + coordinatedPressure;
+    }
+  }
+
+  return score;
+};
+
 export const evaluateGameState = (state: GameState, color: Color) => {
   if (state.phase === "gameover") {
     if (state.winner === color) return 1_000_000;
@@ -78,6 +124,7 @@ export const evaluateGameState = (state: GameState, color: Color) => {
   score -= state.bananas.filter((banana) => banana.owner !== color).length * 0.45;
   if (isInCheck(state.board, opposite(color), state.bananas)) score += 5;
   if (isInCheck(state.board, color, state.bananas)) score -= 8;
+  score += tacticalPositionValue(state, color);
   return score;
 };
 
@@ -213,6 +260,14 @@ const branchKey = (node: SearchNode) =>
   "root";
 
 const pruneFrontier = (nodes: SearchNode[], color: Color) => {
+  const scores = new Map<GameState, number>();
+  const scoreOf = (node: SearchNode) => {
+    const cached = scores.get(node.state);
+    if (cached !== undefined) return cached;
+    const score = evaluateGameState(node.state, color);
+    scores.set(node.state, score);
+    return score;
+  };
   const groups = new Map<string, SearchNode[]>();
   for (const node of nodes) {
     const key = branchKey(node);
@@ -222,11 +277,11 @@ const pruneFrontier = (nodes: SearchNode[], color: Color) => {
   }
   const diverse = [...groups.values()].flatMap((group) =>
     group
-      .sort((a, b) => evaluateGameState(b.state, color) - evaluateGameState(a.state, color))
+      .sort((a, b) => scoreOf(b) - scoreOf(a))
       .slice(0, MAX_PER_ABILITY),
   );
   return diverse
-    .sort((a, b) => evaluateGameState(b.state, color) - evaluateGameState(a.state, color))
+    .sort((a, b) => scoreOf(b) - scoreOf(a))
     .slice(0, MAX_FRONTIER);
 };
 
@@ -252,9 +307,14 @@ const searchPlans = (state: GameState, color: Color) => {
     }
     frontier = pruneFrontier(expanded, color);
   }
-  return completed.sort(
-    (a, b) => evaluateGameState(b.state, color) - evaluateGameState(a.state, color),
-  );
+  const scores = new Map<GameState, number>();
+  return completed.sort((a, b) => {
+    const scoreA = scores.get(a.state) ?? evaluateGameState(a.state, color);
+    const scoreB = scores.get(b.state) ?? evaluateGameState(b.state, color);
+    scores.set(a.state, scoreA);
+    scores.set(b.state, scoreB);
+    return scoreB - scoreA;
+  });
 };
 
 export const chooseAiPlan = (
