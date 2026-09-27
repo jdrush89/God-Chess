@@ -222,11 +222,15 @@ body::before {
   width: min(1190px, calc(100% - 48px)); margin: 24px auto 40px; align-items: start;
 }
 .board-column {
-  width: min(100%, calc(100vh - 305px));
+  --board-size: clamp(220px, calc(100dvh - 305px), 790px);
+  width: 100%;
   max-width: 790px;
   min-width: 0;
   justify-self: end;
+  display: grid;
+  justify-items: end;
 }
+.board-column > .player-bar { width: min(100%, max(440px, var(--board-size))); }
 .side-column { min-width: 0; display: flex; flex-direction: column; gap: 12px; }
 .player-bar {
   height: 59px; display: flex; align-items: center; gap: 11px; padding: 0 13px;
@@ -328,15 +332,15 @@ body::before {
 .mini-pantheon > button:hover { transform: translateY(-2px); filter: brightness(1.2); }
 .mini-pantheon > button.resting { opacity: .42; filter: grayscale(1); }
 .mini-pantheon > button.resting:hover { opacity: .75; }
-.board-shell { width: 100%; aspect-ratio: 1; }
+.board-shell { width: min(100%, var(--board-size)); aspect-ratio: 1; container-type: inline-size; }
 .board-frame {
   padding: 11px; width: 100%; height: 100%;
   background: linear-gradient(135deg, #463a2b, #191b20 42%, #59462c);
   border: 1px solid #77603b; box-shadow: 0 28px 70px rgba(0,0,0,.38), inset 0 0 0 3px #111319;
 }
-.chess-board { display: grid; grid-template-columns: repeat(8, 1fr); width: 100%; height: 100%; }
+.chess-board { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); width: 100%; height: 100%; }
 .board-square {
-  aspect-ratio: 1; position: relative; display: grid; place-items: center; border: 0; padding: 0; cursor: pointer;
+  min-width: 0; aspect-ratio: 1; position: relative; display: grid; place-items: center; border: 0; padding: 0; cursor: pointer;
 }
 .board-square.light { background: #c7b99e; }
 .board-square.dark { background: #504c49; }
@@ -350,7 +354,7 @@ body::before {
 }
 .move-dot { width: 19%; height: 19%; border-radius: 50%; background: rgba(38,31,23,.42); position: absolute; z-index: 2; }
 .chess-piece {
-  position: relative; z-index: 3; font-family: Georgia, serif; font-size: clamp(34px, 5.4vw, 65px); line-height: 1;
+  position: relative; z-index: 3; font-family: Georgia, serif; font-size: clamp(18px, 9cqi, 65px); line-height: 1;
   filter: drop-shadow(0 4px 2px rgba(0,0,0,.42)); transition: transform .15s;
 }
 .board-square:hover .chess-piece { transform: translateY(-2px); }
@@ -366,7 +370,7 @@ body::before {
 .file-label { right: 5px; bottom: 3px; }
 .light .rank-label, .light .file-label { color: #4d4942; }
 .dark .rank-label, .dark .file-label { color: #dad2c2; }
-.banana { position: absolute; z-index: 2; font: 700 24px Georgia; color: #d4ae49; transform: rotate(-24deg); text-shadow: 0 1px 2px #29200e; }
+.banana { position: absolute; z-index: 2; font: 700 clamp(12px, 3.4cqi, 24px) Georgia; color: #d4ae49; transform: rotate(-24deg); text-shadow: 0 1px 2px #29200e; }
 
 /* Action panel */
 .action-panel { border: 1px solid var(--line); background: linear-gradient(180deg, #161920, #101218); min-height: 600px; }
@@ -629,6 +633,7 @@ body::before {
   .pantheon-grid { grid-template-columns: repeat(2, 1fr); }
   .game-layout { grid-template-columns: 1fr; max-width: 760px; }
   .board-column { width: 100%; max-width: none; justify-self: stretch; }
+  .board-column > .player-bar, .board-shell { width: 100%; }
   .side-column { width: 100%; }
   .action-panel { min-height: auto; }
   .god-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
