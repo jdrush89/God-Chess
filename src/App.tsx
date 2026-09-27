@@ -933,11 +933,6 @@ function ActionPanel({
         </>
       ) : !selectedGod ? (
         <>
-          <div className="panel-empty">
-            <Sparkles size={25} />
-            <h3>Call upon a god</h3>
-            <p>Choose one available god. They will rest after completing an action.</p>
-          </div>
           <div className="god-list">
             {player.gods.map((godId) => {
               const god = GOD_BY_ID[godId];
