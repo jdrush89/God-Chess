@@ -12,7 +12,9 @@ Play the latest version at [jdrush89.github.io/God-Chess](https://jdrush89.githu
 - [God boards](https://jdrush89.github.io/God-Chess/printables/god-chess-god-boards.pdf) - one full-color US Letter landscape board per god.
 - [Marker tokens](https://jdrush89.github.io/God-Chess/printables/god-chess-marker-tokens.pdf) - cut-out rest, ability-level, orb, and status markers.
 
-Regenerate both PDFs with `npm run printables`.
+Regenerate both PDFs with `npm run printables`. God boards use the dedicated
+1792×1008 portraits in `print-assets/gods`; the smaller `src/assets/gods`
+versions are reserved for the web game.
 
 ## Run locally
 

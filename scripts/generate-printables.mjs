@@ -5,7 +5,7 @@ import PDFDocument from "pdfkit";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sourcePath = path.join(root, "src/game/gods.ts");
-const portraitsPath = path.join(root, "src/assets/gods");
+const portraitsPath = path.join(root, "print-assets/gods");
 const outputPath = path.join(root, "public/printables");
 const pt = 72;
 const boardWidth = 11 * pt;
