@@ -261,6 +261,40 @@ describe("game flow", () => {
     expect(shortMove.players.white.orbs.black).toBe(1);
   });
 
+  it("scales Sing rewards from orthogonal pairs to all neighbors plus pair bonuses", () => {
+    const singAtLevel = (level: 1 | 2 | 3) => {
+      let state = createGame(1);
+      state.phase = "play";
+      state.players.white.gods = ["teles"];
+      state.players.white.upgrades.resonance = level;
+      state.board = {
+        a1: testPiece("king", "white", "white-king"),
+        h8: testPiece("king", "black", "black-king"),
+        c3: testPiece("knight", "white", "singer"),
+        e5: testPiece("pawn", "white", "white-orthogonal-1"),
+        e3: testPiece("bishop", "white", "white-orthogonal-2"),
+        d4: testPiece("rook", "white", "white-orthogonal-3"),
+        f4: testPiece("pawn", "black", "black-orthogonal"),
+        d3: testPiece("pawn", "white", "white-diagonal"),
+        f5: testPiece("bishop", "black", "black-diagonal"),
+      };
+
+      state = gameReducer(state, { type: "select-god", godId: "teles" });
+      state = gameReducer(state, { type: "select-ability", abilityId: "resonance" });
+      state = gameReducer(state, { type: "square", square: "c3" });
+      return gameReducer(state, { type: "square", square: "e4" });
+    };
+
+    const levelOne = singAtLevel(1);
+    expect(levelOne.players.white.orbs).toEqual({ white: 1, black: 0 });
+
+    const levelTwo = singAtLevel(2);
+    expect(levelTwo.players.white.orbs).toEqual({ white: 4, black: 2 });
+
+    const levelThree = singAtLevel(3);
+    expect(levelThree.players.white.orbs).toEqual({ white: 5, black: 2 });
+  });
+
   it("records a captured piece flight to its owner's graveyard", () => {
     let state = createGame(1);
     (["ares", "chiron", "teles", "death", "artemis", "midas"] as const).forEach((godId) => {

@@ -1050,14 +1050,22 @@ const resolveMoveEffect = (
   } else if (abilityId === "harden") {
     state.board[to].status.hardened = 2;
   } else if (abilityId === "resonance") {
-    for (const adjacent of adjacentSquares(to)) {
-      const neighbor = state.board[adjacent];
-      if (!neighbor) continue;
-      const diagonal = coords(adjacent)[0] !== toFile && coords(adjacent)[1] !== toRank;
-      if (diagonal && level < 2) continue;
-      const amount = !diagonal && level >= 3 ? 2 : 1;
-      addOrbs(state, color, neighbor.color === "white" ? amount : 0, neighbor.color === "black" ? amount : 0);
-    }
+    const neighbors = adjacentSquares(to)
+      .map((square) => ({ square, piece: state.board[square] }))
+      .filter((entry): entry is { square: Square; piece: Piece } => Boolean(entry.piece));
+    const orthogonal = neighbors.filter(({ square }) => {
+      const [file, rank] = coords(square);
+      return file === toFile || rank === toRank;
+    });
+    const countColor = (pieces: typeof neighbors, orbColor: Color) =>
+      pieces.filter(({ piece }) => piece.color === orbColor).length;
+    const reward = (orbColor: Color) => {
+      const orthogonalCount = countColor(orthogonal, orbColor);
+      if (level === 1) return Math.floor(orthogonalCount / 2);
+      const adjacentCount = countColor(neighbors, orbColor);
+      return adjacentCount + (level >= 3 ? Math.floor(orthogonalCount / 2) : 0);
+    };
+    addOrbs(state, color, reward("white"), reward("black"));
   } else if (abilityId === "enchant") {
     state.bonusTurn = color;
   } else if (abilityId === "take-cover") {

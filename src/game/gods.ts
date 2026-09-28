@@ -93,10 +93,10 @@ export const GODS: God[] = [
     accent: "#72a9d8",
     symbol: "T",
     abilities: [
-      ability("resonance", "Sing", "Move a piece. You get 1 orb of the matching color for each piece orthogonally adjacent to the moved piece after moving.", "move", [
-        "Gain matching orbs for orthogonal neighbors.",
-        "You also get matching orbs for pieces diagonally adjacent to the moved piece.",
-        "You get 2 matching orbs for each orthogonally adjacent piece.",
+      ability("resonance", "Sing", "Move a piece. Gain 1 matching orb for every 2 pieces of that color orthogonally adjacent to the moved piece after moving.", "move", [
+        "Gain 1 matching orb per 2 orthogonally adjacent pieces of that color.",
+        "Gain 1 matching orb for every adjacent piece, including diagonals.",
+        "Also gain 1 extra matching orb per 2 orthogonally adjacent pieces of that color.",
       ]),
       ability("lure", "Lure", "Choose one of your opponent’s pawns, knights, or bishops. Mark it as Lured. A Lured piece must be moved closer to your queen on the next turn if possible.", "target", [
         "Target pawns, knights, or bishops.",
