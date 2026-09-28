@@ -314,6 +314,39 @@ describe("game flow", () => {
     expect(state.players.white.orbs.black).toBe(3);
   });
 
+  it("chooses the Monument rook square after selecting every sacrificed pawn", () => {
+    let state = createGame(1);
+    (["anubis", "ares", "midas", "chiron", "artemis", "teles"] as const).forEach((godId) => {
+      state = gameReducer(state, { type: "draft", godId });
+    });
+    state.players.white.orbs.black = 4;
+
+    state = gameReducer(state, { type: "select-god", godId: "anubis" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "monument" });
+    expect(state.pending?.step).toBe("monument-sacrifice");
+
+    state = gameReducer(state, { type: "square", square: "a2" });
+    state = gameReducer(state, { type: "square", square: "b2" });
+    state = gameReducer(state, { type: "square", square: "c2" });
+
+    expect(state.pending?.step).toBe("monument-base");
+    expect(state.legalTargets).toEqual(["a2", "b2", "c2"]);
+    expect(state.board.a2?.type).toBe("pawn");
+    expect(state.board.b2?.type).toBe("pawn");
+    expect(state.board.c2?.type).toBe("pawn");
+
+    state = gameReducer(state, { type: "square", square: "c2" });
+
+    expect(state.board.a2).toBeUndefined();
+    expect(state.board.b2).toBeUndefined();
+    expect(state.board.c2).toMatchObject({ type: "rook", controller: "white" });
+    expect(state.players.white.graveyard.slice(-3).map((entry) => entry.piece.type)).toEqual([
+      "pawn",
+      "pawn",
+      "pawn",
+    ]);
+  });
+
   it("does not allow Lure without a controlled Queen", () => {
     let state = createGame(1);
     (["teles", "chiron", "midas", "death", "artemis", "medusa"] as const).forEach((godId) => {

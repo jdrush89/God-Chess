@@ -902,8 +902,8 @@ const activateAbility = (state: GameState, abilityId: string) => {
       return;
     }
     state.legalTargets = pawns.map(([square]) => square);
-    state.pending.step = "monument-base";
-    state.notice = `Choose the pawn whose space will hold the new rook. You will select ${needed - 1} additional pawn${needed - 1 === 1 ? "" : "s"} to sacrifice.`;
+    state.pending = { ...state.pending, step: "monument-sacrifice", selected: [] };
+    state.notice = `Choose ${needed} pawn${needed === 1 ? "" : "s"} to sacrifice.`;
     return;
   }
   if (abilityId === "hex") {
@@ -1493,52 +1493,16 @@ const completeSpecialTarget = (state: GameState, square: Square) => {
     }
     finishTurn(state, abilityDescription(state, `: revived ${pieceName(grave.piece)} on ${square}`));
   } else if (pending.step === "monument-base") {
-    const needed = 4 - currentLevel(state, abilityId);
-    if (needed === 1) {
-      const pawn = state.board[square];
-      delete state.board[square];
-      state.players[pawn.color].graveyard.push({ piece: pawn, capturedOnTurn: state.turn });
-      state.board[square] = {
-        id: `${state.activeColor}-monument-${state.turn}`,
-        type: "rook",
-        color: state.activeColor,
-        controller: state.activeColor,
-        hasMoved: true,
-        status: {},
-      };
-      finishTurn(state, abilityDescription(state, `: sacrificed 1 pawn and raised a rook on ${square}`));
-    } else {
-      state.pending = {
-        ...pending,
-        step: "monument-sacrifice",
-        destination: square,
-        selected: [square],
-      };
-      state.legalTargets = Object.entries(state.board)
-        .filter(([candidate, piece]) =>
-          candidate !== square &&
-          piece.controller === state.activeColor &&
-          piece.type === "pawn",
-        )
-        .map(([candidate]) => candidate);
-      state.notice = `Choose ${needed - 1} more pawn${needed - 1 === 1 ? "" : "s"} to sacrifice.`;
-    }
-  } else if (pending.step === "monument-sacrifice" && pending.destination) {
-    const needed = 4 - currentLevel(state, abilityId);
-    const selected = [...(pending.selected ?? []), square];
-    if (selected.length < needed) {
-      state.pending = { ...pending, selected };
-      state.legalTargets = state.legalTargets.filter((candidate) => candidate !== square);
-      state.notice = `Choose ${needed - selected.length} more pawn${needed - selected.length === 1 ? "" : "s"} to sacrifice.`;
-      return;
-    }
+    const selected = pending.selected ?? [];
+    if (!selected.includes(square)) return;
+    const needed = selected.length;
     for (const pawnSquare of selected) {
       const pawn = state.board[pawnSquare];
       if (!pawn) continue;
       delete state.board[pawnSquare];
       state.players[pawn.color].graveyard.push({ piece: pawn, capturedOnTurn: state.turn });
     }
-    state.board[pending.destination] = {
+    state.board[square] = {
       id: `${state.activeColor}-monument-${state.turn}`,
       type: "rook",
       color: state.activeColor,
@@ -1548,8 +1512,20 @@ const completeSpecialTarget = (state: GameState, square: Square) => {
     };
     finishTurn(
       state,
-      abilityDescription(state, `: sacrificed ${needed} pawns and raised a rook on ${pending.destination}`),
+      abilityDescription(state, `: sacrificed ${needed} pawn${needed === 1 ? "" : "s"} and raised a rook on ${square}`),
     );
+  } else if (pending.step === "monument-sacrifice") {
+    const needed = 4 - currentLevel(state, abilityId);
+    const selected = [...(pending.selected ?? []), square];
+    if (selected.length < needed) {
+      state.pending = { ...pending, selected };
+      state.legalTargets = state.legalTargets.filter((candidate) => candidate !== square);
+      state.notice = `Choose ${needed - selected.length} more pawn${needed - selected.length === 1 ? "" : "s"} to sacrifice.`;
+      return;
+    }
+    state.pending = { ...pending, step: "monument-base", selected };
+    state.legalTargets = selected;
+    state.notice = "Choose which sacrificed pawn’s space will hold the new rook.";
   }
 };
 
