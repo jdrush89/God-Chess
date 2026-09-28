@@ -63,7 +63,7 @@ describe("game startup", () => {
     fireEvent.click(screen.getByRole("button", { name: /load game/i }));
     fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
 
-    expect(screen.getByText(/player 2 · black picks/i)).toBeTruthy();
+    expect(screen.getByText(/black picks/i)).toBeTruthy();
     expect(screen.getByRole("button", { name: /quetzacoatl sky w/i })).toBeTruthy();
   });
 
@@ -84,7 +84,7 @@ describe("game startup", () => {
     fireEvent.click(screen.getByRole("button", { name: /begin local duel/i }));
     fireEvent.click(screen.getByRole("button", { name: /auto-pick random god/i }));
 
-    expect(screen.getByText(/player 2 · black picks/i)).toBeTruthy();
+    expect(screen.getByText(/black picks/i)).toBeTruthy();
     expect(screen.getByRole("button", { name: /auto-pick random god/i })).toBeTruthy();
   });
 

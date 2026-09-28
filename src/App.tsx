@@ -76,16 +76,6 @@ interface CaptureFlight extends CaptureAnimation {
   deltaY: number;
 }
 
-interface MoveFlight {
-  id: string;
-  piece: Piece;
-  size: number;
-  startX: number;
-  startY: number;
-  deltaX: number;
-  deltaY: number;
-}
-
 const orbTotals = (state: GameState): OrbTotals => ({
   white: { ...state.players.white.orbs },
   black: { ...state.players.black.orbs },
@@ -685,11 +675,11 @@ function PlayerBar({
   );
 }
 
-function PieceView({ piece, moving = false }: { piece: Piece; moving?: boolean }) {
+function PieceView({ piece }: { piece: Piece }) {
   const statuses = statusLabels.filter(([key]) => Boolean(piece.status[key]));
   return (
     <span
-      className={`chess-piece ${piece.color} ${piece.status.hired ? "hired" : ""} ${moving ? "moving-placeholder" : ""}`}
+      className={`chess-piece ${piece.color} ${piece.status.hired ? "hired" : ""}`}
       data-piece-id={piece.id}
     >
       {PIECES[piece.color][piece.type]}
@@ -702,12 +692,10 @@ function ChessBoard({
   state,
   dispatch,
   onInspectSquare,
-  movingPieceIds,
 }: {
   state: GameState;
   dispatch: GameDispatch;
   onInspectSquare: (square: Square) => void;
-  movingPieceIds: Set<string>;
 }) {
   const displaySquares = useMemo(() => [...allSquares].sort((a, b) => Number(b[1]) - Number(a[1]) || a.localeCompare(b)), []);
   return (
@@ -736,7 +724,7 @@ function ChessBoard({
                 {rank === "1" && <span className="file-label">{file}</span>}
                 {legal && !piece && <span className="move-dot" />}
                 {banana && <span className="banana" title="Banana peel">⌁</span>}
-                {piece && <PieceView piece={piece} moving={movingPieceIds.has(piece.id)} />}
+                {piece && <PieceView piece={piece} />}
               </button>
             );
           })}
@@ -1635,8 +1623,6 @@ function GameScreen({
   }));
   const [captureFlights, setCaptureFlights] = useState<CaptureFlight[]>([]);
   const [arrivingGraveyards, setArrivingGraveyards] = useState<Set<Color>>(() => new Set());
-  const [moveFlights, setMoveFlights] = useState<MoveFlight[]>([]);
-  const [movingPieceIds, setMovingPieceIds] = useState<Set<string>>(() => new Set());
   const [opponentPresentation, setOpponentPresentation] = useState<ActionPresentation>();
   const processedOrbAnimations = useRef(new Set((state.orbAnimations ?? []).map((event) => event.id)));
   const processedCaptureAnimations = useRef(new Set((state.captureAnimations ?? []).map((event) => event.id)));
@@ -1695,37 +1681,31 @@ function GameScreen({
     previousPieceSquares.current = current;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
-    const flights = [...current.entries()].flatMap(([pieceId, destination]): MoveFlight[] => {
+    for (const [pieceId, destination] of current) {
       const source = previous.get(pieceId);
-      if (!source || source === destination) return [];
-      const piece = state.board[destination];
+      if (!source || source === destination) continue;
       const sourceElement = document.querySelector<HTMLElement>(`[data-square="${source}"]`);
       const destinationElement = document.querySelector<HTMLElement>(`[data-square="${destination}"]`);
-      if (!piece || !sourceElement || !destinationElement) return [];
+      const pieceElement = destinationElement?.querySelector<HTMLElement>(`[data-piece-id="${pieceId}"]`);
+      if (!sourceElement || !destinationElement || !pieceElement) continue;
       const sourceRect = sourceElement.getBoundingClientRect();
       const destinationRect = destinationElement.getBoundingClientRect();
-      const startX = sourceRect.left + sourceRect.width / 2;
-      const startY = sourceRect.top + sourceRect.height / 2;
-      return [{
-        id: `${pieceId}-${source}-${destination}-${state.turn}`,
-        piece,
-        size: Math.min(65, sourceRect.width * .82),
-        startX,
-        startY,
-        deltaX: destinationRect.left + destinationRect.width / 2 - startX,
-        deltaY: destinationRect.top + destinationRect.height / 2 - startY,
-      }];
-    });
-    if (!flights.length) return;
-    const ids = new Set(flights.map((flight) => flight.piece.id));
-    setMoveFlights((currentFlights) => [...currentFlights, ...flights]);
-    setMovingPieceIds((currentIds) => new Set([...currentIds, ...ids]));
-    const timer = window.setTimeout(() => {
-      const flightIds = new Set(flights.map((flight) => flight.id));
-      setMoveFlights((currentFlights) => currentFlights.filter((flight) => !flightIds.has(flight.id)));
-      setMovingPieceIds((currentIds) => new Set([...currentIds].filter((id) => !ids.has(id))));
-    }, 900);
-    animationTimers.current.push(timer);
+      const deltaX = sourceRect.left + sourceRect.width / 2 -
+        (destinationRect.left + destinationRect.width / 2);
+      const deltaY = sourceRect.top + sourceRect.height / 2 -
+        (destinationRect.top + destinationRect.height / 2);
+      const travel = Math.hypot(deltaX, deltaY);
+      pieceElement.animate(
+        [
+          { transform: `translate3d(${deltaX}px, ${deltaY}px, 0)` },
+          { transform: "translate3d(0, 0, 0)" },
+        ],
+        {
+          duration: Math.min(700, 360 + travel * .35),
+          easing: "cubic-bezier(.22, .8, .2, 1)",
+        },
+      );
+    }
   }, [boardPositionKey]);
 
   useLayoutEffect(() => {
@@ -1979,7 +1959,6 @@ function GameScreen({
             state={state}
             dispatch={dispatch}
             onInspectSquare={setInspectedSquare}
-            movingPieceIds={movingPieceIds}
           />
           <PlayerBar
             state={state}
@@ -2069,27 +2048,6 @@ function GameScreen({
           </span>
         </div>
       ))}
-      {moveFlights.map((flight) => (
-        <div
-          className="move-flight"
-          style={{
-            left: `${flight.startX}px`,
-            top: `${flight.startY}px`,
-            "--move-flight-x": `${flight.deltaX}px`,
-            "--move-flight-y": `${flight.deltaY}px`,
-            "--move-flight-size": `${flight.size}px`,
-          } as React.CSSProperties}
-          key={flight.id}
-          aria-hidden="true"
-        >
-          <span className="move-flight-path">
-            <span className={`move-flight-piece ${flight.piece.color}`}>
-              {PIECES[flight.piece.color][flight.piece.type]}
-            </span>
-          </span>
-        </div>
-      ))}
-
       {historyOpen && (
         <aside className="history-drawer">
           <div><h3><History size={18} /> Chronicle</h3><button onClick={() => setHistoryOpen(false)}><X size={18} /></button></div>

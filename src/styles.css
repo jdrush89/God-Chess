@@ -348,29 +348,6 @@ body::before {
 }
 .capture-flight-piece.white { color: #f5f0e6; -webkit-text-stroke: 1px #6f6557; text-shadow: 0 1px 0 #fff; }
 .capture-flight-piece.black { color: #17191d; -webkit-text-stroke: 1px #74767d; text-shadow: 0 1px 0 #5c5e63; }
-.move-flight { position: fixed; z-index: 44; width: 0; height: 0; pointer-events: none; }
-.move-flight-path {
-  display: block; will-change: transform;
-  animation: move-flight-path 820ms cubic-bezier(.22,.72,.18,1) forwards;
-}
-.move-flight-piece {
-  display: block; font: var(--move-flight-size, 58px)/1 Georgia, serif;
-  filter: drop-shadow(0 7px 8px rgba(0,0,0,.58));
-  will-change: transform;
-  animation: move-flight-piece 820ms ease-in-out forwards;
-}
-.move-flight-piece.white { color: #f5f0e6; -webkit-text-stroke: 1px #6f6557; text-shadow: 0 1px 0 #fff; }
-.move-flight-piece.black { color: #17191d; -webkit-text-stroke: 1px #74767d; text-shadow: 0 1px 0 #5c5e63; }
-.chess-piece.moving-placeholder { opacity: 0; }
-@keyframes move-flight-path {
-  from { transform: translate3d(0, 0, 0); }
-  to { transform: translate3d(var(--move-flight-x), var(--move-flight-y), 0); }
-}
-@keyframes move-flight-piece {
-  0% { transform: translate3d(-50%, -50%, 0) scale(1); }
-  48% { transform: translate3d(-50%, -58%, 0) scale(1.08); }
-  100% { transform: translate3d(-50%, -50%, 0) scale(1); }
-}
 @keyframes capture-flight-path {
   from { transform: translate3d(0, 0, 0); }
   to { transform: translate3d(var(--capture-flight-x), var(--capture-flight-y), 0); }
