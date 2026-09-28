@@ -17,6 +17,7 @@ import {
   Info,
   LoaderCircle,
   Magnet,
+  Menu,
   Coins,
   Rabbit,
   RotateCcw,
@@ -702,8 +703,9 @@ function PlayerBar({
 }) {
   const player = state.players[color];
   const isActive = state.activeColor === color && state.phase !== "gameover";
+  const [toolsOpen, setToolsOpen] = useState(false);
   return (
-    <section className={`player-bar ${color} ${isActive ? "active" : ""}`}>
+    <section className={`player-bar ${color} ${isActive ? "active" : ""} ${toolsOpen ? "tools-open" : ""}`}>
       <div className={`player-avatar ${color}`}><Crown size={19} /></div>
       <div className="player-copy">
         <strong>{player.name}</strong>
@@ -723,31 +725,49 @@ function PlayerBar({
           arriving={arrivingOrbs.has(`${color}-black`)}
         />
       </div>
-      <button
-        className={`graveyard-button ${graveyardArriving ? "arriving" : ""}`}
-        onClick={() => onGraveyardClick(color)}
-        title={`View ${player.name}'s graveyard`}
-        aria-label={`View ${player.name}'s graveyard, ${displayedGraveyardCount} captured pieces`}
-        data-graveyard-target={color}
-      >
-        <Skull size={15} />
-        <b>{displayedGraveyardCount}</b>
-      </button>
-      <div className="mini-pantheon">
-        {player.gods.map((godId) => {
-          const resting = state.rested.includes(godId);
-          const interactive = isActive && !resting;
-          return (
-            <button
-              className={resting ? "resting" : ""}
-              title={`${interactive ? "Use" : "View"} ${GOD_BY_ID[godId].name}${resting ? " · resting" : ""}`}
-              onClick={() => onGodClick(godId, color)}
-              key={godId}
-            >
-              <GodSigil godId={godId} size="small" />
-            </button>
-          );
-        })}
+      <div className={`player-tools ${toolsOpen ? "open" : ""}`}>
+        <button
+          className="player-tools-toggle"
+          onClick={() => setToolsOpen((open) => !open)}
+          aria-label={`${toolsOpen ? "Close" : "Open"} ${player.name} controls`}
+          aria-expanded={toolsOpen}
+        >
+          {toolsOpen ? <X size={16} /> : <Menu size={16} />}
+        </button>
+        <div className="player-tools-content">
+          <button
+            className={`graveyard-button ${graveyardArriving ? "arriving" : ""}`}
+            onClick={() => {
+              setToolsOpen(false);
+              onGraveyardClick(color);
+            }}
+            title={`View ${player.name}'s graveyard`}
+            aria-label={`View ${player.name}'s graveyard, ${displayedGraveyardCount} captured pieces`}
+            data-graveyard-target={color}
+          >
+            <Skull size={15} />
+            <b>{displayedGraveyardCount}</b>
+          </button>
+          <div className="mini-pantheon">
+            {player.gods.map((godId) => {
+              const resting = state.rested.includes(godId);
+              const interactive = isActive && !resting;
+              return (
+                <button
+                  className={resting ? "resting" : ""}
+                  title={`${interactive ? "Use" : "View"} ${GOD_BY_ID[godId].name}${resting ? " · resting" : ""}`}
+                  onClick={() => {
+                    setToolsOpen(false);
+                    onGodClick(godId, color);
+                  }}
+                  key={godId}
+                >
+                  <GodSigil godId={godId} size="small" />
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </section>
   );
