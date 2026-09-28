@@ -101,10 +101,10 @@ describe("chess movement", () => {
 
 describe("game flow", () => {
   it("assigns AI and online players to their randomized colors", () => {
-    const aiGame = createGame(2, { mode: "ai", aiDifficulty: 8 });
+    const aiGame = createGame(2, { mode: "ai", aiDifficulty: 8, playerName: "Athena" });
     expect(aiGame.aiColor).toBe("white");
     expect(aiGame.players.white.name).toBe("Divine AI");
-    expect(aiGame.players.black.name).toBe("Player 1");
+    expect(aiGame.players.black.name).toBe("Athena");
     expect(aiGame.aiDifficulty).toBe(8);
 
     const onlineGame = createGame(2, {

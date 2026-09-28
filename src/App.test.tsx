@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import App from "./App";
 import { createGame, gameReducer } from "./game/engine";
@@ -72,15 +72,23 @@ describe("game startup", () => {
     expect(screen.getByRole("button", { name: /quetzacoatl sky w/i })).toBeTruthy();
   });
 
-  it("saves and quits a new game back to the main menu", () => {
+  it("saves and quits a new game back to the main menu", async () => {
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: /^new game$/i }));
     fireEvent.click(screen.getByRole("button", { name: /begin local duel/i }));
     fireEvent.click(screen.getByRole("button", { name: /save & quit/i }));
 
-    expect(screen.getByRole("img", { name: /god chess/i })).toBeTruthy();
+    expect(await screen.findByRole("img", { name: /god chess/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /load game/i })).toBeTruthy();
     expect(window.localStorage.getItem(SAVE_KEY)).toBeTruthy();
+  });
+
+  it("explains when account services have not been configured", () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
+
+    expect(screen.getByText(/account setup required/i)).toBeTruthy();
+    expect(screen.getByText(/local games remain available/i)).toBeTruthy();
   });
 
   it("auto-picks one god at a time from the draft screen", () => {
@@ -145,7 +153,7 @@ describe("game startup", () => {
     );
   });
 
-  it("enables undo from Settings and restores the previous completed turn", () => {
+  it("enables undo from Settings and restores the previous completed turn", async () => {
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: /^new game$/i }));
     fireEvent.click(screen.getByRole("button", { name: /begin local duel/i }));
@@ -171,6 +179,7 @@ describe("game startup", () => {
     fireEvent.click(screen.getByRole("gridcell", { name: "e4" }));
 
     fireEvent.click(screen.getByRole("button", { name: /save & quit/i }));
+    await waitFor(() => expect(screen.getByRole("img", { name: /god chess/i })).toBeTruthy());
     const storedGames = JSON.parse(window.localStorage.getItem(SAVE_KEY) ?? "[]");
     expect(storedGames[0].version).toBe(3);
     expect(storedGames[0].undoHistory).toHaveLength(1);

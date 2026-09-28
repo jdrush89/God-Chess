@@ -30,6 +30,7 @@ import {
   Swords,
   Trash2,
   Undo2,
+  UserRound,
   Users,
   Wifi,
   X,
@@ -41,6 +42,9 @@ import { chooseAiPlan, isAiTurn } from "./game/ai";
 import { createGame, gameReducer, type GameAction } from "./game/engine";
 import { abilityLevel, GOD_BY_ID, GODS } from "./game/gods";
 import type { Ability, ActionPresentation, CaptureAnimation, Color, GameMode, GameState, GodId, OrbAnimation, OrbColor, Piece, Square } from "./game/types";
+import { AccountModal } from "./account/AccountModal";
+import { deleteCloudSavedGame, loadCloudSavedGames, upsertCloudSavedGame } from "./account/cloudSaves";
+import { useAccount, type AccountProfile } from "./account/useAccount";
 import {
   onlinePlayerColor,
   onlineTurnInputDisabled,
@@ -48,6 +52,15 @@ import {
   useOnlineGame,
   type OnlineGameState,
 } from "./multiplayer/useOnlineGame";
+import {
+  createSavedGame,
+  loadLocalSavedGames,
+  mergeSavedGame,
+  persistLocalSavedGames,
+  prepareSavedState,
+  saveId,
+  type SavedGame,
+} from "./saves";
 
 type GameDispatch = (action: GameAction) => void;
 
@@ -97,53 +110,7 @@ const orbTotals = (state: GameState): OrbTotals => ({
 
 const orbTargetKey = (player: Color, orb: OrbColor) => `${player}-${orb}`;
 
-const SAVE_KEY = "god-chess-saves-v2";
-const LEGACY_SAVE_KEY = "god-chess-save-v1";
 const UNDO_SETTING_KEY = "god-chess-undo-enabled";
-
-interface SavedGame {
-  version: 3;
-  id: string;
-  savedAt: string;
-  state: GameState;
-  undoHistory: GameState[];
-  turnStart?: GameState;
-}
-
-interface StoredSavedGame {
-  version?: number;
-  id?: string;
-  savedAt?: string;
-  state?: GameState;
-  undoHistory?: GameState[];
-  turnStart?: GameState;
-}
-
-const prepareSavedState = (state: GameState) => {
-  const savedState = structuredClone(state);
-  savedState.orbAnimations = [];
-  savedState.nextOrbAnimationId ??= 1;
-  savedState.captureAnimations = [];
-  savedState.nextCaptureAnimationId ??= 1;
-  savedState.presentation = undefined;
-  savedState.upgradePreview = undefined;
-  savedState.nextPresentationId ??= 1;
-  savedState.gameMode ??= "local";
-  savedState.aiDifficulty ??= 5;
-  return savedState;
-};
-
-const isSavedGameState = (state: GameState | undefined): state is GameState =>
-  Boolean(
-    state &&
-    ["draft", "play", "upgrade", "gameover"].includes(state.phase) &&
-    state.board &&
-    state.players?.white &&
-    state.players?.black,
-  );
-
-const saveId = () => globalThis.crypto?.randomUUID?.() ??
-  `save-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 const loadUndoSetting = () => {
   try {
@@ -159,95 +126,6 @@ const persistUndoSetting = (enabled: boolean) => {
     window.localStorage.setItem(UNDO_SETTING_KEY, String(enabled));
   } catch (error) {
     console.error("Unable to save the undo setting.", error);
-  }
-};
-
-const persistSavedGames = (games: SavedGame[]) => {
-  window.localStorage.setItem(SAVE_KEY, JSON.stringify(games));
-};
-
-const loadSavedGames = (): SavedGame[] => {
-  try {
-    const raw = window.localStorage.getItem(SAVE_KEY);
-    const decoded = raw ? JSON.parse(raw) as unknown : [];
-    const parsed = Array.isArray(decoded)
-      ? decoded as StoredSavedGame[]
-      : [];
-    let migrated = false;
-    const games = parsed.flatMap((saved): SavedGame[] => {
-      if (
-        (saved.version !== 2 && saved.version !== 3) ||
-        !saved.id ||
-        !saved.savedAt ||
-        !isSavedGameState(saved.state)
-      ) return [];
-      if (saved.version !== 3) migrated = true;
-      return [{
-        version: 3,
-        id: saved.id,
-        savedAt: saved.savedAt,
-        state: prepareSavedState(saved.state),
-        undoHistory: (Array.isArray(saved.undoHistory) ? saved.undoHistory : [])
-          .filter(isSavedGameState)
-          .map(prepareSavedState),
-        turnStart: isSavedGameState(saved.turnStart)
-          ? prepareSavedState(saved.turnStart)
-          : undefined,
-      }];
-    });
-    const legacyRaw = window.localStorage.getItem(LEGACY_SAVE_KEY);
-    if (legacyRaw) {
-      const legacy = JSON.parse(legacyRaw) as {
-        version?: number;
-        savedAt?: string;
-        state?: GameState;
-      };
-      if (legacy.version === 1 && legacy.savedAt && isSavedGameState(legacy.state)) {
-        games.push({
-          version: 3,
-          id: saveId(),
-          savedAt: legacy.savedAt,
-          state: prepareSavedState(legacy.state),
-          undoHistory: [],
-          turnStart: legacy.state.phase === "play"
-            ? prepareSavedState(legacy.state)
-            : undefined,
-        });
-        migrated = true;
-      }
-      window.localStorage.removeItem(LEGACY_SAVE_KEY);
-    }
-    if (migrated) persistSavedGames(games);
-    return games.sort((a, b) => b.savedAt.localeCompare(a.savedAt));
-  } catch (error) {
-    console.error("Unable to load saved God Chess games.", error);
-    return [];
-  }
-};
-
-const saveGameState = (
-  games: SavedGame[],
-  id: string,
-  state: GameState,
-  undoHistory: GameState[],
-  turnStart?: GameState,
-) => {
-  try {
-    const saved: SavedGame = {
-      version: 3,
-      id,
-      savedAt: new Date().toISOString(),
-      state: prepareSavedState(state),
-      undoHistory: undoHistory.map(prepareSavedState),
-      turnStart: turnStart ? prepareSavedState(turnStart) : undefined,
-    };
-    const next = [saved, ...games.filter((game) => game.id !== id)]
-      .sort((a, b) => b.savedAt.localeCompare(a.savedAt));
-    persistSavedGames(next);
-    return next;
-  } catch (error) {
-    console.error("Unable to save the God Chess game.", error);
-    return undefined;
   }
 };
 
@@ -1500,16 +1378,39 @@ function SettingsModal({
 
 function MainMenu({
   savedGames,
+  savesLoading,
+  saveError,
+  account,
+  accountConfigured,
+  accountLoading,
+  accountWorking,
+  accountError,
   onLoad,
   onDelete,
   onNewGame,
+  onSignIn,
+  onSignUp,
+  onSignOut,
+  onUpdateDisplayName,
 }: {
   savedGames: SavedGame[];
+  savesLoading: boolean;
+  saveError?: string;
+  account?: AccountProfile;
+  accountConfigured: boolean;
+  accountLoading: boolean;
+  accountWorking: boolean;
+  accountError?: string;
   onLoad: (game: SavedGame) => void;
   onDelete: (id: string) => void;
   onNewGame: () => void;
+  onSignIn: (email: string, password: string) => Promise<string>;
+  onSignUp: (email: string, password: string, displayName: string) => Promise<string>;
+  onSignOut: () => Promise<void>;
+  onUpdateDisplayName: (displayName: string) => Promise<string>;
 }) {
   const [loadOpen, setLoadOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
   useEffect(() => {
     if (!savedGames.length) setLoadOpen(false);
   }, [savedGames.length]);
@@ -1518,17 +1419,26 @@ function MainMenu({
       <img className="main-menu-art" src={TITLE_ART} alt="God Chess" />
       <div className="main-menu-shade" />
       <span className="game-version">Version {GAME_VERSION}</span>
+      <button className="main-account-button" onClick={() => setAccountOpen(true)}>
+        <UserRound size={16} />
+        {accountLoading ? "Account" : account?.displayName ?? "Sign in"}
+      </button>
       <div className="main-menu-actions">
         <p className="eyebrow">THE DIVINE GAME</p>
         <div>
-          <button className="primary-button" onClick={onNewGame}>New game</button>
-          {savedGames.length > 0 && (
-            <button className="secondary-button" onClick={() => setLoadOpen(true)}>Load game</button>
+          <button className="primary-button" onClick={onNewGame} disabled={savesLoading}>New game</button>
+          {(savedGames.length > 0 || savesLoading) && (
+            <button className="secondary-button" onClick={() => setLoadOpen(true)} disabled={savesLoading}>Load game</button>
           )}
         </div>
-        {savedGames.length > 0 && (
-          <small>{savedGames.length} saved game{savedGames.length === 1 ? "" : "s"}</small>
-        )}
+        {savesLoading
+          ? <small>Loading cloud saves...</small>
+          : savedGames.length > 0 && (
+            <small>
+              {savedGames.length} {account ? "cloud " : ""}saved game{savedGames.length === 1 ? "" : "s"}
+            </small>
+          )}
+        {saveError && <p className="main-menu-error" role="alert">{saveError}</p>}
       </div>
       {loadOpen && (
         <div className="load-game-backdrop" onMouseDown={() => setLoadOpen(false)}>
@@ -1539,7 +1449,13 @@ function MainMenu({
             <p className="eyebrow">SAVED PANTHEONS</p>
             <h2>Load game</h2>
             <div className="saved-game-list">
-              {savedGames.map((game) => (
+              {savesLoading && (
+                <div className="saved-games-loading">
+                  <LoaderCircle className="spin" size={22} />
+                  Loading cloud saves
+                </div>
+              )}
+              {!savesLoading && savedGames.map((game) => (
                 <article className="saved-game-card" key={game.id}>
                   <button
                     className="saved-game-load"
@@ -1584,9 +1500,26 @@ function MainMenu({
                   </button>
                 </article>
               ))}
+              {!savesLoading && savedGames.length === 0 && (
+                <p className="saved-games-empty">No saved games are stored in this account yet.</p>
+              )}
             </div>
           </section>
         </div>
+      )}
+      {accountOpen && (
+        <AccountModal
+          account={account}
+          configured={accountConfigured}
+          loading={accountLoading}
+          working={accountWorking}
+          serviceError={accountError}
+          onClose={() => setAccountOpen(false)}
+          onSignIn={onSignIn}
+          onSignUp={onSignUp}
+          onSignOut={onSignOut}
+          onUpdateDisplayName={onUpdateDisplayName}
+        />
       )}
     </section>
   );
@@ -1594,6 +1527,7 @@ function MainMenu({
 
 function StartGamePrompt({
   online,
+  defaultPlayerName,
   canCancel,
   onStart,
   onHost,
@@ -1603,6 +1537,7 @@ function StartGamePrompt({
   onDisconnect,
 }: {
   online: OnlineGameState;
+  defaultPlayerName?: string;
   canCancel: boolean;
   onStart: (mode: Exclude<GameMode, "online">, difficulty: number) => void;
   onHost: (name: string) => void;
@@ -1614,7 +1549,7 @@ function StartGamePrompt({
   const [mode, setMode] = useState<GameMode>("local");
   const [difficulty, setDifficulty] = useState(7);
   const [onlineAction, setOnlineAction] = useState<"host" | "join">("host");
-  const [playerName, setPlayerName] = useState("Player");
+  const [playerName, setPlayerName] = useState(defaultPlayerName || "Player");
   const [roomCode, setRoomCode] = useState("");
 
   const chooseMode = (nextMode: GameMode) => {
@@ -2283,7 +2218,12 @@ function GameScreen({
 }
 
 export default function App() {
-  const [savedGames, setSavedGames] = useState(loadSavedGames);
+  const accountService = useAccount();
+  const [localSavedGames, setLocalSavedGames] = useState(loadLocalSavedGames);
+  const [cloudSavedGames, setCloudSavedGames] = useState<SavedGame[]>([]);
+  const [savesLoading, setSavesLoading] = useState(false);
+  const [saveError, setSaveError] = useState<string>();
+  const savedGames = accountService.account ? cloudSavedGames : localSavedGames;
   const savedGamesRef = useRef(savedGames);
   savedGamesRef.current = savedGames;
   const activeSaveId = useRef<string | undefined>(undefined);
@@ -2300,6 +2240,33 @@ export default function App() {
   const undoStack = useRef<GameState[]>([]);
   const undoDepthRef = useRef(0);
   const turnStart = useRef<GameState | undefined>(undefined);
+  const cloudSaveQueue = useRef<Promise<void>>(Promise.resolve());
+
+  useEffect(() => {
+    activeSaveId.current = undefined;
+    setSaveError(undefined);
+    if (!accountService.account) {
+      setCloudSavedGames([]);
+      setSavesLoading(false);
+      return;
+    }
+    let active = true;
+    setSavesLoading(true);
+    void loadCloudSavedGames(accountService.account.userId)
+      .then((games) => {
+        if (active) setCloudSavedGames(games);
+      })
+      .catch((error) => {
+        console.error("Unable to load cloud God Chess saves.", error);
+        if (active) setSaveError(error instanceof Error ? error.message : "Unable to load cloud saves.");
+      })
+      .finally(() => {
+        if (active) setSavesLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [accountService.account?.userId]);
 
   const receiveState = (next: GameState) => {
     stateRef.current = next;
@@ -2430,25 +2397,40 @@ export default function App() {
     setUndoPreferred(enabled);
   };
 
-  const saveCurrentGame = () => {
+  const saveCurrentGame = async () => {
     if (stateRef.current.gameMode === "online") return false;
     const id = activeSaveId.current ?? saveId();
-    const next = saveGameState(
-      savedGamesRef.current,
+    const saved = createSavedGame(
       id,
       stateRef.current,
       undoStack.current,
       turnStart.current,
     );
-    if (!next) return false;
-    activeSaveId.current = id;
-    savedGamesRef.current = next;
-    setSavedGames(next);
-    return true;
+    const next = mergeSavedGame(savedGamesRef.current, saved);
+    const account = accountService.account;
+    try {
+      if (account) {
+        const queuedSave = cloudSaveQueue.current.then(() => upsertCloudSavedGame(account.userId, saved));
+        cloudSaveQueue.current = queuedSave.catch(() => undefined);
+        await queuedSave;
+        setCloudSavedGames(next);
+      } else {
+        persistLocalSavedGames(next);
+        setLocalSavedGames(next);
+      }
+      setSaveError(undefined);
+      activeSaveId.current = id;
+      savedGamesRef.current = next;
+      return true;
+    } catch (error) {
+      console.error("Unable to save the God Chess game.", error);
+      setSaveError(error instanceof Error ? error.message : "Unable to save the game.");
+      return false;
+    }
   };
 
-  const saveAndQuit = () => {
-    if (!saveCurrentGame()) return;
+  const saveAndQuit = async () => {
+    if (!await saveCurrentGame()) return;
     aiPlan.current = [];
     clearUndoHistory();
     setStartView("menu");
@@ -2456,7 +2438,7 @@ export default function App() {
 
   useEffect(() => {
     if (startView !== "none" || state.gameMode === "online") return;
-    const timer = window.setTimeout(() => saveCurrentGame(), 120);
+    const timer = window.setTimeout(() => void saveCurrentGame(), 120);
     return () => window.clearTimeout(timer);
   }, [startView, state]);
 
@@ -2492,12 +2474,24 @@ export default function App() {
     aiPlan.current = [];
     setStartView("none");
   };
-  const deleteSavedGame = (id: string) => {
+  const deleteSavedGame = async (id: string) => {
     const next = savedGamesRef.current.filter((game) => game.id !== id);
-    persistSavedGames(next);
-    savedGamesRef.current = next;
-    setSavedGames(next);
-    if (activeSaveId.current === id) activeSaveId.current = undefined;
+    const account = accountService.account;
+    try {
+      if (account) {
+        await deleteCloudSavedGame(account.userId, id);
+        setCloudSavedGames(next);
+      } else {
+        persistLocalSavedGames(next);
+        setLocalSavedGames(next);
+      }
+      setSaveError(undefined);
+      savedGamesRef.current = next;
+      if (activeSaveId.current === id) activeSaveId.current = undefined;
+    } catch (error) {
+      console.error("Unable to delete the saved God Chess game.", error);
+      setSaveError(error instanceof Error ? error.message : "Unable to delete the saved game.");
+    }
   };
   const startNewGame = () => {
     setSetupCanCancel(true);
@@ -2507,7 +2501,11 @@ export default function App() {
   const beginGame = (mode: Exclude<GameMode, "online">, difficulty: number) => {
     onlineActions.disconnect();
     activeSaveId.current = saveId();
-    const next = createGame(undefined, { mode, aiDifficulty: difficulty });
+    const next = createGame(undefined, {
+      mode,
+      aiDifficulty: difficulty,
+      playerName: accountService.account?.displayName,
+    });
     resetUndoTracking(next);
     receiveState(next);
     aiPlan.current = [];
@@ -2583,9 +2581,20 @@ export default function App() {
       <>
         <MainMenu
           savedGames={savedGames}
+          savesLoading={savesLoading}
+          saveError={saveError}
+          account={accountService.account}
+          accountConfigured={accountService.configured}
+          accountLoading={accountService.loading}
+          accountWorking={accountService.working}
+          accountError={accountService.error}
           onLoad={loadGame}
-          onDelete={deleteSavedGame}
+          onDelete={(id) => void deleteSavedGame(id)}
           onNewGame={startNewGame}
+          onSignIn={accountService.signIn}
+          onSignUp={accountService.signUp}
+          onSignOut={accountService.signOut}
+          onUpdateDisplayName={accountService.updateDisplayName}
         />
       </>
     );
@@ -2593,6 +2602,12 @@ export default function App() {
 
   return (
     <>
+      {saveError && (
+        <div className="save-error-banner" role="alert">
+          <span>{saveError}</span>
+          <button onClick={() => setSaveError(undefined)} aria-label="Dismiss save error"><X size={15} /></button>
+        </div>
+      )}
       {state.phase === "draft"
         ? (
           <DraftScreen
@@ -2632,6 +2647,7 @@ export default function App() {
       {startView === "setup" && (
         <StartGamePrompt
           online={online}
+          defaultPlayerName={accountService.account?.displayName}
           canCancel={setupCanCancel}
           onStart={beginGame}
           onHost={(name) => void onlineActions.hostGame(name)}

@@ -82,6 +82,7 @@ export const createGame = (
   options: {
     mode?: GameMode;
     aiDifficulty?: number;
+    playerName?: string;
     hostName?: string;
     guestName?: string;
   } = {},
@@ -90,16 +91,21 @@ export const createGame = (
   const aiDifficulty = Math.max(1, Math.min(10, Math.round(options.aiDifficulty ?? 5)));
   const aiColor = gameMode === "ai" ? (whitePlayer === 2 ? "white" : "black") : undefined;
   const onlineHostColor = gameMode === "online" ? (whitePlayer === 1 ? "white" : "black") : undefined;
+  const playerName = options.playerName?.trim() || "Player 1";
   const whiteName = gameMode === "ai" && aiColor === "white"
     ? "Divine AI"
-    : gameMode === "online"
-      ? (onlineHostColor === "white" ? options.hostName ?? "Host" : options.guestName ?? "Guest")
-      : `Player ${whitePlayer}`;
+    : gameMode === "ai"
+      ? playerName
+      : gameMode === "online"
+        ? (onlineHostColor === "white" ? options.hostName ?? "Host" : options.guestName ?? "Guest")
+        : `Player ${whitePlayer}`;
   const blackName = gameMode === "ai" && aiColor === "black"
     ? "Divine AI"
-    : gameMode === "online"
-      ? (onlineHostColor === "black" ? options.hostName ?? "Host" : options.guestName ?? "Guest")
-      : `Player ${whitePlayer === 1 ? 2 : 1}`;
+    : gameMode === "ai"
+      ? playerName
+      : gameMode === "online"
+        ? (onlineHostColor === "black" ? options.hostName ?? "Host" : options.guestName ?? "Guest")
+        : `Player ${whitePlayer === 1 ? 2 : 1}`;
   return {
   phase: "draft",
   gameMode,
@@ -146,7 +152,7 @@ export const createGame = (
   nextPresentationId: 1,
   history: [
     gameMode === "ai"
-      ? `${aiColor === "white" ? "Divine AI" : "Player 1"} was chosen for White.`
+      ? `${whiteName} was chosen for White.`
       : gameMode === "online"
         ? `${whiteName} was chosen for White.`
       : `Player ${whitePlayer} was chosen for White.`,

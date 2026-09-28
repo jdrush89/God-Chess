@@ -26,6 +26,29 @@ npm run dev
 Open the URL printed by Vite. The game begins by randomly assigning colors,
 then walks both players through the `1-2-2-1` draft.
 
+## Accounts and cloud saves
+
+God Chess supports optional Supabase email/password accounts. Signed-out players
+continue using saves stored only in their browser. Signed-in players use a
+separate set of cloud saves and their account display name is reused for online
+rooms and games against the Divine AI.
+
+1. Create a Supabase project.
+2. Open the Supabase SQL editor and run [`supabase/schema.sql`](supabase/schema.sql).
+3. In Supabase Authentication settings, add the deployed site URL and local
+   development URL to the allowed redirect URLs:
+   - `https://jdrush89.github.io/God-Chess/`
+   - `http://localhost:5173/`
+4. Copy `.env.example` to `.env.local` and enter the project URL and
+   publishable key for local development.
+5. Add these GitHub repository variables for Pages deployments:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_PUBLISHABLE_KEY`
+
+Supabase row-level-security policies restrict profiles and saves to their
+authenticated owner. Passwords and sessions are managed by Supabase and are
+never stored in the game database or browser save records.
+
 ## Commands
 
 - `npm run dev` starts the development server.
