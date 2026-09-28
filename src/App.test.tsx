@@ -113,6 +113,33 @@ describe("game startup", () => {
     expect(within(airLiftCard as HTMLElement).getByLabelText("3 white orbs")).toBeTruthy();
   });
 
+  it("renders distinct artwork for each active piece marker", () => {
+    const savedState = createGame(1);
+    savedState.phase = "play";
+    savedState.board.e2.status = {
+      hardened: 2,
+      poisoned: 2,
+      markedForDeath: { owner: "black", round: 1 },
+    };
+    window.localStorage.setItem(LEGACY_SAVE_KEY, JSON.stringify({
+      version: 1,
+      savedAt: new Date().toISOString(),
+      state: savedState,
+    }));
+
+    const { container } = render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /load game/i }));
+    fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
+
+    const pawn = container.querySelector('[data-piece-id="white-pawn-4"]');
+    expect(pawn?.querySelector('[data-status="hardened"] svg')).toBeTruthy();
+    expect(pawn?.querySelector('[data-status="poisoned"] svg')).toBeTruthy();
+    expect(pawn?.querySelector('[data-status="markedForDeath"] svg')).toBeTruthy();
+    expect(pawn?.querySelector(".status-markers")?.getAttribute("title")).toBe(
+      "Hardened, Poisoned, Marked",
+    );
+  });
+
   it("lists multiple saved games with pantheons and allows deletion", () => {
     let firstState = createGame(1);
     firstState = gameReducer(firstState, { type: "draft", godId: "ares" });

@@ -394,10 +394,28 @@ body::before {
 .chess-piece.white { color: #f5f0e6; -webkit-text-stroke: 1px #6f6557; text-shadow: 0 1px 0 #fff; }
 .chess-piece.black { color: #17191d; -webkit-text-stroke: 1px #060708; text-shadow: 0 1px 0 #5c5e63; }
 .chess-piece.hired { text-shadow: 0 0 10px var(--gold-bright); }
-.status-marker {
-  position: absolute; top: -3px; right: -7px; width: 16px; height: 16px; display: grid; place-items: center;
-  border-radius: 50%; background: #8e442f; color: #fff; font: 700 8px "DM Sans"; -webkit-text-stroke: 0;
+.status-markers {
+  position: absolute; top: -5px; right: -10px; z-index: 5; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 2px;
+  width: 30px; pointer-events: none; -webkit-text-stroke: 0;
 }
+.status-marker {
+  width: 14px; height: 14px; display: grid; place-items: center; overflow: hidden;
+  border: 1px solid rgba(255,255,255,.62); border-radius: 4px; color: #fff;
+  background: #555; box-shadow: 0 1px 3px rgba(0,0,0,.65), inset 0 0 5px rgba(255,255,255,.16);
+}
+.status-marker svg { width: 9px; height: 9px; stroke-width: 2.4; }
+.status-marker[data-status="hardened"] { background: linear-gradient(145deg, #a4864c, #55452d); }
+.status-marker[data-status="frozen"] { background: linear-gradient(145deg, #75bada, #365f82); }
+.status-marker[data-status="poisoned"] { background: linear-gradient(145deg, #7da24b, #344c29); }
+.status-marker[data-status="polymorphed"] { background: linear-gradient(145deg, #a86bb7, #5d376a); }
+.status-marker[data-status="luredBy"] { background: linear-gradient(145deg, #d5799e, #763750); }
+.status-marker[data-status="hexedBy"] { background: linear-gradient(145deg, #8a62aa, #442d61); }
+.status-marker[data-status="prepared"] { background: linear-gradient(145deg, #5f9cb2, #294f68); }
+.status-marker[data-status="ritual"] { background: linear-gradient(145deg, #d46b43, #71331f); }
+.status-marker[data-status="markedForDeath"] { background: linear-gradient(145deg, #685270, #29202f); }
+.status-marker[data-status="hired"] { background: linear-gradient(145deg, #d3ad4c, #705621); color: #211b0c; }
+.status-marker[data-status="gazing"] { background: linear-gradient(145deg, #62a789, #2b584b); }
+.status-marker[data-status="chargeUntil"] { background: linear-gradient(145deg, #e3943c, #83451f); }
 .rank-label, .file-label { position: absolute; z-index: 4; font-size: 8px; font-weight: 700; opacity: .55; }
 .rank-label { top: 4px; left: 5px; }
 .file-label { right: 5px; bottom: 3px; }

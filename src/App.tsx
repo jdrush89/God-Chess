@@ -6,15 +6,24 @@ import {
   ChevronRight,
   Copy,
   Crown,
+  Crosshair,
   Download,
+  Eye,
+  Flame,
+  FlaskConical,
   Globe2,
+  Hexagon,
   History,
   Info,
   LoaderCircle,
+  Magnet,
+  Coins,
+  Rabbit,
   RotateCcw,
   Save,
   Shield,
   Skull,
+  Snowflake,
   Sparkles,
   Swords,
   Trash2,
@@ -22,6 +31,7 @@ import {
   Wifi,
   X,
   Zap,
+  type LucideIcon,
 } from "lucide-react";
 import { allSquares, isInCheck } from "./game/chess";
 import { chooseAiPlan, isAiTurn } from "./game/ai";
@@ -197,19 +207,23 @@ const aiActionDelay = (action: GameAction) => {
   return 750;
 };
 
-const statusLabels: [keyof Piece["status"], string][] = [
-  ["hardened", "Hardened"],
-  ["frozen", "Stone"],
-  ["poisoned", "Poisoned"],
-  ["polymorphed", "Polymorphed"],
-  ["luredBy", "Lured"],
-  ["hexedBy", "Hexed"],
-  ["prepared", "Prepared"],
-  ["ritual", "Ritual"],
-  ["markedForDeath", "Marked"],
-  ["hired", "Hired"],
-  ["gazing", "Gazing"],
-  ["chargeUntil", "Charged"],
+const statusMarkers: {
+  key: keyof Piece["status"];
+  label: string;
+  icon: LucideIcon;
+}[] = [
+  { key: "hardened", label: "Hardened", icon: Shield },
+  { key: "frozen", label: "Stone", icon: Snowflake },
+  { key: "poisoned", label: "Poisoned", icon: FlaskConical },
+  { key: "polymorphed", label: "Polymorphed", icon: Rabbit },
+  { key: "luredBy", label: "Lured", icon: Magnet },
+  { key: "hexedBy", label: "Hexed", icon: Hexagon },
+  { key: "prepared", label: "Prepared", icon: Crosshair },
+  { key: "ritual", label: "Ritual", icon: Flame },
+  { key: "markedForDeath", label: "Marked", icon: Skull },
+  { key: "hired", label: "Hired", icon: Coins },
+  { key: "gazing", label: "Gazing", icon: Eye },
+  { key: "chargeUntil", label: "Charged", icon: Zap },
 ];
 
 const PIECE_NAMES: Record<Piece["type"], string> = {
@@ -676,14 +690,22 @@ function PlayerBar({
 }
 
 function PieceView({ piece }: { piece: Piece }) {
-  const statuses = statusLabels.filter(([key]) => Boolean(piece.status[key]));
+  const statuses = statusMarkers.filter(({ key }) => Boolean(piece.status[key]));
   return (
     <span
       className={`chess-piece ${piece.color} ${piece.status.hired ? "hired" : ""}`}
       data-piece-id={piece.id}
     >
       {PIECES[piece.color][piece.type]}
-      {statuses.length > 0 && <i className="status-marker" title={statuses.map(([, label]) => label).join(", ")}>{statuses.length}</i>}
+      {statuses.length > 0 && (
+        <span className="status-markers" title={statuses.map(({ label }) => label).join(", ")}>
+          {statuses.map(({ key, label, icon: Icon }) => (
+            <i className="status-marker" data-status={key} aria-label={label} key={key}>
+              <Icon aria-hidden="true" />
+            </i>
+          ))}
+        </span>
+      )}
     </span>
   );
 }
