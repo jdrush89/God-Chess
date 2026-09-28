@@ -228,10 +228,10 @@ export const GODS: God[] = [
         "The queen can move diagonally three times.",
         "The queen can move diagonally any number of times.",
       ], { white: 1 }),
-      ability("stone-gaze", "Stone Gaze", "Choose any piece within line of sight of the queen. That piece can’t move for 2 turns. The queen can’t move while this is active.", "target", [
-        "Stone for 2 turns.",
-        "The chosen piece can’t move for 3 turns.",
-        "The chosen piece can’t move until Medusa’s next turn.",
+      ability("stone-gaze", "Stone Gaze", "All pieces within line of sight of your Queen, friendly and enemy, can’t move for 2 turns. The Queen can’t move while any of them remain frozen.", "target", [
+        "Stone all pieces in the Queen’s line of sight for 2 turns.",
+        "Those pieces can’t move for 3 turns.",
+        "Those pieces can’t move until Medusa’s next turn.",
       ], { black: 3 }),
     ],
   },

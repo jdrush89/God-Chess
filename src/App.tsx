@@ -245,7 +245,7 @@ const pieceMarkerDetails = (piece: Piece, state: GameState) => {
   if (piece.status.gazing) {
     markers.push({
       name: "Gazing",
-      description: "This Queen cannot move while the piece targeted by Stone Gaze remains frozen.",
+      description: "This Queen cannot move while any piece affected by Stone Gaze remains frozen.",
     });
   }
   if (piece.status.poisoned) {

@@ -801,13 +801,6 @@ const startTargetAbility = (state: GameState, abilityId: string) => {
     state.legalTargets = Object.entries(state.board)
       .filter(([, piece]) => piece.controller === enemy && allowed.includes(piece.type))
       .map(([square]) => square);
-  } else if (abilityId === "stone-gaze") {
-    const queenSquares = Object.entries(state.board)
-      .filter(([, piece]) => piece.controller === state.activeColor && piece.type === "queen")
-      .map(([square]) => square);
-    state.legalTargets = Object.entries(state.board)
-      .filter(([square]) => queenSquares.some((queen) => lineOfSight(state.board, queen, square)))
-      .map(([square]) => square);
   } else if (abilityId === "rage") {
     state.legalTargets = Object.entries(state.board)
       .filter(([, piece]) => level < 3 || piece.controller === state.activeColor)
@@ -832,16 +825,44 @@ const startTargetAbility = (state: GameState, abilityId: string) => {
   state.notice = `Choose a target for ${GOD_BY_ID[state.selectedGod!].abilities.find((a) => a.id === abilityId)!.name}.`;
 };
 
+const resolveStoneGaze = (state: GameState) => {
+  const level = currentLevel(state, "stone-gaze");
+  const queens = Object.entries(state.board)
+    .filter(([, piece]) => piece.controller === state.activeColor && piece.type === "queen");
+  const queenIds = new Set(queens.map(([, queen]) => queen.id));
+  const targets = Object.entries(state.board).filter(
+    ([square, piece]) =>
+      !queenIds.has(piece.id) &&
+      queens.some(([queenSquare]) => lineOfSight(state.board, queenSquare, square)),
+  );
+  for (const [, piece] of targets) {
+    piece.status.frozen = level >= 3
+      ? "god"
+      : level + 1 + (piece.controller === state.activeColor ? 1 : 0);
+    piece.status.frozenBy = state.activeColor;
+  }
+  if (targets.length) {
+    for (const [, queen] of queens) queen.status.gazing = true;
+  }
+  finishTurn(
+    state,
+    abilityDescription(
+      state,
+      `: petrified ${targets.length} piece${targets.length === 1 ? "" : "s"} in the Queen’s line of sight`,
+    ),
+  );
+};
+
 const activateAbility = (state: GameState, abilityId: string) => {
   if (!state.selectedGod) return;
   const god = GOD_BY_ID[state.selectedGod];
   const ability = god.abilities.find((candidate) => candidate.id === abilityId);
   if (!ability) return;
   if (
-    abilityId === "lure" &&
+    (abilityId === "lure" || abilityId === "stone-gaze") &&
     !Object.values(state.board).some((piece) => piece.controller === state.activeColor && piece.type === "queen")
   ) {
-    state.notice = "Lure requires you to control a Queen.";
+    state.notice = `${ability.name} requires you to control a Queen.`;
     return;
   }
   if (
@@ -866,6 +887,10 @@ const activateAbility = (state: GameState, abilityId: string) => {
   state.legalTargets = [];
   state.pending = { godId: god.id, abilityId, step: "source" };
 
+  if (abilityId === "stone-gaze") {
+    resolveStoneGaze(state);
+    return;
+  }
   if (ability.kind === "target") {
     startTargetAbility(state, abilityId);
     return;
@@ -1378,16 +1403,6 @@ const chooseTarget = (state: GameState, square: Square) => {
   const piece = state.board[square];
   if (abilityId === "lure" && piece) {
     piece.status.luredBy = state.activeColor;
-  } else if (abilityId === "stone-gaze" && piece) {
-    piece.status.frozen = level >= 3 ? "god" : level + 1;
-    piece.status.frozenBy = state.activeColor;
-    const queen = Object.entries(state.board).find(
-      ([queenSquare, candidate]) =>
-        candidate.controller === state.activeColor &&
-        candidate.type === "queen" &&
-        lineOfSight(state.board, queenSquare, square),
-    );
-    if (queen) queen[1].status.gazing = true;
   } else if (abilityId === "poison-cloud") {
     if (level === 1 && piece) {
       piece.status.poisoned = "god";

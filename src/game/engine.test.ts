@@ -295,6 +295,43 @@ describe("game flow", () => {
     expect(levelThree.players.white.orbs).toEqual({ white: 5, black: 2 });
   });
 
+  it("applies Stone Gaze to every friendly and enemy piece in the Queen's line of sight", () => {
+    const gazeAtLevel = (level: 1 | 2 | 3) => {
+      let state = createGame(1);
+      state.phase = "play";
+      state.players.white.gods = ["medusa"];
+      state.players.white.orbs.black = 3;
+      state.players.white.upgrades["stone-gaze"] = level;
+      state.board = {
+        a1: testPiece("king", "white", "white-king"),
+        h8: testPiece("king", "black", "black-king"),
+        d4: testPiece("queen", "white", "white-queen"),
+        d6: testPiece("rook", "white", "visible-friendly"),
+        f4: testPiece("bishop", "black", "visible-enemy"),
+        d8: testPiece("pawn", "black", "blocked-enemy"),
+      };
+
+      state = gameReducer(state, { type: "select-god", godId: "medusa" });
+      return gameReducer(state, { type: "select-ability", abilityId: "stone-gaze" });
+    };
+
+    const levelOne = gazeAtLevel(1);
+    expect(levelOne.board.d6.status.frozen).toBe(2);
+    expect(levelOne.board.f4.status.frozen).toBe(2);
+    expect(levelOne.board.d8.status.frozen).toBeUndefined();
+    expect(levelOne.board.d4.status.gazing).toBe(true);
+    expect(levelOne.activeColor).toBe("black");
+    expect(levelOne.legalTargets).toEqual([]);
+
+    const levelTwo = gazeAtLevel(2);
+    expect(levelTwo.board.d6.status.frozen).toBe(3);
+    expect(levelTwo.board.f4.status.frozen).toBe(3);
+
+    const levelThree = gazeAtLevel(3);
+    expect(levelThree.board.d6.status.frozen).toBe("god");
+    expect(levelThree.board.f4.status.frozen).toBe("god");
+  });
+
   it("records a captured piece flight to its owner's graveyard", () => {
     let state = createGame(1);
     (["ares", "chiron", "teles", "death", "artemis", "midas"] as const).forEach((godId) => {
