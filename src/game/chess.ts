@@ -206,7 +206,9 @@ export const pseudoTargets = (
 
 export const isSquareAttacked = (board: Record<Square, Piece>, square: Square, by: Color, bananas: Banana[] = []) =>
   Object.entries(board).some(([from, piece]) =>
-    piece.controller === by && pseudoTargets(board, from, { attacksOnly: true, ignoreCheck: true, bananas }).includes(square),
+    piece.controller === by &&
+    !piece.status.frozen &&
+    pseudoTargets(board, from, { attacksOnly: true, ignoreCheck: true, bananas }).includes(square),
   );
 
 export const kingSquare = (board: Record<Square, Piece>, color: Color) =>

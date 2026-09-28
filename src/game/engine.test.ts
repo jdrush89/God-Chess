@@ -83,6 +83,20 @@ describe("chess movement", () => {
     board.e2 = { ...board.a2, id: "white-blocker-test", type: "rook" };
     expect(legalTargets(board, "e2")).not.toContain("d2");
   });
+
+  it("does not treat a Stone-Gazed piece as checking the king", () => {
+    const frozenRook = testPiece("rook", "black", "frozen-attacker");
+    frozenRook.status.frozen = 2;
+    const board = {
+      e1: testPiece("king", "white", "white-king"),
+      a2: testPiece("rook", "white", "white-rook"),
+      e8: frozenRook,
+      h8: testPiece("king", "black", "black-king"),
+    };
+
+    expect(isInCheck(board, "white")).toBe(false);
+    expect(legalTargets(board, "a2")).toContain("a3");
+  });
 });
 
 describe("game flow", () => {
