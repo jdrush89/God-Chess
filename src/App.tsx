@@ -998,7 +998,7 @@ function ActionPanel({
   }, [presentedGodId]);
 
   return (
-    <aside className="action-panel">
+    <aside className={`action-panel ${!selectedGod ? "god-selection-panel" : ""}`}>
       <div className="panel-heading">
         <span>DIVINE ACTION</span>
         <small>ROUND {state.round}</small>
