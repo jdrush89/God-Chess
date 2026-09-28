@@ -115,17 +115,17 @@ describe("game flow", () => {
     expect(state.activeColor).toBe("white");
   });
 
-  it("auto-drafts every remaining slot in the supplied random order", () => {
-    let state = gameReducer(createGame(1), { type: "draft", godId: "ares" });
-    state = gameReducer(state, {
+  it("auto-drafts only one god for the current player", () => {
+    const state = gameReducer(createGame(1), {
       type: "auto-draft",
-      godIds: ["medusa", "midas", "death", "artemis", "chiron"],
+      godId: "ares",
     });
 
-    expect(state.phase).toBe("play");
-    expect(state.players.white.gods).toEqual(["ares", "death", "artemis"]);
-    expect(state.players.black.gods).toEqual(["medusa", "midas", "chiron"]);
-    expect(new Set([...state.players.white.gods, ...state.players.black.gods]).size).toBe(6);
+    expect(state.phase).toBe("draft");
+    expect(state.draft.pickIndex).toBe(1);
+    expect(state.activeColor).toBe("black");
+    expect(state.players.white.gods).toEqual(["ares"]);
+    expect(state.players.black.gods).toEqual([]);
   });
 
   it("rests a god after its action and passes the turn", () => {

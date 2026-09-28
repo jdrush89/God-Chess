@@ -512,14 +512,11 @@ function DraftScreen({
           disabled={inputDisabled || state.draft.pickIndex >= state.draft.order.length}
           onClick={() => dispatch({
             type: "auto-draft",
-            godIds: shuffled(state.draft.available).slice(
-              0,
-              state.draft.order.length - state.draft.pickIndex,
-            ),
+            godId: shuffled(state.draft.available)[0],
           })}
         >
           <Sparkles size={15} />
-          Auto-draft remaining gods
+          Auto-pick random god
         </button>
         <div className="draft-progress">
           {state.draft.order.map((color, index) => (

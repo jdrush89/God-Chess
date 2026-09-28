@@ -31,7 +31,7 @@ import { opposite } from "./types";
 
 export type GameAction =
   | { type: "draft"; godId: GodId }
-  | { type: "auto-draft"; godIds: GodId[] }
+  | { type: "auto-draft"; godId: GodId }
   | { type: "load-game"; state: GameState }
   | { type: "select-god"; godId: GodId }
   | { type: "clear-god" }
@@ -1976,12 +1976,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
   next.nextCaptureAnimationId ??= 1;
   next.nextPresentationId ??= 1;
   if (action.type === "draft" && next.phase === "draft") draftGod(next, action.godId);
-  else if (action.type === "auto-draft" && next.phase === "draft") {
-    for (const godId of action.godIds) {
-      if (next.phase !== "draft") break;
-      draftGod(next, godId);
-    }
-  }
+  else if (action.type === "auto-draft" && next.phase === "draft") draftGod(next, action.godId);
   else if (action.type === "select-god" && next.phase === "play") {
     selectGod(next, action.godId);
     if (next.selectedGod === action.godId) {

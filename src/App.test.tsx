@@ -78,14 +78,14 @@ describe("game startup", () => {
     expect(window.localStorage.getItem(SAVE_KEY)).toBeTruthy();
   });
 
-  it("auto-drafts all remaining gods from the draft screen", () => {
+  it("auto-picks one god at a time from the draft screen", () => {
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: /^new game$/i }));
     fireEvent.click(screen.getByRole("button", { name: /begin local duel/i }));
-    fireEvent.click(screen.getByRole("button", { name: /auto-draft remaining gods/i }));
+    fireEvent.click(screen.getByRole("button", { name: /auto-pick random god/i }));
 
-    expect(screen.getByRole("button", { name: /history/i })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /auto-draft remaining gods/i })).toBeNull();
+    expect(screen.getByText(/player 2 · black picks/i)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /auto-pick random god/i })).toBeTruthy();
   });
 
   it("shows ability orb costs while choosing an upgrade", () => {
