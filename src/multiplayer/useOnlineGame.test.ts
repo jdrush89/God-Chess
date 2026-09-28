@@ -50,6 +50,24 @@ describe("online player input", () => {
     expect(onlineTurnInputDisabled(guest, "white", "black")).toBe(false);
   });
 
+  it("keeps the assigned drafter enabled if the transport temporarily clears started", () => {
+    const host: OnlineGameState = {
+      role: "host",
+      connecting: false,
+      started: false,
+      awaitingSync: false,
+    };
+    const guest: OnlineGameState = {
+      role: "peer",
+      connecting: false,
+      started: false,
+      awaitingSync: false,
+    };
+
+    expect(onlineTurnInputDisabled(host, "black", "black")).toBe(false);
+    expect(onlineTurnInputDisabled(guest, "white", "black")).toBe(false);
+  });
+
   it("keeps both players locked until a seat assignment is available", () => {
     const connecting: OnlineGameState = {
       role: "peer",

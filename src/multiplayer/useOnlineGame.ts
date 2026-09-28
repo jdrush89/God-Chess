@@ -42,7 +42,7 @@ export const onlineTurnInputDisabled = (
   state: OnlineGameState,
   activeColor: Color,
   hostColor?: Color,
-) => !state.started || onlinePlayerColor(state, hostColor) !== activeColor || state.awaitingSync;
+) => onlinePlayerColor(state, hostColor) !== activeColor || state.awaitingSync;
 
 export const useOnlineGame = (callbacks: OnlineCallbacks) => {
   const [state, setState] = useState(initialState);

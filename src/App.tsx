@@ -482,6 +482,12 @@ function DraftScreen({
     setGodPreviewLevel(undefined);
   }, [inspected]);
 
+  useEffect(() => {
+    if (!state.draft.available.includes(inspected) && state.draft.available[0]) {
+      setInspected(state.draft.available[0]);
+    }
+  }, [state.draft.pickIndex]);
+
   return (
     <main className="draft-page">
       <header className="topbar draft-topbar">
@@ -2144,7 +2150,7 @@ export default function App() {
 
   const dispatch: GameDispatch = (action) => {
     const current = stateRef.current;
-    if (current.gameMode === "online" && online.started) {
+    if (current.gameMode === "online") {
       const localColor = onlinePlayerColor(online, current.onlineHostColor);
       if (!localColor || current.activeColor !== localColor) return;
       if (online.role === "peer") {
@@ -2157,6 +2163,7 @@ export default function App() {
         onlineActions.syncState(next);
         return;
       }
+      return;
     }
     const next = gameReducer(current, action);
     receiveState(next);

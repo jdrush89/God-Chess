@@ -96,11 +96,13 @@ export class NetworkManager {
   }
 
   disconnect() {
-    this.peers.forEach((peer) => peer.destroy());
+    const peers = [...this.peers.values()];
     this.peers.clear();
     this.relayPeers.clear();
-    this.ws?.close();
+    const ws = this.ws;
     this.ws = null;
+    ws?.close();
+    peers.forEach((peer) => peer.destroy());
     this.hostPeerId = null;
     this.isHost = false;
     this.callbacks.onStatusChange("disconnected");
@@ -166,7 +168,7 @@ export class NetworkManager {
           }
         }, RELAY_FALLBACK_MS);
       } else if (message.type === "peer_left") {
-        this.destroyPeer(String(message.peerId));
+        this.removePeer(String(message.peerId));
       } else if (message.type === "signal") {
         this.handleSignal(String(message.fromPeerId), message.signalData);
       } else if (message.type === "relay" || message.type === "broadcast") {
@@ -218,18 +220,8 @@ export class NetworkManager {
         this.callbacks.onError("Received an invalid multiplayer message.");
       }
     });
-    peer.on("close", () => this.destroyPeer(remotePeerId));
-    peer.on("error", () => {
-      if (this.ws?.readyState === WebSocket.OPEN) {
-        const wasConnected = this.relayPeers.has(remotePeerId);
-        this.relayPeers.add(remotePeerId);
-        if (!wasConnected) this.callbacks.onPeerConnected(remotePeerId);
-        this.firstConnectionResolver?.();
-        this.firstConnectionResolver = null;
-      } else {
-        this.destroyPeer(remotePeerId);
-      }
-    });
+    peer.on("close", () => this.fallbackToRelay(remotePeerId));
+    peer.on("error", () => this.fallbackToRelay(remotePeerId));
     this.peers.set(remotePeerId, peer);
   }
 
@@ -239,12 +231,29 @@ export class NetworkManager {
     this.peers.get(remotePeerId)?.signal(signalData as never);
   }
 
-  private destroyPeer(peerId: string) {
+  private fallbackToRelay(peerId: string) {
+    const peer = this.peers.get(peerId);
+    if (!peer) return;
+    this.peers.delete(peerId);
+    if (peer && !peer.destroyed) peer.destroy();
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      const wasConnected = this.relayPeers.has(peerId);
+      this.relayPeers.add(peerId);
+      if (!wasConnected) this.callbacks.onPeerConnected(peerId);
+      this.firstConnectionResolver?.();
+      this.firstConnectionResolver = null;
+      return;
+    }
+    this.relayPeers.delete(peerId);
+    this.callbacks.onPeerDisconnected(peerId);
+  }
+
+  private removePeer(peerId: string) {
     const peer = this.peers.get(peerId);
     const existed = Boolean(peer) || this.relayPeers.has(peerId);
-    if (peer && !peer.destroyed) peer.destroy();
     this.peers.delete(peerId);
     this.relayPeers.delete(peerId);
+    if (peer && !peer.destroyed) peer.destroy();
     if (existed) this.callbacks.onPeerDisconnected(peerId);
   }
 }
