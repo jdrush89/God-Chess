@@ -266,10 +266,11 @@ body::before {
 .board-column > .player-bar { width: min(100%, max(440px, var(--board-size))); }
 .side-column {
   min-width: 0; height: calc(var(--board-size) + 118px);
-  display: flex; flex-direction: column; gap: 12px;
+  display: flex; flex-direction: column;
 }
 .piece-info-column { display: none; min-width: 0; padding-top: 59px; }
 .side-square-info { display: block; }
+.side-square-info:not(:empty) { margin-top: 12px; }
 .player-bar {
   height: 59px; display: flex; align-items: center; gap: 11px; padding: 0 13px;
   border: 1px solid var(--line); background: rgba(19,22,29,.8); opacity: .7; transition: opacity .2s;
