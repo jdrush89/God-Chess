@@ -291,6 +291,29 @@ describe("game flow", () => {
     });
   });
 
+  it("executes marked pieces only after Death completes a turn", () => {
+    let state = createGame(1);
+    (["death", "ares", "midas", "chiron", "artemis", "teles"] as const).forEach((godId) => {
+      state = gameReducer(state, { type: "draft", godId });
+    });
+    state.board.e7.status.markedForDeath = { owner: "white", round: state.round };
+
+    state = gameReducer(state, { type: "select-god", godId: "death" });
+    expect(state.board.e7?.status.markedForDeath).toBeDefined();
+    expect(state.players.white.orbs.black).toBe(0);
+
+    state = gameReducer(state, { type: "clear-god" });
+    expect(state.board.e7?.status.markedForDeath).toBeDefined();
+
+    state = gameReducer(state, { type: "select-god", godId: "death" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "marked" });
+    state = gameReducer(state, { type: "pass" });
+
+    expect(state.board.e7).toBeUndefined();
+    expect(state.players.black.graveyard.at(-1)?.piece.id).toBe("black-pawn-4");
+    expect(state.players.white.orbs.black).toBe(3);
+  });
+
   it("does not allow Lure without a controlled Queen", () => {
     let state = createGame(1);
     (["teles", "chiron", "midas", "death", "artemis", "medusa"] as const).forEach((godId) => {

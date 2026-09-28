@@ -380,7 +380,27 @@ const resolveStartOfTurn = (state: GameState) => {
   if (!queueHardenChoice(state)) queuePreparedShot(state);
 };
 
+const resolveMarkedForDeath = (state: GameState) => {
+  for (const [square, piece] of Object.entries(state.board)) {
+    if (
+      piece.status.markedForDeath?.owner !== state.activeColor ||
+      piece.status.markedForDeath.round > state.round
+    ) {
+      continue;
+    }
+    delete state.board[square];
+    sendCapturedPieceToGraveyard(state, piece, square);
+    addOrbs(state, state.activeColor, 0, 3);
+    log(state, `Death claimed the marked ${piece.type} on ${square}.`);
+    if (piece.type === "king") {
+      state.phase = "gameover";
+      state.winner = opposite(state.activeColor);
+    }
+  }
+};
+
 const finishTurn = (state: GameState, description: string) => {
+  if (state.selectedGod === "death") resolveMarkedForDeath(state);
   if (state.selectedGod && !state.rested.includes(state.selectedGod)) state.rested.push(state.selectedGod);
   log(state, description);
   state.lastAction = description;
@@ -1868,16 +1888,6 @@ const selectGod = (state: GameState, godId: GodId) => {
   state.pending = undefined;
   state.legalTargets = [];
 
-  if (godId === "death") {
-    for (const [square, piece] of Object.entries(state.board)) {
-      if (piece.status.markedForDeath?.owner === state.activeColor && piece.status.markedForDeath.round <= state.round) {
-        delete state.board[square];
-        sendCapturedPieceToGraveyard(state, piece, square);
-        addOrbs(state, state.activeColor, 0, 3);
-        log(state, `Death claimed the marked ${piece.type} on ${square}.`);
-      }
-    }
-  }
   if (godId === "artemis") {
     for (const piece of Object.values(state.board)) {
       const prepared = preparedDetails(piece);
