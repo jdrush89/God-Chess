@@ -45,6 +45,7 @@ describe("game startup", () => {
     render(<App />);
     expect(screen.getByRole("img", { name: /god chess/i })).toBeTruthy();
     expect(screen.getByText("Version dev")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /settings/i })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /^new game$/i }));
 
     expect(screen.getByRole("button", { name: /two players share this device/i })).toBeTruthy();
@@ -146,13 +147,12 @@ describe("game startup", () => {
 
   it("enables undo from Settings and restores the previous completed turn", () => {
     render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /^new game$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /begin local duel/i }));
     fireEvent.click(screen.getByRole("button", { name: /settings/i }));
     fireEvent.click(screen.getByRole("switch", { name: /allow undo/i }));
     expect(window.localStorage.getItem("god-chess-undo-enabled")).toBe("true");
     fireEvent.click(screen.getByRole("button", { name: /close settings/i }));
-
-    fireEvent.click(screen.getByRole("button", { name: /^new game$/i }));
-    fireEvent.click(screen.getByRole("button", { name: /begin local duel/i }));
 
     const draft = (god: string, domain: string) => {
       fireEvent.click(screen.getByRole("button", { name: new RegExp(`${god} ${domain}`, "i") }));
@@ -170,6 +170,16 @@ describe("game startup", () => {
     fireEvent.click(screen.getByRole("gridcell", { name: "e2, white pawn" }));
     fireEvent.click(screen.getByRole("gridcell", { name: "e4" }));
 
+    fireEvent.click(screen.getByRole("button", { name: /save & quit/i }));
+    const storedGames = JSON.parse(window.localStorage.getItem(SAVE_KEY) ?? "[]");
+    expect(storedGames[0].version).toBe(3);
+    expect(storedGames[0].undoHistory).toHaveLength(1);
+
+    cleanup();
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /load game/i }));
+    fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
+
     const undo = screen.getByRole("button", { name: /^undo$/i });
     expect((undo as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(undo);
@@ -177,6 +187,42 @@ describe("game startup", () => {
     expect(screen.getByRole("gridcell", { name: "e2, white pawn" })).toBeTruthy();
     expect(screen.getByRole("gridcell", { name: "e4" })).toBeTruthy();
     expect((screen.getByRole("button", { name: /^undo$/i }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("undoes a completed upgrade", () => {
+    const savedState = createGame(1);
+    savedState.phase = "upgrade";
+    savedState.activeColor = "white";
+    savedState.players.white.gods = ["quetzacoatl"];
+    savedState.players.black.gods = ["medusa"];
+    savedState.upgradeQueue = ["white", "black"];
+    savedState.notice = "White upgrades one ability.";
+    window.localStorage.setItem("god-chess-undo-enabled", "true");
+    window.localStorage.setItem(SAVE_KEY, JSON.stringify([{
+      version: 3,
+      id: "upgrade-save",
+      savedAt: new Date().toISOString(),
+      state: savedState,
+      undoHistory: [],
+    }]));
+
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /load game/i }));
+    fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
+    fireEvent.click(screen.getAllByRole("button", { name: /quetzacoatl/i }).at(-1)!);
+    fireEvent.click(screen.getByRole("button", { name: /^flight/i }));
+    fireEvent.click(screen.getByRole("button", { name: /confirm flight/i }));
+
+    expect(screen.getByText(/black upgrades one ability/i)).toBeTruthy();
+    const undo = screen.getByRole("button", { name: /^undo$/i });
+    expect((undo as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(undo);
+
+    expect(screen.getByText(/white upgrades one ability/i)).toBeTruthy();
+    fireEvent.click(screen.getAllByRole("button", { name: /quetzacoatl/i }).at(-1)!);
+    const flightCard = screen.getByText("Flight").closest(".ability-card");
+    expect(flightCard).toBeTruthy();
+    expect(within(flightCard as HTMLElement).getByText("CURRENT LVL 1")).toBeTruthy();
   });
 
   it("previews instant ability targets before confirming the effect", () => {

@@ -619,7 +619,6 @@ body::before {
 }
 .main-menu-actions > div { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .main-menu-actions > div > button:only-child { grid-column: 1 / -1; }
-.main-menu-actions .main-menu-settings { grid-column: 1 / -1; }
 .main-menu-actions .eyebrow { margin: 0 0 13px; color: #cfb06d; }
 .main-menu-actions small { display: block; margin-top: 11px; color: #8d8b85; font-size: 8px; letter-spacing: .08em; text-transform: uppercase; }
 .load-game-backdrop {

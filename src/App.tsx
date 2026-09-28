@@ -101,10 +101,21 @@ const LEGACY_SAVE_KEY = "god-chess-save-v1";
 const UNDO_SETTING_KEY = "god-chess-undo-enabled";
 
 interface SavedGame {
-  version: 2;
+  version: 3;
   id: string;
   savedAt: string;
   state: GameState;
+  undoHistory: GameState[];
+  turnStart?: GameState;
+}
+
+interface StoredSavedGame {
+  version?: number;
+  id?: string;
+  savedAt?: string;
+  state?: GameState;
+  undoHistory?: GameState[];
+  turnStart?: GameState;
 }
 
 const prepareSavedState = (state: GameState) => {
@@ -114,11 +125,21 @@ const prepareSavedState = (state: GameState) => {
   savedState.captureAnimations = [];
   savedState.nextCaptureAnimationId ??= 1;
   savedState.presentation = undefined;
+  savedState.upgradePreview = undefined;
   savedState.nextPresentationId ??= 1;
   savedState.gameMode ??= "local";
   savedState.aiDifficulty ??= 5;
   return savedState;
 };
+
+const isSavedGameState = (state: GameState | undefined): state is GameState =>
+  Boolean(
+    state &&
+    ["draft", "play", "upgrade", "gameover"].includes(state.phase) &&
+    state.board &&
+    state.players?.white &&
+    state.players?.black,
+  );
 
 const saveId = () => globalThis.crypto?.randomUUID?.() ??
   `save-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -148,23 +169,29 @@ const loadSavedGames = (): SavedGame[] => {
   try {
     const raw = window.localStorage.getItem(SAVE_KEY);
     const decoded = raw ? JSON.parse(raw) as unknown : [];
-    const parsed = Array.isArray(decoded) ? decoded as Partial<SavedGame>[] : [];
+    const parsed = Array.isArray(decoded)
+      ? decoded as StoredSavedGame[]
+      : [];
+    let migrated = false;
     const games = parsed.flatMap((saved): SavedGame[] => {
       if (
-        saved.version !== 2 ||
+        (saved.version !== 2 && saved.version !== 3) ||
         !saved.id ||
         !saved.savedAt ||
-        !saved.state ||
-        !["draft", "play", "upgrade", "gameover"].includes(saved.state.phase) ||
-        !saved.state.board ||
-        !saved.state.players?.white ||
-        !saved.state.players?.black
+        !isSavedGameState(saved.state)
       ) return [];
+      if (saved.version !== 3) migrated = true;
       return [{
-        version: 2,
+        version: 3,
         id: saved.id,
         savedAt: saved.savedAt,
         state: prepareSavedState(saved.state),
+        undoHistory: (Array.isArray(saved.undoHistory) ? saved.undoHistory : [])
+          .filter(isSavedGameState)
+          .map(prepareSavedState),
+        turnStart: isSavedGameState(saved.turnStart)
+          ? prepareSavedState(saved.turnStart)
+          : undefined,
       }];
     });
     const legacyRaw = window.localStorage.getItem(LEGACY_SAVE_KEY);
@@ -174,17 +201,22 @@ const loadSavedGames = (): SavedGame[] => {
         savedAt?: string;
         state?: GameState;
       };
-      if (legacy.version === 1 && legacy.savedAt && legacy.state?.board && legacy.state.players?.white && legacy.state.players?.black) {
+      if (legacy.version === 1 && legacy.savedAt && isSavedGameState(legacy.state)) {
         games.push({
-          version: 2,
+          version: 3,
           id: saveId(),
           savedAt: legacy.savedAt,
           state: prepareSavedState(legacy.state),
+          undoHistory: [],
+          turnStart: legacy.state.phase === "play"
+            ? prepareSavedState(legacy.state)
+            : undefined,
         });
-        persistSavedGames(games);
+        migrated = true;
       }
       window.localStorage.removeItem(LEGACY_SAVE_KEY);
     }
+    if (migrated) persistSavedGames(games);
     return games.sort((a, b) => b.savedAt.localeCompare(a.savedAt));
   } catch (error) {
     console.error("Unable to load saved God Chess games.", error);
@@ -192,13 +224,21 @@ const loadSavedGames = (): SavedGame[] => {
   }
 };
 
-const saveGameState = (games: SavedGame[], id: string, state: GameState) => {
+const saveGameState = (
+  games: SavedGame[],
+  id: string,
+  state: GameState,
+  undoHistory: GameState[],
+  turnStart?: GameState,
+) => {
   try {
     const saved: SavedGame = {
-      version: 2,
+      version: 3,
       id,
       savedAt: new Date().toISOString(),
       state: prepareSavedState(state),
+      undoHistory: undoHistory.map(prepareSavedState),
+      turnStart: turnStart ? prepareSavedState(turnStart) : undefined,
     };
     const next = [saved, ...games.filter((game) => game.id !== id)]
       .sort((a, b) => b.savedAt.localeCompare(a.savedAt));
@@ -1395,8 +1435,8 @@ function SettingsModal({
             <strong>Allow undo</strong>
             <p>
               {onlineSession
-                ? "Both players must enable this setting. Either player can then rewind the latest completed turn."
-                : "Adds an Undo button that rewinds the latest completed turn."}
+                ? "Both players must enable this setting. Either player can then rewind the latest completed turn or upgrade."
+                : "Adds an Undo button that rewinds the latest completed turn or upgrade."}
             </p>
           </div>
           <button
@@ -1443,13 +1483,11 @@ function MainMenu({
   onLoad,
   onDelete,
   onNewGame,
-  onOpenSettings,
 }: {
   savedGames: SavedGame[];
   onLoad: (game: SavedGame) => void;
   onDelete: (id: string) => void;
   onNewGame: () => void;
-  onOpenSettings: () => void;
 }) {
   const [loadOpen, setLoadOpen] = useState(false);
   useEffect(() => {
@@ -1467,9 +1505,6 @@ function MainMenu({
           {savedGames.length > 0 && (
             <button className="secondary-button" onClick={() => setLoadOpen(true)}>Load game</button>
           )}
-          <button className="secondary-button main-menu-settings" onClick={onOpenSettings}>
-            <Settings size={16} /> Settings
-          </button>
         </div>
         {savedGames.length > 0 && (
           <small>{savedGames.length} saved game{savedGames.length === 1 ? "" : "s"}</small>
@@ -2043,7 +2078,7 @@ function GameScreen({
           <button
             onClick={onUndo}
             disabled={!canUndo}
-            title={undoEnabled ? "Undo the latest completed turn" : "Enable undo in Settings"}
+            title={undoEnabled ? "Undo the latest completed turn or upgrade" : "Enable undo in Settings"}
           >
             <Undo2 size={18} />
             <span>Undo</span>
@@ -2262,24 +2297,49 @@ export default function App() {
     clearUndoHistory();
     turnStart.current = next.phase === "play" ? prepareSavedState(next) : undefined;
   };
+  const restoreUndoTracking = (
+    undoHistory: GameState[],
+    savedTurnStart: GameState | undefined,
+    current: GameState,
+  ) => {
+    undoStack.current = undoHistory.map(prepareSavedState);
+    turnStart.current = savedTurnStart
+      ? prepareSavedState(savedTurnStart)
+      : current.phase === "play"
+        ? prepareSavedState(current)
+        : undefined;
+    updateUndoDepth();
+  };
   const applyTrackedAction = (current: GameState, action: GameAction) => {
     const next = gameReducer(current, action);
-    if (
-      (current.phase === "draft" || current.phase === "upgrade") &&
-      next.phase === "play"
-    ) {
+    const completedUpgrade =
+      action.type === "upgrade" &&
+      current.phase === "upgrade" &&
+      (
+        next.phase !== current.phase ||
+        next.upgradeQueue.length !== current.upgradeQueue.length
+      );
+    if (current.phase === "draft" && next.phase === "play") {
       resetUndoTracking(next);
-    } else if (current.phase === "play" && next.phase === "upgrade") {
-      clearUndoHistory();
-      turnStart.current = undefined;
     } else if (
       current.phase === "play" &&
-      (next.turn !== current.turn || next.phase === "gameover")
+      (
+        next.turn !== current.turn ||
+        next.phase === "upgrade" ||
+        next.phase === "gameover"
+      )
     ) {
       undoStack.current = [
         ...undoStack.current,
         prepareSavedState(turnStart.current ?? current),
-      ].slice(-100);
+      ];
+      updateUndoDepth();
+      turnStart.current = next.phase === "play" ? prepareSavedState(next) : undefined;
+    } else if (completedUpgrade) {
+      undoStack.current = [
+        ...undoStack.current,
+        prepareSavedState(current),
+      ];
       updateUndoDepth();
       turnStart.current = next.phase === "play" ? prepareSavedState(next) : undefined;
     }
@@ -2289,7 +2349,7 @@ export default function App() {
     const current = stateRef.current;
     return (
       undoDepthRef.current > 0 &&
-      (current.phase === "play" || current.phase === "gameover") &&
+      (current.phase === "play" || current.phase === "upgrade" || current.phase === "gameover") &&
       !current.selectedGod &&
       !current.selectedAbility
     );
@@ -2306,7 +2366,7 @@ export default function App() {
     }
     updateUndoDepth();
     const next = prepareSavedState(restored);
-    turnStart.current = prepareSavedState(next);
+    turnStart.current = next.phase === "play" ? prepareSavedState(next) : undefined;
     aiPlan.current = [];
     receiveState(next);
     return next;
@@ -2353,7 +2413,13 @@ export default function App() {
   const saveCurrentGame = () => {
     if (stateRef.current.gameMode === "online") return false;
     const id = activeSaveId.current ?? saveId();
-    const next = saveGameState(savedGamesRef.current, id, stateRef.current);
+    const next = saveGameState(
+      savedGamesRef.current,
+      id,
+      stateRef.current,
+      undoStack.current,
+      turnStart.current,
+    );
     if (!next) return false;
     activeSaveId.current = id;
     savedGamesRef.current = next;
@@ -2401,7 +2467,7 @@ export default function App() {
   const loadGame = (game: SavedGame) => {
     activeSaveId.current = game.id;
     const next = structuredClone(game.state);
-    resetUndoTracking(next);
+    restoreUndoTracking(game.undoHistory, game.turnStart, next);
     receiveState(next);
     aiPlan.current = [];
     setStartView("none");
@@ -2478,7 +2544,7 @@ export default function App() {
     ? onlineUndoEnabled(online)
     : undoPreferred;
   const undoStable =
-    (state.phase === "play" || state.phase === "gameover") &&
+    (state.phase === "play" || state.phase === "upgrade" || state.phase === "gameover") &&
     !state.selectedGod &&
     !state.selectedAbility;
   const canUndo = undoEnabled && undoStable && (
@@ -2500,18 +2566,7 @@ export default function App() {
           onLoad={loadGame}
           onDelete={deleteSavedGame}
           onNewGame={startNewGame}
-          onOpenSettings={() => setSettingsOpen(true)}
         />
-        {settingsOpen && (
-          <SettingsModal
-            undoPreferred={undoPreferred}
-            onlineSession={false}
-            localConsent={undoPreferred}
-            remoteConsent={false}
-            onUndoPreferenceChange={changeUndoPreference}
-            onClose={() => setSettingsOpen(false)}
-          />
-        )}
       </>
     );
   }
