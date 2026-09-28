@@ -700,8 +700,8 @@ body::before {
 .online-error { margin: 13px 0 0; color: #e58b80; font-size: 10px; text-align: center; }
 .leave-room-button { display: block; margin: 12px auto 0; }
 .spin { animation: spin .9s linear infinite; }
-.input-locked .game-layout, .input-locked .draft-layout { pointer-events: none; }
-.input-locked .game-layout, .input-locked .draft-layout { filter: saturate(.84); }
+.input-locked .game-layout { pointer-events: none; }
+.input-locked .game-layout { filter: saturate(.84); }
 @keyframes spin { to { transform: rotate(360deg); } }
 .graveyard-modal { position: relative; width: min(610px, 100%); }
 .graveyard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 9px; margin-top: 26px; }
@@ -744,6 +744,10 @@ body::before {
   .god-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
   .god-row { margin-top: 0; }
   .board-shell { max-height: none; }
+}
+
+@media (min-width: 641px) and (max-width: 960px) {
+  .draft-card .god-card-portrait { object-position: center 42%; }
 }
 
 @media (max-width: 640px) {

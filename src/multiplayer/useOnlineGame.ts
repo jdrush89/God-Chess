@@ -32,8 +32,17 @@ const initialState: OnlineGameState = {
   awaitingSync: false,
 };
 
-export const onlineInputDisabled = (state: OnlineGameState, activeColor: Color) =>
-  !state.started || state.localColor !== activeColor || state.awaitingSync;
+export const onlinePlayerColor = (state: OnlineGameState, hostColor?: Color) => {
+  if (hostColor && state.role === "host") return hostColor;
+  if (hostColor && state.role === "peer") return hostColor === "white" ? "black" : "white";
+  return state.localColor;
+};
+
+export const onlineTurnInputDisabled = (
+  state: OnlineGameState,
+  activeColor: Color,
+  hostColor?: Color,
+) => !state.started || onlinePlayerColor(state, hostColor) !== activeColor || state.awaitingSync;
 
 export const useOnlineGame = (callbacks: OnlineCallbacks) => {
   const [state, setState] = useState(initialState);

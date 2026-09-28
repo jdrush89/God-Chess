@@ -28,7 +28,12 @@ import { chooseAiPlan, isAiTurn } from "./game/ai";
 import { createGame, gameReducer, type GameAction } from "./game/engine";
 import { abilityLevel, GOD_BY_ID, GODS } from "./game/gods";
 import type { Ability, ActionPresentation, CaptureAnimation, Color, GameMode, GameState, GodId, OrbAnimation, OrbColor, Piece, Square } from "./game/types";
-import { onlineInputDisabled, useOnlineGame, type OnlineGameState } from "./multiplayer/useOnlineGame";
+import {
+  onlinePlayerColor,
+  onlineTurnInputDisabled,
+  useOnlineGame,
+  type OnlineGameState,
+} from "./multiplayer/useOnlineGame";
 
 type GameDispatch = (action: GameAction) => void;
 
@@ -478,7 +483,7 @@ function DraftScreen({
   }, [inspected]);
 
   return (
-    <main className={`draft-page ${inputDisabled ? "input-locked" : ""}`}>
+    <main className="draft-page">
       <header className="topbar draft-topbar">
         <Brand />
         <div className="draft-turn">
@@ -2140,7 +2145,7 @@ export default function App() {
   const dispatch: GameDispatch = (action) => {
     const current = stateRef.current;
     if (current.gameMode === "online" && online.started) {
-      const localColor = online.localColor;
+      const localColor = onlinePlayerColor(online, current.onlineHostColor);
       if (!localColor || current.activeColor !== localColor) return;
       if (online.role === "peer") {
         onlineActions.sendAction(action);
@@ -2251,12 +2256,13 @@ export default function App() {
     isAiTurn(state) ||
     (
       state.gameMode === "online" &&
-      onlineInputDisabled(online, state.activeColor)
+      onlineTurnInputDisabled(online, state.activeColor, state.onlineHostColor)
     );
+  const localOnlineColor = onlinePlayerColor(online, state.onlineHostColor);
   const opponentColor = state.gameMode === "ai"
     ? state.aiColor
-    : state.gameMode === "online" && online.localColor
-      ? (online.localColor === "white" ? "black" : "white")
+    : state.gameMode === "online" && localOnlineColor
+      ? (localOnlineColor === "white" ? "black" : "white")
       : undefined;
 
   if (startView === "menu") {
