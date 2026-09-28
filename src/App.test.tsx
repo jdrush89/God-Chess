@@ -22,6 +22,10 @@ beforeAll(() => {
       dispatchEvent: () => false,
     }),
   });
+  Object.defineProperty(HTMLElement.prototype, "animate", {
+    writable: true,
+    value: () => ({}),
+  });
 });
 
 afterEach(() => {
@@ -138,6 +142,69 @@ describe("game startup", () => {
     expect(pawn?.querySelector(".status-markers")?.getAttribute("title")).toBe(
       "Hardened, Poisoned, Marked",
     );
+  });
+
+  it("enables undo from Settings and restores the previous completed turn", () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /settings/i }));
+    fireEvent.click(screen.getByRole("switch", { name: /allow undo/i }));
+    expect(window.localStorage.getItem("god-chess-undo-enabled")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: /close settings/i }));
+
+    fireEvent.click(screen.getByRole("button", { name: /^new game$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /begin local duel/i }));
+
+    const draft = (god: string, domain: string) => {
+      fireEvent.click(screen.getByRole("button", { name: new RegExp(`${god} ${domain}`, "i") }));
+      fireEvent.click(screen.getByRole("button", { name: new RegExp(`claim ${god}`, "i") }));
+    };
+    draft("Ares", "Conflict");
+    draft("Medusa", "Sight");
+    draft("Midas", "Commerce");
+    draft("Chiron", "Momentum");
+    draft("Artemis", "Ambush");
+    draft("Death", "Mortality");
+
+    fireEvent.click(screen.getByRole("button", { name: /ares conflict/i }));
+    fireEvent.click(screen.getByRole("button", { name: /threaten/i }));
+    fireEvent.click(screen.getByRole("gridcell", { name: "e2, white pawn" }));
+    fireEvent.click(screen.getByRole("gridcell", { name: "e4" }));
+
+    const undo = screen.getByRole("button", { name: /^undo$/i });
+    expect((undo as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(undo);
+
+    expect(screen.getByRole("gridcell", { name: "e2, white pawn" })).toBeTruthy();
+    expect(screen.getByRole("gridcell", { name: "e4" })).toBeTruthy();
+    expect((screen.getByRole("button", { name: /^undo$/i }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("previews instant ability targets before confirming the effect", () => {
+    const savedState = createGame(1);
+    savedState.phase = "play";
+    savedState.players.white.gods = ["medusa"];
+    savedState.players.white.orbs.black = 3;
+    window.localStorage.setItem(LEGACY_SAVE_KEY, JSON.stringify({
+      version: 1,
+      savedAt: new Date().toISOString(),
+      state: savedState,
+    }));
+
+    const { container } = render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /load game/i }));
+    fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
+    fireEvent.click(screen.getByRole("button", { name: /medusa sight/i }));
+    fireEvent.click(screen.getByRole("button", { name: /stone gaze/i }));
+
+    expect(screen.getByRole("button", { name: /confirm stone gaze/i })).toBeTruthy();
+    expect(screen.getByRole("gridcell", {
+      name: /e2, white pawn, affected by selected ability/i,
+    })).toBeTruthy();
+    expect(container.querySelector('[data-piece-id="white-pawn-4"] [data-status="frozen"]')).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /confirm stone gaze/i }));
+
+    expect(container.querySelector('[data-piece-id="white-pawn-4"] [data-status="frozen"]')).toBeTruthy();
   });
 
   it("lists multiple saved games with pantheons and allows deletion", () => {

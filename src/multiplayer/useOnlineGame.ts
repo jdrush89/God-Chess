@@ -16,12 +16,19 @@ export interface OnlineGameState {
   started: boolean;
   awaitingSync: boolean;
   localColor?: Color;
+  undoConsent: {
+    host: boolean;
+    peer: boolean;
+  };
+  undoAvailable: boolean;
   error?: string;
 }
 
 interface OnlineCallbacks {
   getState: () => GameState;
   applyRemoteAction: (action: GameAction) => GameState;
+  applyUndo: () => GameState | undefined;
+  canUndo: () => boolean;
   receiveState: (state: GameState) => void;
 }
 
@@ -30,6 +37,8 @@ const initialState: OnlineGameState = {
   connecting: false,
   started: false,
   awaitingSync: false,
+  undoConsent: { host: false, peer: false },
+  undoAvailable: false,
 };
 
 export const onlinePlayerColor = (state: OnlineGameState, hostColor?: Color) => {
@@ -43,6 +52,9 @@ export const onlineTurnInputDisabled = (
   activeColor: Color,
   hostColor?: Color,
 ) => onlinePlayerColor(state, hostColor) !== activeColor || state.awaitingSync;
+
+export const onlineUndoEnabled = (state: OnlineGameState) =>
+  state.undoConsent.host && state.undoConsent.peer;
 
 export const useOnlineGame = (callbacks: OnlineCallbacks) => {
   const [state, setState] = useState(initialState);
@@ -59,17 +71,26 @@ export const useOnlineGame = (callbacks: OnlineCallbacks) => {
   const hostGame = useCallback(async (hostName: string) => {
     hostRef.current?.stop();
     peerRef.current?.disconnect();
-    setState({ role: "none", connecting: true, started: false, awaitingSync: false });
+    setState({ ...initialState, connecting: true });
     const host = new MultiplayerHost(hostName, {
       getState: () => callbacksRef.current.getState(),
       applyRemoteAction: (action) => callbacksRef.current.applyRemoteAction(action),
+      applyUndo: () => callbacksRef.current.applyUndo(),
+      canUndo: () => callbacksRef.current.canUndo(),
       onGuestJoined: (guest) => setState((current) => ({ ...current, guest })),
       onGuestLeft: () => setState((current) => ({
         ...current,
         guest: undefined,
         started: false,
         localColor: undefined,
+        undoConsent: { ...current.undoConsent, peer: false },
+        undoAvailable: false,
         error: current.started ? "The other player disconnected." : undefined,
+      })),
+      onUndoSettings: (hostEnabled, guestEnabled, canUndo) => setState((current) => ({
+        ...current,
+        undoConsent: { host: hostEnabled, peer: guestEnabled },
+        undoAvailable: canUndo,
       })),
       onError: (error) => setState((current) => ({ ...current, error, connecting: false })),
     });
@@ -77,20 +98,16 @@ export const useOnlineGame = (callbacks: OnlineCallbacks) => {
       const roomCode = await host.start();
       hostRef.current = host;
       setState({
+        ...initialState,
         role: "host",
         roomCode,
         hostName,
-        connecting: false,
-        started: false,
-        awaitingSync: false,
       });
     } catch (error) {
       host.stop();
       setState({
-        role: "none",
+        ...initialState,
         connecting: false,
-        started: false,
-        awaitingSync: false,
         error: error instanceof Error ? error.message : "Unable to host the game.",
       });
     }
@@ -101,11 +118,9 @@ export const useOnlineGame = (callbacks: OnlineCallbacks) => {
     peerRef.current?.disconnect();
     const normalizedCode = roomCode.trim().toUpperCase();
     setState({
-      role: "none",
+      ...initialState,
       roomCode: normalizedCode,
       connecting: true,
-      started: false,
-      awaitingSync: false,
     });
     const peer = new MultiplayerPeer({
       onJoinAccepted: (guest, acceptedCode) => setState((current) => ({
@@ -135,13 +150,16 @@ export const useOnlineGame = (callbacks: OnlineCallbacks) => {
         callbacksRef.current.receiveState(gameState);
         setState((current) => ({ ...current, awaitingSync: false }));
       },
+      onUndoSettings: (hostEnabled, guestEnabled, canUndo) => setState((current) => ({
+        ...current,
+        undoConsent: { host: hostEnabled, peer: guestEnabled },
+        undoAvailable: canUndo,
+      })),
       onRejected: (reason) => {
         peer.disconnect();
         setState({
-          role: "none",
+          ...initialState,
           connecting: false,
-          started: false,
-          awaitingSync: false,
           error: reason,
         });
       },
@@ -159,10 +177,8 @@ export const useOnlineGame = (callbacks: OnlineCallbacks) => {
     } catch (error) {
       peer.disconnect();
       setState({
-        role: "none",
+        ...initialState,
         connecting: false,
-        started: false,
-        awaitingSync: false,
         error: error instanceof Error ? error.message : "Unable to join the game.",
       });
     }
@@ -186,6 +202,33 @@ export const useOnlineGame = (callbacks: OnlineCallbacks) => {
     setState((current) => ({ ...current, awaitingSync: true }));
   }, []);
 
+  const setUndoConsent = useCallback((enabled: boolean) => {
+    if (state.role === "host") {
+      hostRef.current?.setUndoConsent(enabled);
+      return;
+    }
+    if (state.role === "peer") {
+      peerRef.current?.sendUndoConsent(enabled);
+      setState((current) => ({
+        ...current,
+        undoConsent: { ...current.undoConsent, peer: enabled },
+        undoAvailable: enabled && current.undoConsent.host && current.undoAvailable,
+      }));
+    }
+  }, [state.role]);
+
+  const requestUndo = useCallback(() => {
+    if (!onlineUndoEnabled(state) || !state.undoAvailable) return;
+    if (state.role === "host") {
+      hostRef.current?.requestUndo();
+      return;
+    }
+    if (state.role === "peer") {
+      peerRef.current?.requestUndo();
+      setState((current) => ({ ...current, awaitingSync: true }));
+    }
+  }, [state]);
+
   const disconnect = useCallback(() => {
     hostRef.current?.stop();
     peerRef.current?.disconnect();
@@ -194,5 +237,17 @@ export const useOnlineGame = (callbacks: OnlineCallbacks) => {
     setState(initialState);
   }, []);
 
-  return [state, { hostGame, joinGame, startGame, syncState, sendAction, disconnect }] as const;
+  return [
+    state,
+    {
+      hostGame,
+      joinGame,
+      startGame,
+      syncState,
+      sendAction,
+      setUndoConsent,
+      requestUndo,
+      disconnect,
+    },
+  ] as const;
 };

@@ -8,6 +8,7 @@ interface PeerCallbacks {
   onLobbyState: (hostName: string, guest?: OnlinePlayer) => void;
   onGameStart: (state: GameState, guestColor: Color) => void;
   onStateSync: (state: GameState) => void;
+  onUndoSettings: (hostEnabled: boolean, guestEnabled: boolean, canUndo: boolean) => void;
   onRejected: (reason: string) => void;
   onDisconnected: () => void;
   onError: (error: string) => void;
@@ -35,6 +36,14 @@ export class MultiplayerPeer {
     this.network.sendToHost({ type: "game_action", action });
   }
 
+  sendUndoConsent(enabled: boolean) {
+    this.network.sendToHost({ type: "undo_consent", enabled });
+  }
+
+  requestUndo() {
+    this.network.sendToHost({ type: "undo_request" });
+  }
+
   disconnect() {
     this.network.disconnect();
   }
@@ -55,6 +64,13 @@ export class MultiplayerPeer {
         break;
       case "state_sync":
         this.callbacks.onStateSync(message.state);
+        break;
+      case "undo_settings":
+        this.callbacks.onUndoSettings(
+          message.hostEnabled,
+          message.guestEnabled,
+          message.canUndo,
+        );
         break;
       case "guest_left":
         this.callbacks.onDisconnected();

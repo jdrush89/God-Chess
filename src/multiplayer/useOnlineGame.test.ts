@@ -2,8 +2,14 @@ import { describe, expect, it } from "vitest";
 import {
   onlinePlayerColor,
   onlineTurnInputDisabled,
+  onlineUndoEnabled,
   type OnlineGameState,
 } from "./useOnlineGame";
+
+const undoState = {
+  undoConsent: { host: false, peer: false },
+  undoAvailable: false,
+};
 
 describe("online player input", () => {
   it("unlocks exactly the assigned player during the draft", () => {
@@ -13,6 +19,7 @@ describe("online player input", () => {
       started: true,
       awaitingSync: false,
       localColor: "white",
+      ...undoState,
     };
     const blackPlayer: OnlineGameState = {
       role: "peer",
@@ -20,6 +27,7 @@ describe("online player input", () => {
       started: true,
       awaitingSync: false,
       localColor: "black",
+      ...undoState,
     };
 
     expect(onlineTurnInputDisabled(whitePlayer, "white")).toBe(false);
@@ -34,12 +42,14 @@ describe("online player input", () => {
       connecting: false,
       started: true,
       awaitingSync: false,
+      ...undoState,
     };
     const guest: OnlineGameState = {
       role: "peer",
       connecting: false,
       started: true,
       awaitingSync: false,
+      ...undoState,
     };
 
     expect(onlinePlayerColor(host, "black")).toBe("black");
@@ -56,12 +66,14 @@ describe("online player input", () => {
       connecting: false,
       started: false,
       awaitingSync: false,
+      ...undoState,
     };
     const guest: OnlineGameState = {
       role: "peer",
       connecting: false,
       started: false,
       awaitingSync: false,
+      ...undoState,
     };
 
     expect(onlineTurnInputDisabled(host, "black", "black")).toBe(false);
@@ -74,9 +86,25 @@ describe("online player input", () => {
       connecting: false,
       started: true,
       awaitingSync: false,
+      ...undoState,
     };
 
     expect(onlineTurnInputDisabled(connecting, "white")).toBe(true);
     expect(onlineTurnInputDisabled(connecting, "black")).toBe(true);
+  });
+
+  it("enables online undo only after both players consent", () => {
+    const state: OnlineGameState = {
+      role: "host",
+      connecting: false,
+      started: true,
+      awaitingSync: false,
+      undoConsent: { host: true, peer: false },
+      undoAvailable: false,
+    };
+
+    expect(onlineUndoEnabled(state)).toBe(false);
+    state.undoConsent.peer = true;
+    expect(onlineUndoEnabled(state)).toBe(true);
   });
 });

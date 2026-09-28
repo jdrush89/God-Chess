@@ -40,6 +40,20 @@ describe("Divine AI", () => {
     expect(state.activeColor).toBe("black");
   });
 
+  it("confirms an instant ability after its affected pieces are previewed", () => {
+    let state = createGame(2, { mode: "ai", aiDifficulty: 10 });
+    state.phase = "play";
+    state.activeColor = "white";
+    state.players.white.gods = ["medusa"];
+    state.players.white.orbs.black = 3;
+
+    state = gameReducer(state, { type: "select-god", godId: "medusa" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "stone-gaze" });
+
+    expect(state.pending?.step).toBe("confirm-stone-gaze");
+    expect(chooseAiPlan(state, () => 0)).toEqual([{ type: "confirm-ability" }]);
+  });
+
   it("strongly prefers a defended piece over the same piece left hanging", () => {
     const hanging = createGame(1);
     hanging.phase = "play";

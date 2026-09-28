@@ -312,7 +312,12 @@ describe("game flow", () => {
       };
 
       state = gameReducer(state, { type: "select-god", godId: "medusa" });
-      return gameReducer(state, { type: "select-ability", abilityId: "stone-gaze" });
+      state = gameReducer(state, { type: "select-ability", abilityId: "stone-gaze" });
+      expect(state.board.d6.status.frozen).toBeUndefined();
+      expect(state.board.f4.status.frozen).toBeUndefined();
+      expect(state.legalTargets).toEqual(expect.arrayContaining(["d6", "f4"]));
+      expect(state.legalTargets).not.toContain("d8");
+      return gameReducer(state, { type: "confirm-ability" });
     };
 
     const levelOne = gazeAtLevel(1);
@@ -330,6 +335,49 @@ describe("game flow", () => {
     const levelThree = gazeAtLevel(3);
     expect(levelThree.board.d6.status.frozen).toBe("god");
     expect(levelThree.board.f4.status.frozen).toBe("god");
+  });
+
+  it("refunds Stone Gaze when its preview is cancelled", () => {
+    let state = createGame(1);
+    state.phase = "play";
+    state.players.white.gods = ["medusa"];
+    state.players.white.orbs.black = 3;
+
+    state = gameReducer(state, { type: "select-god", godId: "medusa" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "stone-gaze" });
+    expect(state.pending?.step).toBe("confirm-stone-gaze");
+    expect(state.players.white.orbs.black).toBe(0);
+
+    state = gameReducer(state, { type: "cancel" });
+
+    expect(state.selectedAbility).toBeUndefined();
+    expect(state.players.white.orbs.black).toBe(3);
+    expect(Object.values(state.board).some((piece) => piece.status.frozen)).toBe(false);
+  });
+
+  it("previews and confirms level-one March Home before teleporting the King", () => {
+    let state = createGame(1);
+    state.phase = "play";
+    state.players.white.gods = ["leonidas"];
+    state.players.white.orbs.white = 2;
+    state.board = {
+      d4: testPiece("king", "white", "white-king"),
+      h8: testPiece("king", "black", "black-king"),
+    };
+
+    state = gameReducer(state, { type: "select-god", godId: "leonidas" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "march-home" });
+
+    expect(state.pending?.step).toBe("confirm-march-home");
+    expect(state.selectedSquare).toBe("d4");
+    expect(state.legalTargets).toEqual(["e1"]);
+    expect(state.board.d4?.id).toBe("white-king");
+
+    state = gameReducer(state, { type: "confirm-ability" });
+
+    expect(state.board.d4).toBeUndefined();
+    expect(state.board.e1?.id).toBe("white-king");
+    expect(state.activeColor).toBe("black");
   });
 
   it("records a captured piece flight to its owner's graveyard", () => {

@@ -36,6 +36,7 @@ export type GameAction =
   | { type: "select-god"; godId: GodId }
   | { type: "clear-god" }
   | { type: "select-ability"; abilityId: string }
+  | { type: "confirm-ability" }
   | { type: "square"; square: Square }
   | { type: "grave"; pieceId: string }
   | { type: "marked-execute" }
@@ -825,8 +826,7 @@ const startTargetAbility = (state: GameState, abilityId: string) => {
   state.notice = `Choose a target for ${GOD_BY_ID[state.selectedGod!].abilities.find((a) => a.id === abilityId)!.name}.`;
 };
 
-const resolveStoneGaze = (state: GameState) => {
-  const level = currentLevel(state, "stone-gaze");
+const stoneGazeTargets = (state: GameState) => {
   const queens = Object.entries(state.board)
     .filter(([, piece]) => piece.controller === state.activeColor && piece.type === "queen");
   const queenIds = new Set(queens.map(([, queen]) => queen.id));
@@ -835,6 +835,12 @@ const resolveStoneGaze = (state: GameState) => {
       !queenIds.has(piece.id) &&
       queens.some(([queenSquare]) => lineOfSight(state.board, queenSquare, square)),
   );
+  return { queens, targets };
+};
+
+const resolveStoneGaze = (state: GameState) => {
+  const level = currentLevel(state, "stone-gaze");
+  const { queens, targets } = stoneGazeTargets(state);
   for (const [, piece] of targets) {
     piece.status.frozen = level >= 3
       ? "god"
@@ -888,7 +894,10 @@ const activateAbility = (state: GameState, abilityId: string) => {
   state.pending = { godId: god.id, abilityId, step: "source" };
 
   if (abilityId === "stone-gaze") {
-    resolveStoneGaze(state);
+    const { targets } = stoneGazeTargets(state);
+    state.pending.step = "confirm-stone-gaze";
+    state.legalTargets = targets.map(([square]) => square);
+    state.notice = `Stone Gaze will affect ${targets.length} piece${targets.length === 1 ? "" : "s"}. Confirm to petrify them.`;
     return;
   }
   if (ability.kind === "target") {
@@ -949,7 +958,17 @@ const activateAbility = (state: GameState, abilityId: string) => {
     if (!king) return;
     const level = currentLevel(state, abilityId);
     if (level === 1) {
-      executeMarchHome(state, king[0], []);
+      const destination = king[1].color === "white" ? "e1" : "e8";
+      state.pending = {
+        godId: state.selectedGod!,
+        abilityId,
+        step: "confirm-march-home",
+        source: king[0],
+        destination,
+      };
+      state.selectedSquare = king[0];
+      state.legalTargets = [destination];
+      state.notice = `March Home will teleport the King to ${destination}. Confirm to continue.`;
     } else if (level === 2) {
       const destination = king[1].color === "white" ? "e1" : "e8";
       const [fromFile, fromRank] = coords(king[0]);
@@ -1553,6 +1572,10 @@ const completeSpecialTarget = (state: GameState, square: Square) => {
 };
 
 const handleSquare = (state: GameState, square: Square) => {
+  if (
+    state.pending?.step === "confirm-stone-gaze" ||
+    state.pending?.step === "confirm-march-home"
+  ) return;
   if (state.pending?.abilityId === "harden-choice") {
     if (state.pending.step === "harden-choice" && state.legalTargets.includes(square)) {
       state.pending = { ...state.pending, step: "harden-decision", source: square };
@@ -2024,6 +2047,12 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
         godId: next.selectedGod,
         abilityId: action.abilityId,
       });
+    }
+  } else if (action.type === "confirm-ability" && next.phase === "play") {
+    if (next.pending?.step === "confirm-stone-gaze") {
+      resolveStoneGaze(next);
+    } else if (next.pending?.step === "confirm-march-home" && next.pending.source) {
+      executeMarchHome(next, next.pending.source, []);
     }
   } else if (action.type === "square" && next.phase === "play") handleSquare(next, action.square);
   else if (action.type === "grave" && next.pending?.step === "grave") chooseGravePiece(next, action.pieceId);

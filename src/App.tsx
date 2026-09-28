@@ -21,12 +21,14 @@ import {
   Rabbit,
   RotateCcw,
   Save,
+  Settings,
   Shield,
   Skull,
   Snowflake,
   Sparkles,
   Swords,
   Trash2,
+  Undo2,
   Users,
   Wifi,
   X,
@@ -41,6 +43,7 @@ import type { Ability, ActionPresentation, CaptureAnimation, Color, GameMode, Ga
 import {
   onlinePlayerColor,
   onlineTurnInputDisabled,
+  onlineUndoEnabled,
   useOnlineGame,
   type OnlineGameState,
 } from "./multiplayer/useOnlineGame";
@@ -95,6 +98,7 @@ const orbTargetKey = (player: Color, orb: OrbColor) => `${player}-${orb}`;
 
 const SAVE_KEY = "god-chess-saves-v2";
 const LEGACY_SAVE_KEY = "god-chess-save-v1";
+const UNDO_SETTING_KEY = "god-chess-undo-enabled";
 
 interface SavedGame {
   version: 2;
@@ -118,6 +122,23 @@ const prepareSavedState = (state: GameState) => {
 
 const saveId = () => globalThis.crypto?.randomUUID?.() ??
   `save-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+const loadUndoSetting = () => {
+  try {
+    return window.localStorage.getItem(UNDO_SETTING_KEY) === "true";
+  } catch (error) {
+    console.error("Unable to load the undo setting.", error);
+    return false;
+  }
+};
+
+const persistUndoSetting = (enabled: boolean) => {
+  try {
+    window.localStorage.setItem(UNDO_SETTING_KEY, String(enabled));
+  } catch (error) {
+    console.error("Unable to save the undo setting.", error);
+  }
+};
 
 const persistSavedGames = (games: SavedGame[]) => {
   window.localStorage.setItem(SAVE_KEY, JSON.stringify(games));
@@ -470,11 +491,13 @@ function DraftScreen({
   state,
   dispatch,
   onSaveAndQuit,
+  onOpenSettings,
   inputDisabled = false,
 }: {
   state: GameState;
   dispatch: GameDispatch;
   onSaveAndQuit?: () => void;
+  onOpenSettings: () => void;
   inputDisabled?: boolean;
 }) {
   const [inspected, setInspected] = useState<GodId>(state.draft.available[0]);
@@ -500,11 +523,12 @@ function DraftScreen({
           <span className={`turn-dot ${state.activeColor}`} />
           {activePlayer.name} · {state.activeColor} picks
         </div>
-        {onSaveAndQuit && (
-          <div className="header-actions">
+        <div className="header-actions">
+          {onSaveAndQuit && (
             <button onClick={onSaveAndQuit}><Save size={18} /><span>Save & quit</span></button>
-          </div>
-        )}
+          )}
+          <button onClick={onOpenSettings}><Settings size={18} /><span>Settings</span></button>
+        </div>
       </header>
 
       <section className="draft-hero">
@@ -720,6 +744,8 @@ function ChessBoard({
   onInspectSquare: (square: Square) => void;
 }) {
   const displaySquares = useMemo(() => [...allSquares].sort((a, b) => Number(b[1]) - Number(a[1]) || a.localeCompare(b)), []);
+  const previewingEffect = state.pending?.step === "confirm-stone-gaze" ||
+    state.pending?.step === "confirm-march-home";
   return (
     <div className="board-shell">
       <div className="board-frame">
@@ -728,14 +754,15 @@ function ChessBoard({
             const [file, rank] = [square[0], square[1]];
             const piece = state.board[square];
             const selected = state.selectedSquare === square;
-            const legal = state.legalTargets.includes(square);
+            const effectPreview = previewingEffect && state.legalTargets.includes(square);
+            const legal = !previewingEffect && state.legalTargets.includes(square);
             const banana = state.bananas.find((item) => item.square === square);
             return (
               <button
                 role="gridcell"
-                aria-label={`${square}${piece ? `, ${piece.color} ${piece.type}` : ""}`}
+                aria-label={`${square}${piece ? `, ${piece.color} ${piece.type}` : ""}${effectPreview ? ", affected by selected ability" : ""}`}
                 data-square={square}
-                className={`board-square ${(file.charCodeAt(0) + Number(rank)) % 2 ? "light" : "dark"} ${selected ? "selected" : ""} ${legal ? "legal" : ""} ${legal && piece ? "legal-occupied" : ""}`}
+                className={`board-square ${(file.charCodeAt(0) + Number(rank)) % 2 ? "light" : "dark"} ${selected ? "selected" : ""} ${legal ? "legal" : ""} ${legal && piece ? "legal-occupied" : ""} ${effectPreview ? "effect-preview" : ""}`}
                 key={square}
                 onClick={() => {
                   onInspectSquare(square);
@@ -745,6 +772,11 @@ function ChessBoard({
                 {file === "a" && <span className="rank-label">{rank}</span>}
                 {rank === "1" && <span className="file-label">{file}</span>}
                 {legal && !piece && <span className="move-dot" />}
+                {effectPreview && (
+                  <span className="effect-preview-icon">
+                    {state.selectedAbility === "stone-gaze" ? <Eye /> : <Crown />}
+                  </span>
+                )}
                 {banana && <span className="banana" title="Banana peel">⌁</span>}
                 {piece && <PieceView piece={piece} />}
               </button>
@@ -1035,6 +1067,12 @@ function ActionPanel({
           </div>
           {!readOnly && state.selectedAbility && (
             <div className="action-buttons">
+              {(state.pending?.step === "confirm-stone-gaze" ||
+                state.pending?.step === "confirm-march-home") && (
+                <button className="primary-button" onClick={() => dispatch({ type: "confirm-ability" })}>
+                  Confirm {selectedGod.abilities.find((ability) => ability.id === state.selectedAbility)?.name}
+                </button>
+              )}
               {state.pending?.step === "marked-choice" && (
                 <button className="danger-button" onClick={() => dispatch({ type: "marked-execute" })}>
                   Execute now
@@ -1330,16 +1368,88 @@ function RulesModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+function SettingsModal({
+  undoPreferred,
+  onlineSession,
+  localConsent,
+  remoteConsent,
+  onUndoPreferenceChange,
+  onClose,
+}: {
+  undoPreferred: boolean;
+  onlineSession: boolean;
+  localConsent: boolean;
+  remoteConsent: boolean;
+  onUndoPreferenceChange: (enabled: boolean) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="modal-backdrop" onMouseDown={onClose}>
+      <section className="settings-modal" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="close-button" onClick={onClose} aria-label="Close settings"><X size={20} /></button>
+        <div className="settings-icon"><Settings size={25} /></div>
+        <p className="eyebrow">GAME OPTIONS</p>
+        <h2>Settings</h2>
+        <div className="setting-row">
+          <div>
+            <strong>Allow undo</strong>
+            <p>
+              {onlineSession
+                ? "Both players must enable this setting. Either player can then rewind the latest completed turn."
+                : "Adds an Undo button that rewinds the latest completed turn."}
+            </p>
+          </div>
+          <button
+            className={`setting-switch ${undoPreferred ? "enabled" : ""}`}
+            role="switch"
+            aria-checked={undoPreferred}
+            aria-label="Allow undo"
+            onClick={() => onUndoPreferenceChange(!undoPreferred)}
+          >
+            <span />
+          </button>
+        </div>
+        {onlineSession && (
+          <div className="undo-consent-status">
+            <span className={localConsent ? "enabled" : ""}>
+              <i>{localConsent ? "✓" : "—"}</i>
+              You
+            </span>
+            <span className={remoteConsent ? "enabled" : ""}>
+              <i>{remoteConsent ? "✓" : "—"}</i>
+              Opponent
+            </span>
+            <p>
+              {localConsent && remoteConsent
+                ? "Undo is enabled for this online game."
+                : localConsent
+                  ? "Waiting for your opponent to enable undo."
+                  : "Enable undo to give your consent."}
+            </p>
+          </div>
+        )}
+        {!onlineSession && (
+          <p className="settings-note">
+            Against the Divine AI, undo rewinds the AI response and your preceding turn together.
+          </p>
+        )}
+      </section>
+    </div>
+  );
+}
+
 function MainMenu({
   savedGames,
   onLoad,
   onDelete,
   onNewGame,
+  onOpenSettings,
 }: {
   savedGames: SavedGame[];
   onLoad: (game: SavedGame) => void;
   onDelete: (id: string) => void;
   onNewGame: () => void;
+  onOpenSettings: () => void;
 }) {
   const [loadOpen, setLoadOpen] = useState(false);
   useEffect(() => {
@@ -1357,6 +1467,9 @@ function MainMenu({
           {savedGames.length > 0 && (
             <button className="secondary-button" onClick={() => setLoadOpen(true)}>Load game</button>
           )}
+          <button className="secondary-button main-menu-settings" onClick={onOpenSettings}>
+            <Settings size={16} /> Settings
+          </button>
         </div>
         {savedGames.length > 0 && (
           <small>{savedGames.length} saved game{savedGames.length === 1 ? "" : "s"}</small>
@@ -1620,6 +1733,10 @@ function GameScreen({
   opponentColor,
   onlineRoomCode,
   onlineError,
+  undoEnabled,
+  canUndo,
+  onUndo,
+  onOpenSettings,
 }: {
   state: GameState;
   dispatch: GameDispatch;
@@ -1629,6 +1746,10 @@ function GameScreen({
   opponentColor?: Color;
   onlineRoomCode?: string;
   onlineError?: string;
+  undoEnabled: boolean;
+  canUndo: boolean;
+  onUndo: () => void;
+  onOpenSettings: () => void;
 }) {
   const [rulesOpen, setRulesOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -1919,6 +2040,14 @@ function GameScreen({
           {onlineRoomCode && <><i /><span>ROOM <strong>{onlineRoomCode}</strong></span></>}
         </div>
         <div className="header-actions">
+          <button
+            onClick={onUndo}
+            disabled={!canUndo}
+            title={undoEnabled ? "Undo the latest completed turn" : "Enable undo in Settings"}
+          >
+            <Undo2 size={18} />
+            <span>Undo</span>
+          </button>
           {state.gameMode !== "online" && (
             <button onClick={onSaveAndQuit}>
               <Save size={18} />
@@ -1927,6 +2056,7 @@ function GameScreen({
           )}
           <button onClick={() => setHistoryOpen(!historyOpen)}><History size={18} /><span>History</span></button>
           <button onClick={() => setRulesOpen(true)}><BookOpen size={18} /><span>Rules</span></button>
+          <button onClick={onOpenSettings}><Settings size={18} /><span>Settings</span></button>
           <button onClick={onRestart}><RotateCcw size={18} /><span>New game</span></button>
         </div>
       </header>
@@ -2105,23 +2235,92 @@ export default function App() {
   const [startView, setStartView] = useState<"menu" | "setup" | "none">("menu");
   const [setupCanCancel, setSetupCanCancel] = useState(false);
   const [setupReturnView, setSetupReturnView] = useState<"menu" | "none">("menu");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [undoPreferred, setUndoPreferred] = useState(loadUndoSetting);
+  const [undoDepth, setUndoDepth] = useState(0);
   const [state, baseDispatch] = useReducer(gameReducer, undefined, () => createGame());
   const stateRef = useRef(state);
   stateRef.current = state;
   const aiPlan = useRef<GameAction[]>([]);
+  const undoStack = useRef<GameState[]>([]);
+  const undoDepthRef = useRef(0);
+  const turnStart = useRef<GameState | undefined>(undefined);
 
   const receiveState = (next: GameState) => {
     stateRef.current = next;
     baseDispatch({ type: "load-game", state: next });
   };
+  const updateUndoDepth = () => {
+    undoDepthRef.current = undoStack.current.length;
+    setUndoDepth(undoStack.current.length);
+  };
+  const clearUndoHistory = () => {
+    undoStack.current = [];
+    updateUndoDepth();
+  };
+  const resetUndoTracking = (next: GameState) => {
+    clearUndoHistory();
+    turnStart.current = next.phase === "play" ? prepareSavedState(next) : undefined;
+  };
+  const applyTrackedAction = (current: GameState, action: GameAction) => {
+    const next = gameReducer(current, action);
+    if (
+      (current.phase === "draft" || current.phase === "upgrade") &&
+      next.phase === "play"
+    ) {
+      resetUndoTracking(next);
+    } else if (current.phase === "play" && next.phase === "upgrade") {
+      clearUndoHistory();
+      turnStart.current = undefined;
+    } else if (
+      current.phase === "play" &&
+      (next.turn !== current.turn || next.phase === "gameover")
+    ) {
+      undoStack.current = [
+        ...undoStack.current,
+        prepareSavedState(turnStart.current ?? current),
+      ].slice(-100);
+      updateUndoDepth();
+      turnStart.current = next.phase === "play" ? prepareSavedState(next) : undefined;
+    }
+    return next;
+  };
+  const canApplyUndo = () => {
+    const current = stateRef.current;
+    return (
+      undoDepthRef.current > 0 &&
+      (current.phase === "play" || current.phase === "gameover") &&
+      !current.selectedGod &&
+      !current.selectedAbility
+    );
+  };
+  const applyUndo = () => {
+    if (!canApplyUndo()) return undefined;
+    const current = stateRef.current;
+    let restored = undoStack.current.pop();
+    if (!restored) return undefined;
+    if (current.gameMode === "ai" && current.aiColor) {
+      while (restored.activeColor === current.aiColor && undoStack.current.length) {
+        restored = undoStack.current.pop()!;
+      }
+    }
+    updateUndoDepth();
+    const next = prepareSavedState(restored);
+    turnStart.current = prepareSavedState(next);
+    aiPlan.current = [];
+    receiveState(next);
+    return next;
+  };
   const applyRemoteAction = (action: GameAction) => {
-    const next = gameReducer(stateRef.current, action);
+    const next = applyTrackedAction(stateRef.current, action);
     receiveState(next);
     return next;
   };
   const [online, onlineActions] = useOnlineGame({
     getState: () => stateRef.current,
     applyRemoteAction,
+    applyUndo,
+    canUndo: canApplyUndo,
     receiveState,
   });
 
@@ -2135,15 +2334,20 @@ export default function App() {
         return;
       }
       if (online.role === "host") {
-        const next = gameReducer(current, action);
+        const next = applyTrackedAction(current, action);
         receiveState(next);
         onlineActions.syncState(next);
         return;
       }
       return;
     }
-    const next = gameReducer(current, action);
+    const next = applyTrackedAction(current, action);
     receiveState(next);
+  };
+
+  const changeUndoPreference = (enabled: boolean) => {
+    persistUndoSetting(enabled);
+    setUndoPreferred(enabled);
   };
 
   const saveCurrentGame = () => {
@@ -2160,6 +2364,7 @@ export default function App() {
   const saveAndQuit = () => {
     if (!saveCurrentGame()) return;
     aiPlan.current = [];
+    clearUndoHistory();
     setStartView("menu");
   };
 
@@ -2188,9 +2393,16 @@ export default function App() {
     if (online.started) setStartView("none");
   }, [online.started]);
 
+  useEffect(() => {
+    if (!online.started || state.gameMode !== "online") return;
+    onlineActions.setUndoConsent(undoPreferred);
+  }, [online.started, online.role, state.gameMode, undoPreferred]);
+
   const loadGame = (game: SavedGame) => {
     activeSaveId.current = game.id;
-    receiveState(structuredClone(game.state));
+    const next = structuredClone(game.state);
+    resetUndoTracking(next);
+    receiveState(next);
     aiPlan.current = [];
     setStartView("none");
   };
@@ -2209,7 +2421,9 @@ export default function App() {
   const beginGame = (mode: Exclude<GameMode, "online">, difficulty: number) => {
     onlineActions.disconnect();
     activeSaveId.current = saveId();
-    receiveState(createGame(undefined, { mode, aiDifficulty: difficulty }));
+    const next = createGame(undefined, { mode, aiDifficulty: difficulty });
+    resetUndoTracking(next);
+    receiveState(next);
     aiPlan.current = [];
     setStartView("none");
   };
@@ -2221,6 +2435,7 @@ export default function App() {
       hostName: online.hostName,
       guestName: online.guest.name,
     });
+    resetUndoTracking(next);
     receiveState(next);
     onlineActions.startGame(next);
     setStartView("none");
@@ -2248,15 +2463,56 @@ export default function App() {
     : state.gameMode === "online" && localOnlineColor
       ? (localOnlineColor === "white" ? "black" : "white")
       : undefined;
+  const onlineSession =
+    startView === "none" &&
+    state.gameMode === "online" &&
+    online.role !== "none" &&
+    online.started;
+  const localUndoConsent = online.role === "host"
+    ? online.undoConsent.host
+    : online.undoConsent.peer;
+  const remoteUndoConsent = online.role === "host"
+    ? online.undoConsent.peer
+    : online.undoConsent.host;
+  const undoEnabled = state.gameMode === "online"
+    ? onlineUndoEnabled(online)
+    : undoPreferred;
+  const undoStable =
+    (state.phase === "play" || state.phase === "gameover") &&
+    !state.selectedGod &&
+    !state.selectedAbility;
+  const canUndo = undoEnabled && undoStable && (
+    state.gameMode === "online"
+      ? online.undoAvailable && !online.awaitingSync
+      : undoDepth > 0
+  );
+  const requestUndo = () => {
+    if (!canUndo) return;
+    if (state.gameMode === "online") onlineActions.requestUndo();
+    else applyUndo();
+  };
 
   if (startView === "menu") {
     return (
-      <MainMenu
-        savedGames={savedGames}
-        onLoad={loadGame}
-        onDelete={deleteSavedGame}
-        onNewGame={startNewGame}
-      />
+      <>
+        <MainMenu
+          savedGames={savedGames}
+          onLoad={loadGame}
+          onDelete={deleteSavedGame}
+          onNewGame={startNewGame}
+          onOpenSettings={() => setSettingsOpen(true)}
+        />
+        {settingsOpen && (
+          <SettingsModal
+            undoPreferred={undoPreferred}
+            onlineSession={false}
+            localConsent={undoPreferred}
+            remoteConsent={false}
+            onUndoPreferenceChange={changeUndoPreference}
+            onClose={() => setSettingsOpen(false)}
+          />
+        )}
+      </>
     );
   }
 
@@ -2269,6 +2525,7 @@ export default function App() {
             dispatch={dispatch}
             inputDisabled={inputDisabled}
             onSaveAndQuit={state.gameMode === "online" ? undefined : saveAndQuit}
+            onOpenSettings={() => setSettingsOpen(true)}
           />
         )
         : (
@@ -2279,10 +2536,24 @@ export default function App() {
             opponentColor={opponentColor}
             onlineRoomCode={online.roomCode}
             onlineError={online.error}
+            undoEnabled={undoEnabled}
+            canUndo={canUndo}
+            onUndo={requestUndo}
+            onOpenSettings={() => setSettingsOpen(true)}
             onRestart={openNewGame}
             onSaveAndQuit={saveAndQuit}
           />
         )}
+      {settingsOpen && (
+        <SettingsModal
+          undoPreferred={undoPreferred}
+          onlineSession={onlineSession}
+          localConsent={onlineSession ? localUndoConsent : undoPreferred}
+          remoteConsent={onlineSession ? remoteUndoConsent : false}
+          onUndoPreferenceChange={changeUndoPreference}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
       {startView === "setup" && (
         <StartGamePrompt
           online={online}

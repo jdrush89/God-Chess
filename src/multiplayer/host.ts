@@ -6,8 +6,11 @@ import type { NetworkMessage, OnlinePlayer, PeerMessage } from "./types";
 interface HostCallbacks {
   getState: () => GameState;
   applyRemoteAction: (action: GameAction) => GameState;
+  applyUndo: () => GameState | undefined;
+  canUndo: () => boolean;
   onGuestJoined: (guest: OnlinePlayer) => void;
   onGuestLeft: () => void;
+  onUndoSettings: (hostEnabled: boolean, guestEnabled: boolean, canUndo: boolean) => void;
   onError: (error: string) => void;
 }
 
@@ -20,6 +23,8 @@ export class MultiplayerHost {
   private guest: OnlinePlayer | null = null;
   private started = false;
   private hostColor?: Color;
+  private hostUndoEnabled = false;
+  private guestUndoEnabled = false;
   readonly roomCode = generateRoomCode();
 
   constructor(
@@ -33,6 +38,8 @@ export class MultiplayerHost {
       onPeerDisconnected: (peerId) => {
         if (this.guest?.id !== peerId) return;
         this.guest = null;
+        this.guestUndoEnabled = false;
+        this.publishUndoSettings();
         this.callbacks.onGuestLeft();
         this.network.broadcast({ type: "guest_left" });
       },
@@ -61,10 +68,25 @@ export class MultiplayerHost {
       hostColor: this.hostColor,
       guestColor: this.hostColor === "white" ? "black" : "white",
     });
+    this.publishUndoSettings();
   }
 
   syncState(state: GameState) {
-    if (this.started) this.network.broadcast({ type: "state_sync", state });
+    if (!this.started) return;
+    this.network.broadcast({ type: "state_sync", state });
+    this.publishUndoSettings();
+  }
+
+  setUndoConsent(enabled: boolean) {
+    this.hostUndoEnabled = enabled;
+    this.publishUndoSettings();
+  }
+
+  requestUndo() {
+    if (!this.started || !this.hostUndoEnabled || !this.guestUndoEnabled) return;
+    const next = this.callbacks.applyUndo();
+    if (next) this.syncState(next);
+    else this.publishUndoSettings();
   }
 
   stop() {
@@ -72,6 +94,8 @@ export class MultiplayerHost {
     this.guest = null;
     this.started = false;
     this.hostColor = undefined;
+    this.hostUndoEnabled = false;
+    this.guestUndoEnabled = false;
   }
 
   private handleMessage(peerId: string, message: NetworkMessage) {
@@ -79,16 +103,33 @@ export class MultiplayerHost {
       this.handleJoin(peerId, message);
       return;
     }
+    if (this.guest?.id !== peerId || !this.started) return;
+    if (message.type === "undo_consent") {
+      this.guestUndoEnabled = message.enabled;
+      this.publishUndoSettings();
+      return;
+    }
+    if (message.type === "undo_request") {
+      if (this.hostUndoEnabled && this.guestUndoEnabled) {
+        const next = this.callbacks.applyUndo();
+        if (next) this.syncState(next);
+        else {
+          this.syncState(this.callbacks.getState());
+        }
+      } else {
+        this.syncState(this.callbacks.getState());
+      }
+      return;
+    }
     if (
       message.type !== "game_action" ||
       !message.action ||
       typeof message.action.type !== "string" ||
-      this.guest?.id !== peerId ||
-      !this.started
+      !remoteActionIsAllowed(message.action)
     ) return;
     const state = this.callbacks.getState();
     const guestColor = this.hostColor === "white" ? "black" : "white";
-    if (state.activeColor !== guestColor || !remoteActionIsAllowed(message.action)) {
+    if (state.activeColor !== guestColor) {
       this.syncState(state);
       return;
     }
@@ -107,6 +148,7 @@ export class MultiplayerHost {
     }
     const name = message.playerName.trim().slice(0, 24) || "Guest";
     this.guest = { id: peerId, name };
+    this.guestUndoEnabled = false;
     this.network.send(peerId, {
       type: "join_accepted",
       player: this.guest,
@@ -119,5 +161,22 @@ export class MultiplayerHost {
       roomCode: this.roomCode,
     });
     this.callbacks.onGuestJoined(this.guest);
+  }
+
+  private publishUndoSettings() {
+    const canUndo =
+      this.started &&
+      this.hostUndoEnabled &&
+      this.guestUndoEnabled &&
+      this.callbacks.canUndo();
+    this.callbacks.onUndoSettings(this.hostUndoEnabled, this.guestUndoEnabled, canUndo);
+    if (this.started) {
+      this.network.broadcast({
+        type: "undo_settings",
+        hostEnabled: this.hostUndoEnabled,
+        guestEnabled: this.guestUndoEnabled,
+        canUndo,
+      });
+    }
   }
 }

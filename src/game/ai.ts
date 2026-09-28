@@ -221,6 +221,12 @@ const availableActions = (state: GameState): GameAction[] => {
   if (state.pending?.step === "siphon-choice") {
     return [2, 1, 0].map((amount) => ({ type: "siphon", amount } as GameAction));
   }
+  if (
+    state.pending?.step === "confirm-stone-gaze" ||
+    state.pending?.step === "confirm-march-home"
+  ) {
+    return [{ type: "confirm-ability" }];
+  }
   if (!state.selectedGod) {
     return state.players[state.activeColor].gods
       .filter((godId) => !state.rested.includes(godId))

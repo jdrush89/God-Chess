@@ -8,7 +8,9 @@ export interface OnlinePlayer {
 
 export type PeerMessage =
   | { type: "join_request"; playerName: string }
-  | { type: "game_action"; action: GameAction };
+  | { type: "game_action"; action: GameAction }
+  | { type: "undo_consent"; enabled: boolean }
+  | { type: "undo_request" };
 
 export type HostMessage =
   | { type: "join_accepted"; player: OnlinePlayer; roomCode: string }
@@ -16,6 +18,7 @@ export type HostMessage =
   | { type: "lobby_state"; hostName: string; guest?: OnlinePlayer; roomCode: string }
   | { type: "game_start"; state: GameState; hostColor: Color; guestColor: Color }
   | { type: "state_sync"; state: GameState }
+  | { type: "undo_settings"; hostEnabled: boolean; guestEnabled: boolean; canUndo: boolean }
   | { type: "guest_left" }
   | { type: "error"; message: string };
 
