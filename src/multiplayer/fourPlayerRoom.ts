@@ -58,7 +58,7 @@ export interface FourPlayerPeerCallbacks {
   ) => void;
   onSnapshot: (snapshot: FourPlayerRoomSnapshot) => void;
   onRejected: (reason: string) => void;
-  onDisconnected: () => void;
+  onDisconnected: (roomEnded: boolean) => void;
   onError: (error: string) => void;
 }
 
@@ -85,6 +85,21 @@ const reconnectToken = () =>
 
 const aiName = (seat: Seat) =>
   `${seat[0].toUpperCase()}${seat.slice(1)} Divine AI`;
+
+const replaceSeatWithAi = (
+  source: FourPlayerState,
+  seat: Seat,
+  difficulty: number,
+) => {
+  const state = prepareFourPlayerState(source);
+  const name = aiName(seat);
+  const control = { kind: "ai" as const, difficulty };
+  state.config.seats[seat].name = name;
+  state.config.seats[seat].control = control;
+  state.players[seat].name = name;
+  state.players[seat].control = control;
+  return state;
+};
 
 export const createFourPlayerOnlineConfig = (): FourPlayerConfig => {
   const config = createDefaultFourPlayerConfig();
@@ -261,13 +276,13 @@ export class FourPlayerRoomHost {
     this.undoConsents.delete(participant.id);
     if (participant.peerId) this.peerParticipants.delete(participant.peerId);
 
-    const state = prepareFourPlayerState(this.canonical.state);
-    const name = aiName(seat);
-    const control = { kind: "ai" as const, difficulty: level };
-    state.config.seats[seat].name = name;
-    state.config.seats[seat].control = control;
-    state.players[seat].name = name;
-    state.players[seat].control = control;
+    const state = replaceSeatWithAi(this.canonical.state, seat, level);
+    this.undoStack = this.undoStack.map((snapshot) =>
+      replaceSeatWithAi(snapshot, seat, level)
+    );
+    this.turnStart = this.turnStart
+      ? replaceSeatWithAi(this.turnStart, seat, level)
+      : undefined;
     this.config = structuredClone(state.config);
     this.canonical = createFourPlayerStateEnvelope(
       state,
@@ -692,7 +707,7 @@ export class FourPlayerRoomHost {
     }
     const connected = [...this.participants.values()]
       .filter((participant) => participant.connected);
-    return connected.length >= 2 &&
+    return connected.length >= 1 &&
       connected.every((participant) =>
         this.undoConsents.get(participant.id) === true
       );
@@ -789,6 +804,7 @@ export class FourPlayerRoomHost {
 
 export class FourPlayerRoomPeer {
   private network: MultiplayerTransport;
+  private latestCanonicalRevision = -1;
 
   constructor(
     private callbacks: FourPlayerPeerCallbacks,
@@ -800,7 +816,8 @@ export class FourPlayerRoomPeer {
       onInvalidMessage: () =>
         callbacks.onError("Received an invalid multiplayer message."),
       onPeerConnected: () => {},
-      onPeerDisconnected: () => callbacks.onDisconnected(),
+      onPeerDisconnected: (_peerId, reason) =>
+        callbacks.onDisconnected(reason === "peer-left"),
       onStatusChange: () => {},
       onError: callbacks.onError,
     });
@@ -864,6 +881,19 @@ export class FourPlayerRoomPeer {
         this.callbacks.onRejected(payload.reason);
         break;
       case "room_state":
+        if (
+          payload.snapshot.canonical === undefined
+            ? this.latestCanonicalRevision >= 0
+            : payload.snapshot.canonical.revision < this.latestCanonicalRevision
+        ) {
+          break;
+        }
+        if (payload.snapshot.canonical) {
+          this.latestCanonicalRevision = Math.max(
+            this.latestCanonicalRevision,
+            payload.snapshot.canonical.revision,
+          );
+        }
         this.callbacks.onSnapshot(payload.snapshot);
         break;
       case "error":

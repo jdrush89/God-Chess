@@ -17,7 +17,7 @@ import {
 import { GODS } from "../game/gods";
 import type { Color, GameMode, GameState, GodId } from "../game/types";
 import {
-  isTwoPlayerGameState,
+  isStrictOnlineTwoPlayerGameState,
   prepareTwoPlayerState,
 } from "../saves";
 
@@ -196,7 +196,7 @@ const normalizeGameAction = (value: unknown): GameAction | undefined => {
         : undefined;
     case "load-game":
       return hasExactKeys(value, ["type", "state"]) &&
-          isTwoPlayerGameState(value.state)
+          isStrictOnlineTwoPlayerGameState(value.state)
         ? { type: "load-game", state: prepareTwoPlayerState(value.state) }
         : undefined;
     case "clear-god":
@@ -351,7 +351,7 @@ const normalizeClassicHostMessage = (value: unknown): HostMessage | undefined =>
         "hostColor",
         "guestColor",
       ]) &&
-          isTwoPlayerGameState(value.state) &&
+          isStrictOnlineTwoPlayerGameState(value.state) &&
           isColor(value.hostColor) &&
           isColor(value.guestColor)
         ? {
@@ -363,7 +363,7 @@ const normalizeClassicHostMessage = (value: unknown): HostMessage | undefined =>
         : undefined;
     case "state_sync":
       return hasExactKeys(value, ["type", "state"]) &&
-          isTwoPlayerGameState(value.state)
+          isStrictOnlineTwoPlayerGameState(value.state)
         ? { type: "state_sync", state: prepareTwoPlayerState(value.state) }
         : undefined;
     case "undo_settings":

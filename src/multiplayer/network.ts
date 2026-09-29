@@ -17,12 +17,16 @@ export const generateRoomCode = () => {
 };
 
 export type ConnectionStatus = "disconnected" | "connecting" | "connected" | "error";
+export type PeerDisconnectReason = "peer-left" | "connection-lost";
 
 export interface NetworkCallbacks {
   onMessage: (peerId: string, message: ProtocolMessage) => void;
   onInvalidMessage?: (peerId: string) => void;
   onPeerConnected: (peerId: string) => void;
-  onPeerDisconnected: (peerId: string) => void;
+  onPeerDisconnected: (
+    peerId: string,
+    reason: PeerDisconnectReason,
+  ) => void;
   onStatusChange: (status: ConnectionStatus) => void;
   onError: (error: string) => void;
 }
@@ -287,7 +291,7 @@ export class NetworkManager implements MultiplayerTransport {
       return;
     }
     this.relayPeers.delete(peerId);
-    this.callbacks.onPeerDisconnected(peerId);
+    this.callbacks.onPeerDisconnected(peerId, "connection-lost");
   }
 
   private removePeer(peerId: string) {
@@ -296,6 +300,6 @@ export class NetworkManager implements MultiplayerTransport {
     this.peers.delete(peerId);
     this.relayPeers.delete(peerId);
     if (peer && !peer.destroyed) peer.destroy();
-    if (existed) this.callbacks.onPeerDisconnected(peerId);
+    if (existed) this.callbacks.onPeerDisconnected(peerId, "peer-left");
   }
 }

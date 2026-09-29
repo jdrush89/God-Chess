@@ -57,6 +57,46 @@ const clearReconnectToken = (roomCode?: string) => {
   }
 };
 
+const INVALID_RECONNECT_TOKEN =
+  "That reconnect token is not valid for this match.";
+
+export const reconcileFourPlayerSnapshot = (
+  current: FourPlayerOnlineState,
+  snapshot: FourPlayerRoomSnapshot,
+): FourPlayerOnlineState => {
+  const currentRevision = current.snapshot?.canonical?.revision;
+  const incomingCanonical = snapshot.canonical;
+  if (
+    currentRevision !== undefined &&
+    (
+      incomingCanonical === undefined ||
+      incomingCanonical.revision < currentRevision
+    )
+  ) {
+    return current;
+  }
+  const revisionAdvanced =
+    incomingCanonical !== undefined &&
+    (
+      currentRevision === undefined ||
+      incomingCanonical.revision > currentRevision
+    );
+  const actionAcknowledged =
+    current.awaitingActionId === undefined ||
+    revisionAdvanced ||
+    incomingCanonical?.lastActionId === current.awaitingActionId;
+  return {
+    ...current,
+    role: current.role === "none" ? "peer" : current.role,
+    connecting: false,
+    roomCode: snapshot.roomCode,
+    snapshot,
+    awaitingActionId: actionAcknowledged
+      ? undefined
+      : current.awaitingActionId,
+  };
+};
+
 export const fourPlayerOnlineLocalSeat = (
   state: FourPlayerOnlineState,
 ) => state.snapshot?.participants.find(
@@ -163,17 +203,14 @@ export const useFourPlayerOnlineGame = () => {
           error: undefined,
         }));
       },
-      onSnapshot: (snapshot) => setState((current) => ({
-        ...current,
-        role: current.role === "none" ? "peer" : current.role,
-        connecting: false,
-        roomCode: snapshot.roomCode,
-        snapshot,
-        awaitingActionId: undefined,
-      })),
+      onSnapshot: (snapshot) => setState((current) =>
+        reconcileFourPlayerSnapshot(current, snapshot)
+      ),
       onRejected: (reason) => {
         peer.disconnect();
-        if (token) clearReconnectToken(normalizedCode);
+        if (token && reason === INVALID_RECONNECT_TOKEN) {
+          clearReconnectToken(normalizedCode);
+        }
         setState({
           ...initialState,
           roomCode: normalizedCode,
@@ -181,15 +218,17 @@ export const useFourPlayerOnlineGame = () => {
           error: reason,
         });
       },
-      onDisconnected: () => {
-        clearReconnectToken(normalizedCode);
+      onDisconnected: (roomEnded) => {
+        if (roomEnded) clearReconnectToken(normalizedCode);
         setState((current) => ({
           ...initialState,
           roomCode: current.roomCode,
           playerName: current.playerName,
           ended: true,
           connecting: false,
-          error: "The host disconnected. This room has ended.",
+          error: roomEnded
+            ? "The host disconnected. This room has ended."
+            : "The connection was interrupted. Rejoin the room to resume.",
         }));
       },
       onError: (error) => setState((current) => ({

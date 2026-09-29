@@ -83,6 +83,35 @@ describe("versioned multiplayer protocol", () => {
     })).toBeUndefined();
   });
 
+  it("rejects crash-shaped classic game states with missing or malformed nested fields", () => {
+    const state = createGame(undefined, { mode: "online" });
+    const missingRequiredField = structuredClone(state) as unknown as Record<string, unknown>;
+    delete missingRequiredField.legalTargets;
+    expect(normalizeProtocolMessage(createProtocolMessage(
+      "classic",
+      "host",
+      { type: "state_sync", state: missingRequiredField as never },
+    ))).toBeUndefined();
+
+    const malformedPiece = structuredClone(state);
+    (malformedPiece.board.a2 as unknown as { status: unknown }).status = null;
+    expect(normalizeProtocolMessage(createProtocolMessage(
+      "classic",
+      "host",
+      { type: "game_start", state: malformedPiece, hostColor: "white", guestColor: "black" },
+    ))).toBeUndefined();
+
+    const malformedPlayer = structuredClone(state);
+    (malformedPlayer.players.white as unknown as { graveyard: unknown }).graveyard = [
+      { piece: { id: "broken" }, capturedOnTurn: 1 },
+    ];
+    expect(normalizeProtocolMessage(createProtocolMessage(
+      "classic",
+      "host",
+      { type: "state_sync", state: malformedPlayer },
+    ))).toBeUndefined();
+  });
+
   it("strictly validates public room snapshots without reconnect secrets", () => {
     const snapshot = fourSnapshot();
     expect(normalizeFourPlayerRoomSnapshot(snapshot)).toEqual(snapshot);

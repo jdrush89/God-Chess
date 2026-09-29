@@ -6,6 +6,7 @@ import type {
   TransportFactory,
 } from "./network";
 import { MultiplayerHost } from "./host";
+import { MultiplayerPeer } from "./peer";
 import {
   createProtocolMessage,
   type ProtocolMessage,
@@ -96,5 +97,33 @@ describe("classic online protocol compatibility", () => {
       { type: "undo_request" },
     ));
     expect(applyUndo).toHaveBeenCalled();
+  });
+
+  it("reports and drops malformed classic state messages before peer callbacks", () => {
+    let transport!: ClassicTransport;
+    const onStateSync = vi.fn();
+    const onGameStart = vi.fn();
+    const onError = vi.fn();
+    new MultiplayerPeer({
+      onJoinAccepted: vi.fn(),
+      onLobbyState: vi.fn(),
+      onGameStart,
+      onStateSync,
+      onUndoSettings: vi.fn(),
+      onRejected: vi.fn(),
+      onDisconnected: vi.fn(),
+      onError,
+    }, (callbacks) => {
+      transport = new ClassicTransport(callbacks);
+      return transport;
+    });
+
+    transport.callbacks.onInvalidMessage?.("host-peer");
+
+    expect(onError).toHaveBeenCalledWith(
+      "Received an invalid multiplayer message.",
+    );
+    expect(onGameStart).not.toHaveBeenCalled();
+    expect(onStateSync).not.toHaveBeenCalled();
   });
 });

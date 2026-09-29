@@ -33,6 +33,8 @@ export class MultiplayerPeer {
   ) {
     this.network = transportFactory({
       onMessage: (_peerId, message) => this.handleMessage(message),
+      onInvalidMessage: () =>
+        callbacks.onError("Received an invalid multiplayer message."),
       onPeerConnected: () => {},
       onPeerDisconnected: () => callbacks.onDisconnected(),
       onStatusChange: () => {},

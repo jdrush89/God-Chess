@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createFourPlayerGame } from "../game/fourPlayerEngine";
+import { createFourPlayerStateEnvelope } from "../game/fourPlayerSession";
 import { GODS } from "../game/gods";
 import type {
   MultiplayerTransport,
@@ -7,6 +9,7 @@ import type {
 } from "./network";
 import {
   FourPlayerRoomHost,
+  FourPlayerRoomPeer,
 } from "./fourPlayerRoom";
 import {
   createProtocolMessage,
@@ -44,8 +47,15 @@ class FakeTransport implements MultiplayerTransport {
     );
   }
 
+  receiveHost(payload: FourPlayerHostMessage) {
+    this.callbacks.onMessage(
+      "host",
+      createProtocolMessage("four-player", "host", payload),
+    );
+  }
+
   disconnectPeer(peerId: string) {
-    this.callbacks.onPeerDisconnected(peerId);
+    this.callbacks.onPeerDisconnected(peerId, "peer-left");
   }
 
   hostPayloads(peerId: string) {
@@ -215,6 +225,32 @@ describe("four-player authoritative room", () => {
     expect(host.snapshot.undoConsents[accepted.participantId]).toBe(false);
   });
 
+  it("keeps the reconnect token valid across an old/new connection race", () => {
+    const { host, transport, accepted } = readyTwoHumanRoom();
+    expect(host.startGame()).toBe(true);
+
+    expect(join(
+      transport,
+      "peer-new",
+      "Guest",
+      accepted.reconnectToken,
+    )).toBeUndefined();
+    expect(transport.hostPayloads("peer-new")).toContainEqual({
+      type: "join_rejected",
+      reason: "That participant is already connected.",
+    });
+
+    transport.disconnectPeer("peer-1");
+    const retried = join(
+      transport,
+      "peer-new",
+      "Guest",
+      accepted.reconnectToken,
+    );
+    expect(retried?.participantId).toBe(accepted.participantId);
+    expect(host.snapshot.status).toBe("playing");
+  });
+
   it("runs AI draft actions only through the host canonical revision chain", () => {
     const { host, transport } = readyTwoHumanRoom();
     expect(host.startGame()).toBe(true);
@@ -231,9 +267,16 @@ describe("four-player authoritative room", () => {
     expect(host.snapshot.canonical?.lastActionId).toMatch(/^ai-action-/);
   });
 
-  it("permanently replaces a disconnected seat with the selected AI and recalculates undo", () => {
+  it("rewrites undo history when permanently replacing a disconnected seat with AI", () => {
     const { host, transport, accepted } = readyTwoHumanRoom();
     expect(host.startGame()).toBe(true);
+    host.submitHostAction({ type: "draft", godId: GODS[0].id });
+    transport.receive("peer-1", {
+      type: "action",
+      revision: 1,
+      actionId: "guest-pick",
+      action: { type: "draft", godId: GODS[1].id },
+    });
     transport.disconnectPeer("peer-1");
     expect(host.replaceDisconnectedSeatWithAi("east", 9)).toBe(true);
     expect(host.snapshot.status).toBe("playing");
@@ -244,6 +287,20 @@ describe("four-player authoritative room", () => {
       kind: "ai",
       difficulty: 9,
     });
+
+    host.setHostUndoConsent(true);
+    expect(host.snapshot.undoAvailable).toBe(true);
+    host.requestHostUndo();
+    expect(host.snapshot.canonical?.state.players.east.control).toEqual({
+      kind: "ai",
+      difficulty: 9,
+    });
+    expect(host.snapshot.canonical?.state.config.seats.east.control).toEqual({
+      kind: "ai",
+      difficulty: 9,
+    });
+    expect(host.snapshot.canonical?.state.draft.pickIndex).toBe(0);
+    expect(host.snapshot.canonical?.state.activeSeat).toBe("north");
   });
 
   it("requires every connected Human to consent before any participant can undo", () => {
@@ -265,5 +322,37 @@ describe("four-player authoritative room", () => {
     transport.receive("peer-1", { type: "undo_request" });
     expect(host.snapshot.canonical?.revision).toBe(3);
     expect(host.snapshot.canonical?.state.draft.pickIndex).toBe(1);
+  });
+
+  it("ignores canonical room states delivered out of revision order", () => {
+    let transport!: FakeTransport;
+    const snapshots: FourPlayerRoomHost["snapshot"][] = [];
+    const peer = new FourPlayerRoomPeer({
+      onAccepted: vi.fn(),
+      onSnapshot: (snapshot) => snapshots.push(snapshot),
+      onRejected: vi.fn(),
+      onDisconnected: vi.fn(),
+      onError: vi.fn(),
+    }, (callbacks) => {
+      transport = new FakeTransport(callbacks);
+      return transport;
+    });
+    const lobby = setup().host.snapshot;
+    const state = createFourPlayerGame(lobby.config);
+    const newer = {
+      ...lobby,
+      status: "playing" as const,
+      canonical: createFourPlayerStateEnvelope(state, 5, "newer"),
+    };
+    const older = {
+      ...newer,
+      canonical: createFourPlayerStateEnvelope(state, 4, "older"),
+    };
+
+    transport.receiveHost({ type: "room_state", snapshot: newer });
+    transport.receiveHost({ type: "room_state", snapshot: older });
+
+    expect(snapshots).toEqual([newer]);
+    peer.disconnect();
   });
 });
