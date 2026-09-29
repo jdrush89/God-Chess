@@ -8,6 +8,22 @@ describe("puzzle mode", () => {
   it("includes five one-turn and ten two-turn positions", () => {
     expect(PUZZLES.filter((puzzle) => puzzle.playerTurns === 1)).toHaveLength(5);
     expect(PUZZLES.filter((puzzle) => puzzle.playerTurns === 2)).toHaveLength(10);
+    expect(PUZZLES.filter((puzzle) => puzzle.difficulty === "easy")).toHaveLength(5);
+    expect(PUZZLES.filter((puzzle) => puzzle.difficulty === "medium")).toHaveLength(10);
+  });
+
+  it.each([
+    "hidden-reserve",
+    "serpents-delivery",
+    "borrowed-bishop",
+    "rising-monument",
+    "funded-flight",
+    "cleared-lane",
+    "royal-landing",
+  ])("%s disguises its required upgrade among multiple upgraded abilities", (puzzleId) => {
+    const puzzle = PUZZLES.find((candidate) => candidate.id === puzzleId)!;
+    const state = puzzle.createState("Solver");
+    expect(Object.values(state.players.white.upgrades).filter((level) => level > 1)).toHaveLength(3);
   });
 
   it.each(PUZZLES)("$title has a legal winning solution against level 10 AI", (puzzle) => {

@@ -29,11 +29,13 @@ then walks both players through the `1-2-2-1` draft.
 
 ## Puzzle mode
 
-Puzzle mode includes five anonymized positions won in one divine turn and ten
-positions won across two player turns. The puzzle picker does not reveal the
-intended god or ability. Each position includes an optional hint, restart and
-next-puzzle controls, and level 10 Divine AI responses between player turns.
-Puzzle positions are not added to local or cloud saves.
+Puzzle mode has a dedicated difficulty browser with five Easy positions won in
+one divine turn and ten Medium positions won across two player turns. The
+puzzle cards do not reveal the intended god or ability. Each position includes
+an optional hint, restart and next-puzzle controls, and level 10 Divine AI
+responses between player turns. Completion check marks are stored in local
+storage while signed out and in the player's account while signed in; puzzle
+positions themselves are not added to local or cloud saves.
 
 ## Accounts and cloud saves
 

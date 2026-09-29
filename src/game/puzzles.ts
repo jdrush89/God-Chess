@@ -10,9 +10,12 @@ import type {
   Square,
 } from "./types";
 
+export type PuzzleDifficulty = "easy" | "medium";
+
 export interface PuzzleDefinition {
   id: PuzzleId;
   title: string;
+  difficulty: PuzzleDifficulty;
   objective: string;
   hint: string;
   solutionSummary: string;
@@ -227,7 +230,11 @@ const hiddenReserve = (playerName?: string) => {
     ["g6", piece("black-pawn-g", "pawn", "black")],
     ["h7", piece("black-pawn-h", "pawn", "black")],
   );
-  state.players.white.upgrades.resurrect = 3;
+  state.players.white.upgrades = {
+    resurrect: 3,
+    barter: 2,
+    "poison-cloud": 2,
+  };
   state.players.white.graveyard = [{
     piece: piece("white-queen", "queen", "white"),
     capturedOnTurn: 0,
@@ -298,7 +305,11 @@ const serpentsDelivery = (playerName?: string) => {
     ["d6", piece("black-pawn-d", "pawn", "black")],
     ["g7", piece("black-pawn-g", "pawn", "black")],
   );
-  state.players.white.upgrades["air-strike"] = 2;
+  state.players.white.upgrades = {
+    "air-strike": 2,
+    resonance: 2,
+    polymorph: 2,
+  };
   return state;
 };
 
@@ -337,7 +348,11 @@ const borrowedBishop = (playerName?: string) => {
     ["h7", piece("black-bishop", "bishop", "black", { movedThisTurn: true })],
     ["h8", piece("black-king", "king", "black", { movedThisTurn: true })],
   );
-  state.players.white.upgrades.resurrect = 3;
+  state.players.white.upgrades = {
+    resurrect: 3,
+    barter: 2,
+    polymorph: 2,
+  };
   state.players.white.graveyard = [{
     piece: piece("white-reserve-queen", "queen", "white"),
     capturedOnTurn: 0,
@@ -381,7 +396,11 @@ const risingMonument = (playerName?: string) => {
     ["e2", piece("white-monument-pawn-e", "pawn", "white")],
     ["f4", piece("black-king", "king", "black", { movedThisTurn: true })],
   );
-  state.players.white.upgrades["air-strike"] = 2;
+  state.players.white.upgrades = {
+    "air-strike": 2,
+    construction: 2,
+    resonance: 2,
+  };
   return state;
 };
 
@@ -420,7 +439,11 @@ const fundedFlight = (playerName?: string) => {
     ["e1", piece("white-recruiter", "bishop", "white")],
     ["f4", piece("black-king", "king", "black", { movedThisTurn: true })],
   );
-  state.players.white.upgrades["air-strike"] = 3;
+  state.players.white.upgrades = {
+    "air-strike": 3,
+    barter: 3,
+    construction: 2,
+  };
   return state;
 };
 
@@ -439,7 +462,11 @@ const clearedLane = (playerName?: string) => {
     ["e4", piece("white-doomed-bishop", "bishop", "white")],
     ["e8", piece("black-king", "king", "black", { movedThisTurn: true })],
   );
-  state.players.white.upgrades.marked = 3;
+  state.players.white.upgrades = {
+    marked: 3,
+    gallop: 2,
+    resonance: 2,
+  };
   return state;
 };
 
@@ -458,7 +485,11 @@ const royalLanding = (playerName?: string) => {
     ["g6", piece("white-escort", "rook", "white")],
     ["h7", piece("black-king", "king", "black", { movedThisTurn: true })],
   );
-  state.players.white.upgrades["air-lift"] = 3;
+  state.players.white.upgrades = {
+    "air-lift": 3,
+    "royal-step": 2,
+    barter: 2,
+  };
   return state;
 };
 
@@ -501,6 +532,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   {
     id: "centaurs-lance",
     title: "Position One",
+    difficulty: "easy",
     objective: "Capture the black King in one divine turn.",
     hint: "A knight does not always have to move like a knight.",
     solutionSummary: "Use Chiron's Charge to send the knight from e2 to e8 like a rook.",
@@ -516,6 +548,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   {
     id: "circle-of-rage",
     title: "Position Two",
+    difficulty: "easy",
     objective: "Capture the black King in one divine turn.",
     hint: "The knight does not need to move to destroy everything surrounding it.",
     solutionSummary: "Use Kangus Kong's Rage on the knight at e7 to engulf the King at e8.",
@@ -530,6 +563,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   {
     id: "hidden-reserve",
     title: "Position Three",
+    difficulty: "easy",
     objective: "Capture the black King in one divine turn.",
     hint: "One of your strongest pieces is not currently on the board. A fully upgraded ability can return it to an occupied square.",
     solutionSummary: "Use Death's level 3 Resurrect to revive the Queen from the graveyard directly onto the King at e4.",
@@ -545,6 +579,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   {
     id: "royal-escort",
     title: "Position Four",
+    difficulty: "easy",
     objective: "Capture the black King in one divine turn.",
     hint: "Move the King so that his companion, not the King, lands on e2.",
     solutionSummary: "Escort the bishop beside the King, then move the King from c2 to d2 so the bishop lands on e2.",
@@ -561,6 +596,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   {
     id: "serpents-delivery",
     title: "Position Five",
+    difficulty: "easy",
     objective: "Capture the black King in one divine turn.",
     hint: "The rook can carry the pawn over the blocked a-file. At level 2, the passenger may land on the first enemy flown over.",
     solutionSummary: "Use level 2 Air Strike with the rook on a1, carry the pawn from b1, land on a8, and drop the pawn onto the first enemy flown over at a5.",
@@ -578,6 +614,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   {
     id: "opened-file",
     title: "Position Six",
+    difficulty: "medium",
     objective: "Capture the black King in two divine turns.",
     hint: "The piece blocking the e-file can be compelled to move before the knight charges.",
     solutionSummary: "Lure the bishop on e6 toward the white Queen, then use Chiron's Charge from e2 to e8.",
@@ -600,6 +637,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   {
     id: "borrowed-bishop",
     title: "Position Seven",
+    difficulty: "medium",
     objective: "Capture the black King in two divine turns.",
     hint: "A Bishop does not have to begin the puzzle under your control to anchor a resurrection.",
     solutionSummary: "Hire the bishop on h7 with Leverage, then use level 3 Resurrect to return the Queen onto h8.",
@@ -624,6 +662,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   {
     id: "mounted-fury",
     title: "Position Eight",
+    difficulty: "medium",
     objective: "Capture the black King in two divine turns.",
     hint: "The knight can carry another piece into a square where destruction reaches the King.",
     solutionSummary: "Mount the rook from f7, dismount it on g7, then use Rage to engulf the King on h8.",
@@ -648,6 +687,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   {
     id: "rising-monument",
     title: "Position Nine",
+    difficulty: "medium",
     objective: "Capture the black King in two divine turns.",
     hint: "Three pawns can create the only carrier capable of delivering the nearby passenger through the blocked rank.",
     solutionSummary: "Raise a Monument rook on a4, then Air Strike to h4 and drop the pawn onto the King at f4.",
@@ -675,6 +715,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   {
     id: "turncoat-charge",
     title: "Position Ten",
+    difficulty: "medium",
     objective: "Capture the black King in two divine turns.",
     hint: "An enemy knight can change allegiance before charging up the open file.",
     solutionSummary: "Use Leverage to hire the knight on e4, then Charge it from e4 to e8.",
@@ -699,6 +740,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   {
     id: "funded-flight",
     title: "Position Eleven",
+    difficulty: "medium",
     objective: "Capture the black King in two divine turns.",
     hint: "The carrier cannot lift an enemy piece, but ownership can change before the second turn.",
     solutionSummary: "Hire the bishop on b4 with Leverage, then use level 3 Air Strike from a4 to h4 and drop it on the King at f4.",
@@ -725,6 +767,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   {
     id: "cleared-lane",
     title: "Position Twelve",
+    difficulty: "medium",
     objective: "Capture the black King in two divine turns.",
     hint: "The piece obstructing the knight can be moved and immediately claimed before the charge.",
     solutionSummary: "Mark the bishop from e4 to f5 and execute it, then Charge the knight from e2 to e8.",
@@ -749,6 +792,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   {
     id: "royal-landing",
     title: "Position Thirteen",
+    difficulty: "medium",
     objective: "Capture the black King in two divine turns.",
     hint: "The King can arrive beside an escort before commanding that escort into the target.",
     solutionSummary: "Air Lift the white King to f6, then Escort the rook from g6 onto the King at h7.",
@@ -773,6 +817,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   {
     id: "skyward-charge",
     title: "Position Fourteen",
+    difficulty: "medium",
     objective: "Capture the black King in two divine turns.",
     hint: "First place the knight beneath the King, then abandon the knight's usual movement.",
     solutionSummary: "Use Flight from c4 to e5, then Charge the knight up the e-file to e8.",
@@ -796,6 +841,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   {
     id: "provoked-fury",
     title: "Position Fifteen",
+    difficulty: "medium",
     objective: "Capture the black King in two divine turns.",
     hint: "A square attacked by the enemy rook places the knight directly beneath the King.",
     solutionSummary: "Pick a Fight to teleport the knight from c5 to g6, then Charge it to the King on g8.",

@@ -55,13 +55,21 @@ describe("game startup", () => {
     expect(screen.getByRole("button", { name: /divine puzzles/i })).toBeTruthy();
   });
 
-  it("starts a selected puzzle from its prepared position", () => {
+  it("browses puzzle difficulties and starts a selected position", () => {
     const { container } = render(<App />);
     fireEvent.click(screen.getByRole("button", { name: /^new game$/i }));
     fireEvent.click(screen.getByRole("button", { name: /divine puzzles/i }));
 
-    expect(screen.getAllByRole("button", { name: /puzzle \d/i })).toHaveLength(15);
-    const puzzleLibrary = container.querySelector(".puzzle-library");
+    expect(screen.getByRole("heading", { name: /choose a difficulty/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^easy/i }));
+    expect(screen.getAllByRole("button", { name: /puzzle \d/i })).toHaveLength(5);
+    fireEvent.click(screen.getByRole("button", { name: /difficulties/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^medium/i }));
+    expect(screen.getAllByRole("button", { name: /puzzle \d/i })).toHaveLength(10);
+    fireEvent.click(screen.getByRole("button", { name: /difficulties/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^easy/i }));
+
+    const puzzleLibrary = container.querySelector(".puzzle-select-grid");
     expect(puzzleLibrary).toBeTruthy();
     expect(puzzleLibrary?.querySelector(".god-sigil")).toBeNull();
     expect(within(puzzleLibrary as HTMLElement).queryByText(/chiron|charge/i)).toBeNull();
@@ -71,6 +79,19 @@ describe("game startup", () => {
     expect(screen.getAllByText(/capture the black king in one divine turn/i)).toHaveLength(2);
     expect(screen.getByRole("gridcell", { name: "e2, white knight" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /save & quit/i })).toBeNull();
+  });
+
+  it("marks locally completed puzzles in the difficulty browser", () => {
+    window.localStorage.setItem("god-chess-puzzle-progress-v1", JSON.stringify(["centaurs-lance"]));
+
+    const { container } = render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /^new game$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /divine puzzles/i }));
+
+    expect(screen.getByRole("button", { name: /^easy.*1 of 5 completed/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^easy/i }));
+    expect(screen.getByRole("button", { name: /puzzle 1.*completed/i })).toBeTruthy();
+    expect(container.querySelector(".puzzle-complete-badge svg")).toBeTruthy();
   });
 
   it("waits for the captured King animation before showing puzzle victory", async () => {
@@ -89,6 +110,9 @@ describe("game startup", () => {
 
     expect(screen.queryByText("PUZZLE SOLVED")).toBeNull();
     expect(await screen.findByText("PUZZLE SOLVED", {}, { timeout: 1400 })).toBeTruthy();
+    expect(screen.getByText(/you found a winning line/i)).toBeTruthy();
+    expect(screen.queryByText(puzzle.solutionSummary)).toBeNull();
+    expect(JSON.parse(window.localStorage.getItem("god-chess-puzzle-progress-v1") ?? "[]")).toContain(puzzle.id);
   });
 
   it("restores the saved position instead of the fresh initial game", () => {

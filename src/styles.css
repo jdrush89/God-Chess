@@ -314,6 +314,9 @@ body::before {
 }
 .player-tools-content { display: flex; align-items: center; gap: 11px; }
 .player-tools-content .mini-pantheon { margin-left: 0; }
+.player-tools-content .mini-pantheon .god-sigil {
+  width: 55px; height: 31px;
+}
 .graveyard-button {
   min-width: 34px; height: 31px; display: inline-flex; align-items: center; justify-content: center; gap: 4px;
   padding: 0 7px; color: #7f8189; background: rgba(255,255,255,.025); border: 1px solid var(--line);
@@ -688,6 +691,78 @@ body::before {
 .main-menu-actions .eyebrow { margin: 0 0 13px; color: #cfb06d; }
 .main-menu-actions small { display: block; margin-top: 11px; color: #8d8b85; font-size: 8px; letter-spacing: .08em; text-transform: uppercase; }
 .main-menu-error { margin: 10px 0 0; color: #e69a8e; font-size: 10px; line-height: 1.4; }
+.puzzle-select-view {
+  min-height: 100dvh; padding: clamp(18px, 4vw, 44px);
+  color: #e8e1d2;
+  background:
+    radial-gradient(circle at 50% -10%, rgba(198,161,91,.18), transparent 35%),
+    linear-gradient(145deg, #171a22, #090b10 58%, #050609);
+}
+.puzzle-select-screen {
+  position: relative; width: min(1040px, 100%); margin: 0 auto; padding-top: 64px; text-align: center;
+}
+.puzzle-select-back {
+  position: absolute; top: 0; left: 0; min-height: 40px; display: inline-flex; align-items: center; gap: 8px;
+  padding: 0 13px; color: #b8b2a7; background: rgba(8,10,15,.55); border: 1px solid #343740;
+  font-size: 9px; letter-spacing: .08em; text-transform: uppercase; cursor: pointer;
+}
+.puzzle-select-back:hover { color: #f3dfaa; border-color: var(--gold); }
+.puzzle-select-screen > .eyebrow { margin: 0; color: #c9a85f; }
+.puzzle-select-screen > h1 { margin: 8px 0 10px; font: 600 clamp(25px, 4vw, 38px) "Cinzel"; }
+.puzzle-select-intro {
+  max-width: 620px; margin: 0 auto clamp(24px, 5vw, 44px); color: #85868d; font-size: 11px; line-height: 1.6;
+}
+.puzzle-difficulty-grid {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; max-width: 780px; margin: 0 auto;
+}
+.puzzle-difficulty-card {
+  min-height: 260px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  padding: 30px; color: #d8d2c6; background: rgba(8,10,15,.72); border: 1px solid #32353e;
+  cursor: pointer; transition: transform .2s, border-color .2s, background .2s;
+}
+.puzzle-difficulty-card:hover {
+  transform: translateY(-3px); color: #fff2cf; border-color: rgba(198,161,91,.7); background: rgba(198,161,91,.08);
+}
+.puzzle-difficulty-card > svg { color: var(--gold-bright); }
+.puzzle-difficulty-card strong { font: 600 22px "Cinzel"; }
+.puzzle-difficulty-card > span { color: #85868d; font-size: 10px; letter-spacing: .08em; }
+.puzzle-difficulty-progress {
+  width: min(210px, 100%); display: grid; gap: 7px; margin-top: 7px;
+  color: #9a9ba1; font-size: 9px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+}
+.puzzle-difficulty-progress i {
+  height: 4px; display: block; overflow: hidden; background: #292c34;
+}
+.puzzle-difficulty-progress i::after {
+  content: ""; display: block; width: var(--progress); height: 100%; background: var(--gold-bright);
+}
+.puzzle-select-grid {
+  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px;
+}
+.puzzle-select-card {
+  position: relative; min-height: 170px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; padding: 20px 14px; overflow: hidden; color: #b5b0a7; background: rgba(8,10,15,.72);
+  border: 1px solid #30333b; cursor: pointer; transition: transform .2s, border-color .2s, background .2s;
+}
+.puzzle-select-card:hover {
+  transform: translateY(-2px); color: #f0e4c8; border-color: rgba(198,161,91,.68); background: rgba(198,161,91,.07);
+}
+.puzzle-select-card.completed { border-color: rgba(105,153,124,.55); }
+.puzzle-select-card > svg { color: #c9a85f; }
+.puzzle-select-card > span:not(.puzzle-complete-badge) {
+  color: #777981; font-size: 8px; font-weight: 800; letter-spacing: .14em;
+}
+.puzzle-select-card > strong { min-height: 38px; font: 600 13px/1.45 "Cinzel"; text-align: center; }
+.puzzle-select-card > small { color: #797b82; font-size: 9px; line-height: 1.4; text-align: center; }
+.puzzle-complete-badge {
+  position: absolute; top: 10px; right: 10px; width: 27px; height: 27px; display: grid; place-items: center;
+  color: #dff3e6; background: #315c42; border: 1px solid #71a181; border-radius: 50%;
+  box-shadow: 0 3px 12px rgba(0,0,0,.35);
+}
+.puzzle-progress-loading {
+  display: flex; align-items: center; justify-content: center; gap: 8px; margin: 20px 0 0;
+  color: #85868d; font-size: 9px; letter-spacing: .08em; text-transform: uppercase;
+}
 .load-game-backdrop {
   position: absolute; z-index: 3; inset: 0; display: grid; place-items: center; padding: 24px;
   background: rgba(4,5,8,.76); backdrop-filter: blur(10px);
@@ -979,12 +1054,19 @@ body::before {
   .player-orbs { gap: 8px; }
   .mini-pantheon { gap: 7px; }
   .mini-pantheon .god-sigil { width: 32px; height: 18px; }
+  .player-tools-content .mini-pantheon .god-sigil { width: 46px; height: 31px; }
   .turn-notice { padding: 8px 14px; justify-content: flex-start; }
   .turn-notice p { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .god-list { grid-template-columns: 1fr; }
   .action-panel { border-left: 0; border-right: 0; }
   .rules-modal, .gameover-modal, .save-game-modal, .start-game-modal, .settings-modal, .account-modal { padding: 28px 18px; }
   .game-mode-grid { grid-template-columns: 1fr; }
+  .puzzle-select-view { padding: 16px 12px 28px; }
+  .puzzle-select-screen { padding-top: 58px; }
+  .puzzle-difficulty-grid { grid-template-columns: 1fr; }
+  .puzzle-difficulty-card { min-height: 210px; }
+  .puzzle-select-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .puzzle-select-card { min-height: 150px; padding: 17px 9px; }
   .puzzle-card-grid { grid-template-columns: 1fr 1fr; }
   .puzzle-banner { grid-template-columns: 1fr; padding: 12px 14px; gap: 9px; }
   .puzzle-banner-title { justify-self: center; }

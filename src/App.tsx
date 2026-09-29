@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   Bot,
   BookOpen,
+  Check,
   ChevronRight,
   Copy,
   Crown,
@@ -41,10 +42,19 @@ import { allSquares, isInCheck } from "./game/chess";
 import { chooseAiPlan, isAiTurn } from "./game/ai";
 import { createGame, gameReducer, type GameAction } from "./game/engine";
 import { abilityLevel, GOD_BY_ID, GODS } from "./game/gods";
-import { createPuzzleGame, PUZZLE_BY_ID, PUZZLES } from "./game/puzzles";
+import {
+  createPuzzleGame,
+  PUZZLE_BY_ID,
+  PUZZLES,
+  type PuzzleDifficulty,
+} from "./game/puzzles";
 import type { Ability, ActionPresentation, CaptureAnimation, Color, GameMode, GameState, GodId, OrbAnimation, OrbColor, Piece, PuzzleId, Square } from "./game/types";
 import { AccountModal } from "./account/AccountModal";
 import { deleteCloudSavedGame, loadCloudSavedGames, upsertCloudSavedGame } from "./account/cloudSaves";
+import {
+  loadCloudCompletedPuzzles,
+  upsertCloudCompletedPuzzles,
+} from "./account/cloudPuzzleProgress";
 import { useAccount, type AccountProfile } from "./account/useAccount";
 import {
   onlinePlayerColor,
@@ -62,6 +72,10 @@ import {
   saveId,
   type SavedGame,
 } from "./saves";
+import {
+  loadLocalCompletedPuzzles,
+  persistLocalCompletedPuzzles,
+} from "./puzzleProgress";
 
 type GameDispatch = (action: GameAction) => void;
 
@@ -1532,7 +1546,7 @@ function StartGamePrompt({
   initialMode,
   canCancel,
   onStart,
-  onStartPuzzle,
+  onOpenPuzzles,
   onHost,
   onJoin,
   onStartOnline,
@@ -1544,7 +1558,7 @@ function StartGamePrompt({
   initialMode: GameMode;
   canCancel: boolean;
   onStart: (mode: Exclude<GameMode, "online" | "puzzle">, difficulty: number) => void;
-  onStartPuzzle: (puzzleId: PuzzleId) => void;
+  onOpenPuzzles: () => void;
   onHost: (name: string) => void;
   onJoin: (code: string, name: string) => void;
   onStartOnline: () => void;
@@ -1584,7 +1598,13 @@ function StartGamePrompt({
             <strong>Online versus</strong>
             <span>Host or join with a room code.</span>
           </button>
-          <button className={mode === "puzzle" ? "active" : ""} onClick={() => chooseMode("puzzle")}>
+          <button
+            className={mode === "puzzle" ? "active" : ""}
+            onClick={() => {
+              chooseMode("puzzle");
+              onOpenPuzzles();
+            }}
+          >
             <Crosshair size={24} />
             <strong>Divine puzzles</strong>
             <span>Find the winning move from a prepared position.</span>
@@ -1678,29 +1698,122 @@ function StartGamePrompt({
           </div>
         )}
 
-        {mode === "puzzle" && (
-          <div className="puzzle-library">
-            <div className="puzzle-library-heading">
-              <span>Divine puzzle collection</span>
-              <strong>Win in one or two divine turns</strong>
-              <small>The opponent responds with level 10 AI between player turns.</small>
-            </div>
-            <div className="puzzle-card-grid">
-              {PUZZLES.map((puzzle, index) => (
-                <button key={puzzle.id} onClick={() => onStartPuzzle(puzzle.id)}>
-                  <span>PUZZLE {index + 1}</span>
-                  <strong>{puzzle.title}</strong>
-                  <small>Win in {puzzle.playerTurns === 1 ? "one" : "two"} divine turn{puzzle.playerTurns === 1 ? "" : "s"}</small>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
         {mode !== "online" && mode !== "puzzle" && (
           <button className="primary-button start-match-button" onClick={() => onStart(mode, difficulty)}>
             {mode === "ai" ? "Challenge the AI" : "Begin local duel"}
           </button>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function PuzzleSelectScreen({
+  completedPuzzles,
+  progressLoading,
+  progressError,
+  onStartPuzzle,
+  onBack,
+  onDismissError,
+}: {
+  completedPuzzles: Set<PuzzleId>;
+  progressLoading: boolean;
+  progressError?: string;
+  onStartPuzzle: (puzzleId: PuzzleId) => void;
+  onBack: () => void;
+  onDismissError: () => void;
+}) {
+  const [difficulty, setDifficulty] = useState<PuzzleDifficulty>();
+  const visiblePuzzles = difficulty
+    ? PUZZLES.filter((puzzle) => puzzle.difficulty === difficulty)
+    : [];
+  const completedInDifficulty = visiblePuzzles.filter((puzzle) => completedPuzzles.has(puzzle.id)).length;
+
+  return (
+    <div className="puzzle-select-view">
+      {progressError && (
+        <div className="save-error-banner" role="alert">
+          <span>{progressError}</span>
+          <button onClick={onDismissError} aria-label="Dismiss save error"><X size={15} /></button>
+        </div>
+      )}
+      <section className="puzzle-select-screen">
+        <button
+          className="puzzle-select-back"
+          onClick={() => difficulty ? setDifficulty(undefined) : onBack()}
+        >
+          <ArrowLeft size={17} />
+          {difficulty ? "Difficulties" : "Game modes"}
+        </button>
+        <p className="eyebrow">DIVINE PUZZLES</p>
+        {!difficulty ? (
+          <>
+            <h1>Choose a difficulty</h1>
+            <p className="puzzle-select-intro">
+              Capture the opposing King while a level 10 Divine AI searches for its best response.
+            </p>
+            <div className="puzzle-difficulty-grid">
+              {([
+                {
+                  id: "easy",
+                  title: "Easy",
+                  description: "Win in one divine turn.",
+                },
+                {
+                  id: "medium",
+                  title: "Medium",
+                  description: "Build a winning line across two divine turns.",
+                },
+              ] as const).map((option) => {
+                const puzzles = PUZZLES.filter((puzzle) => puzzle.difficulty === option.id);
+                const completed = puzzles.filter((puzzle) => completedPuzzles.has(puzzle.id)).length;
+                return (
+                  <button
+                    className="puzzle-difficulty-card"
+                    key={option.id}
+                    onClick={() => setDifficulty(option.id)}
+                  >
+                    <Crosshair size={28} />
+                    <strong>{option.title}</strong>
+                    <span>{option.description}</span>
+                    <small>{progressLoading ? "Loading progress" : `${completed} of ${puzzles.length} completed`}</small>
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        ) : (
+          <>
+            <h1>{difficulty === "easy" ? "Easy" : "Medium"} puzzles</h1>
+            <p className="puzzle-select-intro">
+              {progressLoading
+                ? "Loading completion history..."
+                : `${completedInDifficulty} of ${visiblePuzzles.length} positions completed`}
+            </p>
+            <div className="puzzle-select-grid">
+              {visiblePuzzles.map((puzzle) => {
+                const index = PUZZLES.findIndex((candidate) => candidate.id === puzzle.id);
+                const completed = completedPuzzles.has(puzzle.id);
+                return (
+                  <button
+                    className={`puzzle-select-card${completed ? " completed" : ""}`}
+                    key={puzzle.id}
+                    onClick={() => onStartPuzzle(puzzle.id)}
+                    aria-label={`Puzzle ${index + 1}, ${puzzle.title}${completed ? ", completed" : ""}`}
+                  >
+                    {completed && (
+                      <span className="puzzle-complete-badge" aria-hidden="true">
+                        <Check size={22} strokeWidth={3} />
+                      </span>
+                    )}
+                    <span>PUZZLE {index + 1}</span>
+                    <strong>{puzzle.title}</strong>
+                    <small>Win in {puzzle.playerTurns === 1 ? "one" : "two"} divine turn{puzzle.playerTurns === 1 ? "" : "s"}</small>
+                  </button>
+                );
+              })}
+            </div>
+          </>
         )}
       </section>
     </div>
@@ -1782,7 +1895,12 @@ function GameScreen({
   const [graveyardColor, setGraveyardColor] = useState<Color>();
   const kingInCheck = state.phase === "play" && isInCheck(state.board, state.activeColor, state.bananas);
   const puzzle = state.puzzleId ? PUZZLE_BY_ID[state.puzzleId] : undefined;
-  const puzzleIndex = puzzle ? PUZZLES.findIndex((candidate) => candidate.id === puzzle.id) : -1;
+  const difficultyPuzzles = puzzle
+    ? PUZZLES.filter((candidate) => candidate.difficulty === puzzle.difficulty)
+    : [];
+  const puzzleIndex = puzzle
+    ? difficultyPuzzles.findIndex((candidate) => candidate.id === puzzle.id)
+    : -1;
   const puzzleSolved = Boolean(
     puzzle &&
     state.phase === "gameover" &&
@@ -2133,7 +2251,7 @@ function GameScreen({
         <section className="puzzle-banner">
           <div className="puzzle-banner-title">
             <Crosshair size={18} />
-            <span>PUZZLE {puzzleIndex + 1} OF {PUZZLES.length}</span>
+            <span>PUZZLE {puzzleIndex + 1} OF {difficultyPuzzles.length}</span>
             <strong>{puzzle.title}</strong>
           </div>
           <p>{puzzle.objective}</p>
@@ -2305,10 +2423,10 @@ function GameScreen({
             <div className="victory-crown"><Crown size={38} /></div>
             <p className="eyebrow">PUZZLE SOLVED</p>
             <h2>{puzzle.title}</h2>
-            <p>{puzzle.solutionSummary}</p>
+            <p>You found a winning line and captured the opposing King.</p>
             <div className="puzzle-result-actions">
               <button className="primary-button" onClick={onNextPuzzle}>
-                {puzzleIndex === PUZZLES.length - 1 ? "Choose another puzzle" : "Next puzzle"}
+                {puzzleIndex === difficultyPuzzles.length - 1 ? "Choose another puzzle" : "Next puzzle"}
               </button>
               <button className="secondary-button" onClick={onRestartPuzzle}>Play again</button>
             </div>
@@ -2350,11 +2468,23 @@ export default function App() {
   const [cloudSavedGames, setCloudSavedGames] = useState<SavedGame[]>([]);
   const [savesLoading, setSavesLoading] = useState(false);
   const [saveError, setSaveError] = useState<string>();
+  const [localCompletedPuzzles, setLocalCompletedPuzzles] = useState(loadLocalCompletedPuzzles);
+  const [cloudPuzzleProgress, setCloudPuzzleProgress] = useState<{
+    userId?: string;
+    completed: PuzzleId[];
+  }>({ completed: [] });
+  const [puzzleProgressLoading, setPuzzleProgressLoading] = useState(false);
   const savedGames = accountService.account ? cloudSavedGames : localSavedGames;
+  const completedPuzzleIds = accountService.account
+    ? cloudPuzzleProgress.userId === accountService.account.userId
+      ? cloudPuzzleProgress.completed
+      : []
+    : localCompletedPuzzles;
+  const completedPuzzles = new Set(completedPuzzleIds);
   const savedGamesRef = useRef(savedGames);
   savedGamesRef.current = savedGames;
   const activeSaveId = useRef<string | undefined>(undefined);
-  const [startView, setStartView] = useState<"menu" | "setup" | "none">("menu");
+  const [startView, setStartView] = useState<"menu" | "setup" | "puzzles" | "none">("menu");
   const [setupCanCancel, setSetupCanCancel] = useState(false);
   const [setupReturnView, setSetupReturnView] = useState<"menu" | "none">("menu");
   const [setupInitialMode, setSetupInitialMode] = useState<GameMode>("local");
@@ -2395,6 +2525,80 @@ export default function App() {
       active = false;
     };
   }, [accountService.account?.userId]);
+
+  useEffect(() => {
+    const account = accountService.account;
+    if (!account) {
+      setCloudPuzzleProgress({ completed: [] });
+      setPuzzleProgressLoading(false);
+      return;
+    }
+    let active = true;
+    setPuzzleProgressLoading(true);
+    void loadCloudCompletedPuzzles(account.userId)
+      .then((completed) => {
+        if (active) setCloudPuzzleProgress({ userId: account.userId, completed });
+      })
+      .catch((error) => {
+        console.error("Unable to load cloud puzzle progress.", error);
+        if (active) {
+          setSaveError(error instanceof Error ? error.message : "Unable to load puzzle progress.");
+          setCloudPuzzleProgress({ completed: [] });
+        }
+      })
+      .finally(() => {
+        if (active) setPuzzleProgressLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [accountService.account?.userId]);
+
+  useEffect(() => {
+    const puzzleId = state.puzzleId;
+    const solved =
+      puzzleId &&
+      state.gameMode === "puzzle" &&
+      state.phase === "gameover" &&
+      state.winner &&
+      state.winner !== state.aiColor;
+    if (!solved || !puzzleId) return;
+
+    const account = accountService.account;
+    if (account) {
+      if (cloudPuzzleProgress.userId !== account.userId || puzzleProgressLoading) return;
+      if (cloudPuzzleProgress.completed.includes(puzzleId)) return;
+      const previous = cloudPuzzleProgress.completed;
+      const completed = [...previous, puzzleId];
+      setCloudPuzzleProgress({ userId: account.userId, completed });
+      void upsertCloudCompletedPuzzles(account.userId, completed).catch((error) => {
+        console.error("Unable to save cloud puzzle progress.", error);
+        setCloudPuzzleProgress({ userId: account.userId, completed: previous });
+        setSaveError(error instanceof Error ? error.message : "Unable to save puzzle progress.");
+      });
+      return;
+    }
+
+    if (localCompletedPuzzles.includes(puzzleId)) return;
+    const completed = [...localCompletedPuzzles, puzzleId];
+    try {
+      persistLocalCompletedPuzzles(completed);
+      setLocalCompletedPuzzles(completed);
+    } catch (error) {
+      console.error("Unable to save local puzzle progress.", error);
+      setSaveError(error instanceof Error ? error.message : "Unable to save puzzle progress.");
+    }
+  }, [
+    accountService.account?.userId,
+    cloudPuzzleProgress,
+    localCompletedPuzzles,
+    puzzleProgressLoading,
+    state.aiColor,
+    state.gameMode,
+    state.phase,
+    state.puzzleId,
+    state.winner,
+  ]);
 
   const receiveState = (next: GameState) => {
     stateRef.current = next;
@@ -2670,7 +2874,11 @@ export default function App() {
     } else {
       setSetupCanCancel(true);
     }
-    setSetupInitialMode(state.gameMode === "puzzle" ? "puzzle" : "local");
+    if (state.gameMode === "puzzle") {
+      setStartView("puzzles");
+      return;
+    }
+    setSetupInitialMode("local");
     setSetupReturnView("none");
     setStartView("setup");
   };
@@ -2680,15 +2888,14 @@ export default function App() {
   };
   const nextPuzzle = () => {
     if (!state.puzzleId) return;
-    const index = PUZZLES.findIndex((puzzle) => puzzle.id === state.puzzleId);
-    const next = PUZZLES[index + 1];
+    const current = PUZZLE_BY_ID[state.puzzleId];
+    const difficultyPuzzles = PUZZLES.filter((puzzle) => puzzle.difficulty === current.difficulty);
+    const index = difficultyPuzzles.findIndex((puzzle) => puzzle.id === state.puzzleId);
+    const next = difficultyPuzzles[index + 1];
     if (next) {
       beginPuzzle(next.id);
     } else {
-      setSetupCanCancel(true);
-      setSetupReturnView("none");
-      setSetupInitialMode("puzzle");
-      setStartView("setup");
+      setStartView("puzzles");
     }
   };
 
@@ -2766,6 +2973,19 @@ export default function App() {
     );
   }
 
+  if (startView === "puzzles") {
+    return (
+      <PuzzleSelectScreen
+        completedPuzzles={completedPuzzles}
+        progressLoading={puzzleProgressLoading}
+        progressError={saveError}
+        onStartPuzzle={beginPuzzle}
+        onBack={() => setStartView("setup")}
+        onDismissError={() => setSaveError(undefined)}
+      />
+    );
+  }
+
   return (
     <>
       {saveError && (
@@ -2819,7 +3039,7 @@ export default function App() {
           initialMode={setupInitialMode}
           canCancel={setupCanCancel}
           onStart={beginGame}
-          onStartPuzzle={beginPuzzle}
+          onOpenPuzzles={() => setStartView("puzzles")}
           onHost={(name) => void onlineActions.hostGame(name)}
           onJoin={(code, name) => void onlineActions.joinGame(code, name)}
           onStartOnline={startHostedGame}
