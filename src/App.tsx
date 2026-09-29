@@ -1686,18 +1686,13 @@ function StartGamePrompt({
               <small>The opponent responds with level 10 AI if the winning line is missed.</small>
             </div>
             <div className="puzzle-card-grid">
-              {PUZZLES.map((puzzle, index) => {
-                const god = GOD_BY_ID[puzzle.godId];
-                const ability = god.abilities.find((candidate) => candidate.id === puzzle.abilityId);
-                return (
-                  <button key={puzzle.id} onClick={() => onStartPuzzle(puzzle.id)}>
-                    <span>PUZZLE {index + 1}</span>
-                    <GodSigil godId={puzzle.godId} size="small" />
-                    <strong>{puzzle.title}</strong>
-                    <small>{god.name} · {ability?.name}</small>
-                  </button>
-                );
-              })}
+              {PUZZLES.map((puzzle, index) => (
+                <button key={puzzle.id} onClick={() => onStartPuzzle(puzzle.id)}>
+                  <span>PUZZLE {index + 1}</span>
+                  <strong>{puzzle.title}</strong>
+                  <small>Win in one divine turn</small>
+                </button>
+              ))}
             </div>
           </div>
         )}

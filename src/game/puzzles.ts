@@ -13,8 +13,6 @@ import type {
 export interface PuzzleDefinition {
   id: PuzzleId;
   title: string;
-  godId: GodId;
-  abilityId: string;
   objective: string;
   hint: string;
   solutionSummary: string;
@@ -96,10 +94,24 @@ const centaursLance = (playerName?: string) => {
     playerName,
   );
   state.board = board(
-    ["a1", piece("white-king", "king", "white")],
+    ["b1", piece("white-king", "king", "white")],
+    ["a1", piece("white-rook", "rook", "white")],
+    ["c3", piece("white-queen", "queen", "white")],
     ["e2", piece("white-knight", "knight", "white")],
+    ["g2", piece("white-bishop", "bishop", "white")],
+    ["a2", piece("white-pawn-a", "pawn", "white")],
+    ["b2", piece("white-pawn-b", "pawn", "white")],
+    ["f2", piece("white-pawn-f", "pawn", "white")],
+    ["g3", piece("white-pawn-g", "pawn", "white")],
     ["e8", piece("black-king", "king", "black")],
-    ["h7", piece("black-pawn", "pawn", "black")],
+    ["c7", piece("black-queen", "queen", "black")],
+    ["h8", piece("black-rook", "rook", "black")],
+    ["b7", piece("black-bishop", "bishop", "black")],
+    ["g6", piece("black-knight", "knight", "black")],
+    ["a7", piece("black-pawn-a", "pawn", "black")],
+    ["d6", piece("black-pawn-d", "pawn", "black")],
+    ["f7", piece("black-pawn-f", "pawn", "black")],
+    ["h7", piece("black-pawn-h", "pawn", "black")],
   );
   return state;
 };
@@ -113,44 +125,64 @@ const circleOfRage = (playerName?: string) => {
     playerName,
   );
   state.board = board(
-    ["a1", piece("white-king", "king", "white")],
+    ["b1", piece("white-king", "king", "white")],
+    ["a1", piece("white-rook", "rook", "white")],
+    ["c4", piece("white-queen", "queen", "white")],
+    ["g2", piece("white-bishop", "bishop", "white")],
     ["e7", piece("white-knight", "knight", "white")],
+    ["a2", piece("white-pawn-a", "pawn", "white")],
+    ["b2", piece("white-pawn-b", "pawn", "white")],
+    ["c2", piece("white-pawn-c", "pawn", "white")],
+    ["f3", piece("white-pawn-f", "pawn", "white")],
+    ["g3", piece("white-pawn-g", "pawn", "white")],
     ["e8", piece("black-king", "king", "black")],
     ["d8", piece("black-rook", "rook", "black")],
-    ["f8", piece("black-pawn", "pawn", "black")],
+    ["b6", piece("black-queen", "queen", "black")],
+    ["c8", piece("black-bishop", "bishop", "black")],
+    ["g6", piece("black-knight", "knight", "black")],
+    ["a7", piece("black-pawn-a", "pawn", "black")],
+    ["c6", piece("black-pawn-c", "pawn", "black")],
+    ["d7", piece("black-pawn-d", "pawn", "black")],
+    ["f8", piece("black-pawn-f", "pawn", "black")],
+    ["h7", piece("black-pawn-h", "pawn", "black")],
   );
   return state;
 };
 
-const preparedFate = (playerName?: string) => {
+const hiddenReserve = (playerName?: string) => {
   const state = preparePuzzle(
-    "prepared-fate",
-    "Prepared Fate",
-    "Use the prepared shot to capture the black King.",
-    ["artemis", "teles", "death"],
+    "hidden-reserve",
+    "Position Three",
+    "Capture the black King in one divine turn.",
+    ["death", "midas", "salem"],
     playerName,
   );
   state.board = board(
-    ["a1", piece("white-king", "king", "white")],
-    ["b1", piece("white-bishop", "bishop", "white", {
-      prepared: { owner: "white", level: 1 },
-      movedThisTurn: true,
-    })],
-    ["d5", piece("white-knight", "knight", "white", {
-      prepared: { owner: "white", level: 1 },
-      movedThisTurn: true,
-    })],
-    ["g6", piece("black-king", "king", "black")],
-    ["f6", piece("black-pawn", "pawn", "black")],
+    ["b1", piece("white-king", "king", "white")],
+    ["a1", piece("white-rook", "rook", "white")],
+    ["d4", piece("white-bishop", "bishop", "white")],
+    ["f3", piece("white-knight", "knight", "white")],
+    ["a2", piece("white-pawn-a", "pawn", "white")],
+    ["b2", piece("white-pawn-b", "pawn", "white")],
+    ["c3", piece("white-pawn-c", "pawn", "white")],
+    ["f2", piece("white-pawn-f", "pawn", "white")],
+    ["g2", piece("white-pawn-g", "pawn", "white")],
+    ["e4", piece("black-king", "king", "black")],
+    ["c6", piece("black-queen", "queen", "black")],
     ["h8", piece("black-rook", "rook", "black")],
+    ["g7", piece("black-bishop", "bishop", "black")],
+    ["f6", piece("black-knight", "knight", "black")],
+    ["a7", piece("black-pawn-a", "pawn", "black")],
+    ["b6", piece("black-pawn-b", "pawn", "black")],
+    ["d5", piece("black-pawn-d", "pawn", "black")],
+    ["g6", piece("black-pawn-g", "pawn", "black")],
+    ["h7", piece("black-pawn-h", "pawn", "black")],
   );
-  state.pending = {
-    godId: "artemis",
-    abilityId: "snipe-shot",
-    step: "snipe-source",
-  };
-  state.legalTargets = ["b1", "d5"];
-  state.notice = "Prepared Shot: choose the prepared piece that can end the game.";
+  state.players.white.upgrades.resurrect = 3;
+  state.players.white.graveyard = [{
+    piece: piece("white-queen", "queen", "white"),
+    capturedOnTurn: 0,
+  }];
   return state;
 };
 
@@ -165,8 +197,24 @@ const royalEscort = (playerName?: string) => {
   state.board = board(
     ["c2", piece("white-king", "king", "white")],
     ["d2", piece("white-bishop", "bishop", "white")],
+    ["a1", piece("white-rook", "rook", "white")],
+    ["f4", piece("white-queen", "queen", "white")],
+    ["b4", piece("white-knight", "knight", "white")],
+    ["a2", piece("white-pawn-a", "pawn", "white")],
+    ["b2", piece("white-pawn-b", "pawn", "white")],
+    ["c3", piece("white-pawn-c", "pawn", "white")],
+    ["g2", piece("white-pawn-g", "pawn", "white")],
+    ["h2", piece("white-pawn-h", "pawn", "white")],
     ["e2", piece("black-king", "king", "black")],
-    ["h7", piece("black-pawn", "pawn", "black")],
+    ["c6", piece("black-queen", "queen", "black")],
+    ["h8", piece("black-rook", "rook", "black")],
+    ["g7", piece("black-bishop", "bishop", "black")],
+    ["f5", piece("black-knight", "knight", "black")],
+    ["a7", piece("black-pawn-a", "pawn", "black")],
+    ["b6", piece("black-pawn-b", "pawn", "black")],
+    ["d5", piece("black-pawn-d", "pawn", "black")],
+    ["g6", piece("black-pawn-g", "pawn", "black")],
+    ["h7", piece("black-pawn-h", "pawn", "black")],
   );
   return state;
 };
@@ -183,9 +231,23 @@ const serpentsDelivery = (playerName?: string) => {
     ["h1", piece("white-king", "king", "white")],
     ["a1", piece("white-rook", "rook", "white")],
     ["b1", piece("white-pawn", "pawn", "white")],
+    ["f3", piece("white-queen", "queen", "white")],
+    ["g2", piece("white-bishop", "bishop", "white")],
+    ["c3", piece("white-knight", "knight", "white")],
+    ["a2", piece("white-pawn-a", "pawn", "white")],
+    ["d2", piece("white-pawn-d", "pawn", "white")],
+    ["e2", piece("white-pawn-e", "pawn", "white")],
+    ["g3", piece("white-pawn-g", "pawn", "white")],
     ["a3", piece("black-pawn", "pawn", "black")],
     ["a5", piece("black-king", "king", "black")],
-    ["h8", piece("black-knight", "knight", "black")],
+    ["e6", piece("black-queen", "queen", "black")],
+    ["g8", piece("black-rook", "rook", "black")],
+    ["c6", piece("black-bishop", "bishop", "black")],
+    ["f6", piece("black-knight", "knight", "black")],
+    ["b6", piece("black-pawn-b", "pawn", "black")],
+    ["c5", piece("black-pawn-c", "pawn", "black")],
+    ["d6", piece("black-pawn-d", "pawn", "black")],
+    ["g7", piece("black-pawn-g", "pawn", "black")],
   );
   return state;
 };
@@ -193,9 +255,7 @@ const serpentsDelivery = (playerName?: string) => {
 export const PUZZLES: PuzzleDefinition[] = [
   {
     id: "centaurs-lance",
-    title: "The Centaur's Lance",
-    godId: "chiron",
-    abilityId: "charge",
+    title: "Position One",
     objective: "Capture the black King in one divine turn.",
     hint: "A knight does not always have to move like a knight.",
     solutionSummary: "Use Chiron's Charge to send the knight from e2 to e8 like a rook.",
@@ -209,9 +269,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   },
   {
     id: "circle-of-rage",
-    title: "Circle of Rage",
-    godId: "kangus",
-    abilityId: "rage",
+    title: "Position Two",
     objective: "Capture the black King in one divine turn.",
     hint: "The knight does not need to move to destroy everything surrounding it.",
     solutionSummary: "Use Kangus Kong's Rage on the knight at e7 to engulf the King at e8.",
@@ -223,24 +281,22 @@ export const PUZZLES: PuzzleDefinition[] = [
     createState: circleOfRage,
   },
   {
-    id: "prepared-fate",
-    title: "Prepared Fate",
-    godId: "artemis",
-    abilityId: "snipe",
-    objective: "Use the prepared shot to capture the black King.",
-    hint: "Only one highlighted piece has an uninterrupted line to the King.",
-    solutionSummary: "Choose the prepared bishop on b1, then Snipe the King on g6.",
+    id: "hidden-reserve",
+    title: "Position Three",
+    objective: "Capture the black King in one divine turn.",
+    hint: "One of your strongest pieces is not currently on the board. A fully upgraded ability can return it to an occupied square.",
+    solutionSummary: "Use Death's level 3 Resurrect to revive the Queen from the graveyard directly onto the King at e4.",
     solution: [
-      { type: "square", square: "b1" },
-      { type: "square", square: "g6" },
+      { type: "select-god", godId: "death" },
+      { type: "select-ability", abilityId: "resurrect" },
+      { type: "grave", pieceId: "white-queen" },
+      { type: "square", square: "e4" },
     ],
-    createState: preparedFate,
+    createState: hiddenReserve,
   },
   {
     id: "royal-escort",
-    title: "The Royal Escort",
-    godId: "leonidas",
-    abilityId: "escort",
+    title: "Position Four",
     objective: "Capture the black King in one divine turn.",
     hint: "Move the King so that his companion, not the King, lands on e2.",
     solutionSummary: "Escort the bishop beside the King, then move the King from c2 to d2 so the bishop lands on e2.",
@@ -255,9 +311,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   },
   {
     id: "serpents-delivery",
-    title: "The Serpent's Delivery",
-    godId: "quetzacoatl",
-    abilityId: "air-strike",
+    title: "Position Five",
     objective: "Capture the black King in one divine turn.",
     hint: "The rook can carry the pawn over the blocked a-file and drop it before landing.",
     solutionSummary: "Air Strike with the rook on a1, carry the pawn from b1, land on a8, and drop the pawn on a5.",

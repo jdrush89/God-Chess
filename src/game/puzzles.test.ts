@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { chooseAiPlan, isAiTurn } from "./ai";
+import { legalTargets } from "./chess";
 import { gameReducer } from "./engine";
 import { PUZZLES } from "./puzzles";
 
@@ -10,6 +11,17 @@ describe("puzzle mode", () => {
     expect(state.gameMode).toBe("puzzle");
     expect(state.aiDifficulty).toBe(10);
     expect(state.aiColor).toBe("black");
+    expect(Object.keys(state.board).length).toBeGreaterThanOrEqual(16);
+
+    const blackKingSquare = Object.entries(state.board).find(
+      ([, piece]) => piece.type === "king" && piece.controller === "black",
+    )?.[0];
+    expect(blackKingSquare).toBeTruthy();
+    for (const [square, piece] of Object.entries(state.board)) {
+      if (piece.controller === "white") {
+        expect(legalTargets(state.board, square)).not.toContain(blackKingSquare);
+      }
+    }
 
     for (const action of puzzle.solution) state = gameReducer(state, action);
 
@@ -23,8 +35,8 @@ describe("puzzle mode", () => {
     let state = puzzle.createState("Solver");
     state = gameReducer(state, { type: "select-god", godId: "teles" });
     state = gameReducer(state, { type: "select-ability", abilityId: "resonance" });
-    state = gameReducer(state, { type: "square", square: "a1" });
-    state = gameReducer(state, { type: "square", square: "b1" });
+    state = gameReducer(state, { type: "square", square: "c3" });
+    state = gameReducer(state, { type: "square", square: "d4" });
 
     expect(state.puzzleFailed).toBe(true);
     expect(isAiTurn(state)).toBe(true);

@@ -6,7 +6,7 @@ export type Square = string;
 export type PuzzleId =
   | "centaurs-lance"
   | "circle-of-rage"
-  | "prepared-fate"
+  | "hidden-reserve"
   | "royal-escort"
   | "serpents-delivery";
 export type GodId =

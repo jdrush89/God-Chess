@@ -55,14 +55,18 @@ describe("game startup", () => {
   });
 
   it("starts a selected puzzle from its prepared position", () => {
-    render(<App />);
+    const { container } = render(<App />);
     fireEvent.click(screen.getByRole("button", { name: /^new game$/i }));
     fireEvent.click(screen.getByRole("button", { name: /divine puzzles/i }));
 
     expect(screen.getAllByRole("button", { name: /puzzle \d/i })).toHaveLength(5);
-    fireEvent.click(screen.getByRole("button", { name: /puzzle 1.*centaur's lance/i }));
+    const puzzleLibrary = container.querySelector(".puzzle-library");
+    expect(puzzleLibrary).toBeTruthy();
+    expect(puzzleLibrary?.querySelector(".god-sigil")).toBeNull();
+    expect(within(puzzleLibrary as HTMLElement).queryByText(/chiron|charge/i)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /puzzle 1.*position one/i }));
 
-    expect(screen.getByText("The Centaur's Lance")).toBeTruthy();
+    expect(screen.getByText("Position One")).toBeTruthy();
     expect(screen.getAllByText(/capture the black king in one divine turn/i)).toHaveLength(2);
     expect(screen.getByRole("gridcell", { name: "e2, white knight" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /save & quit/i })).toBeNull();
