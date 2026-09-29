@@ -41,7 +41,8 @@ import { allSquares, isInCheck } from "./game/chess";
 import { chooseAiPlan, isAiTurn } from "./game/ai";
 import { createGame, gameReducer, type GameAction } from "./game/engine";
 import { abilityLevel, GOD_BY_ID, GODS } from "./game/gods";
-import type { Ability, ActionPresentation, CaptureAnimation, Color, GameMode, GameState, GodId, OrbAnimation, OrbColor, Piece, Square } from "./game/types";
+import { createPuzzleGame, PUZZLE_BY_ID, PUZZLES } from "./game/puzzles";
+import type { Ability, ActionPresentation, CaptureAnimation, Color, GameMode, GameState, GodId, OrbAnimation, OrbColor, Piece, PuzzleId, Square } from "./game/types";
 import { AccountModal } from "./account/AccountModal";
 import { deleteCloudSavedGame, loadCloudSavedGames, upsertCloudSavedGame } from "./account/cloudSaves";
 import { useAccount, type AccountProfile } from "./account/useAccount";
@@ -1528,8 +1529,10 @@ function MainMenu({
 function StartGamePrompt({
   online,
   defaultPlayerName,
+  initialMode,
   canCancel,
   onStart,
+  onStartPuzzle,
   onHost,
   onJoin,
   onStartOnline,
@@ -1538,15 +1541,17 @@ function StartGamePrompt({
 }: {
   online: OnlineGameState;
   defaultPlayerName?: string;
+  initialMode: GameMode;
   canCancel: boolean;
-  onStart: (mode: Exclude<GameMode, "online">, difficulty: number) => void;
+  onStart: (mode: Exclude<GameMode, "online" | "puzzle">, difficulty: number) => void;
+  onStartPuzzle: (puzzleId: PuzzleId) => void;
   onHost: (name: string) => void;
   onJoin: (code: string, name: string) => void;
   onStartOnline: () => void;
   onCancel: () => void;
   onDisconnect: () => void;
 }) {
-  const [mode, setMode] = useState<GameMode>("local");
+  const [mode, setMode] = useState<GameMode>(initialMode);
   const [difficulty, setDifficulty] = useState(7);
   const [onlineAction, setOnlineAction] = useState<"host" | "join">("host");
   const [playerName, setPlayerName] = useState(defaultPlayerName || "Player");
@@ -1578,6 +1583,11 @@ function StartGamePrompt({
             <Globe2 size={24} />
             <strong>Online versus</strong>
             <span>Host or join with a room code.</span>
+          </button>
+          <button className={mode === "puzzle" ? "active" : ""} onClick={() => chooseMode("puzzle")}>
+            <Crosshair size={24} />
+            <strong>Divine puzzles</strong>
+            <span>Find the winning move from a prepared position.</span>
           </button>
         </div>
 
@@ -1668,7 +1678,31 @@ function StartGamePrompt({
           </div>
         )}
 
-        {mode !== "online" && (
+        {mode === "puzzle" && (
+          <div className="puzzle-library">
+            <div className="puzzle-library-heading">
+              <span>Easy collection</span>
+              <strong>Mate in one divine turn</strong>
+              <small>The opponent responds with level 10 AI if the winning line is missed.</small>
+            </div>
+            <div className="puzzle-card-grid">
+              {PUZZLES.map((puzzle, index) => {
+                const god = GOD_BY_ID[puzzle.godId];
+                const ability = god.abilities.find((candidate) => candidate.id === puzzle.abilityId);
+                return (
+                  <button key={puzzle.id} onClick={() => onStartPuzzle(puzzle.id)}>
+                    <span>PUZZLE {index + 1}</span>
+                    <GodSigil godId={puzzle.godId} size="small" />
+                    <strong>{puzzle.title}</strong>
+                    <small>{god.name} · {ability?.name}</small>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {mode !== "online" && mode !== "puzzle" && (
           <button className="primary-button start-match-button" onClick={() => onStart(mode, difficulty)}>
             {mode === "ai" ? "Challenge the AI" : "Begin local duel"}
           </button>
@@ -1719,6 +1753,8 @@ function GameScreen({
   dispatch,
   onSaveAndQuit,
   onRestart,
+  onRestartPuzzle,
+  onNextPuzzle,
   inputDisabled = false,
   opponentColor,
   onlineRoomCode,
@@ -1732,6 +1768,8 @@ function GameScreen({
   dispatch: GameDispatch;
   onSaveAndQuit: () => void;
   onRestart: () => void;
+  onRestartPuzzle: () => void;
+  onNextPuzzle: () => void;
   inputDisabled?: boolean;
   opponentColor?: Color;
   onlineRoomCode?: string;
@@ -1743,10 +1781,27 @@ function GameScreen({
 }) {
   const [rulesOpen, setRulesOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [puzzleHintOpen, setPuzzleHintOpen] = useState(false);
   const [inspectedGodId, setInspectedGodId] = useState<GodId>();
   const [inspectedSquare, setInspectedSquare] = useState<Square>();
   const [graveyardColor, setGraveyardColor] = useState<Color>();
   const kingInCheck = state.phase === "play" && isInCheck(state.board, state.activeColor, state.bananas);
+  const puzzle = state.puzzleId ? PUZZLE_BY_ID[state.puzzleId] : undefined;
+  const puzzleIndex = puzzle ? PUZZLES.findIndex((candidate) => candidate.id === puzzle.id) : -1;
+  const puzzleSolved = Boolean(
+    puzzle &&
+    state.phase === "gameover" &&
+    state.winner &&
+    state.winner !== state.aiColor,
+  );
+  const puzzleFailed = Boolean(
+    puzzle &&
+    state.puzzleFailed &&
+    (
+      state.phase === "gameover" ||
+      state.activeColor !== state.aiColor
+    ),
+  );
   const [displayedOrbs, setDisplayedOrbs] = useState<OrbTotals>(() => orbTotals(state));
   const [orbFlights, setOrbFlights] = useState<OrbFlight[]>([]);
   const [arrivingOrbs, setArrivingOrbs] = useState<Set<string>>(() => new Set());
@@ -1787,6 +1842,10 @@ function GameScreen({
   useEffect(() => {
     if (state.phase === "upgrade") setInspectedGodId(undefined);
   }, [state.activeColor, state.phase]);
+
+  useEffect(() => {
+    setPuzzleHintOpen(false);
+  }, [state.puzzleId]);
 
   useEffect(() => {
     const event = state.presentation;
@@ -2020,7 +2079,7 @@ function GameScreen({
     setInspectedGodId(godId);
   };
   return (
-    <main className={`game-page ${state.lastAction ? "has-last-action" : ""} ${inputDisabled || opponentPresentation ? "input-locked" : ""}`}>
+    <main className={`game-page ${puzzle ? "puzzle-mode" : ""} ${state.lastAction ? "has-last-action" : ""} ${inputDisabled || opponentPresentation ? "input-locked" : ""}`}>
       <header className="topbar">
         <Brand />
         <div className="game-meta">
@@ -2030,15 +2089,17 @@ function GameScreen({
           {onlineRoomCode && <><i /><span>ROOM <strong>{onlineRoomCode}</strong></span></>}
         </div>
         <div className="header-actions">
-          <button
-            onClick={onUndo}
-            disabled={!canUndo}
-            title={undoEnabled ? "Undo the latest completed turn or upgrade" : "Enable undo in Settings"}
-          >
-            <Undo2 size={18} />
-            <span>Undo</span>
-          </button>
-          {state.gameMode !== "online" && (
+          {state.gameMode !== "puzzle" && (
+            <button
+              onClick={onUndo}
+              disabled={!canUndo}
+              title={undoEnabled ? "Undo the latest completed turn or upgrade" : "Enable undo in Settings"}
+            >
+              <Undo2 size={18} />
+              <span>Undo</span>
+            </button>
+          )}
+          {state.gameMode !== "online" && state.gameMode !== "puzzle" && (
             <button onClick={onSaveAndQuit}>
               <Save size={18} />
               <span>Save & quit</span>
@@ -2046,10 +2107,34 @@ function GameScreen({
           )}
           <button onClick={() => setHistoryOpen(!historyOpen)}><History size={18} /><span>History</span></button>
           <button onClick={() => setRulesOpen(true)}><BookOpen size={18} /><span>Rules</span></button>
-          <button onClick={onOpenSettings}><Settings size={18} /><span>Settings</span></button>
-          <button onClick={onRestart}><RotateCcw size={18} /><span>New game</span></button>
+          {state.gameMode !== "puzzle" && (
+            <button onClick={onOpenSettings}><Settings size={18} /><span>Settings</span></button>
+          )}
+          <button onClick={onRestart}>
+            <RotateCcw size={18} />
+            <span>{puzzle ? "Puzzles" : "New game"}</span>
+          </button>
         </div>
       </header>
+
+      {puzzle && (
+        <section className="puzzle-banner">
+          <div className="puzzle-banner-title">
+            <Crosshair size={18} />
+            <span>PUZZLE {puzzleIndex + 1} OF {PUZZLES.length}</span>
+            <strong>{puzzle.title}</strong>
+          </div>
+          <p>{puzzle.objective}</p>
+          <div className="puzzle-banner-actions">
+            <button onClick={() => setPuzzleHintOpen((open) => !open)}>
+              <Info size={15} />
+              {puzzleHintOpen ? "Hide hint" : "Show hint"}
+            </button>
+            <button onClick={onRestartPuzzle}><RotateCcw size={15} />Restart</button>
+          </div>
+          {puzzleHintOpen && <small>{puzzle.hint}</small>}
+        </section>
+      )}
 
       {onlineError && (
         <div className="connection-warning">
@@ -2202,7 +2287,37 @@ function GameScreen({
         <GraveyardModal state={state} color={graveyardColor} onClose={() => setGraveyardColor(undefined)} />
       )}
       {rulesOpen && <RulesModal onClose={() => setRulesOpen(false)} />}
-      {state.phase === "gameover" && (
+      {puzzleSolved && puzzle && (
+        <div className="modal-backdrop">
+          <section className="gameover-modal">
+            <div className="victory-crown"><Crown size={38} /></div>
+            <p className="eyebrow">PUZZLE SOLVED</p>
+            <h2>{puzzle.title}</h2>
+            <p>{puzzle.solutionSummary}</p>
+            <div className="puzzle-result-actions">
+              <button className="primary-button" onClick={onNextPuzzle}>
+                {puzzleIndex === PUZZLES.length - 1 ? "Choose another puzzle" : "Next puzzle"}
+              </button>
+              <button className="secondary-button" onClick={onRestartPuzzle}>Play again</button>
+            </div>
+          </section>
+        </div>
+      )}
+      {puzzleFailed && puzzle && (
+        <div className="modal-backdrop">
+          <section className="gameover-modal">
+            <div className="victory-crown"><Crosshair size={38} /></div>
+            <p className="eyebrow">WINNING LINE MISSED</p>
+            <h2>Try the position again</h2>
+            <p>The level 10 Divine AI found its best response. Use the hint or restart from the original position.</p>
+            <div className="puzzle-result-actions">
+              <button className="primary-button" onClick={onRestartPuzzle}>Retry puzzle</button>
+              <button className="secondary-button" onClick={onRestart}>Choose another puzzle</button>
+            </div>
+          </section>
+        </div>
+      )}
+      {!puzzle && state.phase === "gameover" && (
         <div className="modal-backdrop">
           <section className="gameover-modal">
             <div className="victory-crown"><Crown size={38} /></div>
@@ -2230,6 +2345,7 @@ export default function App() {
   const [startView, setStartView] = useState<"menu" | "setup" | "none">("menu");
   const [setupCanCancel, setSetupCanCancel] = useState(false);
   const [setupReturnView, setSetupReturnView] = useState<"menu" | "none">("menu");
+  const [setupInitialMode, setSetupInitialMode] = useState<GameMode>("local");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [undoPreferred, setUndoPreferred] = useState(loadUndoSetting);
   const [undoDepth, setUndoDepth] = useState(0);
@@ -2398,7 +2514,7 @@ export default function App() {
   };
 
   const saveCurrentGame = async () => {
-    if (stateRef.current.gameMode === "online") return false;
+    if (stateRef.current.gameMode === "online" || stateRef.current.gameMode === "puzzle") return false;
     const id = activeSaveId.current ?? saveId();
     const saved = createSavedGame(
       id,
@@ -2437,7 +2553,7 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (startView !== "none" || state.gameMode === "online") return;
+    if (startView !== "none" || state.gameMode === "online" || state.gameMode === "puzzle") return;
     const timer = window.setTimeout(() => void saveCurrentGame(), 120);
     return () => window.clearTimeout(timer);
   }, [startView, state]);
@@ -2496,9 +2612,10 @@ export default function App() {
   const startNewGame = () => {
     setSetupCanCancel(true);
     setSetupReturnView("menu");
+    setSetupInitialMode("local");
     setStartView("setup");
   };
-  const beginGame = (mode: Exclude<GameMode, "online">, difficulty: number) => {
+  const beginGame = (mode: Exclude<GameMode, "online" | "puzzle">, difficulty: number) => {
     onlineActions.disconnect();
     activeSaveId.current = saveId();
     const next = createGame(undefined, {
@@ -2509,6 +2626,16 @@ export default function App() {
     resetUndoTracking(next);
     receiveState(next);
     aiPlan.current = [];
+    setStartView("none");
+  };
+  const beginPuzzle = (puzzleId: PuzzleId) => {
+    onlineActions.disconnect();
+    activeSaveId.current = undefined;
+    const next = createPuzzleGame(puzzleId, accountService.account?.displayName);
+    resetUndoTracking(next);
+    receiveState(next);
+    aiPlan.current = [];
+    setSettingsOpen(false);
     setStartView("none");
   };
   const startHostedGame = () => {
@@ -2531,12 +2658,35 @@ export default function App() {
     } else {
       setSetupCanCancel(true);
     }
+    setSetupInitialMode(state.gameMode === "puzzle" ? "puzzle" : "local");
     setSetupReturnView("none");
     setStartView("setup");
   };
+  const restartPuzzle = () => {
+    if (!state.puzzleId) return;
+    beginPuzzle(state.puzzleId);
+  };
+  const nextPuzzle = () => {
+    if (!state.puzzleId) return;
+    const index = PUZZLES.findIndex((puzzle) => puzzle.id === state.puzzleId);
+    const next = PUZZLES[index + 1];
+    if (next) {
+      beginPuzzle(next.id);
+    } else {
+      setSetupCanCancel(true);
+      setSetupReturnView("none");
+      setSetupInitialMode("puzzle");
+      setStartView("setup");
+    }
+  };
 
+  const puzzleInputLocked =
+    state.gameMode === "puzzle" &&
+    Boolean(state.puzzleFailed) &&
+    state.activeColor !== state.aiColor;
   const inputDisabled =
     isAiTurn(state) ||
+    puzzleInputLocked ||
     (
       state.gameMode === "online" &&
       onlineTurnInputDisabled(online, state.activeColor, state.onlineHostColor)
@@ -2544,6 +2694,8 @@ export default function App() {
   const localOnlineColor = onlinePlayerColor(online, state.onlineHostColor);
   const opponentColor = state.gameMode === "ai"
     ? state.aiColor
+    : state.gameMode === "puzzle"
+      ? state.aiColor
     : state.gameMode === "online" && localOnlineColor
       ? (localOnlineColor === "white" ? "black" : "white")
       : undefined;
@@ -2558,14 +2710,16 @@ export default function App() {
   const remoteUndoConsent = online.role === "host"
     ? online.undoConsent.peer
     : online.undoConsent.host;
-  const undoEnabled = state.gameMode === "online"
+  const undoEnabled = state.gameMode === "puzzle"
+    ? false
+    : state.gameMode === "online"
     ? onlineUndoEnabled(online)
     : undoPreferred;
   const undoStable =
     (state.phase === "play" || state.phase === "upgrade" || state.phase === "gameover") &&
     !state.selectedGod &&
     !state.selectedAbility;
-  const canUndo = undoEnabled && undoStable && (
+  const canUndo = state.gameMode !== "puzzle" && undoEnabled && undoStable && (
     state.gameMode === "online"
       ? online.undoAvailable && !online.awaitingSync
       : undoDepth > 0
@@ -2631,6 +2785,8 @@ export default function App() {
             onUndo={requestUndo}
             onOpenSettings={() => setSettingsOpen(true)}
             onRestart={openNewGame}
+            onRestartPuzzle={restartPuzzle}
+            onNextPuzzle={nextPuzzle}
             onSaveAndQuit={saveAndQuit}
           />
         )}
@@ -2648,8 +2804,10 @@ export default function App() {
         <StartGamePrompt
           online={online}
           defaultPlayerName={accountService.account?.displayName}
+          initialMode={setupInitialMode}
           canCancel={setupCanCancel}
           onStart={beginGame}
+          onStartPuzzle={beginPuzzle}
           onHost={(name) => void onlineActions.hostGame(name)}
           onJoin={(code, name) => void onlineActions.joinGame(code, name)}
           onStartOnline={startHostedGame}

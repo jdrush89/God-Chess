@@ -1,8 +1,14 @@
 export type Color = "white" | "black";
-export type GameMode = "local" | "ai" | "online";
+export type GameMode = "local" | "ai" | "online" | "puzzle";
 export type OrbColor = Color;
 export type PieceType = "king" | "queen" | "rook" | "bishop" | "knight" | "pawn";
 export type Square = string;
+export type PuzzleId =
+  | "centaurs-lance"
+  | "circle-of-rage"
+  | "prepared-fate"
+  | "royal-escort"
+  | "serpents-delivery";
 export type GodId =
   | "quetzacoatl"
   | "chiron"
@@ -154,6 +160,9 @@ export interface GameState {
   aiDifficulty: number;
   aiColor?: Color;
   onlineHostColor?: Color;
+  puzzleId?: PuzzleId;
+  puzzlePlayerTurnsRemaining?: number;
+  puzzleFailed?: boolean;
   board: Record<Square, Piece>;
   players: Record<Color, PlayerState>;
   activeColor: Color;

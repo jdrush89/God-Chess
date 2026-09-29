@@ -34,7 +34,7 @@ afterEach(() => {
 });
 
 describe("game startup", () => {
-  it("shows local, AI, and online choices when starting a new game", () => {
+  it("shows local, AI, online, and puzzle choices when starting a new game", () => {
     const savedState = createGame(1);
     window.localStorage.setItem(LEGACY_SAVE_KEY, JSON.stringify({
       version: 1,
@@ -51,6 +51,21 @@ describe("game startup", () => {
     expect(screen.getByRole("button", { name: /two players share this device/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /divine ai/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /online versus/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /divine puzzles/i })).toBeTruthy();
+  });
+
+  it("starts a selected puzzle from its prepared position", () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /^new game$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /divine puzzles/i }));
+
+    expect(screen.getAllByRole("button", { name: /puzzle \d/i })).toHaveLength(5);
+    fireEvent.click(screen.getByRole("button", { name: /puzzle 1.*centaur's lance/i }));
+
+    expect(screen.getByText("The Centaur's Lance")).toBeTruthy();
+    expect(screen.getAllByText(/capture the black king in one divine turn/i)).toHaveLength(2);
+    expect(screen.getByRole("gridcell", { name: "e2, white knight" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /save & quit/i })).toBeNull();
   });
 
   it("restores the saved position instead of the fresh initial game", () => {

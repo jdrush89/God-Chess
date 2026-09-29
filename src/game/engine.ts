@@ -89,17 +89,25 @@ export const createGame = (
 ): GameState => {
   const gameMode = options.mode ?? "local";
   const aiDifficulty = Math.max(1, Math.min(10, Math.round(options.aiDifficulty ?? 5)));
-  const aiColor = gameMode === "ai" ? (whitePlayer === 2 ? "white" : "black") : undefined;
+  const aiColor = gameMode === "puzzle"
+    ? "black"
+    : gameMode === "ai"
+      ? (whitePlayer === 2 ? "white" : "black")
+      : undefined;
   const onlineHostColor = gameMode === "online" ? (whitePlayer === 1 ? "white" : "black") : undefined;
   const playerName = options.playerName?.trim() || "Player 1";
-  const whiteName = gameMode === "ai" && aiColor === "white"
+  const whiteName = gameMode === "puzzle"
+    ? playerName
+    : gameMode === "ai" && aiColor === "white"
     ? "Divine AI"
     : gameMode === "ai"
       ? playerName
       : gameMode === "online"
         ? (onlineHostColor === "white" ? options.hostName ?? "Host" : options.guestName ?? "Guest")
         : `Player ${whitePlayer}`;
-  const blackName = gameMode === "ai" && aiColor === "black"
+  const blackName = gameMode === "puzzle"
+    ? "Divine AI"
+    : gameMode === "ai" && aiColor === "black"
     ? "Divine AI"
     : gameMode === "ai"
       ? playerName
@@ -419,6 +427,16 @@ const finishTurn = (state: GameState, description: string) => {
   if (state.phase === "gameover") return;
 
   const endingColor = state.activeColor;
+  const keepsTurn = state.bonusTurn === endingColor;
+  if (
+    state.gameMode === "puzzle" &&
+    endingColor !== state.aiColor &&
+    !keepsTurn &&
+    state.puzzlePlayerTurnsRemaining !== undefined
+  ) {
+    state.puzzlePlayerTurnsRemaining = Math.max(0, state.puzzlePlayerTurnsRemaining - 1);
+    if (state.puzzlePlayerTurnsRemaining === 0) state.puzzleFailed = true;
+  }
   expireStatuses(state, endingColor);
   const drafted = [...state.players.white.gods, ...state.players.black.gods];
   if (drafted.length === 6 && drafted.every((god) => state.rested.includes(god))) {
@@ -430,7 +448,7 @@ const finishTurn = (state: GameState, description: string) => {
   }
 
   state.turn += 1;
-  state.activeColor = state.bonusTurn === endingColor ? endingColor : opposite(endingColor);
+  state.activeColor = keepsTurn ? endingColor : opposite(endingColor);
   state.bonusTurn = undefined;
   resolveStartOfTurn(state);
   state.notice = `${colorName(state.activeColor)} to act. Choose an available god.`;

@@ -352,6 +352,6 @@ export const chooseAiPlan = (
 };
 
 export const isAiTurn = (state: GameState) =>
-  state.gameMode === "ai" &&
+  (state.gameMode === "ai" || state.gameMode === "puzzle") &&
   state.aiColor === state.activeColor &&
   state.phase !== "gameover";

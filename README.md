@@ -3,7 +3,8 @@
 A local two-player strategy game that combines legal chess movement with a
 snake-drafted pantheon of gods, shared orb economies, resting turns, status
 effects, and ability upgrades. Play locally, against a difficulty-adjustable
-AI, or online through host-authoritative WebRTC rooms with five-character codes.
+AI, solve prepared divine puzzles, or play online through host-authoritative
+WebRTC rooms with five-character codes.
 
 Play the latest version at [jdrush89.github.io/God-Chess](https://jdrush89.github.io/God-Chess/).
 
@@ -25,6 +26,15 @@ npm run dev
 
 Open the URL printed by Vite. The game begins by randomly assigning colors,
 then walks both players through the `1-2-2-1` draft.
+
+## Puzzle mode
+
+Puzzle mode starts with five easy positions that can each be won in one divine
+turn. The collection features Chiron's Charge, Kangus Kong's Rage, Artemis'
+Snipe, Leonidas' Escort, and Quetzacoatl's Air Strike. Each position includes
+an optional hint, restart and next-puzzle controls, and a level 10 Divine AI
+response when the winning line is missed. Puzzle positions are not added to
+local or cloud saves.
 
 ## Accounts and cloud saves
 
