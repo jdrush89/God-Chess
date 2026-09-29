@@ -495,11 +495,7 @@ const compelledLuredSquares = (state: GameState) =>
     .map(([square]) => square);
 
 const airStrikePassengerTypes = (level: number): PieceType[] =>
-  level === 1
-    ? ["pawn"]
-    : level === 2
-      ? ["pawn", "knight", "bishop"]
-      : ["pawn", "knight", "bishop", "rook", "queen", "king"];
+  level >= 3 ? ["pawn", "knight", "bishop"] : ["pawn"];
 
 const airStrikePassengerSquares = (state: GameState, carrierSquare: Square) => {
   const allowedTypes = airStrikePassengerTypes(currentLevel(state, "air-strike"));
@@ -524,19 +520,39 @@ const airStrikeDropTargets = (
 ) => {
   const passenger = state.board[passengerSquare];
   if (!passenger) return [];
-  return flightPathSquares(carrierSquare, carrierDestination).filter((dropSquare) => {
-    const board = structuredClone(state.board);
-    delete board[passengerSquare];
-    const afterCarrier = applyMove(board, { from: carrierSquare, to: carrierDestination }, state.enPassant).board;
-    const occupant = afterCarrier[dropSquare];
-    if (occupant?.controller === state.activeColor || occupant?.status.hardened) return false;
-    delete afterCarrier[dropSquare];
-    afterCarrier[dropSquare] = {
+  const path = flightPathSquares(carrierSquare, carrierDestination);
+  const board = structuredClone(state.board);
+  delete board[passengerSquare];
+  const afterCarrier = applyMove(
+    board,
+    { from: carrierSquare, to: carrierDestination },
+    state.enPassant,
+  ).board;
+  const level = currentLevel(state, "air-strike");
+  const firstEnemy = level >= 2
+    ? path.find((dropSquare) => {
+      const occupant = afterCarrier[dropSquare];
+      return occupant && occupant.controller !== state.activeColor;
+    })
+    : undefined;
+
+  return path.filter((dropSquare) => {
+    const dropBoard = structuredClone(afterCarrier);
+    const occupant = dropBoard[dropSquare];
+    if (occupant) {
+      if (
+        dropSquare !== firstEnemy ||
+        occupant.controller === state.activeColor ||
+        occupant.status.hardened
+      ) return false;
+    }
+    delete dropBoard[dropSquare];
+    dropBoard[dropSquare] = {
       ...passenger,
       hasMoved: true,
       status: { ...passenger.status, movedThisTurn: true },
     };
-    return !isInCheck(afterCarrier, state.activeColor, state.bananas);
+    return !isInCheck(dropBoard, state.activeColor, state.bananas);
   });
 };
 
@@ -1674,7 +1690,9 @@ const handleSquare = (state: GameState, square: Square) => {
         square,
         passengerSquare,
       );
-      state.notice = "Air Strike: choose a crossed space to drop the passenger.";
+      state.notice = currentLevel(state, "air-strike") >= 2
+        ? "Air Strike: drop on an empty crossed space or the first enemy flown over."
+        : "Air Strike: choose an empty crossed space to drop the passenger.";
     } else if (
       state.pending.step === "air-strike-drop" &&
       state.pending.source &&

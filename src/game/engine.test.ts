@@ -683,7 +683,7 @@ describe("game flow", () => {
     );
   });
 
-  it("flies a carrier over blockers and drops a friendly pawn to capture", () => {
+  it("requires a level 1 Air Strike passenger to land on an empty crossed space", () => {
     let state = createGame(1);
     (["quetzacoatl", "chiron", "teles", "death", "artemis", "midas"] as const).forEach((godId) => {
       state = gameReducer(state, { type: "draft", godId });
@@ -693,7 +693,6 @@ describe("game flow", () => {
       h8: testPiece("king", "black", "black-king"),
       a2: testPiece("rook", "white", "carrier"),
       b2: testPiece("pawn", "white", "passenger"),
-      a3: testPiece("knight", "white", "blocker"),
       a4: testPiece("bishop", "black", "target"),
     };
     state.players.white.orbs.black = 3;
@@ -701,23 +700,48 @@ describe("game flow", () => {
     state = gameReducer(state, { type: "select-god", godId: "quetzacoatl" });
     state = gameReducer(state, { type: "select-ability", abilityId: "air-strike" });
     state = gameReducer(state, { type: "square", square: "a2" });
-    expect(state.legalTargets).toEqual(["b2"]);
     state = gameReducer(state, { type: "square", square: "b2" });
-    expect(state.legalTargets).toContain("a5");
-    expect(state.legalTargets).not.toContain("a4");
     state = gameReducer(state, { type: "square", square: "a5" });
-    expect(state.legalTargets).toEqual(["a4"]);
-    state = gameReducer(state, { type: "square", square: "a4" });
 
+    expect(state.legalTargets).toEqual(["a3"]);
+    state = gameReducer(state, { type: "square", square: "a3" });
     expect(state.board.a5?.id).toBe("carrier");
-    expect(state.board.a4?.id).toBe("passenger");
-    expect(state.board.b2).toBeUndefined();
-    expect(state.players.black.graveyard.at(-1)?.piece.id).toBe("target");
-    expect(state.players.white.orbs.black).toBe(0);
-    expect(state.activeColor).toBe("black");
+    expect(state.board.a3?.id).toBe("passenger");
+    expect(state.board.a4?.id).toBe("target");
   });
 
-  it("expands Air Strike passenger types at levels 2 and 3", () => {
+  it("lets level 2 Air Strike capture only the first enemy flown over", () => {
+    let state = createGame(1);
+    (["quetzacoatl", "chiron", "teles", "death", "artemis", "midas"] as const).forEach((godId) => {
+      state = gameReducer(state, { type: "draft", godId });
+    });
+    state.board = {
+      a1: testPiece("king", "white", "white-king"),
+      h8: testPiece("king", "black", "black-king"),
+      a2: testPiece("rook", "white", "carrier"),
+      b2: testPiece("pawn", "white", "passenger"),
+      a4: testPiece("bishop", "black", "first-target"),
+      a5: testPiece("knight", "black", "second-target"),
+    };
+    state.players.white.upgrades["air-strike"] = 2;
+    state.players.white.orbs.black = 3;
+
+    state = gameReducer(state, { type: "select-god", godId: "quetzacoatl" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "air-strike" });
+    state = gameReducer(state, { type: "square", square: "a2" });
+    state = gameReducer(state, { type: "square", square: "b2" });
+    state = gameReducer(state, { type: "square", square: "a6" });
+
+    expect(state.legalTargets).toEqual(["a3", "a4"]);
+    expect(state.legalTargets).not.toContain("a5");
+    state = gameReducer(state, { type: "square", square: "a4" });
+    expect(state.board.a6?.id).toBe("carrier");
+    expect(state.board.a4?.id).toBe("passenger");
+    expect(state.board.a5?.id).toBe("second-target");
+    expect(state.players.black.graveyard.at(-1)?.piece.id).toBe("first-target");
+  });
+
+  it("adds knight and bishop passengers only at Air Strike level 3", () => {
     const setup = (level: 1 | 2 | 3, passengerType: PieceType) => {
       let state = createGame(1);
       (["quetzacoatl", "chiron", "teles", "death", "artemis", "midas"] as const).forEach((godId) => {
@@ -737,9 +761,10 @@ describe("game flow", () => {
     };
 
     expect(setup(1, "knight").pending?.step).toBe("source");
-    expect(setup(2, "knight").legalTargets).toContain("e4");
-    expect(setup(2, "queen").pending?.step).toBe("source");
-    expect(setup(3, "queen").legalTargets).toContain("e4");
+    expect(setup(2, "knight").pending?.step).toBe("source");
+    expect(setup(3, "knight").legalTargets).toContain("e4");
+    expect(setup(3, "bishop").legalTargets).toContain("e4");
+    expect(setup(3, "queen").pending?.step).toBe("source");
   });
 
   it("rejects Air Strike routes whose carried piece would expose its King", () => {

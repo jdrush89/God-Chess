@@ -238,7 +238,7 @@ const serpentsDelivery = (playerName?: string) => {
     ["d2", piece("white-pawn-d", "pawn", "white")],
     ["e2", piece("white-pawn-e", "pawn", "white")],
     ["g3", piece("white-pawn-g", "pawn", "white")],
-    ["a3", piece("black-pawn", "pawn", "black")],
+    ["h6", piece("black-pawn-h", "pawn", "black")],
     ["a5", piece("black-king", "king", "black")],
     ["e6", piece("black-queen", "queen", "black")],
     ["g8", piece("black-rook", "rook", "black")],
@@ -249,6 +249,7 @@ const serpentsDelivery = (playerName?: string) => {
     ["d6", piece("black-pawn-d", "pawn", "black")],
     ["g7", piece("black-pawn-g", "pawn", "black")],
   );
+  state.players.white.upgrades["air-strike"] = 2;
   return state;
 };
 
@@ -313,8 +314,8 @@ export const PUZZLES: PuzzleDefinition[] = [
     id: "serpents-delivery",
     title: "Position Five",
     objective: "Capture the black King in one divine turn.",
-    hint: "The rook can carry the pawn over the blocked a-file and drop it before landing.",
-    solutionSummary: "Air Strike with the rook on a1, carry the pawn from b1, land on a8, and drop the pawn on a5.",
+    hint: "The rook can carry the pawn over the blocked a-file. At level 2, the passenger may land on the first enemy flown over.",
+    solutionSummary: "Use level 2 Air Strike with the rook on a1, carry the pawn from b1, land on a8, and drop the pawn onto the first enemy flown over at a5.",
     solution: [
       { type: "select-god", godId: "quetzacoatl" },
       { type: "select-ability", abilityId: "air-strike" },
