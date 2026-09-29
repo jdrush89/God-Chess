@@ -11,6 +11,11 @@ export interface AccountProfile {
 const defaultDisplayName = (user: User) =>
   String(user.user_metadata.display_name || user.email?.split("@")[0] || "Player").slice(0, 24);
 
+export const resolveAuthRedirectUrl = (
+  href = window.location.href,
+  baseUrl = import.meta.env.BASE_URL,
+) => new URL(baseUrl, href).href;
+
 const loadProfile = async (user: User): Promise<AccountProfile> => {
   if (!supabase) throw new Error("Account services are not configured.");
   const { data, error } = await supabase
@@ -105,7 +110,10 @@ export function useAccount() {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { display_name: displayName.trim().slice(0, 24) } },
+        options: {
+          data: { display_name: displayName.trim().slice(0, 24) },
+          emailRedirectTo: resolveAuthRedirectUrl(),
+        },
       });
       if (error) throw error;
       setError(undefined);
