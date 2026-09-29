@@ -40,7 +40,10 @@ import {
 } from "../game/fourPlayerAi";
 import { fourPlayerSquareAt } from "../game/fourPlayerChess";
 import { seatsAreAllies } from "../game/fourPlayerConfig";
-import { fourPlayerReducer } from "../game/fourPlayerEngine";
+import {
+  fourPlayerReducer,
+  hasCommittedFourPlayerAction,
+} from "../game/fourPlayerEngine";
 import { prepareFourPlayerState } from "../game/fourPlayerPersistence";
 import {
   FOUR_PLAYER_SEATS,
@@ -734,6 +737,7 @@ function FourActionPanel({
   const ownerSeat = inspectedGod?.seat ?? state.activeSeat;
   const owner = state.players[ownerSeat];
   const readOnly = Boolean(inspectedGod);
+  const committed = hasCommittedFourPlayerAction(state);
 
   if (state.phase === "upgrade") {
     return (
@@ -815,6 +819,13 @@ function FourActionPanel({
             </div>
           )}
           <PendingChoices state={state} dispatch={dispatch} />
+          {canPass(state) && (
+            <div className="four-action-buttons">
+              <button className="secondary-button" onClick={() => dispatch({ type: "pass" })}>
+                Pass / finish
+              </button>
+            </div>
+          )}
           {!state.pending && (
             <div className="god-list">
               {active.gods.map((godId) => {
@@ -850,8 +861,10 @@ function FourActionPanel({
             <div><span>{god.domain}</span><h3>{god.name}</h3><p>{god.epithet}</p></div>
             <button
               className="god-back-button"
+              disabled={!readOnly && committed}
               onClick={() => readOnly ? onCloseInspection() : dispatch({ type: "clear-god" })}
               aria-label={readOnly ? "Close god details" : "Choose a different god"}
+              title={!readOnly && committed ? "Finish the current action first" : undefined}
             >
               <ArrowLeft size={17} />
             </button>
@@ -907,6 +920,7 @@ function FourActionPanel({
                   active={!readOnly && state.selectedAbility === ability.id}
                   disabled={
                     readOnly ||
+                    committed ||
                     state.rested.includes(god.id) ||
                     !affordable ||
                     (ability.id === "lure" && !hasQueen)
@@ -925,9 +939,11 @@ function FourActionPanel({
                   Pass / finish
                 </button>
               )}
-              <button className="text-button" onClick={() => dispatch({ type: "cancel" })}>
-                Cancel ability
-              </button>
+              {!committed && (
+                <button className="text-button" onClick={() => dispatch({ type: "cancel" })}>
+                  Cancel ability
+                </button>
+              )}
             </div>
           )}
         </>

@@ -16,9 +16,15 @@ export const loadCloudSavedGames = async (userId: string): Promise<SavedGame[]> 
     .eq("user_id", userId)
     .order("saved_at", { ascending: false });
   if (error) throw error;
-  return sortSavedGames((data as CloudSaveRow[]).flatMap((row) => {
+  const rows = Array.isArray(data) ? data : [];
+  return sortSavedGames(rows.flatMap((value) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+    const row = value as Partial<CloudSaveRow>;
+    if (typeof row.id !== "string" || typeof row.saved_at !== "string") return [];
     const game = normalizeSavedGame({
-      ...(typeof row.game === "object" && row.game ? row.game : {}),
+      ...(typeof row.game === "object" && row.game && !Array.isArray(row.game)
+        ? row.game
+        : {}),
       id: row.id,
       savedAt: row.saved_at,
     });

@@ -42,6 +42,9 @@ interface StoredSavedGame {
   turnStart?: unknown;
 }
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value && typeof value === "object" && !Array.isArray(value));
+
 const prepareTwoPlayerState = (state: GameState) => {
   const savedState = structuredClone(state);
   savedState.orbAnimations = [];
@@ -65,9 +68,9 @@ export function prepareSavedState(state: SavedGameState): SavedGameState {
 }
 
 const isTwoPlayerGameState = (state: unknown): state is GameState => {
-  const candidate = state as GameState | undefined;
+  if (!isRecord(state)) return false;
+  const candidate = state as unknown as GameState;
   return Boolean(
-    candidate &&
     !("variant" in candidate) &&
     ["draft", "play", "upgrade", "gameover"].includes(candidate.phase) &&
     candidate.board &&
@@ -84,12 +87,14 @@ const isSavedGameState = (state: unknown): state is SavedGameState =>
 export const saveId = () => globalThis.crypto?.randomUUID?.() ??
   `save-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-export const normalizeSavedGame = (value: unknown): SavedGame | undefined => {
+const normalizeSavedGameValue = (value: unknown): SavedGame | undefined => {
+  if (!isRecord(value)) return undefined;
   const saved = value as StoredSavedGame;
   if (
-    !saved ||
     (saved.version !== 2 && saved.version !== 3) ||
+    typeof saved.id !== "string" ||
     !saved.id ||
+    typeof saved.savedAt !== "string" ||
     !saved.savedAt ||
     !isSavedGameState(saved.state)
   ) return undefined;
@@ -123,6 +128,14 @@ export const normalizeSavedGame = (value: unknown): SavedGame | undefined => {
   };
 };
 
+export const normalizeSavedGame = (value: unknown): SavedGame | undefined => {
+  try {
+    return normalizeSavedGameValue(value);
+  } catch {
+    return undefined;
+  }
+};
+
 export const sortSavedGames = (games: SavedGame[]) =>
   [...games].sort((a, b) => b.savedAt.localeCompare(a.savedAt));
 
@@ -144,25 +157,30 @@ export const loadLocalSavedGames = (): SavedGame[] => {
     });
     const legacyRaw = window.localStorage.getItem(LEGACY_SAVE_KEY);
     if (legacyRaw) {
-      const legacy = JSON.parse(legacyRaw) as {
-        version?: number;
-        savedAt?: string;
-        state?: unknown;
-      };
-      if (legacy.version === 1 && legacy.savedAt && isTwoPlayerGameState(legacy.state)) {
-        games.push({
-          version: 3,
-          id: saveId(),
-          savedAt: legacy.savedAt,
-          state: prepareTwoPlayerState(legacy.state),
-          undoHistory: [],
-          turnStart: legacy.state.phase === "play"
-            ? prepareTwoPlayerState(legacy.state)
-            : undefined,
-        });
+      try {
+        const legacy = JSON.parse(legacyRaw) as {
+          version?: number;
+          savedAt?: string;
+          state?: unknown;
+        };
+        if (legacy.version === 1 && legacy.savedAt && isTwoPlayerGameState(legacy.state)) {
+          games.push({
+            version: 3,
+            id: saveId(),
+            savedAt: legacy.savedAt,
+            state: prepareTwoPlayerState(legacy.state),
+            undoHistory: [],
+            turnStart: legacy.state.phase === "play"
+              ? prepareTwoPlayerState(legacy.state)
+              : undefined,
+          });
+          migrated = true;
+        }
+      } catch {
         migrated = true;
+      } finally {
+        window.localStorage.removeItem(LEGACY_SAVE_KEY);
       }
-      window.localStorage.removeItem(LEGACY_SAVE_KEY);
     }
     const sorted = sortSavedGames(games);
     if (migrated) persistLocalSavedGames(sorted);

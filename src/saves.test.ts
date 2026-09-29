@@ -1,10 +1,15 @@
+// @vitest-environment jsdom
+
 import { describe, expect, it } from "vitest";
 import { createFourPlayerGame, fourPlayerReducer } from "./game/fourPlayerEngine";
 import { createGame } from "./game/engine";
 import {
   createSavedGame,
   isFourPlayerSavedGame,
+  LEGACY_SAVE_KEY,
+  loadLocalSavedGames,
   normalizeSavedGame,
+  SAVE_KEY,
 } from "./saves";
 
 describe("saved-game variants", () => {
@@ -43,5 +48,40 @@ describe("saved-game variants", () => {
       undoHistory: [state],
     });
     expect(normalized && !isFourPlayerSavedGame(normalized)).toBe(true);
+  });
+
+  it("rejects primitive state values without throwing", () => {
+    expect(() => normalizeSavedGame({
+      version: 3,
+      id: "malformed",
+      savedAt: new Date().toISOString(),
+      state: 42,
+      undoHistory: [],
+    })).not.toThrow();
+    expect(normalizeSavedGame({
+      version: 3,
+      id: "malformed",
+      savedAt: new Date().toISOString(),
+      state: 42,
+      undoHistory: [],
+    })).toBeUndefined();
+  });
+
+  it("discards malformed local records without losing valid saves", () => {
+    const valid = createSavedGame("valid", createGame(1), []);
+    window.localStorage.setItem(SAVE_KEY, JSON.stringify([
+      42,
+      { version: 3, id: "bad", savedAt: valid.savedAt, state: null },
+      valid,
+    ]));
+    expect(loadLocalSavedGames()).toEqual([valid]);
+  });
+
+  it("discards a malformed legacy record without losing current saves", () => {
+    const valid = createSavedGame("valid", createGame(1), []);
+    window.localStorage.setItem(SAVE_KEY, JSON.stringify([valid]));
+    window.localStorage.setItem(LEGACY_SAVE_KEY, "{not-json");
+    expect(loadLocalSavedGames()).toEqual([valid]);
+    expect(window.localStorage.getItem(LEGACY_SAVE_KEY)).toBeNull();
   });
 });

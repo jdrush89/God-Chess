@@ -154,6 +154,75 @@ describe("four-player app integration", () => {
     expect(screen.getByRole("img", { name: /m8.*controlled by north/i })).toBeTruthy();
   });
 
+  it("shows a finish control for automatic prepared Snipe Shot prompts", () => {
+    let state = createFourPlayerGame();
+    for (const god of GODS) state = fourPlayerReducer(state, { type: "draft", godId: god.id });
+    const preparedSquare = Object.entries(state.board)
+      .find(([, piece]) => piece.controller === state.activeSeat)?.[0];
+    expect(preparedSquare).toBeTruthy();
+    state.board[preparedSquare!].status.prepared = {
+      owner: state.activeSeat,
+      level: 1,
+    };
+    state.pending = {
+      godId: "artemis",
+      abilityId: "snipe-shot",
+      step: "snipe-source",
+    };
+    state.legalTargets = [preparedSquare!];
+    state.notice = "Prepared Shot: choose a prepared piece or pass.";
+    window.localStorage.setItem(SAVE_KEY, JSON.stringify([
+      createSavedGame("prepared-shot", state, []),
+    ]));
+
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /load game/i }));
+    fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
+
+    const finish = screen.getByRole("button", { name: /pass \/ finish/i });
+    fireEvent.click(finish);
+    expect(screen.queryByRole("button", { name: /pass \/ finish/i })).toBeNull();
+    expect(screen.getAllByText(/skipped the prepared shot/i).length).toBeGreaterThan(0);
+  });
+
+  it("disables back, cancellation, and ability switching after committed progress", () => {
+    let state = createFourPlayerGame();
+    const draftOrder = [
+      GODS.find((god) => god.id === "midas")!,
+      ...GODS.filter((god) => god.id !== "midas"),
+    ];
+    for (const god of draftOrder) {
+      state = fourPlayerReducer(state, { type: "draft", godId: god.id });
+    }
+    state.selectedGod = "midas";
+    state.selectedAbility = "military-funding";
+    const movedPawn = Object.values(state.board)
+      .find((piece) => piece.controller === state.activeSeat && piece.type === "pawn")!;
+    state.pending = {
+      godId: "midas",
+      abilityId: "military-funding",
+      step: "funding",
+      selected: [movedPawn.id],
+    };
+    state.notice = "Move another pawn or finish.";
+    window.localStorage.setItem(SAVE_KEY, JSON.stringify([
+      createSavedGame("committed-action", state, []),
+    ]));
+
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /load game/i }));
+    fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
+
+    expect(
+      (screen.getByRole("button", { name: /choose a different god/i }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    expect(screen.queryByRole("button", { name: /cancel ability/i })).toBeNull();
+    expect(
+      (screen.getByRole("button", { name: /barter/i }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+
   it("saves and reloads four-player draft state without misclassifying it", async () => {
     openFourPlayerSetup();
     fireEvent.click(screen.getByRole("button", { name: /begin four-player draft/i }));

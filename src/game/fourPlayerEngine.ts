@@ -97,6 +97,34 @@ const refundCost = (state: FourPlayerState) => {
   addOrbs(state, state.activeSeat, cost.light, cost.dark);
 };
 
+const COMMITTED_PENDING_STEPS = new Set([
+  "banana",
+  "barter-orb",
+  "barter-seat",
+  "cull-choice",
+  "funding",
+  "hire",
+  "marked-choice",
+  "mount-place",
+  "mount-rider",
+  "rage-choice",
+  "resurrect-more",
+  "siphon-amount",
+  "siphon-seat",
+  "slither",
+]);
+
+export const hasCommittedFourPlayerAction = (state: FourPlayerState) => {
+  const pending = state.pending;
+  if (!pending) return false;
+  if (COMMITTED_PENDING_STEPS.has(pending.step)) return true;
+  if (
+    ["grave", "revive-place"].includes(pending.step) &&
+    Boolean(pending.selected?.length)
+  ) return true;
+  return pending.abilityId === "hex" && Boolean(pending.selected?.length);
+};
+
 const findSquareById = (state: FourPlayerState, pieceId: string) =>
   Object.entries(state.board).find(([, piece]) => piece.id === pieceId)?.[0];
 
@@ -2400,9 +2428,18 @@ export const fourPlayerReducer = (
   const next = clone(state);
   if (action.type === "draft" && next.phase === "draft") {
     draftGod(next, action.godId);
-  } else if (action.type === "select-god" && next.phase === "play") {
+  } else if (
+    action.type === "select-god" &&
+    next.phase === "play" &&
+    !hasCommittedFourPlayerAction(next)
+  ) {
     selectGod(next, action.godId);
-  } else if (action.type === "clear-god" && next.phase === "play" && next.selectedGod) {
+  } else if (
+    action.type === "clear-god" &&
+    next.phase === "play" &&
+    next.selectedGod &&
+    !hasCommittedFourPlayerAction(next)
+  ) {
     if (next.selectedAbility) refundCost(next);
     next.selectedGod = undefined;
     next.selectedAbility = undefined;
@@ -2411,7 +2448,11 @@ export const fourPlayerReducer = (
     next.legalTargets = [];
     next.legalSeats = [];
     next.notice = `${name(next.activeSeat)} to act. Choose an available God.`;
-  } else if (action.type === "select-ability" && next.phase === "play") {
+  } else if (
+    action.type === "select-ability" &&
+    next.phase === "play" &&
+    !hasCommittedFourPlayerAction(next)
+  ) {
     if (next.selectedAbility) refundCost(next);
     activateAbility(next, action.abilityId);
   } else if (action.type === "confirm-ability" && next.phase === "play") {
@@ -2507,9 +2548,7 @@ export const fourPlayerReducer = (
   } else if (action.type === "upgrade" && next.phase === "upgrade") {
     upgradeAbility(next, action.abilityId);
   } else if (action.type === "cancel" && next.phase === "play") {
-    const progressed = next.pending && ["slither", "funding", "banana", "hire"].includes(next.pending.step);
-    if (progressed) finishTurn(next, abilityDescription(next, ": completed the action"));
-    else {
+    if (!hasCommittedFourPlayerAction(next)) {
       refundCost(next);
       next.selectedAbility = undefined;
       next.selectedSquare = undefined;

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { GODS } from "./gods";
-import { createFourPlayerGame, fourPlayerReducer } from "./fourPlayerEngine";
+import {
+  createFourPlayerGame,
+  fourPlayerReducer,
+  hasCommittedFourPlayerAction,
+} from "./fourPlayerEngine";
 import type { FourPlayerPiece, FourPlayerState, Seat } from "./fourPlayerTypes";
 import type { GodId, PieceType, Square } from "./types";
 
@@ -352,6 +356,80 @@ describe("four-player God abilities", () => {
 });
 
 describe("four-player ability safety regressions", () => {
+  const expectCommittedActionLocked = (state: FourPlayerState) => {
+    expect(hasCommittedFourPlayerAction(state)).toBe(true);
+    expect(fourPlayerReducer(state, { type: "cancel" })).toEqual(state);
+    expect(fourPlayerReducer(state, { type: "clear-god" })).toEqual(state);
+    const alternateAbility = GODS.find((god) => god.id === state.selectedGod)!
+      .abilities.find((ability) => ability.id !== state.selectedAbility)!;
+    expect(fourPlayerReducer(state, {
+      type: "select-ability",
+      abilityId: alternateAbility.id,
+    })).toEqual(state);
+  };
+
+  it("locks cancellation and ability switching after irreversible pending progress", () => {
+    let state = gameFor("death");
+    state.board.g8 = piece(state, "rook", "north", "siphon");
+    state.board.h9 = piece(state, "pawn", "south", "siphon-target");
+    state.players.south.orbs.light = 3;
+    expectCommittedActionLocked(move(state, "death", "siphon", "g8", "g9"));
+
+    state = gameFor("chiron");
+    state.board.g8 = piece(state, "knight", "north", "mount");
+    state.board.h8 = piece(state, "pawn", "north", "rider");
+    expectCommittedActionLocked(move(state, "chiron", "mount", "g8", "h10"));
+
+    state = gameFor("midas");
+    state.board.g8 = piece(state, "rook", "north", "barter");
+    state.board.h9 = piece(state, "pawn", "south", "barter-target");
+    expectCommittedActionLocked(move(state, "midas", "barter", "g8", "g9"));
+
+    state = gameFor("death", 3);
+    state.board.g8 = piece(state, "rook", "north", "marked");
+    expectCommittedActionLocked(move(state, "death", "marked", "g8", "g9"));
+  });
+
+  it("locks multi-Resurrect, Hex, and moved Rage progress until completion", () => {
+    let state = gameFor("death", 2);
+    state.board.g8 = piece(state, "bishop", "north", "bishop");
+    state.players.north.graveyard.push(
+      {
+        piece: piece(state, "pawn", "north", "dead-pawn-1"),
+        capturedOnTurn: 0,
+      },
+      {
+        piece: piece(state, "rook", "north", "dead-rook-2"),
+        capturedOnTurn: 0,
+      },
+    );
+    state = activate(state, "death", "resurrect");
+    state = fourPlayerReducer(state, { type: "grave", pieceId: "dead-pawn-1" });
+    state = fourPlayerReducer(state, { type: "square", square: "g9" });
+    expect(state.pending?.step).toBe("resurrect-more");
+    expectCommittedActionLocked(state);
+    state = fourPlayerReducer(state, { type: "choice", value: true });
+    expect(state.pending?.step).toBe("grave");
+    expectCommittedActionLocked(state);
+
+    state = gameFor("salem", 2);
+    state.board.g8 = piece(state, "rook", "north", "hex-mover");
+    state.board.g10 = piece(state, "pawn", "south", "hex-target");
+    state = activate(state, "salem", "hex");
+    state = fourPlayerReducer(state, { type: "square", square: "g10" });
+    expect(state.board.g10?.status.hexedBy).toBe("north");
+    expectCommittedActionLocked(state);
+
+    state = gameFor("kangus", 3);
+    state.board.g8 = piece(state, "rook", "north", "rage-mover");
+    state = activate(state, "kangus", "rage");
+    state = fourPlayerReducer(state, { type: "square", square: "g8" });
+    state = fourPlayerReducer(state, { type: "square", square: "g9" });
+    expect(state.board.g9?.id).toBe("rage-mover");
+    expect(state.pending?.step).toBe("rage-choice");
+    expectCommittedActionLocked(state);
+  });
+
   it("rejects hardened March Home destinations for the King and companions", () => {
     let state = gameFor("leonidas");
     delete state.board.g14;

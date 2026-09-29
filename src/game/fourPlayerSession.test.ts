@@ -8,8 +8,11 @@ import {
   createFourPlayerUndoProposal,
   fourPlayerHumanParticipantIds,
   isFourPlayerUndoUnanimous,
+  normalizeFourPlayerAction,
+  normalizeFourPlayerActionEnvelope,
   normalizeFourPlayerStateEnvelope,
 } from "./fourPlayerSession";
+import type { FourPlayerAction } from "./fourPlayerTypes";
 
 const onlineGame = () => {
   const config = createDefaultFourPlayerConfig();
@@ -26,6 +29,65 @@ const onlineGame = () => {
 };
 
 describe("four-player layer-three session seams", () => {
+  it("strictly validates every decoded action variant and envelope field", () => {
+    const state = onlineGame();
+    const validActions: FourPlayerAction[] = [
+      { type: "draft", godId: "ares" },
+      { type: "select-god", godId: "ares" },
+      { type: "clear-god" },
+      { type: "select-ability", abilityId: "threaten" },
+      { type: "confirm-ability" },
+      { type: "square", square: "g14" },
+      { type: "seat", seat: "east" },
+      { type: "grave", pieceId: "north-pawn-1" },
+      { type: "choice", value: true },
+      { type: "amount", amount: 2 },
+      { type: "orb", orb: "light" },
+      { type: "orb" },
+      { type: "pass" },
+      { type: "cancel" },
+      { type: "upgrade", abilityId: "threaten" },
+      { type: "load", state },
+      { type: "restart" },
+    ];
+    for (const action of validActions) {
+      expect(normalizeFourPlayerAction(action)?.type).toBe(action.type);
+      expect(normalizeFourPlayerAction({ ...action, unexpected: true })).toBeUndefined();
+    }
+
+    for (const action of [
+      { type: "amount", amount: 3 },
+      { type: "amount", amount: 1.5 },
+      { type: "choice", value: "true" },
+      { type: "orb", orb: "blue" },
+      { type: "seat", seat: "center" },
+      { type: "square", square: "z99" },
+      { type: "draft", godId: "unknown" },
+      { type: "select-ability", abilityId: "unknown" },
+      { type: "grave", pieceId: "" },
+      { type: "load", state: {} },
+      { type: "unknown" },
+    ]) {
+      expect(normalizeFourPlayerAction(action)).toBeUndefined();
+    }
+
+    const envelope = {
+      revision: 0,
+      actionId: "action-1",
+      participantId: "host",
+      seat: "north",
+      action: { type: "draft", godId: "ares" },
+    };
+    expect(normalizeFourPlayerActionEnvelope(envelope)).toEqual(envelope);
+    expect(normalizeFourPlayerActionEnvelope({ ...envelope, revision: -1 })).toBeUndefined();
+    expect(normalizeFourPlayerActionEnvelope({ ...envelope, extra: true })).toBeUndefined();
+    expect(() => applyAuthorizedFourPlayerAction(
+      state,
+      { ...envelope, action: { type: "amount", amount: 99 } },
+      0,
+    )).toThrow(/envelope is invalid/i);
+  });
+
   it("authorizes only the active seat owner at the expected revision", () => {
     const state = onlineGame();
     const applied = applyAuthorizedFourPlayerAction(state, {
