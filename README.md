@@ -4,8 +4,8 @@ A divine strategy game that combines legal chess movement with snake-drafted
 pantheons, shared orb economies, resting turns, status effects, and ability
 upgrades. Play a two-player duel locally, challenge a difficulty-adjustable AI,
 share a four-player cross-board in free-for-all or 2v2, solve prepared divine
-puzzles, or play a two-player online match through host-authoritative WebRTC
-rooms with five-character codes.
+puzzles, or play host-authoritative two-player and four-player online matches
+through WebRTC rooms with five-character codes.
 
 Play the latest version at [playgodchess.com](https://playgodchess.com/).
 
@@ -53,9 +53,43 @@ corners are outside the playable board.
   undo history. In mixed games, undo rewinds a completed AI chain together with
   the preceding Human turn.
 
-Four-player multiplayer is currently shared-device only. Online rooms remain
-two-player in this layer; multiparty lobby, seat ownership, synchronization,
-and unanimous network undo are reserved for the next networking layer.
+## Four-player online
+
+Choose **Online versus**, then **Four-player**, to host or join a multiparty
+room. The existing two-player online flow remains available under
+**Two-player**.
+
+- A room supports 2–4 connected Human participants. The host assigns every
+  Human to exactly one north/east/south/west seat; all unassigned seats become
+  Divine AI.
+- The host configures free-for-all or any exact 2v2 team layout, clockwise or
+  alternating-team turns, victory mode, takeover, and a separate AI level from
+  1–10 for every AI seat. Assignment or configuration changes clear readiness,
+  and every connected Human must be assigned and ready before starting.
+- Duplicate display names are allowed. Participants are tracked by private
+  identifiers rather than by their names.
+- All clients share the same cross-board, pantheons, history, and God/ability
+  inspection. Only the participant assigned to the active seat can submit an
+  action, and guests wait for the host’s canonical revision before acting
+  again.
+- The host validates every draft, ability, move, choice, and upgrade; runs all
+  AI seats; owns stable undo snapshots; and broadcasts canonical state. Peer
+  payloads, seat claims, revisions, and action IDs are never trusted.
+- If a guest disconnects after the match starts, the room pauses before any
+  further Human or AI action and reserves that seat. The original participant
+  can rejoin with the opaque reconnect token issued privately by the host.
+  Display names alone cannot reclaim a seat.
+- While paused, the host may permanently replace the disconnected seat with a
+  chosen AI level and resume. A replaced participant cannot reclaim that seat.
+- Online four-player undo is available only when every currently connected
+  Human has enabled **Allow undo**. Any participant may request the prior stable
+  snapshot once consent is unanimous. Disconnecting or reconnecting clears the
+  affected participant’s consent; AI replacement removes that participant from
+  the consent set.
+- Host disconnect ends the room. Guest departure before start removes them
+  from the lobby; departure after start uses the pause/reconnect behavior above.
+- Save & Quit is unavailable in live online rooms. Saved games are not used to
+  migrate or resume a room.
 
 ## Puzzle mode
 
@@ -173,6 +207,13 @@ session boundaries intended for the later multiparty-networking layer.
   per-seat difficulty budgets.
 - `src/fourPlayer/` contains the shared-device setup, cross-board, seat panels,
   action UI, animations, AI turn loop, save integration, and snapshot undo.
-- `src/game/fourPlayerSession.ts` defines transport-neutral revisioned action,
-  strict state snapshot, seat authorization, and unanimous-undo primitives for
-  the future online layer. It does not implement signaling or transport.
+- `src/game/fourPlayerSession.ts` defines transport-neutral revisioned actions,
+  strict state snapshots, and seat authorization.
+- `src/multiplayer/types.ts` defines the exact versioned `classic` and
+  `four-player` message protocol and validates every decoded application
+  payload.
+- `src/multiplayer/fourPlayerRoom.ts` owns the multiparty host state machine,
+  private reconnect bindings, canonical revisions, host-run AI, pause and
+  replacement behavior, and unanimous connected-Human undo.
+- `src/multiplayer/useFourPlayerOnlineGame.ts` exposes lobby and canonical game
+  state to React while preserving the existing classic online hook.

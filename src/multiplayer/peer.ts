@@ -1,7 +1,16 @@
 import type { GameAction } from "../game/engine";
 import type { Color, GameState } from "../game/types";
-import { NetworkManager } from "./network";
-import type { HostMessage, NetworkMessage, OnlinePlayer } from "./types";
+import {
+  NetworkManager,
+  type MultiplayerTransport,
+  type TransportFactory,
+} from "./network";
+import {
+  createProtocolMessage,
+  type HostMessage,
+  type OnlinePlayer,
+  type ProtocolMessage,
+} from "./types";
 
 interface PeerCallbacks {
   onJoinAccepted: (player: OnlinePlayer, roomCode: string) => void;
@@ -15,10 +24,14 @@ interface PeerCallbacks {
 }
 
 export class MultiplayerPeer {
-  private network: NetworkManager;
+  private network: MultiplayerTransport;
 
-  constructor(private callbacks: PeerCallbacks) {
-    this.network = new NetworkManager({
+  constructor(
+    private callbacks: PeerCallbacks,
+    transportFactory: TransportFactory = (networkCallbacks) =>
+      new NetworkManager(networkCallbacks),
+  ) {
+    this.network = transportFactory({
       onMessage: (_peerId, message) => this.handleMessage(message),
       onPeerConnected: () => {},
       onPeerDisconnected: () => callbacks.onDisconnected(),
@@ -29,54 +42,67 @@ export class MultiplayerPeer {
 
   async connect(roomCode: string, playerName: string) {
     await this.network.joinRoom(roomCode);
-    this.network.sendToHost({ type: "join_request", playerName });
+    this.network.sendToHost(createProtocolMessage("classic", "peer", {
+      type: "join_request",
+      playerName,
+    }));
   }
 
   sendAction(action: GameAction) {
-    this.network.sendToHost({ type: "game_action", action });
+    this.network.sendToHost(createProtocolMessage("classic", "peer", {
+      type: "game_action",
+      action,
+    }));
   }
 
   sendUndoConsent(enabled: boolean) {
-    this.network.sendToHost({ type: "undo_consent", enabled });
+    this.network.sendToHost(createProtocolMessage("classic", "peer", {
+      type: "undo_consent",
+      enabled,
+    }));
   }
 
   requestUndo() {
-    this.network.sendToHost({ type: "undo_request" });
+    this.network.sendToHost(createProtocolMessage("classic", "peer", {
+      type: "undo_request",
+    }));
   }
 
   disconnect() {
     this.network.disconnect();
   }
 
-  private handleMessage(message: NetworkMessage) {
-    switch (message.type) {
+  private handleMessage(message: ProtocolMessage) {
+    if (message.variant !== "classic" || message.direction !== "host") return;
+    const payload: HostMessage = message.payload;
+    switch (payload.type) {
       case "join_accepted":
-        this.callbacks.onJoinAccepted(message.player, message.roomCode);
+        this.callbacks.onJoinAccepted(payload.player, payload.roomCode);
         break;
       case "join_rejected":
-        this.callbacks.onRejected(message.reason);
+        this.callbacks.onRejected(payload.reason);
         break;
       case "lobby_state":
-        this.callbacks.onLobbyState(message.hostName, message.guest);
+        this.callbacks.onLobbyState(payload.hostName, payload.guest);
         break;
       case "game_start":
-        this.callbacks.onGameStart(message.state, message.guestColor);
+        this.callbacks.onGameStart(payload.state, payload.guestColor);
         break;
       case "state_sync":
-        this.callbacks.onStateSync(message.state);
+        this.callbacks.onStateSync(payload.state);
         break;
       case "undo_settings":
         this.callbacks.onUndoSettings(
-          message.hostEnabled,
-          message.guestEnabled,
-          message.canUndo,
+          payload.hostEnabled,
+          payload.guestEnabled,
+          payload.canUndo,
         );
         break;
       case "guest_left":
         this.callbacks.onDisconnected();
         break;
       case "error":
-        this.callbacks.onError(message.message);
+        this.callbacks.onError(payload.message);
         break;
     }
   }

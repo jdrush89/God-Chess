@@ -59,7 +59,7 @@ const controlsEqual = (first: SeatControl, second: SeatControl) => {
   return false;
 };
 
-const isConfig = (value: unknown): value is FourPlayerConfig => {
+export const isFourPlayerConfig = (value: unknown): value is FourPlayerConfig => {
   if (
     !isRecord(value) ||
     !["ffa", "teams"].includes(String(value.mode)) ||
@@ -199,7 +199,7 @@ const isPending = (value: unknown) => {
 };
 
 export const isFourPlayerState = (value: unknown): value is FourPlayerState => {
-  if (!isRecord(value) || value.variant !== "four-player" || !isConfig(value.config)) return false;
+  if (!isRecord(value) || value.variant !== "four-player" || !isFourPlayerConfig(value.config)) return false;
   if (
     !PHASES.has(String(value.phase)) ||
     !isRecord(value.board) ||

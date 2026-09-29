@@ -70,6 +70,11 @@ import {
   type OnlineGameState,
 } from "./multiplayer/useOnlineGame";
 import {
+  fourPlayerOnlineLocalSeat,
+  useFourPlayerOnlineGame,
+  type FourPlayerOnlineState,
+} from "./multiplayer/useFourPlayerOnlineGame";
+import {
   createSavedGame,
   loadLocalSavedGames,
   mergeSavedGame,
@@ -84,6 +89,7 @@ import {
   persistLocalCompletedPuzzles,
 } from "./puzzleProgress";
 import { FourPlayerGame } from "./fourPlayer/FourPlayerGame";
+import { FourPlayerOnlineLobby } from "./fourPlayer/FourPlayerOnlineLobby";
 import { FourPlayerSetup } from "./fourPlayer/FourPlayerSetup";
 
 type GameDispatch = (action: GameAction) => void;
@@ -1600,6 +1606,7 @@ function MainMenu({
 
 function StartGamePrompt({
   online,
+  fourOnline,
   defaultPlayerName,
   initialMode,
   canCancel,
@@ -1609,10 +1616,17 @@ function StartGamePrompt({
   onHost,
   onJoin,
   onStartOnline,
+  onHostFourOnline,
+  onJoinFourOnline,
+  onFourReady,
+  onFourAssignSeat,
+  onFourUpdateConfig,
+  onStartFourOnline,
   onCancel,
   onDisconnect,
 }: {
   online: OnlineGameState;
+  fourOnline: FourPlayerOnlineState;
   defaultPlayerName?: string;
   initialMode: StartMode;
   canCancel: boolean;
@@ -1622,12 +1636,21 @@ function StartGamePrompt({
   onHost: (name: string) => void;
   onJoin: (code: string, name: string) => void;
   onStartOnline: () => void;
+  onHostFourOnline: (name: string) => void;
+  onJoinFourOnline: (code: string, name: string) => void;
+  onFourReady: (ready: boolean) => void;
+  onFourAssignSeat: (participantId: string, seat?: (typeof FOUR_PLAYER_SEATS)[number]) => void;
+  onFourUpdateConfig: (config: FourPlayerConfig) => void;
+  onStartFourOnline: () => void;
   onCancel: () => void;
   onDisconnect: () => void;
 }) {
   const [mode, setMode] = useState<StartMode>(initialMode);
   const [difficulty, setDifficulty] = useState(7);
   const [onlineAction, setOnlineAction] = useState<"host" | "join">("host");
+  const [onlineVariant, setOnlineVariant] = useState<"classic" | "four-player">(
+    fourOnline.roomCode ? "four-player" : "classic",
+  );
   const [playerName, setPlayerName] = useState(defaultPlayerName || "Player");
   const [roomCode, setRoomCode] = useState("");
 
@@ -1667,7 +1690,7 @@ function StartGamePrompt({
           <button className={mode === "online" ? "active" : ""} onClick={() => chooseMode("online")}>
             <Globe2 size={24} />
             <strong>Online versus</strong>
-            <span>Host or join with a room code.</span>
+            <span>Host a two-player or four-player room.</span>
           </button>
           <button
             className={mode === "puzzle" ? "active" : ""}
@@ -1701,7 +1724,63 @@ function StartGamePrompt({
 
         {mode === "online" && (
           <div className="online-setup">
-            {online.role === "none" ? (
+            {online.role === "none" && fourOnline.role === "none" && (
+              <div className="online-variant-tabs">
+                <button
+                  className={onlineVariant === "classic" ? "active" : ""}
+                  onClick={() => {
+                    onDisconnect();
+                    setOnlineVariant("classic");
+                  }}
+                >
+                  Two-player
+                </button>
+                <button
+                  className={onlineVariant === "four-player" ? "active" : ""}
+                  onClick={() => {
+                    onDisconnect();
+                    setOnlineVariant("four-player");
+                  }}
+                >
+                  Four-player
+                </button>
+              </div>
+            )}
+            {onlineVariant === "four-player" && fourOnline.role !== "none" ? (
+              <FourPlayerOnlineLobby
+                online={fourOnline}
+                onReady={onFourReady}
+                onAssignSeat={onFourAssignSeat}
+                onUpdateConfig={onFourUpdateConfig}
+                onStart={onStartFourOnline}
+                onLeave={onDisconnect}
+              />
+            ) : onlineVariant === "classic" && online.role !== "none" ? (
+              online.role === "host" ? (
+                <div className="online-lobby">
+                  <Wifi size={24} />
+                  <span>ROOM CODE</span>
+                  <button
+                    className="room-code"
+                    onClick={() => online.roomCode && navigator.clipboard.writeText(online.roomCode)}
+                    title="Copy room code"
+                  >
+                    {online.roomCode}<Copy size={15} />
+                  </button>
+                  <p>{online.guest ? `${online.guest.name} joined the room.` : "Waiting for another player to join..."}</p>
+                  <button className="primary-button" disabled={!online.guest} onClick={onStartOnline}>
+                    Start online game
+                  </button>
+                </div>
+              ) : (
+                <div className="online-lobby">
+                  <Wifi size={24} />
+                  <span>JOINED ROOM {online.roomCode}</span>
+                  <h3>Waiting for the host</h3>
+                  <p>The game will begin when the host starts the match.</p>
+                </div>
+              )
+            ) : (
               <>
                 <div className="online-tabs">
                   <button className={onlineAction === "host" ? "active" : ""} onClick={() => setOnlineAction("host")}>
@@ -1728,42 +1807,33 @@ function StartGamePrompt({
                 )}
                 <button
                   className="primary-button"
-                  disabled={online.connecting || !playerName.trim() || (onlineAction === "join" && roomCode.length !== 5)}
-                  onClick={() => onlineAction === "host" ? onHost(playerName) : onJoin(roomCode, playerName)}
+                  disabled={
+                    online.connecting ||
+                    fourOnline.connecting ||
+                    !playerName.trim() ||
+                    (onlineAction === "join" && roomCode.length !== 5)
+                  }
+                  onClick={() => {
+                    if (onlineVariant === "four-player") {
+                      if (onlineAction === "host") onHostFourOnline(playerName);
+                      else onJoinFourOnline(roomCode, playerName);
+                    } else if (onlineAction === "host") onHost(playerName);
+                    else onJoin(roomCode, playerName);
+                  }}
                 >
-                  {online.connecting
+                  {online.connecting || fourOnline.connecting
                     ? <><LoaderCircle className="spin" size={17} /> Connecting</>
                     : onlineAction === "host"
                       ? "Create room"
                       : "Join room"}
                 </button>
               </>
-            ) : online.role === "host" ? (
-              <div className="online-lobby">
-                <Wifi size={24} />
-                <span>ROOM CODE</span>
-                <button
-                  className="room-code"
-                  onClick={() => online.roomCode && navigator.clipboard.writeText(online.roomCode)}
-                  title="Copy room code"
-                >
-                  {online.roomCode}<Copy size={15} />
-                </button>
-                <p>{online.guest ? `${online.guest.name} joined the room.` : "Waiting for another player to join..."}</p>
-                <button className="primary-button" disabled={!online.guest} onClick={onStartOnline}>
-                  Start online game
-                </button>
-              </div>
-            ) : (
-              <div className="online-lobby">
-                <Wifi size={24} />
-                <span>JOINED ROOM {online.roomCode}</span>
-                <h3>Waiting for the host</h3>
-                <p>The game will begin when the host starts the match.</p>
-              </div>
             )}
-            {online.error && <p className="online-error">{online.error}</p>}
-            {online.role !== "none" && (
+            {(online.error || fourOnline.error) && (
+              <p className="online-error">{online.error ?? fourOnline.error}</p>
+            )}
+            {(online.role !== "none" || fourOnline.role !== "none") &&
+              !(onlineVariant === "four-player" && fourOnline.role !== "none") && (
               <button className="text-button leave-room-button" onClick={onDisconnect}>Leave room</button>
             )}
           </div>
@@ -2774,6 +2844,7 @@ export default function App() {
     canUndo: canApplyUndo,
     receiveState,
   });
+  const [fourOnline, fourOnlineActions] = useFourPlayerOnlineGame();
 
   const dispatch: GameDispatch = (action) => {
     const current = stateRef.current;
@@ -2891,6 +2962,21 @@ export default function App() {
   }, [online.started]);
 
   useEffect(() => {
+    if (fourOnline.snapshot?.canonical) {
+      setFourPlayerSession(undefined);
+      setStartView("none");
+    }
+  }, [fourOnline.snapshot?.canonical]);
+
+  useEffect(() => {
+    if (!fourOnline.ended) return;
+    setSetupCanCancel(false);
+    setSetupInitialMode("online");
+    setSetupReturnView("none");
+    setStartView("setup");
+  }, [fourOnline.ended]);
+
+  useEffect(() => {
     if (!online.started || state.gameMode !== "online") return;
     onlineActions.setUndoConsent(undoPreferred);
   }, [online.started, online.role, state.gameMode, undoPreferred]);
@@ -2945,6 +3031,7 @@ export default function App() {
   };
   const beginGame = (mode: Exclude<GameMode, "online" | "puzzle">, difficulty: number) => {
     onlineActions.disconnect();
+    fourOnlineActions.disconnect();
     setFourPlayerSession(undefined);
     activeSaveId.current = saveId();
     const next = createGame(undefined, {
@@ -2959,6 +3046,7 @@ export default function App() {
   };
   const beginFourPlayerGame = (config: FourPlayerConfig) => {
     onlineActions.disconnect();
+    fourOnlineActions.disconnect();
     const id = saveId();
     activeSaveId.current = id;
     clearUndoHistory();
@@ -2973,6 +3061,7 @@ export default function App() {
   };
   const beginPuzzle = (puzzleId: PuzzleId) => {
     onlineActions.disconnect();
+    fourOnlineActions.disconnect();
     setFourPlayerSession(undefined);
     activeSaveId.current = undefined;
     const next = createPuzzleGame(puzzleId, accountService.account?.displayName);
@@ -2984,6 +3073,7 @@ export default function App() {
   };
   const startHostedGame = () => {
     if (!online.guest) return;
+    fourOnlineActions.disconnect();
     activeSaveId.current = undefined;
     setFourPlayerSession(undefined);
     const next = createGame(undefined, {
@@ -3007,6 +3097,9 @@ export default function App() {
     }
     if (state.gameMode === "online") {
       onlineActions.disconnect();
+      setSetupCanCancel(false);
+    } else if (fourOnline.snapshot?.canonical) {
+      fourOnlineActions.disconnect();
       setSetupCanCancel(false);
     } else {
       setSetupCanCancel(true);
@@ -3085,6 +3178,11 @@ export default function App() {
     if (state.gameMode === "online") onlineActions.requestUndo();
     else applyUndo();
   };
+  const fourOnlineCanonical = fourOnline.snapshot?.canonical;
+  const fourOnlinePausedParticipant = fourOnline.snapshot?.participants.find(
+    (participant) =>
+      participant.id === fourOnline.snapshot?.pausedParticipantId
+  );
 
   if (startView === "menu") {
     return (
@@ -3129,6 +3227,58 @@ export default function App() {
         defaultPlayerName={accountService.account?.displayName}
         onStart={beginFourPlayerGame}
         onBack={() => setStartView("setup")}
+      />
+    );
+  }
+
+  if (startView === "none" && fourOnlineCanonical && fourOnline.snapshot) {
+    const pausedSeat = fourOnline.snapshot.pausedSeat;
+    return (
+      <FourPlayerGame
+        key={`online-${fourOnline.roomCode}`}
+        initialState={fourOnlineCanonical.state}
+        undoPreferred={
+          fourOnline.participantId
+            ? fourOnline.snapshot.undoConsents[fourOnline.participantId] === true
+            : false
+        }
+        onUndoPreferenceChange={fourOnlineActions.setUndoConsent}
+        onPersist={async () => false}
+        onQuit={() => {
+          fourOnlineActions.disconnect();
+          setStartView("menu");
+        }}
+        onNewGame={() => {
+          fourOnlineActions.disconnect();
+          setSetupCanCancel(false);
+          setSetupInitialMode("online");
+          setSetupReturnView("none");
+          setStartView("setup");
+        }}
+        onlineSession={{
+          roomCode: fourOnline.snapshot.roomCode,
+          role: fourOnline.role === "host" ? "host" : "peer",
+          participantSeat: fourPlayerOnlineLocalSeat(fourOnline),
+          status: fourOnline.snapshot.status === "paused"
+            ? "paused"
+            : fourOnline.snapshot.status === "finished"
+              ? "finished"
+              : "playing",
+          awaitingSync: Boolean(fourOnline.awaitingActionId),
+          undoConsent: fourOnline.participantId
+            ? fourOnline.snapshot.undoConsents[fourOnline.participantId] === true
+            : false,
+          undoAvailable: fourOnline.snapshot.undoAvailable,
+          pausedSeat,
+          pausedParticipantName: fourOnlinePausedParticipant?.name,
+          onAction: fourOnlineActions.sendAction,
+          onUndo: fourOnlineActions.requestUndo,
+          onUndoConsentChange: fourOnlineActions.setUndoConsent,
+          onReplaceWithAi: pausedSeat && fourOnline.role === "host"
+            ? (difficulty) =>
+              fourOnlineActions.replaceWithAi(pausedSeat, difficulty)
+            : undefined,
+        }}
       />
     );
   }
@@ -3215,20 +3365,45 @@ export default function App() {
       {startView === "setup" && (
         <StartGamePrompt
           online={online}
+          fourOnline={fourOnline}
           defaultPlayerName={accountService.account?.displayName}
           initialMode={setupInitialMode}
           canCancel={setupCanCancel}
           onStart={beginGame}
           onOpenPuzzles={() => setStartView("puzzles")}
           onOpenFourPlayer={() => setStartView("four-setup")}
-          onHost={(name) => void onlineActions.hostGame(name)}
-          onJoin={(code, name) => void onlineActions.joinGame(code, name)}
+          onHost={(name) => {
+            fourOnlineActions.disconnect();
+            void onlineActions.hostGame(name);
+          }}
+          onJoin={(code, name) => {
+            fourOnlineActions.disconnect();
+            void onlineActions.joinGame(code, name);
+          }}
           onStartOnline={startHostedGame}
+          onHostFourOnline={(name) => {
+            onlineActions.disconnect();
+            void fourOnlineActions.hostGame(name);
+          }}
+          onJoinFourOnline={(code, name) => {
+            onlineActions.disconnect();
+            void fourOnlineActions.joinGame(code, name);
+          }}
+          onFourReady={fourOnlineActions.setReady}
+          onFourAssignSeat={fourOnlineActions.assignSeat}
+          onFourUpdateConfig={fourOnlineActions.updateConfig}
+          onStartFourOnline={() => {
+            if (fourOnlineActions.startGame()) setStartView("none");
+          }}
           onCancel={() => {
             onlineActions.disconnect();
+            fourOnlineActions.disconnect();
             setStartView(setupReturnView);
           }}
-          onDisconnect={onlineActions.disconnect}
+          onDisconnect={() => {
+            onlineActions.disconnect();
+            fourOnlineActions.disconnect();
+          }}
         />
       )}
     </>

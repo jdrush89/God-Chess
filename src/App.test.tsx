@@ -53,6 +53,9 @@ describe("game startup", () => {
     expect(screen.getByRole("button", { name: /divine ai/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /online versus/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /divine puzzles/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /online versus/i }));
+    expect(screen.getByRole("button", { name: /^two-player$/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^four-player$/i })).toBeTruthy();
   });
 
   it("browses puzzle difficulties and starts a selected position", () => {

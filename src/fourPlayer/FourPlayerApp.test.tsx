@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import App from "../App";
 import { createFourPlayerGame, fourPlayerReducer } from "../game/fourPlayerEngine";
 import { GODS } from "../game/gods";
 import { createSavedGame } from "../saves";
+import { FourPlayerGame } from "./FourPlayerGame";
+import { createFourPlayerOnlineConfig } from "../multiplayer/fourPlayerRoom";
 
 const SAVE_KEY = "god-chess-saves-v2";
 
@@ -261,5 +263,90 @@ describe("four-player app integration", () => {
     expect(screen.getByText(/player 1.*north picks/i)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /ares conflict/i }));
     expect((screen.getByRole("button", { name: /claim ares/i }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("gates online draft input to the assigned synchronized seat and hides Save & Quit", () => {
+    const config = createFourPlayerOnlineConfig();
+    config.seats.north.name = "Host";
+    config.seats.north.control = {
+      kind: "online",
+      participantId: "host",
+      local: true,
+    };
+    const state = createFourPlayerGame(config);
+    const onAction = vi.fn();
+    render(
+      <FourPlayerGame
+        initialState={state}
+        undoPreferred={false}
+        onUndoPreferenceChange={vi.fn()}
+        onPersist={vi.fn(async () => false)}
+        onQuit={vi.fn()}
+        onNewGame={vi.fn()}
+        onlineSession={{
+          roomCode: "ABCDE",
+          role: "host",
+          participantSeat: "north",
+          status: "playing",
+          awaitingSync: false,
+          undoConsent: false,
+          undoAvailable: false,
+          onAction,
+          onUndo: vi.fn(),
+          onUndoConsentChange: vi.fn(),
+        }}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: /save & quit/i })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /ares conflict/i }));
+    fireEvent.click(screen.getByRole("button", { name: /claim ares/i }));
+    expect(onAction).toHaveBeenCalledWith({ type: "draft", godId: "ares" });
+  });
+
+  it("shows host replacement controls while a disconnected online seat is paused", () => {
+    const config = createFourPlayerOnlineConfig();
+    config.seats.north.name = "Host";
+    config.seats.north.control = {
+      kind: "online",
+      participantId: "host",
+      local: true,
+    };
+    config.seats.east.name = "Guest";
+    config.seats.east.control = {
+      kind: "online",
+      participantId: "guest",
+    };
+    const replace = vi.fn();
+    render(
+      <FourPlayerGame
+        initialState={createFourPlayerGame(config)}
+        undoPreferred={false}
+        onUndoPreferenceChange={vi.fn()}
+        onPersist={vi.fn(async () => false)}
+        onQuit={vi.fn()}
+        onNewGame={vi.fn()}
+        onlineSession={{
+          roomCode: "ABCDE",
+          role: "host",
+          participantSeat: "north",
+          status: "paused",
+          awaitingSync: false,
+          undoConsent: false,
+          undoAvailable: false,
+          pausedSeat: "east",
+          pausedParticipantName: "Guest",
+          onAction: vi.fn(),
+          onUndo: vi.fn(),
+          onUndoConsentChange: vi.fn(),
+          onReplaceWithAi: replace,
+        }}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: /guest disconnected/i })).toBeTruthy();
+    fireEvent.change(screen.getByRole("slider"), { target: { value: "8" } });
+    fireEvent.click(screen.getByRole("button", { name: /replace permanently with ai/i }));
+    expect(replace).toHaveBeenCalledWith(8);
   });
 });

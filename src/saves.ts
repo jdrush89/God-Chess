@@ -45,7 +45,7 @@ interface StoredSavedGame {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
 
-const prepareTwoPlayerState = (state: GameState) => {
+export const prepareTwoPlayerState = (state: GameState) => {
   const savedState = structuredClone(state);
   savedState.orbAnimations = [];
   savedState.nextOrbAnimationId ??= 1;
@@ -67,7 +67,7 @@ export function prepareSavedState(state: SavedGameState): SavedGameState {
     : prepareTwoPlayerState(state);
 }
 
-const isTwoPlayerGameState = (state: unknown): state is GameState => {
+export const isTwoPlayerGameState = (state: unknown): state is GameState => {
   if (!isRecord(state)) return false;
   const candidate = state as unknown as GameState;
   return Boolean(

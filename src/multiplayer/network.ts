@@ -1,5 +1,8 @@
 import Peer from "simple-peer-light";
-import type { NetworkMessage } from "./types";
+import {
+  normalizeProtocolMessage,
+  type ProtocolMessage,
+} from "./types";
 
 const SIGNALING_URL = "wss://rogue-daytrader-signaling.onrender.com";
 const CONNECTION_TIMEOUT_MS = 20_000;
@@ -15,15 +18,30 @@ export const generateRoomCode = () => {
 
 export type ConnectionStatus = "disconnected" | "connecting" | "connected" | "error";
 
-interface NetworkCallbacks {
-  onMessage: (peerId: string, message: NetworkMessage) => void;
+export interface NetworkCallbacks {
+  onMessage: (peerId: string, message: ProtocolMessage) => void;
+  onInvalidMessage?: (peerId: string) => void;
   onPeerConnected: (peerId: string) => void;
   onPeerDisconnected: (peerId: string) => void;
   onStatusChange: (status: ConnectionStatus) => void;
   onError: (error: string) => void;
 }
 
-export class NetworkManager {
+export interface MultiplayerTransport {
+  readonly connectedPeers: string[];
+  hostRoom: (roomCode: string) => Promise<void>;
+  joinRoom: (roomCode: string) => Promise<void>;
+  send: (peerId: string, message: ProtocolMessage) => void;
+  sendToHost: (message: ProtocolMessage) => void;
+  broadcast: (message: ProtocolMessage) => void;
+  disconnect: () => void;
+}
+
+export type TransportFactory = (
+  callbacks: NetworkCallbacks,
+) => MultiplayerTransport;
+
+export class NetworkManager implements MultiplayerTransport {
   private ws: WebSocket | null = null;
   private peers = new Map<string, Peer>();
   private relayPeers = new Set<string>();
@@ -76,7 +94,7 @@ export class NetworkManager {
     });
   }
 
-  send(peerId: string, message: NetworkMessage) {
+  send(peerId: string, message: ProtocolMessage) {
     const peer = this.peers.get(peerId);
     if (peer?.connected && !peer.destroyed) {
       peer.send(JSON.stringify(message));
@@ -87,11 +105,11 @@ export class NetworkManager {
     }
   }
 
-  sendToHost(message: NetworkMessage) {
+  sendToHost(message: ProtocolMessage) {
     if (this.hostPeerId) this.send(this.hostPeerId, message);
   }
 
-  broadcast(message: NetworkMessage) {
+  broadcast(message: ProtocolMessage) {
     this.connectedPeers.forEach((peerId) => this.send(peerId, message));
   }
 
@@ -139,7 +157,14 @@ export class NetworkManager {
         reject(new Error(`Timed out ${operation}.`));
       }, CONNECTION_TIMEOUT_MS);
       const handler = (event: MessageEvent) => {
-        const message = JSON.parse(String(event.data)) as Record<string, unknown>;
+        let message: Record<string, unknown>;
+        try {
+          const decoded = JSON.parse(String(event.data));
+          if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) return;
+          message = decoded as Record<string, unknown>;
+        } catch {
+          return;
+        }
         if (message.type !== successType && message.type !== "error") return;
         cleanup();
         if (message.type === "error") reject(new Error(String(message.message)));
@@ -157,7 +182,15 @@ export class NetworkManager {
   private setupSignalingHandlers() {
     if (!this.ws) return;
     this.ws.onmessage = (event) => {
-      const message = JSON.parse(String(event.data));
+      let message: Record<string, unknown>;
+      try {
+        const decoded = JSON.parse(String(event.data));
+        if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) return;
+        message = decoded as Record<string, unknown>;
+      } catch {
+        this.callbacks.onError("Received an invalid signaling message.");
+        return;
+      }
       if (message.type === "peer_joined" && this.isHost) {
         const peerId = String(message.peerId);
         window.setTimeout(() => {
@@ -172,7 +205,7 @@ export class NetworkManager {
       } else if (message.type === "signal") {
         this.handleSignal(String(message.fromPeerId), message.signalData);
       } else if (message.type === "relay" || message.type === "broadcast") {
-        this.callbacks.onMessage(String(message.fromPeerId), message.data as NetworkMessage);
+        this.deliverMessage(String(message.fromPeerId), message.data);
       }
     };
   }
@@ -215,14 +248,23 @@ export class NetworkManager {
     peer.on("data", (data) => {
       try {
         const serialized = typeof data === "string" ? data : new TextDecoder().decode(data);
-        this.callbacks.onMessage(remotePeerId, JSON.parse(serialized) as NetworkMessage);
+        this.deliverMessage(remotePeerId, JSON.parse(serialized));
       } catch {
-        this.callbacks.onError("Received an invalid multiplayer message.");
+        this.callbacks.onInvalidMessage?.(remotePeerId);
       }
     });
     peer.on("close", () => this.fallbackToRelay(remotePeerId));
     peer.on("error", () => this.fallbackToRelay(remotePeerId));
     this.peers.set(remotePeerId, peer);
+  }
+
+  private deliverMessage(peerId: string, value: unknown) {
+    const message = normalizeProtocolMessage(value);
+    if (!message) {
+      this.callbacks.onInvalidMessage?.(peerId);
+      return;
+    }
+    this.callbacks.onMessage(peerId, message);
   }
 
   private handleSignal(remotePeerId: string, signalData: unknown) {
