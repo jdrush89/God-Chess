@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
   ArrowLeft,
   Bot,
@@ -41,6 +41,12 @@ import {
 import { allSquares, isInCheck } from "./game/chess";
 import { chooseAiPlan, isAiTurn } from "./game/ai";
 import { createGame, gameReducer, type GameAction } from "./game/engine";
+import { createFourPlayerGame } from "./game/fourPlayerEngine";
+import {
+  FOUR_PLAYER_SEATS,
+  type FourPlayerConfig,
+  type FourPlayerState,
+} from "./game/fourPlayerTypes";
 import { abilityLevel, GOD_BY_ID, GODS } from "./game/gods";
 import {
   createPuzzleGame,
@@ -70,14 +76,25 @@ import {
   persistLocalSavedGames,
   prepareSavedState,
   saveId,
+  isFourPlayerSavedGame,
   type SavedGame,
 } from "./saves";
 import {
   loadLocalCompletedPuzzles,
   persistLocalCompletedPuzzles,
 } from "./puzzleProgress";
+import { FourPlayerGame } from "./fourPlayer/FourPlayerGame";
+import { FourPlayerSetup } from "./fourPlayer/FourPlayerSetup";
 
 type GameDispatch = (action: GameAction) => void;
+type StartMode = GameMode | "four-player";
+
+interface FourPlayerSession {
+  key: string;
+  state: FourPlayerState;
+  undoHistory: FourPlayerState[];
+  turnStart?: FourPlayerState;
+}
 
 const PIECES: Record<Color, Record<Piece["type"], string>> = {
   white: { king: "♔", queen: "♕", rook: "♖", bishop: "♗", knight: "♘", pawn: "♙" },
@@ -1479,9 +1496,50 @@ function MainMenu({
                   >
                     <div className="saved-game-meta">
                       <strong>{new Date(game.savedAt).toLocaleString()}</strong>
-                      <span>{game.state.gameMode === "ai" ? "Divine AI" : "Local duel"} · Round {game.state.round} · Turn {game.state.turn}</span>
+                      <span>
+                        {isFourPlayerSavedGame(game)
+                          ? `Four-player ${game.state.config.mode === "teams" ? "2v2" : "FFA"} · ${game.state.players[game.state.activeSeat].name} to act`
+                          : `${game.state.gameMode === "ai" ? "Divine AI" : "Local duel"} · Round ${game.state.round} · Turn ${game.state.turn}`}
+                      </span>
                     </div>
-                    {(["white", "black"] as const).map((color) => (
+                    {isFourPlayerSavedGame(game)
+                      ? FOUR_PLAYER_SEATS.map((seat) => {
+                        const player = game.state.players[seat];
+                        return (
+                          <div className="saved-pantheon four-saved-pantheon" key={seat}>
+                            <span
+                              className="four-player-crest"
+                              style={{ "--seat-color": player.displayColor } as React.CSSProperties}
+                            >
+                              {seat[0].toUpperCase()}
+                            </span>
+                            <div>
+                              <strong>{player.name}</strong>
+                              <small>
+                                {seat} · {player.control.kind === "ai"
+                                  ? `AI ${player.control.difficulty ?? 5}`
+                                  : "Human"}
+                                {player.team ? ` · ${player.team === "team-a" ? "Team A" : "Team B"}` : ""}
+                              </small>
+                            </div>
+                            <div className="saved-gods">
+                              {player.gods.length
+                                ? player.gods.map((godId) => (
+                                  <span
+                                    className="saved-god"
+                                    title={GOD_BY_ID[godId].name}
+                                    aria-label={GOD_BY_ID[godId].name}
+                                    key={godId}
+                                  >
+                                    <GodSigil godId={godId} size="small" />
+                                  </span>
+                                ))
+                                : <em>No gods drafted</em>}
+                            </div>
+                          </div>
+                        );
+                      })
+                      : (["white", "black"] as const).map((color) => (
                       <div className="saved-pantheon" key={color}>
                         <span className={`player-crest ${color}`}>{color[0].toUpperCase()}</span>
                         <div>
@@ -1503,7 +1561,7 @@ function MainMenu({
                             : <em>No gods drafted</em>}
                         </div>
                       </div>
-                    ))}
+                      ))}
                   </button>
                   <button
                     className="delete-save-button"
@@ -1547,6 +1605,7 @@ function StartGamePrompt({
   canCancel,
   onStart,
   onOpenPuzzles,
+  onOpenFourPlayer,
   onHost,
   onJoin,
   onStartOnline,
@@ -1555,23 +1614,24 @@ function StartGamePrompt({
 }: {
   online: OnlineGameState;
   defaultPlayerName?: string;
-  initialMode: GameMode;
+  initialMode: StartMode;
   canCancel: boolean;
   onStart: (mode: Exclude<GameMode, "online" | "puzzle">, difficulty: number) => void;
   onOpenPuzzles: () => void;
+  onOpenFourPlayer: () => void;
   onHost: (name: string) => void;
   onJoin: (code: string, name: string) => void;
   onStartOnline: () => void;
   onCancel: () => void;
   onDisconnect: () => void;
 }) {
-  const [mode, setMode] = useState<GameMode>(initialMode);
+  const [mode, setMode] = useState<StartMode>(initialMode);
   const [difficulty, setDifficulty] = useState(7);
   const [onlineAction, setOnlineAction] = useState<"host" | "join">("host");
   const [playerName, setPlayerName] = useState(defaultPlayerName || "Player");
   const [roomCode, setRoomCode] = useState("");
 
-  const chooseMode = (nextMode: GameMode) => {
+  const chooseMode = (nextMode: StartMode) => {
     if (mode === "online" && nextMode !== "online") onDisconnect();
     setMode(nextMode);
   };
@@ -1592,6 +1652,17 @@ function StartGamePrompt({
             <Bot size={24} />
             <strong>Divine AI</strong>
             <span>Challenge a computer opponent.</span>
+          </button>
+          <button
+            className={mode === "four-player" ? "active" : ""}
+            onClick={() => {
+              chooseMode("four-player");
+              onOpenFourPlayer();
+            }}
+          >
+            <Users size={24} />
+            <strong>Four-player local</strong>
+            <span>FFA or 2v2 on the shared cross-board.</span>
           </button>
           <button className={mode === "online" ? "active" : ""} onClick={() => chooseMode("online")}>
             <Globe2 size={24} />
@@ -1698,7 +1769,7 @@ function StartGamePrompt({
           </div>
         )}
 
-        {mode !== "online" && mode !== "puzzle" && (
+        {mode !== "online" && mode !== "puzzle" && mode !== "four-player" && (
           <button className="primary-button start-match-button" onClick={() => onStart(mode, difficulty)}>
             {mode === "ai" ? "Challenge the AI" : "Begin local duel"}
           </button>
@@ -2484,10 +2555,11 @@ export default function App() {
   const savedGamesRef = useRef(savedGames);
   savedGamesRef.current = savedGames;
   const activeSaveId = useRef<string | undefined>(undefined);
-  const [startView, setStartView] = useState<"menu" | "setup" | "puzzles" | "none">("menu");
+  const [startView, setStartView] = useState<"menu" | "setup" | "four-setup" | "puzzles" | "none">("menu");
   const [setupCanCancel, setSetupCanCancel] = useState(false);
   const [setupReturnView, setSetupReturnView] = useState<"menu" | "none">("menu");
-  const [setupInitialMode, setSetupInitialMode] = useState<GameMode>("local");
+  const [setupInitialMode, setSetupInitialMode] = useState<StartMode>("local");
+  const [fourPlayerSession, setFourPlayerSession] = useState<FourPlayerSession>();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [undoPreferred, setUndoPreferred] = useState(loadUndoSetting);
   const [undoDepth, setUndoDepth] = useState(0);
@@ -2621,7 +2693,7 @@ export default function App() {
     savedTurnStart: GameState | undefined,
     current: GameState,
   ) => {
-    undoStack.current = undoHistory.map(prepareSavedState);
+    undoStack.current = undoHistory.map((snapshot) => prepareSavedState(snapshot));
     turnStart.current = savedTurnStart
       ? prepareSavedState(savedTurnStart)
       : current.phase === "play"
@@ -2729,6 +2801,32 @@ export default function App() {
     setUndoPreferred(enabled);
   };
 
+  const persistSavedGame = useCallback(async (saved: SavedGame) => {
+    const next = mergeSavedGame(savedGamesRef.current, saved);
+    const account = accountService.account;
+    try {
+      if (account) {
+        const queuedSave = cloudSaveQueue.current.then(() =>
+          upsertCloudSavedGame(account.userId, saved)
+        );
+        cloudSaveQueue.current = queuedSave.catch(() => undefined);
+        await queuedSave;
+        setCloudSavedGames(next);
+      } else {
+        persistLocalSavedGames(next);
+        setLocalSavedGames(next);
+      }
+      setSaveError(undefined);
+      activeSaveId.current = saved.id;
+      savedGamesRef.current = next;
+      return true;
+    } catch (error) {
+      console.error("Unable to save the God Chess game.", error);
+      setSaveError(error instanceof Error ? error.message : "Unable to save the game.");
+      return false;
+    }
+  }, [accountService.account]);
+
   const saveCurrentGame = async () => {
     if (stateRef.current.gameMode === "online" || stateRef.current.gameMode === "puzzle") return false;
     const id = activeSaveId.current ?? saveId();
@@ -2738,28 +2836,22 @@ export default function App() {
       undoStack.current,
       turnStart.current,
     );
-    const next = mergeSavedGame(savedGamesRef.current, saved);
-    const account = accountService.account;
-    try {
-      if (account) {
-        const queuedSave = cloudSaveQueue.current.then(() => upsertCloudSavedGame(account.userId, saved));
-        cloudSaveQueue.current = queuedSave.catch(() => undefined);
-        await queuedSave;
-        setCloudSavedGames(next);
-      } else {
-        persistLocalSavedGames(next);
-        setLocalSavedGames(next);
-      }
-      setSaveError(undefined);
-      activeSaveId.current = id;
-      savedGamesRef.current = next;
-      return true;
-    } catch (error) {
-      console.error("Unable to save the God Chess game.", error);
-      setSaveError(error instanceof Error ? error.message : "Unable to save the game.");
-      return false;
-    }
+    return persistSavedGame(saved);
   };
+
+  const persistFourPlayerGame = useCallback((
+    fourState: FourPlayerState,
+    fourUndoHistory: FourPlayerState[],
+    fourTurnStart?: FourPlayerState,
+  ) => {
+    const id = activeSaveId.current ?? saveId();
+    return persistSavedGame(createSavedGame(
+      id,
+      fourState,
+      fourUndoHistory,
+      fourTurnStart,
+    ));
+  }, [persistSavedGame]);
 
   const saveAndQuit = async () => {
     if (!await saveCurrentGame()) return;
@@ -2769,13 +2861,18 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (startView !== "none" || state.gameMode === "online" || state.gameMode === "puzzle") return;
+    if (
+      startView !== "none" ||
+      fourPlayerSession ||
+      state.gameMode === "online" ||
+      state.gameMode === "puzzle"
+    ) return;
     const timer = window.setTimeout(() => void saveCurrentGame(), 120);
     return () => window.clearTimeout(timer);
-  }, [startView, state]);
+  }, [fourPlayerSession, startView, state]);
 
   useEffect(() => {
-    if (startView !== "none" || !isAiTurn(state)) {
+    if (fourPlayerSession || startView !== "none" || !isAiTurn(state)) {
       aiPlan.current = [];
       return;
     }
@@ -2787,7 +2884,7 @@ export default function App() {
       dispatch(action);
     }, aiActionDelay(action));
     return () => window.clearTimeout(timer);
-  }, [startView, state]);
+  }, [fourPlayerSession, startView, state]);
 
   useEffect(() => {
     if (online.started) setStartView("none");
@@ -2800,6 +2897,20 @@ export default function App() {
 
   const loadGame = (game: SavedGame) => {
     activeSaveId.current = game.id;
+    if (isFourPlayerSavedGame(game)) {
+      setFourPlayerSession({
+        key: `${game.id}-${game.savedAt}`,
+        state: structuredClone(game.state),
+        undoHistory: game.undoHistory.map((snapshot) => structuredClone(snapshot)),
+        turnStart: game.turnStart ? structuredClone(game.turnStart) : undefined,
+      });
+      aiPlan.current = [];
+      clearUndoHistory();
+      setSettingsOpen(false);
+      setStartView("none");
+      return;
+    }
+    setFourPlayerSession(undefined);
     const next = structuredClone(game.state);
     restoreUndoTracking(game.undoHistory, game.turnStart, next);
     receiveState(next);
@@ -2826,6 +2937,7 @@ export default function App() {
     }
   };
   const startNewGame = () => {
+    setFourPlayerSession(undefined);
     setSetupCanCancel(true);
     setSetupReturnView("menu");
     setSetupInitialMode("local");
@@ -2833,6 +2945,7 @@ export default function App() {
   };
   const beginGame = (mode: Exclude<GameMode, "online" | "puzzle">, difficulty: number) => {
     onlineActions.disconnect();
+    setFourPlayerSession(undefined);
     activeSaveId.current = saveId();
     const next = createGame(undefined, {
       mode,
@@ -2844,8 +2957,23 @@ export default function App() {
     aiPlan.current = [];
     setStartView("none");
   };
+  const beginFourPlayerGame = (config: FourPlayerConfig) => {
+    onlineActions.disconnect();
+    const id = saveId();
+    activeSaveId.current = id;
+    clearUndoHistory();
+    aiPlan.current = [];
+    setSettingsOpen(false);
+    setFourPlayerSession({
+      key: id,
+      state: createFourPlayerGame(config),
+      undoHistory: [],
+    });
+    setStartView("none");
+  };
   const beginPuzzle = (puzzleId: PuzzleId) => {
     onlineActions.disconnect();
+    setFourPlayerSession(undefined);
     activeSaveId.current = undefined;
     const next = createPuzzleGame(puzzleId, accountService.account?.displayName);
     resetUndoTracking(next);
@@ -2857,6 +2985,7 @@ export default function App() {
   const startHostedGame = () => {
     if (!online.guest) return;
     activeSaveId.current = undefined;
+    setFourPlayerSession(undefined);
     const next = createGame(undefined, {
       mode: "online",
       hostName: online.hostName,
@@ -2868,6 +2997,14 @@ export default function App() {
     setStartView("none");
   };
   const openNewGame = () => {
+    if (fourPlayerSession) {
+      setFourPlayerSession(undefined);
+      setSetupCanCancel(false);
+      setSetupInitialMode("four-player");
+      setSetupReturnView("none");
+      setStartView("four-setup");
+      return;
+    }
     if (state.gameMode === "online") {
       onlineActions.disconnect();
       setSetupCanCancel(false);
@@ -2986,6 +3123,49 @@ export default function App() {
     );
   }
 
+  if (startView === "four-setup") {
+    return (
+      <FourPlayerSetup
+        defaultPlayerName={accountService.account?.displayName}
+        onStart={beginFourPlayerGame}
+        onBack={() => setStartView("setup")}
+      />
+    );
+  }
+
+  if (startView === "none" && fourPlayerSession) {
+    return (
+      <>
+        {saveError && (
+          <div className="save-error-banner" role="alert">
+            <span>{saveError}</span>
+            <button onClick={() => setSaveError(undefined)} aria-label="Dismiss save error"><X size={15} /></button>
+          </div>
+        )}
+        <FourPlayerGame
+          key={fourPlayerSession.key}
+          initialState={fourPlayerSession.state}
+          initialUndoHistory={fourPlayerSession.undoHistory}
+          initialTurnStart={fourPlayerSession.turnStart}
+          undoPreferred={undoPreferred}
+          onUndoPreferenceChange={changeUndoPreference}
+          onPersist={persistFourPlayerGame}
+          onQuit={() => {
+            setFourPlayerSession(undefined);
+            setStartView("menu");
+          }}
+          onNewGame={() => {
+            setFourPlayerSession(undefined);
+            setSetupCanCancel(false);
+            setSetupInitialMode("local");
+            setSetupReturnView("none");
+            setStartView("setup");
+          }}
+        />
+      </>
+    );
+  }
+
   return (
     <>
       {saveError && (
@@ -3040,6 +3220,7 @@ export default function App() {
           canCancel={setupCanCancel}
           onStart={beginGame}
           onOpenPuzzles={() => setStartView("puzzles")}
+          onOpenFourPlayer={() => setStartView("four-setup")}
           onHost={(name) => void onlineActions.hostGame(name)}
           onJoin={(code, name) => void onlineActions.joinGame(code, name)}
           onStartOnline={startHostedGame}

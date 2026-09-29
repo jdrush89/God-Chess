@@ -1,0 +1,196 @@
+// @vitest-environment jsdom
+
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import App from "../App";
+import { createFourPlayerGame, fourPlayerReducer } from "../game/fourPlayerEngine";
+import { GODS } from "../game/gods";
+import { createSavedGame } from "../saves";
+
+const SAVE_KEY = "god-chess-saves-v2";
+
+beforeAll(() => {
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    value: (query: string) => ({
+      matches: true,
+      media: query,
+      onchange: null,
+      addListener: () => undefined,
+      removeListener: () => undefined,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      dispatchEvent: () => false,
+    }),
+  });
+  Object.defineProperty(HTMLElement.prototype, "animate", {
+    writable: true,
+    value: () => ({}),
+  });
+});
+
+afterEach(() => {
+  cleanup();
+  window.localStorage.clear();
+});
+
+const openFourPlayerSetup = () => {
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: /^new game$/i }));
+  fireEvent.click(screen.getByRole("button", { name: /four-player local/i }));
+};
+
+describe("four-player app integration", () => {
+  it("offers four-player mode and validates that one seat remains Human", () => {
+    const { container } = render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /^new game$/i }));
+    expect(screen.getByRole("button", { name: /four-player local/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /four-player local/i }));
+    expect(screen.getByRole("heading", { name: /gather four pantheons/i })).toBeTruthy();
+
+    for (const card of container.querySelectorAll(".four-seat-setup-card")) {
+      fireEvent.click(within(card as HTMLElement).getByRole("button", { name: /^ai$/i }));
+    }
+    expect(screen.getByRole("alert").textContent).toMatch(/at least one seat must be human/i);
+    expect((screen.getByRole("button", { name: /begin four-player draft/i }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("starts an all-Human snake draft with twelve unique picks", () => {
+    openFourPlayerSetup();
+    fireEvent.click(screen.getByRole("button", { name: /begin four-player draft/i }));
+    expect(screen.getByText(/player 1.*north picks/i)).toBeTruthy();
+    expect(screen.getAllByText(/choose your gods/i).length).toBeGreaterThan(0);
+    expect(document.querySelectorAll(".four-draft-progress .draft-pip")).toHaveLength(12);
+  });
+
+  it("uses per-seat AI difficulty and advances chained AI draft seats", async () => {
+    const { container } = render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /^new game$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /four-player local/i }));
+    for (const seat of ["east", "west"]) {
+      const card = container.querySelector(`.four-seat-setup-card.seat-${seat}`) as HTMLElement;
+      fireEvent.click(within(card).getByRole("button", { name: /^ai$/i }));
+      fireEvent.change(within(card).getByRole("slider"), { target: { value: "3" } });
+      expect(within(card).getByText("3")).toBeTruthy();
+    }
+    fireEvent.click(screen.getByRole("button", { name: /begin four-player draft/i }));
+    fireEvent.click(screen.getByRole("button", { name: /ares conflict/i }));
+    fireEvent.click(screen.getByRole("button", { name: /claim ares/i }));
+    expect(await screen.findByText(/player 3.*south picks/i, {}, { timeout: 3000 })).toBeTruthy();
+  });
+
+  it("persists team layout, alternating turns, victory, and takeover options", async () => {
+    const { container } = render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /^new game$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /four-player local/i }));
+    fireEvent.click(screen.getByRole("button", { name: /2v2 teams/i }));
+    fireEvent.click(
+      within(container.querySelector(".four-seat-setup-card.seat-east") as HTMLElement)
+        .getByRole("button", { name: /team a/i }),
+    );
+    fireEvent.click(
+      within(container.querySelector(".four-seat-setup-card.seat-south") as HTMLElement)
+        .getByRole("button", { name: /team b/i }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /first king captured/i }));
+    fireEvent.click(screen.getByLabelText(/piece takeover/i));
+    fireEvent.click(screen.getByLabelText(/alternate teams/i));
+    fireEvent.click(screen.getByRole("button", { name: /begin four-player draft/i }));
+    fireEvent.click(screen.getByRole("button", { name: /save & quit/i }));
+    await waitFor(() => expect(screen.getByRole("img", { name: /god chess/i })).toBeTruthy());
+
+    const stored = JSON.parse(window.localStorage.getItem(SAVE_KEY) ?? "[]");
+    expect(stored[0].state.config).toMatchObject({
+      mode: "teams",
+      teams: {
+        north: "team-a",
+        east: "team-a",
+        south: "team-b",
+        west: "team-b",
+      },
+      turnPolicy: "alternate-teams",
+      victoryMode: "first-king-captured",
+      takeover: true,
+    });
+  });
+
+  it("renders the 160-square cross-board with void corners and four seat panels", () => {
+    let state = createFourPlayerGame();
+    for (const god of GODS) state = fourPlayerReducer(state, { type: "draft", godId: god.id });
+    window.localStorage.setItem(SAVE_KEY, JSON.stringify([
+      createSavedGame("four-board", state, []),
+    ]));
+
+    const { container } = render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /load game/i }));
+    fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
+
+    expect(screen.getAllByRole("gridcell")).toHaveLength(160);
+    expect(container.querySelectorAll(".four-board-outside")).toHaveLength(36);
+    expect(container.querySelectorAll(".four-player-panel")).toHaveLength(4);
+    expect(screen.getByRole("gridcell", { name: /g14, north king/i })).toBeTruthy();
+  });
+
+  it("labels inert and takeover-controlled pieces accessibly", () => {
+    let state = createFourPlayerGame();
+    for (const god of GODS) state = fourPlayerReducer(state, { type: "draft", godId: god.id });
+    delete state.board.n8;
+    state.players.east.eliminated = true;
+    state.players.east.eliminatedBy = "north";
+    for (const piece of Object.values(state.board)) {
+      if (piece.owner === "east") piece.controller = null;
+    }
+    state.board.m7.controller = null;
+    state.board.m8.controller = "north";
+    window.localStorage.setItem(SAVE_KEY, JSON.stringify([
+      createSavedGame("four-control", state, []),
+    ]));
+
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /load game/i }));
+    fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
+
+    expect(screen.getByRole("gridcell", { name: /m7.*inert/i })).toBeTruthy();
+    expect(screen.getByRole("img", { name: /m8.*controlled by north/i })).toBeTruthy();
+  });
+
+  it("saves and reloads four-player draft state without misclassifying it", async () => {
+    openFourPlayerSetup();
+    fireEvent.click(screen.getByRole("button", { name: /begin four-player draft/i }));
+    fireEvent.click(screen.getByRole("button", { name: /ares conflict/i }));
+    fireEvent.click(screen.getByRole("button", { name: /claim ares/i }));
+    fireEvent.click(screen.getByRole("button", { name: /save & quit/i }));
+
+    await waitFor(() => expect(screen.getByRole("img", { name: /god chess/i })).toBeTruthy());
+    const stored = JSON.parse(window.localStorage.getItem(SAVE_KEY) ?? "[]");
+    expect(stored[0].state.variant).toBe("four-player");
+    expect(stored[0].state.players.north.gods).toEqual(["ares"]);
+
+    fireEvent.click(screen.getByRole("button", { name: /load game/i }));
+    expect(screen.getByText(/four-player ffa/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
+    expect(screen.getByText(/player 2.*east picks/i)).toBeTruthy();
+  });
+
+  it("restores saved four-player undo history to the prior stable draft pick", async () => {
+    openFourPlayerSetup();
+    fireEvent.click(screen.getByRole("button", { name: /begin four-player draft/i }));
+    fireEvent.click(screen.getByRole("button", { name: /settings/i }));
+    fireEvent.click(screen.getByRole("switch", { name: /allow undo/i }));
+    fireEvent.click(screen.getByRole("button", { name: /close settings/i }));
+    fireEvent.click(screen.getByRole("button", { name: /ares conflict/i }));
+    fireEvent.click(screen.getByRole("button", { name: /claim ares/i }));
+    expect(screen.getByText(/player 2.*east picks/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /save & quit/i }));
+    await waitFor(() => expect(screen.getByRole("img", { name: /god chess/i })).toBeTruthy());
+
+    fireEvent.click(screen.getByRole("button", { name: /load game/i }));
+    fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
+    const undo = screen.getByRole("button", { name: /^undo$/i });
+    expect((undo as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(undo);
+    expect(screen.getByText(/player 1.*north picks/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /ares conflict/i }));
+    expect((screen.getByRole("button", { name: /claim ares/i }) as HTMLButtonElement).disabled).toBe(false);
+  });
+});

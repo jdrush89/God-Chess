@@ -1,10 +1,11 @@
 # God Chess
 
-A local two-player strategy game that combines legal chess movement with a
-snake-drafted pantheon of gods, shared orb economies, resting turns, status
-effects, and ability upgrades. Play locally, against a difficulty-adjustable
-AI, solve prepared divine puzzles, or play online through host-authoritative
-WebRTC rooms with five-character codes.
+A divine strategy game that combines legal chess movement with snake-drafted
+pantheons, shared orb economies, resting turns, status effects, and ability
+upgrades. Play a two-player duel locally, challenge a difficulty-adjustable AI,
+share a four-player cross-board in free-for-all or 2v2, solve prepared divine
+puzzles, or play a two-player online match through host-authoritative WebRTC
+rooms with five-character codes.
 
 Play the latest version at [playgodchess.com](https://playgodchess.com/).
 
@@ -26,6 +27,35 @@ npm run dev
 
 Open the URL printed by Vite. The game begins by randomly assigning colors,
 then walks both players through the `1-2-2-1` draft.
+
+## Local four-player
+
+Choose **Four-player local** from the new-game menu to configure a shared-device
+match on the fixed 14×14 cross-board. North is always displayed at the top,
+east at the right, south at the bottom, and west at the left; the four 3×3
+corners are outside the playable board.
+
+- Choose free-for-all or 2v2. Team games require exactly two seats on Team A
+  and two on Team B, in any seat arrangement.
+- Turns are clockwise by default. Team games can alternate teams when adjacent
+  teammates would otherwise act consecutively.
+- Choose last surviving player/team or the optional first-King-captured victory
+  rule.
+- With takeover disabled, an eliminated seat’s remaining pieces become inert
+  but stay capturable. With takeover enabled, the capturer controls those
+  pieces; Gods and upgrades never transfer.
+- Configure every seat as Human or Divine AI. At least one local Human is
+  required, and each AI seat has its own level from 1–10.
+- All twelve Gods are drafted exactly once in seat order
+  `1-2-3-4, 4-3-2-1, 1-2-3-4`. AI seats draft, act, and upgrade automatically
+  until the next Human decision.
+- Local and cloud saves include the full four-player state and stable snapshot
+  undo history. In mixed games, undo rewinds a completed AI chain together with
+  the preceding Human turn.
+
+Four-player multiplayer is currently shared-device only. Online rooms remain
+two-player in this layer; multiparty lobby, seat ownership, synchronization,
+and unanimous network undo are reserved for the next networking layer.
 
 ## Puzzle mode
 
@@ -108,11 +138,11 @@ and multi-step choice.
 After all six drafted gods have acted, rest tokens clear and each player
 upgrades one ability. Capture the opposing king to win.
 
-## Four-player core
+## Four-player architecture
 
-The repository includes a deterministic four-player rules foundation for later
-setup/UI and multiparty-networking layers. It does not yet replace or widen the
-current two-player `GameState`, reducer, AI, save, or WebRTC contracts.
+The repository keeps four-player gameplay parallel to the existing two-player
+contracts. The deterministic core is used by the local UI, AI, saves, and the
+session boundaries intended for the later multiparty-networking layer.
 
 - `src/game/geometry.ts` contains shared geometry primitives. The existing
   `src/game/chess.ts` API remains the 8x8 compatibility facade.
@@ -136,8 +166,13 @@ current two-player `GameState`, reducer, AI, save, or WebRTC contracts.
   rules. Opponent-turn effects count hostile turns, so allied turns do not
   consume them.
 - `src/game/fourPlayerPersistence.ts` exposes a strict clone/type-guard boundary
-  intended for the later save and online protocol layers. Malformed or
+  used by saves and future online snapshots. Malformed or
   configuration-inconsistent serialized states are rejected before loading.
-
-The four-player layer intentionally has no final setup screen, board rendering,
-AI search integration, save-list integration, or multiparty transport yet.
+- `src/game/fourPlayerAi.ts` plans deterministic draft, ability, movement,
+  choice, and upgrade action sequences for multiple enemies or teams with
+  per-seat difficulty budgets.
+- `src/fourPlayer/` contains the shared-device setup, cross-board, seat panels,
+  action UI, animations, AI turn loop, save integration, and snapshot undo.
+- `src/game/fourPlayerSession.ts` defines transport-neutral revisioned action,
+  strict state snapshot, seat authorization, and unanimous-undo primitives for
+  the future online layer. It does not implement signaling or transport.
