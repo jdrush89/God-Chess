@@ -350,3 +350,62 @@ describe("four-player God abilities", () => {
     ].filter(Boolean)).toHaveLength(1);
   });
 });
+
+describe("four-player ability safety regressions", () => {
+  it("rejects hardened March Home destinations for the King and companions", () => {
+    let state = gameFor("leonidas");
+    delete state.board.g14;
+    state.board.g8 = piece(state, "king", "north", "marching-king");
+    state.board.g14 = piece(state, "rook", "south", "hardened-home");
+    state.board.g14.status.hardened = 2;
+    let result = activate(state, "leonidas", "march-home");
+    result = fourPlayerReducer(result, { type: "confirm-ability" });
+    expect(result.board.g8?.id).toBe("marching-king");
+    expect(result.board.g14?.id).toBe("hardened-home");
+    expect(result.notice).toMatch(/hardened/);
+
+    state = gameFor("leonidas", 2);
+    delete state.board.g14;
+    state.board.g8 = piece(state, "king", "north", "marching-king");
+    state.board.h8 = piece(state, "rook", "north", "companion");
+    state.board.h14 = piece(state, "rook", "south", "hardened-companion-target");
+    state.board.h14.status.hardened = 2;
+    result = activate(state, "leonidas", "march-home");
+    result = fourPlayerReducer(result, { type: "square", square: "h8" });
+    result = fourPlayerReducer(result, { type: "pass" });
+    expect(result.board.g8?.id).toBe("marching-king");
+    expect(result.board.h8?.id).toBe("companion");
+    expect(result.board.h14?.id).toBe("hardened-companion-target");
+    expect(result.notice).toMatch(/hardened/);
+  });
+
+  it("does not offer a hardened piece as a level-three Resurrect destination", () => {
+    let state = gameFor("death", 3);
+    state.board.g8 = piece(state, "bishop", "north", "bishop");
+    state.board.g9 = piece(state, "rook", "south", "hardened-target");
+    state.board.g9.status.hardened = 2;
+    state.players.north.graveyard.push({
+      piece: piece(state, "pawn", "north", "dead-pawn"),
+      capturedOnTurn: 0,
+    });
+    state = activate(state, "death", "resurrect");
+    state = fourPlayerReducer(state, { type: "grave", pieceId: "dead-pawn" });
+    expect(state.legalTargets).not.toContain("g9");
+    state = fourPlayerReducer(state, { type: "square", square: "g9" });
+    expect(state.board.g9?.id).toBe("hardened-target");
+    expect(state.players.north.graveyard).toHaveLength(1);
+  });
+
+  it("checks King safety on every Slither leg", () => {
+    let state = gameFor("medusa");
+    state.board.g8 = piece(state, "rook", "south", "line-rook");
+    state.board.h11 = piece(state, "queen", "north", "slithering-queen");
+    state = activate(state, "medusa", "slither");
+    state = fourPlayerReducer(state, { type: "square", square: "h11" });
+    expect(state.legalTargets).toContain("g12");
+    state = fourPlayerReducer(state, { type: "square", square: "g12" });
+    expect(state.pending?.step).toBe("slither");
+    expect(state.legalTargets).toEqual([]);
+    expect(state.board.g12?.id).toBe("slithering-queen");
+  });
+});

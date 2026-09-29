@@ -36,6 +36,7 @@ import {
   type OrbAffinity,
   type Seat,
 } from "./fourPlayerTypes";
+import { isFourPlayerState } from "./fourPlayerPersistence";
 import { abilityLevel, GOD_BY_ID, GODS } from "./gods";
 import type { GodId, PieceType, Square } from "./types";
 
@@ -102,8 +103,17 @@ const findSquareById = (state: FourPlayerState, pieceId: string) =>
 const livingSeats = (state: FourPlayerState) =>
   state.turnOrder.filter((seat) => !state.players[seat].eliminated);
 
+const hasUpgradeableAbility = (state: FourPlayerState, seat: Seat) =>
+  state.players[seat].gods.some((godId) =>
+    GOD_BY_ID[godId].abilities.some((ability) =>
+      abilityLevel(state.players[seat].upgrades, ability.id) < 3
+    )
+  );
+
 const normalizeUpgradeQueue = (state: FourPlayerState) => {
-  state.upgradeQueue = state.upgradeQueue.filter((seat) => !state.players[seat].eliminated);
+  state.upgradeQueue = state.upgradeQueue.filter((seat) =>
+    !state.players[seat].eliminated && hasUpgradeableAbility(state, seat)
+  );
 };
 
 const setWinner = (
@@ -119,11 +129,8 @@ const setWinner = (
   };
 };
 
-const evaluateLastSurvivorVictory = (state: FourPlayerState, fallback: Seat) => {
-  if (state.config.victoryMode === "first-king-captured") {
-    setWinner(state, fallback, "first-king-captured");
-    return;
-  }
+const evaluateLastSurvivorVictory = (state: FourPlayerState) => {
+  if (state.winner) return;
   const survivors = livingSeats(state);
   if (state.config.mode === "ffa") {
     if (survivors.length === 1) setWinner(state, survivors[0], "last-player");
@@ -136,8 +143,13 @@ const evaluateLastSurvivorVictory = (state: FourPlayerState, fallback: Seat) => 
 const eliminateSeat = (state: FourPlayerState, eliminated: Seat, captor: Seat) => {
   const player = state.players[eliminated];
   if (player.eliminated) return;
+  const isFirstKingCapture = !FOUR_PLAYER_SEATS.some(
+    (seat) => state.players[seat].eliminated,
+  );
   player.eliminated = true;
   player.eliminatedBy = captor;
+  const takeoverController =
+    state.config.takeover && !state.players[captor].eliminated ? captor : null;
   const clearEliminatedEffects = (piece: FourPlayerPiece) => {
     if (piece.status.frozenBy === eliminated) {
       delete piece.status.frozen;
@@ -155,39 +167,51 @@ const eliminateSeat = (state: FourPlayerState, eliminated: Seat, captor: Seat) =
     if (piece.status.ritual?.owner === eliminated) delete piece.status.ritual;
     if (piece.status.markedForDeath?.owner === eliminated) delete piece.status.markedForDeath;
   };
+  const nextController = (piece: FourPlayerPiece) => {
+    if (piece.owner === eliminated || state.players[piece.owner].eliminated) {
+      return takeoverController;
+    }
+    return piece.owner;
+  };
   for (const piece of Object.values(state.board)) {
     clearEliminatedEffects(piece);
-    if (piece.owner !== eliminated) continue;
-    delete piece.status.hardened;
-    delete piece.status.gazing;
-    delete piece.status.chargeUntil;
-    delete piece.status.prepared;
+    if (piece.owner === eliminated) {
+      delete piece.status.hardened;
+      delete piece.status.gazing;
+      delete piece.status.chargeUntil;
+      delete piece.status.prepared;
+    }
+    if (piece.owner !== eliminated && piece.controller !== eliminated) continue;
     delete piece.status.hired;
-    piece.controller = state.config.takeover ? captor : null;
+    piece.controller = nextController(piece);
   }
   const eliminatedStealth = FOUR_PLAYER_SEATS.flatMap((seat) =>
-    state.stealth[seat].filter((move) => move.piece.owner === eliminated)
+    state.stealth[seat].filter((move) =>
+      move.piece.owner === eliminated || move.piece.controller === eliminated
+    )
   );
   for (const seat of FOUR_PLAYER_SEATS) {
+    for (const move of state.stealth[seat]) clearEliminatedEffects(move.piece);
     state.stealth[seat] = state.stealth[seat].filter(
-      (move) => move.piece.owner !== eliminated,
+      (move) => move.piece.owner !== eliminated && move.piece.controller !== eliminated,
     );
   }
   for (const move of eliminatedStealth) {
     clearEliminatedEffects(move.piece);
-    delete move.piece.status.hardened;
-    delete move.piece.status.gazing;
-    delete move.piece.status.chargeUntil;
-    delete move.piece.status.prepared;
+    if (move.piece.owner === eliminated) {
+      delete move.piece.status.hardened;
+      delete move.piece.status.gazing;
+      delete move.piece.status.chargeUntil;
+      delete move.piece.status.prepared;
+    }
     delete move.piece.status.hired;
-    if (state.config.takeover) {
-      move.piece.controller = captor;
-      state.stealth[captor].push({
+    move.piece.controller = nextController(move.piece);
+    if (move.piece.controller) {
+      state.stealth[move.piece.controller].push({
         ...move,
-        returnOnTurn: state.seatTurns[captor] + 1,
+        returnOnTurn: state.seatTurns[move.piece.controller] + 1,
       });
     } else {
-      move.piece.controller = null;
       if (!state.board[move.destination]) state.board[move.destination] = move.piece;
       else sendToGraveyard(state, move.piece, move.destination);
     }
@@ -195,7 +219,15 @@ const eliminateSeat = (state: FourPlayerState, eliminated: Seat, captor: Seat) =
   state.bananas = state.bananas.filter((banana) => banana.owner !== eliminated);
   state.upgradeQueue = state.upgradeQueue.filter((seat) => seat !== eliminated);
   log(state, `${name(eliminated)} was eliminated by ${name(captor)}.`);
-  evaluateLastSurvivorVictory(state, captor);
+  if (
+    isFirstKingCapture &&
+    state.config.victoryMode === "first-king-captured" &&
+    seatsAreHostile(state.config, captor, eliminated)
+  ) {
+    setWinner(state, captor, "first-king-captured");
+  } else {
+    evaluateLastSurvivorVictory(state);
+  }
 };
 
 const sendToGraveyard = (
@@ -209,7 +241,10 @@ const sendToGraveyard = (
   });
   if (
     piece.status.ritual &&
-    (piece.status.ritual.expires === "kangus" || state.turn <= piece.status.ritual.expires)
+    (
+      piece.status.ritual.expires === "kangus" ||
+      state.hostileTurns[piece.status.ritual.owner] < piece.status.ritual.expires
+    )
   ) {
     const reward = levelFor(state, piece.status.ritual.owner, "ritual-sacrifice") >= 3 ? 4 : 3;
     addOrbs(state, piece.status.ritual.owner, reward, reward);
@@ -306,7 +341,11 @@ const expireStatuses = (state: FourPlayerState, endingSeat: Seat) => {
       delete status.luredBy;
       delete status.movedThisTurn;
     }
-    if (status.ritual && typeof status.ritual.expires === "number" && state.turn >= status.ritual.expires) {
+    if (
+      status.ritual &&
+      typeof status.ritual.expires === "number" &&
+      state.hostileTurns[status.ritual.owner] >= status.ritual.expires
+    ) {
       delete status.ritual;
     }
     piece.status = status;
@@ -319,7 +358,9 @@ const expireStatuses = (state: FourPlayerState, endingSeat: Seat) => {
     if (!remains) delete piece.status.gazing;
   }
   state.bananas = state.bananas.filter((banana) =>
-    typeof banana.expires === "number" ? banana.expires > state.turn : true
+    typeof banana.expires === "number"
+      ? state.hostileTurns[banana.owner] < banana.expires
+      : true
   );
 };
 
@@ -415,6 +456,19 @@ const resolveMarkedForDeath = (state: FourPlayerState) => {
 const survivingGods = (state: FourPlayerState) =>
   livingSeats(state).flatMap((seat) => state.players[seat].gods);
 
+const startNextRound = (state: FourPlayerState) => {
+  const survivors = livingSeats(state);
+  if (!survivors.length) return;
+  state.phase = "play";
+  state.round += 1;
+  state.rested = [];
+  state.upgradeQueue = [];
+  state.activeSeat = survivors[0];
+  state.turn += 1;
+  resolveStartOfTurn(state);
+  if (!state.winner) state.notice = `Round ${state.round}. ${name(state.activeSeat)} to act.`;
+};
+
 const finishTurn = (state: FourPlayerState, description: string) => {
   if (state.selectedGod === "death") resolveMarkedForDeath(state);
   const god = state.selectedGod;
@@ -435,10 +489,13 @@ const finishTurn = (state: FourPlayerState, description: string) => {
   expireStatuses(state, endingSeat);
   const gods = survivingGods(state);
   if (gods.length && gods.every((candidate) => state.rested.includes(candidate))) {
-    state.phase = "upgrade";
     state.upgradeQueue = livingSeats(state);
     normalizeUpgradeQueue(state);
-    if (!state.upgradeQueue.length) return;
+    if (!state.upgradeQueue.length) {
+      startNextRound(state);
+      return;
+    }
+    state.phase = "upgrade";
     state.activeSeat = state.upgradeQueue[0];
     state.notice = `${name(state.activeSeat)} upgrades one ability.`;
     return;
@@ -1346,7 +1403,7 @@ const resolveMoveEffect = (
   } else if (abilityId === "ritual-sacrifice") {
     state.board[to].status.ritual = {
       owner: state.activeSeat,
-      expires: level >= 2 ? "kangus" : state.turn + 1,
+      expires: level >= 2 ? "kangus" : state.hostileTurns[state.activeSeat] + 1,
     };
   } else if (abilityId === "banana-peel") {
     state.pending = {
@@ -1544,39 +1601,60 @@ const executeMarchHome = (
   const companions = companionSquares
     .map((square) => ({ square, piece: state.board[square] }))
     .filter((entry): entry is { square: Square; piece: FourPlayerPiece } => Boolean(entry.piece));
+  if (companions.some(({ square }) => square === destination)) {
+    state.notice = "March Home cannot bring a companion from the King's destination.";
+    return;
+  }
+  const landings = [
+    { from: kingSquare, to: destination, piece: king },
+    ...companions.flatMap(({ square, piece }) => {
+      const [file, rank] = fourPlayerCoords(square);
+      const target = fourPlayerSquareAt(file + toFile - fromFile, rank + toRank - fromRank);
+      return target ? [{ from: square, to: target, piece }] : [];
+    }),
+  ];
+  if (landings.length !== companions.length + 1) {
+    state.notice = "A March Home companion has no valid destination.";
+    return;
+  }
+  const movingSources = new Set(landings.map((landing) => landing.from));
+  for (const landing of landings) {
+    const occupant = state.board[landing.to];
+    if (
+      occupant &&
+      !movingSources.has(landing.to) &&
+      occupant.status.hardened
+    ) {
+      state.notice = "March Home cannot replace a hardened piece.";
+      return;
+    }
+  }
   const simulated = structuredClone(state.board);
-  delete simulated[kingSquare];
-  for (const { square } of companions) delete simulated[square];
-  delete simulated[destination];
-  simulated[destination] = king;
-  for (const { square, piece } of companions) {
-    const [file, rank] = fourPlayerCoords(square);
-    const target = fourPlayerSquareAt(file + toFile - fromFile, rank + toRank - fromRank);
-    if (!target) continue;
-    delete simulated[target];
-    simulated[target] = piece;
+  for (const landing of landings) delete simulated[landing.from];
+  for (const landing of landings) {
+    delete simulated[landing.to];
+    simulated[landing.to] = landing.piece;
   }
   if (fourPlayerIsInCheck(simulated, state.activeSeat, state.config, state.bananas)) {
     state.notice = "March Home would leave your King in check.";
     return;
   }
-  if (state.board[destination]) captureAt(state, destination, true);
-  delete state.board[kingSquare];
-  state.board[destination] = {
-    ...king,
-    hasMoved: true,
-    status: { ...king.status, movedThisTurn: true },
-  };
-  for (const { square, piece } of companions) {
-    const [file, rank] = fourPlayerCoords(square);
-    const target = fourPlayerSquareAt(file + toFile - fromFile, rank + toRank - fromRank);
-    if (!target) continue;
-    if (state.board[target]) captureAt(state, target, true);
-    delete state.board[square];
-    state.board[target] = {
-      ...piece,
+  for (const landing of landings) {
+    if (
+      state.board[landing.to] &&
+      !movingSources.has(landing.to) &&
+      !captureAt(state, landing.to, true)
+    ) {
+      state.notice = "March Home could not clear a destination.";
+      return;
+    }
+  }
+  for (const landing of landings) delete state.board[landing.from];
+  for (const landing of landings) {
+    state.board[landing.to] = {
+      ...landing.piece,
       hasMoved: true,
-      status: { ...piece.status, movedThisTurn: true },
+      status: { ...landing.piece.status, movedThisTurn: true },
     };
   }
   finishTurn(
@@ -1641,10 +1719,10 @@ const executeMovement = (
         movesRemaining: remaining,
       };
       state.selectedSquare = result.to;
-      state.legalTargets = fourPlayerPseudoTargets(state.board, result.to, state.config, {
+      state.legalTargets = fourPlayerLegalTargets(state.board, result.to, state.config, {
         forceType: "bishop",
         noCapture: true,
-        ignoreCheck: true,
+        bananas: state.bananas,
       });
       state.notice = unlimited
         ? "Slither may continue; pass to stop."
@@ -1705,6 +1783,7 @@ const resolveRage = (
       )
     ) continue;
     captureAt(state, square, true);
+    if (state.phase === "gameover" || state.players[state.activeSeat].eliminated) break;
   }
 };
 
@@ -1766,11 +1845,15 @@ const chooseGravePiece = (state: FourPlayerState, pieceId: string) => {
   if (!bishops.length) return;
   state.pending = { ...state.pending!, step: "revive-place", movedPieceId: pieceId };
   state.legalTargets = [...new Set(bishops.flatMap((square) => fourPlayerAdjacentSquares(square)))]
-    .filter((square) =>
-      currentLevel(state, "resurrect") >= 3
-        ? !state.board[square] || hostilePiece(state, state.board[square])
-        : !state.board[square]
-    );
+    .filter((square) => {
+      const occupant = state.board[square];
+      if (!occupant) return true;
+      return (
+        currentLevel(state, "resurrect") >= 3 &&
+        !occupant.status.hardened &&
+        hostilePiece(state, occupant)
+      );
+    });
   state.notice = "Choose a square adjacent to a controlled Bishop.";
 };
 
@@ -1782,7 +1865,11 @@ const completeSpecialTarget = (state: FourPlayerState, square: Square) => {
     state.bananas.push({
       square,
       owner: state.activeSeat,
-      expires: level >= 3 ? "god" : level === 2 ? "kangus" : state.turn + 1,
+      expires: level >= 3
+        ? "god"
+        : level === 2
+          ? "kangus"
+          : state.hostileTurns[state.activeSeat] + 1,
     });
     finishTurn(state, abilityDescription(state, `: placed a banana on ${square}`));
   } else if (pending.step === "hire") {
@@ -1800,7 +1887,10 @@ const completeSpecialTarget = (state: FourPlayerState, square: Square) => {
     const graveyard = activePlayer(state).graveyard;
     const index = graveyard.findIndex((entry) => entry.piece.id === pending.movedPieceId);
     if (index < 0) return;
-    if (state.board[square]) captureAt(state, square);
+    if (state.board[square] && !captureAt(state, square)) {
+      state.notice = "Resurrect cannot replace that piece.";
+      return;
+    }
     const [grave] = graveyard.splice(index, 1);
     state.board[square] = {
       ...grave.piece,
@@ -2248,13 +2338,7 @@ const upgradeAbility = (state: FourPlayerState, abilityId: string) => {
     state.activeSeat = state.upgradeQueue[0];
     state.notice = `${name(state.activeSeat)} upgrades one ability.`;
   } else {
-    state.phase = "play";
-    state.round += 1;
-    state.rested = [];
-    state.activeSeat = livingSeats(state)[0];
-    state.turn += 1;
-    resolveStartOfTurn(state);
-    state.notice = `Round ${state.round}. ${name(state.activeSeat)} to act.`;
+    startNextRound(state);
   }
 };
 
@@ -2306,7 +2390,12 @@ export const fourPlayerReducer = (
   state: FourPlayerState,
   action: FourPlayerAction,
 ): FourPlayerState => {
-  if (action.type === "load") return clone(action.state);
+  if (action.type === "load") {
+    if (!isFourPlayerState(action.state)) {
+      throw new Error("Cannot load an invalid four-player state.");
+    }
+    return clone(action.state);
+  }
   if (action.type === "restart") return createFourPlayerGame(state.config);
   const next = clone(state);
   if (action.type === "draft" && next.phase === "draft") {

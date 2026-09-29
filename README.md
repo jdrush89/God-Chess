@@ -130,9 +130,14 @@ current two-player `GameState`, reducer, AI, save, or WebRTC contracts.
 - `src/game/fourPlayerEngine.ts` exports `createFourPlayerGame`,
   `fourPlayerReducer`, and the deterministic `FourPlayerAction` boundary. It
   implements the 12-God snake draft, all God abilities, elimination, inert
-  pieces, piece-only takeover, victory, rest, and upgrade cycles.
-- `src/game/fourPlayerPersistence.ts` exposes the clone/type-guard boundary
-  intended for the later save and online protocol layers.
+  pieces, piece-only takeover, victory, rest, and upgrade cycles. Eliminating a
+  controller returns hired pieces to a living original owner, chains takeover
+  for already-eliminated owners, and resolves stealth pieces under the same
+  rules. Opponent-turn effects count hostile turns, so allied turns do not
+  consume them.
+- `src/game/fourPlayerPersistence.ts` exposes a strict clone/type-guard boundary
+  intended for the later save and online protocol layers. Malformed or
+  configuration-inconsistent serialized states are rejected before loading.
 
 The four-player layer intentionally has no final setup screen, board rendering,
 AI search integration, save-list integration, or multiparty transport yet.
