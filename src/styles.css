@@ -396,9 +396,10 @@ body::before {
   72% { opacity: 1; transform: translate3d(-50%, -50%, 0) scale(.72) rotate(8deg); }
   100% { opacity: 0; transform: translate3d(-50%, -50%, 0) scale(.3) rotate(16deg); }
 }
-.mini-pantheon { margin-left: auto; display: flex; gap: 11px; }
+.mini-pantheon { margin-left: auto; display: flex; align-items: center; gap: 11px; }
 .mini-pantheon > button {
-  position: relative; padding: 0; border: 0; background: transparent; cursor: pointer; transition: .2s;
+  position: relative; display: flex; align-items: center; padding: 0; border: 0;
+  background: transparent; line-height: 0; cursor: pointer; transition: .2s;
 }
 .mini-pantheon > button:hover { transform: translateY(-2px); filter: brightness(1.2); }
 .mini-pantheon > button.resting { opacity: .42; filter: grayscale(1); }
