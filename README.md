@@ -107,3 +107,32 @@ and multi-step choice.
 
 After all six drafted gods have acted, rest tokens clear and each player
 upgrades one ability. Capture the opposing king to win.
+
+## Four-player core
+
+The repository includes a deterministic four-player rules foundation for later
+setup/UI and multiparty-networking layers. It does not yet replace or widen the
+current two-player `GameState`, reducer, AI, save, or WebRTC contracts.
+
+- `src/game/geometry.ts` contains shared geometry primitives. The existing
+  `src/game/chess.ts` API remains the 8x8 compatibility facade.
+- `src/game/fourPlayerChess.ts` defines the 14x14 cross board: the central 8x8
+  plus a 3x8 arm on every side, with the four 3x3 corners excluded.
+- Four-player coordinates use files `a` through `n` and ranks `1` through `14`.
+  North moves toward decreasing ranks, east toward decreasing files, south
+  toward increasing ranks, and west toward increasing files.
+- `src/game/fourPlayerTypes.ts` separates seat, team, original owner, current
+  controller, display color, light/dark orb affinity, and local/AI/online
+  control metadata.
+- `src/game/fourPlayerConfig.ts` validates FFA or exact 2v2 teams, distinct
+  display colors, two light and two dark affinities, clockwise or alternating
+  team turns, victory mode, and takeover.
+- `src/game/fourPlayerEngine.ts` exports `createFourPlayerGame`,
+  `fourPlayerReducer`, and the deterministic `FourPlayerAction` boundary. It
+  implements the 12-God snake draft, all God abilities, elimination, inert
+  pieces, piece-only takeover, victory, rest, and upgrade cycles.
+- `src/game/fourPlayerPersistence.ts` exposes the clone/type-guard boundary
+  intended for the later save and online protocol layers.
+
+The four-player layer intentionally has no final setup screen, board rendering,
+AI search integration, save-list integration, or multiparty transport yet.

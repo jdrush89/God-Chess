@@ -1,28 +1,32 @@
 import type { Banana, Color, Move, Piece, PieceType, Square } from "./types";
 import { opposite } from "./types";
+import {
+  CLASSIC_GEOMETRY,
+  geometryAdjacentSquares,
+  geometryCoords,
+  geometryDistance,
+  geometryFlightPathSquares,
+  geometryLineOfSightSquares,
+  geometryPathSquares,
+  geometrySquareAt,
+  geometrySquares,
+} from "./geometry";
 
 export const files = ["a", "b", "c", "d", "e", "f", "g", "h"] as const;
 export const ranks = ["1", "2", "3", "4", "5", "6", "7", "8"] as const;
-export const allSquares = ranks.flatMap((rank) => files.map((file) => `${file}${rank}`));
+export const allSquares = geometrySquares(CLASSIC_GEOMETRY);
 
-export const coords = (square: Square): [number, number] => [
-  files.indexOf(square[0] as (typeof files)[number]),
-  Number(square[1]) - 1,
-];
+export const coords = geometryCoords;
 
 export const squareAt = (file: number, rank: number): Square | undefined =>
-  file >= 0 && file < 8 && rank >= 0 && rank < 8 ? `${files[file]}${rank + 1}` : undefined;
+  geometrySquareAt(CLASSIC_GEOMETRY, file, rank);
 
 export const squareColor = (square: Square): Color => {
   const [file, rank] = coords(square);
   return (file + rank) % 2 === 0 ? "black" : "white";
 };
 
-export const distance = (from: Square, to: Square) => {
-  const [fx, fy] = coords(from);
-  const [tx, ty] = coords(to);
-  return Math.max(Math.abs(tx - fx), Math.abs(ty - fy));
-};
+export const distance = geometryDistance;
 
 export const createInitialBoard = (): Record<Square, Piece> => {
   const board: Record<Square, Piece> = {};
@@ -272,63 +276,15 @@ export const canCastle = (
 };
 
 export const pathSquares = (from: Square, to: Square) => {
-  const [fx, fy] = coords(from);
-  const [tx, ty] = coords(to);
-  const fileDistance = Math.abs(tx - fx);
-  const rankDistance = Math.abs(ty - fy);
-  const isStraight = fileDistance === 0 || rankDistance === 0;
-  const isDiagonal = fileDistance === rankDistance;
-  if (!isStraight && !isDiagonal) return [];
-  const dx = Math.sign(tx - fx);
-  const dy = Math.sign(ty - fy);
-  const path: Square[] = [];
-  let x = fx + dx;
-  let y = fy + dy;
-  while (x !== tx || y !== ty) {
-    const square = squareAt(x, y);
-    if (square) path.push(square);
-    x += dx;
-    y += dy;
-  }
-  return path;
+  return geometryPathSquares(CLASSIC_GEOMETRY, from, to);
 };
 
 export const flightPathSquares = (from: Square, to: Square) => {
-  const directPath = pathSquares(from, to);
-  if (directPath.length || from === to) return directPath;
-
-  const [fromFile, fromRank] = coords(from);
-  const [toFile, toRank] = coords(to);
-  const fileDistance = Math.abs(toFile - fromFile);
-  const rankDistance = Math.abs(toRank - fromRank);
-  if (!((fileDistance === 1 && rankDistance === 2) || (fileDistance === 2 && rankDistance === 1))) return [];
-
-  const crossed = new Set<Square>();
-  const samples = 64;
-  for (let step = 1; step < samples; step += 1) {
-    const progress = step / samples;
-    const file = Math.floor(fromFile + 0.5 + (toFile - fromFile) * progress);
-    const rank = Math.floor(fromRank + 0.5 + (toRank - fromRank) * progress);
-    const square = squareAt(file, rank);
-    if (square && square !== from && square !== to) crossed.add(square);
-  }
-  return [...crossed];
+  return geometryFlightPathSquares(CLASSIC_GEOMETRY, from, to);
 };
 
 export const lineOfSightSquares = (from: Square, to: Square) => {
-  if (from === to) return [];
-  const [fromFile, fromRank] = coords(from);
-  const [toFile, toRank] = coords(to);
-  const crossed = new Set<Square>();
-  const samples = 512;
-  for (let step = 1; step < samples; step += 1) {
-    const progress = step / samples;
-    const file = Math.floor(fromFile + 0.5 + (toFile - fromFile) * progress);
-    const rank = Math.floor(fromRank + 0.5 + (toRank - fromRank) * progress);
-    const square = squareAt(file, rank);
-    if (square && square !== from && square !== to) crossed.add(square);
-  }
-  return [...crossed];
+  return geometryLineOfSightSquares(CLASSIC_GEOMETRY, from, to);
 };
 
 export const lineOfSight = (board: Record<Square, Piece>, from: Square, to: Square) => {
@@ -336,16 +292,7 @@ export const lineOfSight = (board: Record<Square, Piece>, from: Square, to: Squa
 };
 
 export const adjacentSquares = (square: Square, diagonal = true) => {
-  const [file, rank] = coords(square);
-  const result: Square[] = [];
-  for (let dx = -1; dx <= 1; dx += 1) {
-    for (let dy = -1; dy <= 1; dy += 1) {
-      if ((!dx && !dy) || (!diagonal && dx && dy)) continue;
-      const target = squareAt(file + dx, rank + dy);
-      if (target) result.push(target);
-    }
-  }
-  return result;
+  return geometryAdjacentSquares(CLASSIC_GEOMETRY, square, diagonal);
 };
 
 export const applyMove = (
