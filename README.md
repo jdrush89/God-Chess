@@ -37,6 +37,31 @@ responses between player turns. Completion check marks are stored in local
 storage while signed out and in the player's account while signed in; puzzle
 positions themselves are not added to local or cloud saves.
 
+### Puzzle god index
+
+`PUZZLE_GOD_USAGE` and `PUZZLE_GOD_INDEX` in `src/game/puzzles.ts` are derived
+from each prepared position and its tested solution actions. The table below is
+covered by a regression test so changes to puzzle rosters or required abilities
+must update this documentation.
+
+| Puzzle | Player gods | Opponent gods | Required by tested solution |
+|---|---|---|---|
+| Position One | Chiron, Teles, Midas | Ares, Chiron, Anubis | Chiron (charge) |
+| Position Two | Kangus Kong, Teles, Death | Ares, Chiron, Anubis | Kangus Kong (rage) |
+| Position Three | Death, Midas, Salem | Ares, Chiron, Anubis | Death (resurrect) |
+| Position Four | Leonidas, Teles, Midas | Ares, Chiron, Anubis | Leonidas (escort) |
+| Position Five | Quetzacoatl, Teles, Salem | Ares, Chiron, Anubis | Quetzacoatl (air-strike) |
+| Position Six | Teles, Chiron, Medusa | Ares, Anubis, Salem | Teles (lure); Chiron (charge) |
+| Position Seven | Midas, Death, Salem | Ares, Chiron, Anubis | Midas (leverage); Death (resurrect) |
+| Position Eight | Chiron, Kangus Kong, Midas | Ares, Anubis, Salem | Chiron (mount); Kangus Kong (rage) |
+| Position Nine | Anubis, Quetzacoatl, Teles | Ares, Chiron, Salem | Anubis (monument); Quetzacoatl (air-strike) |
+| Position Ten | Midas, Chiron, Salem | Ares, Anubis, Medusa | Midas (leverage); Chiron (charge) |
+| Position Eleven | Midas, Quetzacoatl, Anubis | Ares, Chiron, Salem | Midas (leverage); Quetzacoatl (air-strike) |
+| Position Twelve | Death, Chiron, Teles | Ares, Anubis, Salem | Death (marked); Chiron (charge) |
+| Position Thirteen | Quetzacoatl, Leonidas, Midas | Ares, Chiron, Anubis | Quetzacoatl (air-lift); Leonidas (escort) |
+| Position Fourteen | Quetzacoatl, Chiron, Artemis | Ares, Anubis, Salem | Quetzacoatl (flight); Chiron (charge) |
+| Position Fifteen | Ares, Chiron, Salem | Artemis, Anubis, Medusa | Ares (pick-a-fight); Chiron (charge) |
+
 ## Accounts and cloud saves
 
 God Chess supports optional Supabase email/password accounts. Signed-out players

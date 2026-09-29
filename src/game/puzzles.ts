@@ -1,4 +1,5 @@
 import { createGame, type GameAction } from "./engine";
+import { GODS } from "./gods";
 import type {
   Color,
   GameState,
@@ -22,6 +23,22 @@ export interface PuzzleDefinition {
   playerTurns: 1 | 2;
   solutionTurns: GameAction[][];
   createState: (playerName?: string) => GameState;
+}
+
+export interface PuzzleGodUsage {
+  puzzleId: PuzzleId;
+  title: string;
+  playerGods: GodId[];
+  opponentGods: GodId[];
+  requiredGods: GodId[];
+  solutionAbilities: Partial<Record<GodId, string[]>>;
+}
+
+export interface GodPuzzleIndexEntry {
+  playerIn: PuzzleId[];
+  opponentIn: PuzzleId[];
+  requiredBy: PuzzleId[];
+  solutionAbilitiesByPuzzle: Partial<Record<PuzzleId, string[]>>;
 }
 
 const piece = (
@@ -867,6 +884,67 @@ export const PUZZLES: PuzzleDefinition[] = [
 export const PUZZLE_BY_ID = Object.fromEntries(
   PUZZLES.map((puzzle) => [puzzle.id, puzzle]),
 ) as Record<PuzzleId, PuzzleDefinition>;
+
+const puzzleGodUsage = (puzzle: PuzzleDefinition): PuzzleGodUsage => {
+  const state = puzzle.createState();
+  const requiredGods: GodId[] = [];
+  const solutionAbilities: Partial<Record<GodId, string[]>> = {};
+  let selectedGod: GodId | undefined;
+
+  for (const turn of puzzle.solutionTurns) {
+    for (const action of turn) {
+      if (action.type === "select-god") {
+        selectedGod = action.godId;
+        if (!requiredGods.includes(action.godId)) requiredGods.push(action.godId);
+      } else if (action.type === "select-ability" && selectedGod) {
+        const abilities = solutionAbilities[selectedGod] ?? [];
+        if (!abilities.includes(action.abilityId)) abilities.push(action.abilityId);
+        solutionAbilities[selectedGod] = abilities;
+      }
+    }
+  }
+
+  return {
+    puzzleId: puzzle.id,
+    title: puzzle.title,
+    playerGods: [...state.players.white.gods],
+    opponentGods: [...state.players.black.gods],
+    requiredGods,
+    solutionAbilities,
+  };
+};
+
+export const PUZZLE_GOD_USAGE = PUZZLES.map(puzzleGodUsage);
+
+export const PUZZLE_GOD_USAGE_BY_ID = Object.fromEntries(
+  PUZZLE_GOD_USAGE.map((usage) => [usage.puzzleId, usage]),
+) as Record<PuzzleId, PuzzleGodUsage>;
+
+export const PUZZLE_GOD_INDEX = Object.fromEntries(
+  GODS.map((god) => {
+    const playerIn = PUZZLE_GOD_USAGE
+      .filter((usage) => usage.playerGods.includes(god.id))
+      .map((usage) => usage.puzzleId);
+    const opponentIn = PUZZLE_GOD_USAGE
+      .filter((usage) => usage.opponentGods.includes(god.id))
+      .map((usage) => usage.puzzleId);
+    const requiredBy = PUZZLE_GOD_USAGE
+      .filter((usage) => usage.requiredGods.includes(god.id))
+      .map((usage) => usage.puzzleId);
+    const solutionAbilitiesByPuzzle = Object.fromEntries(
+      PUZZLE_GOD_USAGE.flatMap((usage) => {
+        const abilities = usage.solutionAbilities[god.id];
+        return abilities ? [[usage.puzzleId, abilities]] : [];
+      }),
+    ) as Partial<Record<PuzzleId, string[]>>;
+    return [god.id, {
+      playerIn,
+      opponentIn,
+      requiredBy,
+      solutionAbilitiesByPuzzle,
+    }];
+  }),
+) as Record<GodId, GodPuzzleIndexEntry>;
 
 export const createPuzzleGame = (puzzleId: PuzzleId, playerName?: string) =>
   PUZZLE_BY_ID[puzzleId].createState(playerName);

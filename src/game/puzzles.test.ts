@@ -1,8 +1,15 @@
 import { describe, expect, it } from "vitest";
+import readme from "../../README.md?raw";
 import { chooseAiPlan, isAiTurn } from "./ai";
 import { legalTargets } from "./chess";
 import { gameReducer } from "./engine";
-import { PUZZLES } from "./puzzles";
+import { GOD_BY_ID, GODS } from "./gods";
+import {
+  PUZZLE_GOD_INDEX,
+  PUZZLE_GOD_USAGE,
+  PUZZLE_GOD_USAGE_BY_ID,
+  PUZZLES,
+} from "./puzzles";
 
 describe("puzzle mode", () => {
   it("includes five one-turn and ten two-turn positions", () => {
@@ -24,6 +31,51 @@ describe("puzzle mode", () => {
     const puzzle = PUZZLES.find((candidate) => candidate.id === puzzleId)!;
     const state = puzzle.createState("Solver");
     expect(Object.values(state.players.white.upgrades).filter((level) => level > 1)).toHaveLength(3);
+  });
+
+  it.each(PUZZLES)("$title records its player, opponent, and required solution gods", (puzzle) => {
+    const state = puzzle.createState("Solver");
+    const usage = PUZZLE_GOD_USAGE_BY_ID[puzzle.id];
+    const requiredGods = [...new Set(puzzle.solutionTurns.flatMap((turn) =>
+      turn.flatMap((action) => action.type === "select-god" ? [action.godId] : [])
+    ))];
+
+    expect(usage.playerGods).toEqual(state.players.white.gods);
+    expect(usage.opponentGods).toEqual(state.players.black.gods);
+    expect(usage.requiredGods).toEqual(requiredGods);
+    expect(usage.requiredGods.every((godId) => usage.playerGods.includes(godId))).toBe(true);
+  });
+
+  it("indexes every god by player, opponent, and tested-solution usage", () => {
+    expect(Object.keys(PUZZLE_GOD_INDEX)).toHaveLength(GODS.length);
+    for (const god of GODS) {
+      const entry = PUZZLE_GOD_INDEX[god.id];
+      expect(entry.playerIn).toEqual(
+        PUZZLE_GOD_USAGE.filter((usage) => usage.playerGods.includes(god.id))
+          .map((usage) => usage.puzzleId),
+      );
+      expect(entry.opponentIn).toEqual(
+        PUZZLE_GOD_USAGE.filter((usage) => usage.opponentGods.includes(god.id))
+          .map((usage) => usage.puzzleId),
+      );
+      expect(entry.requiredBy).toEqual(
+        PUZZLE_GOD_USAGE.filter((usage) => usage.requiredGods.includes(god.id))
+          .map((usage) => usage.puzzleId),
+      );
+    }
+  });
+
+  it("keeps the human-readable puzzle god index synchronized", () => {
+    for (const usage of PUZZLE_GOD_USAGE) {
+      const playerGods = usage.playerGods.map((godId) => GOD_BY_ID[godId].name).join(", ");
+      const opponentGods = usage.opponentGods.map((godId) => GOD_BY_ID[godId].name).join(", ");
+      const requiredGods = usage.requiredGods.map((godId) =>
+        `${GOD_BY_ID[godId].name} (${usage.solutionAbilities[godId]?.join(", ")})`
+      ).join("; ");
+      expect(readme).toContain(
+        `| ${usage.title} | ${playerGods} | ${opponentGods} | ${requiredGods} |`,
+      );
+    }
   });
 
   it.each(PUZZLES)("$title has a legal winning solution against level 10 AI", (puzzle) => {
