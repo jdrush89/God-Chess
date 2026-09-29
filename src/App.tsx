@@ -1681,16 +1681,16 @@ function StartGamePrompt({
         {mode === "puzzle" && (
           <div className="puzzle-library">
             <div className="puzzle-library-heading">
-              <span>Easy collection</span>
-              <strong>Mate in one divine turn</strong>
-              <small>The opponent responds with level 10 AI if the winning line is missed.</small>
+              <span>Divine puzzle collection</span>
+              <strong>Win in one or two divine turns</strong>
+              <small>The opponent responds with level 10 AI between player turns.</small>
             </div>
             <div className="puzzle-card-grid">
               {PUZZLES.map((puzzle, index) => (
                 <button key={puzzle.id} onClick={() => onStartPuzzle(puzzle.id)}>
                   <span>PUZZLE {index + 1}</span>
                   <strong>{puzzle.title}</strong>
-                  <small>Win in one divine turn</small>
+                  <small>Win in {puzzle.playerTurns === 1 ? "one" : "two"} divine turn{puzzle.playerTurns === 1 ? "" : "s"}</small>
                 </button>
               ))}
             </div>
@@ -1797,6 +1797,12 @@ function GameScreen({
       state.activeColor !== state.aiColor
     ),
   );
+  const winningKingCaptureId = puzzleSolved
+    ? [...(state.captureAnimations ?? [])]
+      .reverse()
+      .find((event) => event.piece.type === "king" && event.player === state.aiColor)?.id
+    : undefined;
+  const [puzzleVictoryReady, setPuzzleVictoryReady] = useState(false);
   const [displayedOrbs, setDisplayedOrbs] = useState<OrbTotals>(() => orbTotals(state));
   const [orbFlights, setOrbFlights] = useState<OrbFlight[]>([]);
   const [arrivingOrbs, setArrivingOrbs] = useState<Set<string>>(() => new Set());
@@ -1841,6 +1847,17 @@ function GameScreen({
   useEffect(() => {
     setPuzzleHintOpen(false);
   }, [state.puzzleId]);
+
+  useEffect(() => {
+    setPuzzleVictoryReady(false);
+    if (!puzzleSolved) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setPuzzleVictoryReady(true);
+      return;
+    }
+    const timer = window.setTimeout(() => setPuzzleVictoryReady(true), 1050);
+    return () => window.clearTimeout(timer);
+  }, [puzzleSolved, state.puzzleId, winningKingCaptureId]);
 
   useEffect(() => {
     const event = state.presentation;
@@ -2282,7 +2299,7 @@ function GameScreen({
         <GraveyardModal state={state} color={graveyardColor} onClose={() => setGraveyardColor(undefined)} />
       )}
       {rulesOpen && <RulesModal onClose={() => setRulesOpen(false)} />}
-      {puzzleSolved && puzzle && (
+      {puzzleSolved && puzzleVictoryReady && puzzle && (
         <div className="modal-backdrop">
           <section className="gameover-modal">
             <div className="victory-crown"><Crown size={38} /></div>

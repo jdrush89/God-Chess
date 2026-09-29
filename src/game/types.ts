@@ -8,7 +8,17 @@ export type PuzzleId =
   | "circle-of-rage"
   | "hidden-reserve"
   | "royal-escort"
-  | "serpents-delivery";
+  | "serpents-delivery"
+  | "opened-file"
+  | "borrowed-bishop"
+  | "mounted-fury"
+  | "rising-monument"
+  | "turncoat-charge"
+  | "funded-flight"
+  | "cleared-lane"
+  | "royal-landing"
+  | "skyward-charge"
+  | "provoked-fury";
 export type GodId =
   | "quetzacoatl"
   | "chiron"

@@ -5,7 +5,12 @@ import { gameReducer } from "./engine";
 import { PUZZLES } from "./puzzles";
 
 describe("puzzle mode", () => {
-  it.each(PUZZLES)("$title has a legal one-turn winning solution", (puzzle) => {
+  it("includes five one-turn and ten two-turn positions", () => {
+    expect(PUZZLES.filter((puzzle) => puzzle.playerTurns === 1)).toHaveLength(5);
+    expect(PUZZLES.filter((puzzle) => puzzle.playerTurns === 2)).toHaveLength(10);
+  });
+
+  it.each(PUZZLES)("$title has a legal winning solution against level 10 AI", (puzzle) => {
     let state = puzzle.createState("Solver");
 
     expect(state.gameMode).toBe("puzzle");
@@ -23,7 +28,18 @@ describe("puzzle mode", () => {
       }
     }
 
-    for (const action of puzzle.solution) state = gameReducer(state, action);
+    for (const [turnIndex, actions] of puzzle.solutionTurns.entries()) {
+      for (const action of actions) state = gameReducer(state, action);
+      if (state.phase === "gameover") break;
+
+      expect(turnIndex).toBeLessThan(puzzle.solutionTurns.length - 1);
+      expect(state.puzzleFailed).toBe(false);
+      expect(isAiTurn(state)).toBe(true);
+      const aiPlan = chooseAiPlan(state, () => 0);
+      expect(aiPlan.length).toBeGreaterThan(0);
+      for (const action of aiPlan) state = gameReducer(state, action);
+      expect(state.activeColor).toBe("white");
+    }
 
     expect(state.phase).toBe("gameover");
     expect(state.winner).toBe("white");
@@ -41,5 +57,24 @@ describe("puzzle mode", () => {
     expect(state.puzzleFailed).toBe(true);
     expect(isAiTurn(state)).toBe(true);
     expect(chooseAiPlan(state, () => 0).length).toBeGreaterThan(0);
+  });
+
+  it("lets the AI complete a response after a missed second turn", () => {
+    const puzzle = PUZZLES.find((candidate) => candidate.id === "opened-file")!;
+    let state = puzzle.createState("Solver");
+    for (const action of puzzle.solutionTurns[0]) state = gameReducer(state, action);
+    for (const action of chooseAiPlan(state, () => 0)) state = gameReducer(state, action);
+
+    state = gameReducer(state, { type: "select-god", godId: "medusa" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "captivate" });
+    state = gameReducer(state, { type: "square", square: "g2" });
+    state = gameReducer(state, { type: "square", square: "g3" });
+
+    expect(state.puzzleFailed).toBe(true);
+    expect(isAiTurn(state)).toBe(true);
+    const response = chooseAiPlan(state, () => 0);
+    expect(response.length).toBeGreaterThan(1);
+    for (const action of response) state = gameReducer(state, action);
+    expect(state.activeColor).toBe("white");
   });
 });

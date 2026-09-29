@@ -416,6 +416,7 @@ const resolveMarkedForDeath = (state: GameState) => {
 
 const finishTurn = (state: GameState, description: string) => {
   if (state.selectedGod === "death") resolveMarkedForDeath(state);
+  const actingGod = state.selectedGod;
   if (state.selectedGod && !state.rested.includes(state.selectedGod)) state.rested.push(state.selectedGod);
   log(state, description);
   state.lastAction = description;
@@ -436,6 +437,14 @@ const finishTurn = (state: GameState, description: string) => {
   ) {
     state.puzzlePlayerTurnsRemaining = Math.max(0, state.puzzlePlayerTurnsRemaining - 1);
     if (state.puzzlePlayerTurnsRemaining === 0) state.puzzleFailed = true;
+  }
+  if (
+    state.gameMode === "puzzle" &&
+    endingColor === state.aiColor &&
+    actingGod &&
+    (state.puzzlePlayerTurnsRemaining ?? 0) > 0
+  ) {
+    state.rested = state.rested.filter((godId) => godId !== actingGod);
   }
   expireStatuses(state, endingColor);
   const drafted = [...state.players.white.gods, ...state.players.black.gods];

@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import App from "./App";
 import { createGame, gameReducer } from "./game/engine";
+import { PUZZLES } from "./game/puzzles";
 
 const SAVE_KEY = "god-chess-saves-v2";
 const LEGACY_SAVE_KEY = "god-chess-save-v1";
@@ -59,7 +60,7 @@ describe("game startup", () => {
     fireEvent.click(screen.getByRole("button", { name: /^new game$/i }));
     fireEvent.click(screen.getByRole("button", { name: /divine puzzles/i }));
 
-    expect(screen.getAllByRole("button", { name: /puzzle \d/i })).toHaveLength(5);
+    expect(screen.getAllByRole("button", { name: /puzzle \d/i })).toHaveLength(15);
     const puzzleLibrary = container.querySelector(".puzzle-library");
     expect(puzzleLibrary).toBeTruthy();
     expect(puzzleLibrary?.querySelector(".god-sigil")).toBeNull();
@@ -70,6 +71,24 @@ describe("game startup", () => {
     expect(screen.getAllByText(/capture the black king in one divine turn/i)).toHaveLength(2);
     expect(screen.getByRole("gridcell", { name: "e2, white knight" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /save & quit/i })).toBeNull();
+  });
+
+  it("waits for the captured King animation before showing puzzle victory", async () => {
+    const puzzle = PUZZLES[0];
+    let solvedState = puzzle.createState("Solver");
+    for (const action of puzzle.solutionTurns[0]) solvedState = gameReducer(solvedState, action);
+    window.localStorage.setItem(LEGACY_SAVE_KEY, JSON.stringify({
+      version: 1,
+      savedAt: new Date().toISOString(),
+      state: solvedState,
+    }));
+
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /load game/i }));
+    fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
+
+    expect(screen.queryByText("PUZZLE SOLVED")).toBeNull();
+    expect(await screen.findByText("PUZZLE SOLVED", {}, { timeout: 1400 })).toBeTruthy();
   });
 
   it("restores the saved position instead of the fresh initial game", () => {

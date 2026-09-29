@@ -6,12 +6,12 @@ effects, and ability upgrades. Play locally, against a difficulty-adjustable
 AI, solve prepared divine puzzles, or play online through host-authoritative
 WebRTC rooms with five-character codes.
 
-Play the latest version at [jdrush89.github.io/God-Chess](https://jdrush89.github.io/God-Chess/).
+Play the latest version at [playgodchess.com](https://playgodchess.com/).
 
 ## Printables
 
-- [God boards](https://jdrush89.github.io/God-Chess/printables/god-chess-god-boards.pdf) - one full-color US Letter landscape board per god.
-- [Marker tokens](https://jdrush89.github.io/God-Chess/printables/god-chess-marker-tokens.pdf) - cut-out rest, ability-level, orb, and status markers.
+- [God boards](https://playgodchess.com/printables/god-chess-god-boards.pdf) - one full-color US Letter landscape board per god.
+- [Marker tokens](https://playgodchess.com/printables/god-chess-marker-tokens.pdf) - cut-out rest, ability-level, orb, and status markers.
 
 Regenerate both PDFs with `npm run printables`. God boards use the dedicated
 1792×1008 portraits in `print-assets/gods`; the smaller `src/assets/gods`
@@ -29,10 +29,10 @@ then walks both players through the `1-2-2-1` draft.
 
 ## Puzzle mode
 
-Puzzle mode starts with five anonymized midgame positions that can each be won
-in one divine turn. The puzzle picker does not reveal the intended god or
-ability. Each position includes an optional hint, restart and next-puzzle
-controls, and a level 10 Divine AI response when the winning line is missed.
+Puzzle mode includes five anonymized positions won in one divine turn and ten
+positions won across two player turns. The puzzle picker does not reveal the
+intended god or ability. Each position includes an optional hint, restart and
+next-puzzle controls, and level 10 Divine AI responses between player turns.
 Puzzle positions are not added to local or cloud saves.
 
 ## Accounts and cloud saves
@@ -46,6 +46,8 @@ rooms and games against the Divine AI.
 2. Open the Supabase SQL editor and run [`supabase/schema.sql`](supabase/schema.sql).
 3. In Supabase Authentication settings, add the deployed site URL and local
    development URL to the allowed redirect URLs:
+   - `https://playgodchess.com/`
+   - `https://www.playgodchess.com/`
    - `https://jdrush89.github.io/God-Chess/`
    - `http://localhost:5173/`
 4. Copy `.env.example` to `.env.local` and enter the project URL and
