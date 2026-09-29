@@ -440,6 +440,16 @@ const finishTurn = (state: GameState, description: string) => {
   }
   if (
     state.gameMode === "puzzle" &&
+    state.aiColor &&
+    endingColor !== state.aiColor &&
+    isInCheck(state.board, state.aiColor, state.bananas)
+  ) {
+    for (const piece of Object.values(state.board)) {
+      if (piece.controller === state.aiColor) delete piece.status.movedThisTurn;
+    }
+  }
+  if (
+    state.gameMode === "puzzle" &&
     endingColor === state.aiColor &&
     actingGod &&
     (state.puzzlePlayerTurnsRemaining ?? 0) > 0

@@ -77,4 +77,19 @@ describe("puzzle mode", () => {
     for (const action of response) state = gameReducer(state, action);
     expect(state.activeColor).toBe("white");
   });
+
+  it("does not stall after the Position Eight rook moves from f7 to h7", () => {
+    const puzzle = PUZZLES.find((candidate) => candidate.id === "mounted-fury")!;
+    let state = puzzle.createState("Solver");
+    state = gameReducer(state, { type: "select-god", godId: "chiron" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "gallop" });
+    state = gameReducer(state, { type: "square", square: "f7" });
+    state = gameReducer(state, { type: "square", square: "h7" });
+
+    expect(isAiTurn(state)).toBe(true);
+    const response = chooseAiPlan(state, () => 0);
+    expect(response.length).toBeGreaterThan(1);
+    for (const action of response) state = gameReducer(state, action);
+    expect(state.activeColor).toBe("white");
+  });
 });
