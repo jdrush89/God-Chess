@@ -143,7 +143,7 @@ export const GODS: God[] = [
     accent: "#d9894c",
     symbol: "K",
     abilities: [
-      ability("ritual-sacrifice", "Ritual Sacrifice", "Move a piece. If that piece gets taken on your opponent’s next turn, gain 3 of each orb.", "move", [
+      ability("ritual-sacrifice", "Goad", "Move a piece. If that piece gets taken on your opponent’s next turn, gain 3 of each orb.", "move", [
         "Reward 3 of each if captured next turn.",
         "You gain the orbs if the piece is taken at any time before Kangus’ next turn.",
         "Increase the reward to 4 white orbs and 4 black orbs.",

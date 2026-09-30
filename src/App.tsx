@@ -285,7 +285,7 @@ const pieceMarkerDetails = (piece: Piece, state: GameState) => {
       ? "before Kangus’ next turn"
       : `before turn ${piece.status.ritual.expires}`;
     markers.push({
-      name: "Ritual Sacrifice",
+      name: "Goad",
       description: `If captured ${duration}, ${colorLabel(piece.status.ritual.owner)} gains ${reward} white and ${reward} black orbs.`,
     });
   }
