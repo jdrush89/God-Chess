@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
-  availableFourPlayerActions,
   chooseFourPlayerAiPlan,
   evaluateFourPlayerState,
 } from "./fourPlayerAi";
 import { createDefaultFourPlayerConfig } from "./fourPlayerConfig";
-import { createFourPlayerGame, fourPlayerReducer } from "./fourPlayerEngine";
+import {
+  availableFourPlayerActions,
+  createFourPlayerGame,
+  fourPlayerReducer,
+} from "./fourPlayerEngine";
 import { FOUR_PLAYER_SEATS, type FourPlayerState } from "./fourPlayerTypes";
 import { GODS } from "./gods";
 

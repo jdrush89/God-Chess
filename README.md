@@ -41,6 +41,9 @@ corners are outside the playable board.
   teammates would otherwise act consecutively.
 - Choose last surviving player/team or the optional first-King-captured victory
   rule.
+- Checkmate is resolved when the checked seat's turn begins, after intervening
+  players have had a chance to disrupt it. If no complete chess or divine
+  action can escape, the latest player to attack that King receives the capture.
 - With takeover disabled, an eliminated seat’s remaining pieces become inert
   but stay capturable. With takeover enabled, the capturer controls those
   pieces; Gods and upgrades never transfer.

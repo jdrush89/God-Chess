@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { GOD_BY_ID, GODS } from "./gods";
 import {
+  fourPlayerIsInCheck,
+  fourPlayerLegalTargets,
+} from "./fourPlayerChess";
+import {
   createDefaultFourPlayerConfig,
   createFourPlayerDraftOrder,
   createTurnOrder,
@@ -47,6 +51,43 @@ const readyGame = () => {
     g1: piece(state, "king", "south", "south-king"),
     a7: piece(state, "king", "west", "west-king"),
     g10: piece(state, "rook", "north", "north-rook"),
+  };
+  return state;
+};
+
+const validPlayState = () => {
+  const state = readyGame();
+  state.players.north.gods = ["chiron", "kangus", "ares"];
+  state.players.east.gods = ["teles", "artemis", "anubis"];
+  state.players.south.gods = ["death", "leonidas", "midas"];
+  state.players.west.gods = ["medusa", "salem", "quetzacoatl"];
+  state.players.north.orbs = { light: 0, dark: 0 };
+  state.draft.pickIndex = 12;
+  state.draft.available = [];
+  return state;
+};
+
+const doubleQueenMate = () => {
+  const state = validPlayState();
+  state.board = {
+    d14: piece(state, "king", "north", "north-king"),
+    e14: {
+      ...piece(state, "pawn", "north", "north-blocker"),
+      status: { hardened: "god" },
+    },
+    n8: piece(state, "king", "east", "east-king"),
+    d10: piece(state, "queen", "east", "east-queen"),
+    g1: piece(state, "king", "south", "south-king"),
+    f12: piece(state, "queen", "south", "south-queen"),
+    a7: piece(state, "king", "west", "west-king"),
+  };
+  state.activeSeat = "north";
+  state.attackSequence = 2;
+  state.kingAttackRecency = {
+    north: { east: 1, south: 2 },
+    east: {},
+    south: {},
+    west: {},
   };
   return state;
 };
@@ -136,6 +177,123 @@ describe("four-player configuration and flow", () => {
     const invalidOrbs = JSON.parse(JSON.stringify(state)) as FourPlayerState;
     invalidOrbs.players.north.orbs.light = -1;
     expect(isFourPlayerState(invalidOrbs)).toBe(false);
+  });
+
+  it("adds attack tracking metadata when preparing older four-player saves", () => {
+    const legacy = JSON.parse(JSON.stringify(validPlayState())) as FourPlayerState;
+    delete legacy.attackSequence;
+    delete legacy.kingAttackRecency;
+    expect(isFourPlayerState(legacy)).toBe(true);
+    expect(prepareFourPlayerState(legacy)).toMatchObject({
+      attackSequence: 0,
+      kingAttackRecency: {
+        north: {},
+        east: {},
+        south: {},
+        west: {},
+      },
+    });
+  });
+
+  it("eliminates a checkmated player when their turn begins and credits the latest attacker", () => {
+    const state = doubleQueenMate();
+    expect(fourPlayerIsInCheck(state.board, "north", state.config)).toBe(true);
+    expect(fourPlayerLegalTargets(state.board, "d14", state.config)).toEqual([]);
+
+    const result = fourPlayerReducer(state, { type: "load", state });
+
+    expect(result.players.north).toMatchObject({
+      eliminated: true,
+      eliminatedBy: "south",
+    });
+    expect(result.players.north.graveyard.at(-1)?.piece.id).toBe("north-king");
+    expect(result.board.d14).toBeUndefined();
+    expect(result.activeSeat).toBe("east");
+    expect(result.history).toContain("North was checkmated by South.");
+  });
+
+  it("records the player who adds the final checking attack before mate is resolved", () => {
+    let state = readyGame();
+    state.turnOrder = ["south", "north", "east", "west"];
+    state.activeSeat = "south";
+    state.players.south.gods = ["ares"];
+    state.players.south.orbs = { light: 0, dark: 0 };
+    state.board = {
+      d14: piece(state, "king", "north", "north-king"),
+      e14: {
+        ...piece(state, "pawn", "north", "north-blocker"),
+        status: { hardened: "god" },
+      },
+      n8: piece(state, "king", "east", "east-king"),
+      d10: piece(state, "queen", "east", "east-queen"),
+      g1: piece(state, "king", "south", "south-king"),
+      f10: piece(state, "queen", "south", "south-queen"),
+      a7: piece(state, "king", "west", "west-king"),
+    };
+
+    state = fourPlayerReducer(state, { type: "select-god", godId: "ares" });
+    state = fourPlayerReducer(state, { type: "select-ability", abilityId: "threaten" });
+    state = fourPlayerReducer(state, { type: "square", square: "f10" });
+    state = fourPlayerReducer(state, { type: "square", square: "f12" });
+
+    expect(state.players.north).toMatchObject({
+      eliminated: true,
+      eliminatedBy: "south",
+    });
+    expect(state.activeSeat).toBe("east");
+  });
+
+  it("does not eliminate a checked player when a legal escape remains", () => {
+    const state = doubleQueenMate();
+    delete state.board.e14;
+
+    const result = fourPlayerReducer(state, { type: "load", state });
+
+    expect(fourPlayerLegalTargets(state.board, "d14", state.config)).toContain("e14");
+    expect(result.players.north.eliminated).toBe(false);
+    expect(result.activeSeat).toBe("north");
+  });
+
+  it("counts a divine King escape when deciding whether the active player is checkmated", () => {
+    const state = doubleQueenMate();
+    state.players.north.gods = ["quetzacoatl", "kangus", "ares"];
+    state.players.west.gods = ["medusa", "salem", "chiron"];
+    state.players.north.orbs.light = 3;
+
+    const result = fourPlayerReducer(state, { type: "load", state });
+
+    expect(fourPlayerLegalTargets(state.board, "d14", state.config)).toEqual([]);
+    expect(result.players.north.eliminated).toBe(false);
+    expect(result.activeSeat).toBe("north");
+  });
+
+  it("applies first-King victory and takeover through start-of-turn checkmate", () => {
+    const state = doubleQueenMate();
+    state.config.victoryMode = "first-king-captured";
+    state.config.takeover = true;
+    state.board.h13 = {
+      ...piece(state, "rook", "north", "north-rook"),
+      status: { frozen: "god" },
+    };
+
+    const result = fourPlayerReducer(state, { type: "load", state });
+
+    expect(result.board.h13.controller).toBe("south");
+    expect(result.winner).toEqual({
+      seat: "south",
+      team: undefined,
+      reason: "first-king-captured",
+    });
+  });
+
+  it("waits for the checked player's turn so an intervening player can disrupt the mate", () => {
+    const state = doubleQueenMate();
+    state.activeSeat = "east";
+
+    const result = fourPlayerReducer(state, { type: "select-god", godId: "teles" });
+
+    expect(result.players.north.eliminated).toBe(false);
+    expect(result.activeSeat).toBe("east");
   });
 
   it("skips eliminated seats in clockwise turn order", () => {

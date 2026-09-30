@@ -65,6 +65,17 @@ describe("four-player app integration", () => {
     expect(document.querySelectorAll(".four-draft-progress .draft-pip")).toHaveLength(12);
   });
 
+  it("previews level two and three ability rules during the four-player draft", () => {
+    openFourPlayerSetup();
+    fireEvent.click(screen.getByRole("button", { name: /begin four-player draft/i }));
+
+    expect(screen.queryByText(/enemy piece you fly over/i)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /lv 2/i }));
+    expect(screen.getByText(/enemy piece you fly over/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /lv 3/i }));
+    expect(screen.getByText(/friendly piece you fly over/i)).toBeTruthy();
+  });
+
   it("keeps drafted Gods inspectable while preventing them from being claimed again", () => {
     openFourPlayerSetup();
     fireEvent.click(screen.getByRole("button", { name: /begin four-player draft/i }));
@@ -145,6 +156,10 @@ describe("four-player app integration", () => {
     expect(container.querySelectorAll(".four-board-outside")).toHaveLength(36);
     expect(container.querySelectorAll(".four-player-panel")).toHaveLength(4);
     expect(screen.getByRole("gridcell", { name: /g14, north king/i })).toBeTruthy();
+    const northPanel = container.querySelector(".four-player-panel.seat-north") as HTMLElement;
+    expect(
+      northPanel.querySelector(".four-panel-resources > .four-panel-menu"),
+    ).toBeTruthy();
   });
 
   it("labels inert and takeover-controlled pieces accessibly", () => {

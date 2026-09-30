@@ -149,6 +149,8 @@ export interface FourPlayerState {
   bananas: FourPlayerBanana[];
   stealth: Record<Seat, FourPlayerStealthMove[]>;
   bonusTurn?: Seat;
+  attackSequence?: number;
+  kingAttackRecency?: Record<Seat, Partial<Record<Seat, number>>>;
   winner?: FourPlayerWinner;
   history: string[];
   lastAction?: string;

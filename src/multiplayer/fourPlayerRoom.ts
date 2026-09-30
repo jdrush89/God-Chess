@@ -1,5 +1,4 @@
 import {
-  availableFourPlayerActions,
   chooseFourPlayerAiPlan,
   isFourPlayerAiTurn,
 } from "../game/fourPlayerAi";
@@ -8,6 +7,7 @@ import {
   validateFourPlayerConfig,
 } from "../game/fourPlayerConfig";
 import {
+  availableFourPlayerActions,
   createFourPlayerGame,
   fourPlayerReducer,
 } from "../game/fourPlayerEngine";

@@ -6,6 +6,8 @@ import {
   fourPlayerDistance,
   fourPlayerFlightPathSquares,
   fourPlayerIsInCheck,
+  fourPlayerIsSquareAttackedBy,
+  fourPlayerKingSquare,
   fourPlayerLegalTargets,
   fourPlayerLineOfSight,
   fourPlayerPathSquares,
@@ -43,6 +45,12 @@ import type { GodId, PieceType, Square } from "./types";
 const name = (seat: Seat) => seat[0].toUpperCase() + seat.slice(1);
 const pieceName = (piece: FourPlayerPiece) => piece.type[0].toUpperCase() + piece.type.slice(1);
 const clone = (state: FourPlayerState): FourPlayerState => structuredClone(state);
+const emptyKingAttackRecency = (): NonNullable<FourPlayerState["kingAttackRecency"]> => ({
+  north: {},
+  east: {},
+  south: {},
+  west: {},
+});
 
 const activePlayer = (state: FourPlayerState) => state.players[state.activeSeat];
 const currentLevel = (state: FourPlayerState, abilityId: string) =>
@@ -130,6 +138,50 @@ const findSquareById = (state: FourPlayerState, pieceId: string) =>
 
 const livingSeats = (state: FourPlayerState) =>
   state.turnOrder.filter((seat) => !state.players[seat].eliminated);
+
+const checkingSeats = (state: FourPlayerState, defender: Seat) => {
+  const king = fourPlayerKingSquare(state.board, defender);
+  if (!king) return [];
+  return FOUR_PLAYER_SEATS.filter((attacker) =>
+    seatsAreHostile(state.config, defender, attacker) &&
+    fourPlayerIsSquareAttackedBy(
+      state.board,
+      king,
+      attacker,
+      state.config,
+      state.bananas,
+    )
+  );
+};
+
+const ensureKingAttackTracking = (state: FourPlayerState) => {
+  state.attackSequence ??= 0;
+  state.kingAttackRecency ??= emptyKingAttackRecency();
+};
+
+const recordKingAttackChanges = (
+  previous: FourPlayerState | undefined,
+  next: FourPlayerState,
+) => {
+  ensureKingAttackTracking(next);
+  for (const defender of FOUR_PLAYER_SEATS) {
+    if (next.players[defender].eliminated) continue;
+    const previousAttackers = new Set(
+      previous && !previous.players[defender].eliminated
+        ? checkingSeats(previous, defender)
+        : [],
+    );
+    for (const attacker of checkingSeats(next, defender)) {
+      const recorded = next.kingAttackRecency![defender][attacker];
+      if (
+        recorded !== undefined &&
+        (!previous || previousAttackers.has(attacker))
+      ) continue;
+      next.attackSequence! += 1;
+      next.kingAttackRecency![defender][attacker] = next.attackSequence;
+    }
+  }
+};
 
 const hasUpgradeableAbility = (state: FourPlayerState, seat: Seat) =>
   state.players[seat].gods.some((godId) =>
@@ -262,6 +314,7 @@ const sendToGraveyard = (
   state: FourPlayerState,
   piece: FourPlayerPiece,
   source: Square,
+  captor = state.activeSeat,
 ) => {
   state.players[piece.owner].graveyard.push({
     piece: structuredClone(piece),
@@ -277,7 +330,7 @@ const sendToGraveyard = (
     const reward = levelFor(state, piece.status.ritual.owner, "ritual-sacrifice") >= 3 ? 4 : 3;
     addOrbs(state, piece.status.ritual.owner, reward, reward);
   }
-  if (piece.type === "king") eliminateSeat(state, piece.owner, state.activeSeat);
+  if (piece.type === "king") eliminateSeat(state, piece.owner, captor);
   log(state, `${name(piece.owner)}'s ${piece.type} was captured on ${source}.`);
 };
 
@@ -580,6 +633,8 @@ export const createFourPlayerGame = (
     seatTurns: { north: 0, east: 0, south: 0, west: 0 },
     hostileTurns: { north: 0, east: 0, south: 0, west: 0 },
     godTurns: { north: {}, east: {}, south: {}, west: {} },
+    attackSequence: 0,
+    kingAttackRecency: emptyKingAttackRecency(),
     upgradeQueue: [],
     legalTargets: [],
     legalSeats: [],
@@ -2414,15 +2469,235 @@ export const unsupportedFourPlayerAbilities = () =>
     .map((ability) => ability.id)
     .filter((abilityId) => !FOUR_PLAYER_SUPPORTED_ABILITIES.has(abilityId));
 
-export const fourPlayerReducer = (
+const availableAbilityActions = (state: FourPlayerState): FourPlayerAction[] => {
+  if (!state.selectedGod) return [];
+  const orbs = state.players[state.activeSeat].orbs;
+  return GOD_BY_ID[state.selectedGod].abilities
+    .filter((ability) =>
+      orbs.light >= (ability.cost?.white ?? 0) &&
+      orbs.dark >= (ability.cost?.black ?? 0)
+    )
+    .map((ability) => ({ type: "select-ability", abilityId: ability.id }));
+};
+
+const canPassAction = (state: FourPlayerState) =>
+  state.pending?.abilityId === "snipe-shot" ||
+  state.selectedAbility === "construction" ||
+  state.selectedAbility === "marked" ||
+  state.pending?.step === "slither" ||
+  state.pending?.step === "mount-rider" ||
+  state.pending?.step === "funding" ||
+  state.pending?.step === "march-companions" ||
+  state.pending?.step === "barter-orb" ||
+  (state.pending?.step === "escort-companions" && Boolean(state.pending.selected?.length)) ||
+  (state.pending?.step === "hex-target" && Boolean(state.pending.selected?.length));
+
+export const availableFourPlayerActions = (
+  state: FourPlayerState,
+): FourPlayerAction[] => {
+  if (state.phase === "draft") {
+    return state.draft.available.map((godId) => ({ type: "draft", godId }));
+  }
+  if (state.phase === "upgrade") {
+    return state.players[state.activeSeat].gods.flatMap((godId) =>
+      GOD_BY_ID[godId].abilities
+        .filter((ability) =>
+          abilityLevel(state.players[state.activeSeat].upgrades, ability.id) < 3
+        )
+        .map((ability) => ({ type: "upgrade", abilityId: ability.id } as FourPlayerAction)),
+    );
+  }
+  if (state.phase !== "play") return [];
+
+  if (state.pending?.abilityId === "harden-choice") {
+    if (state.pending.step === "harden-choice") {
+      return state.legalTargets.map((square) => ({ type: "square", square }));
+    }
+    if (state.pending.step === "harden-decision") {
+      return [{ type: "choice", value: true }, { type: "choice", value: false }];
+    }
+  }
+  if (state.pending?.abilityId === "snipe-shot") {
+    return [
+      ...state.legalTargets.map((square) => ({ type: "square", square } as FourPlayerAction)),
+      { type: "pass" },
+    ];
+  }
+  if (state.pending?.step === "grave") {
+    return state.players[state.activeSeat].graveyard
+      .map(({ piece }) => ({ type: "grave", pieceId: piece.id }));
+  }
+  if (state.pending?.step === "siphon-seat" || state.pending?.step === "barter-seat") {
+    return state.legalSeats.map((seat) => ({ type: "seat", seat }));
+  }
+  if (state.pending?.step === "siphon-amount") {
+    return [2, 1, 0].map((amount) => ({ type: "amount", amount } as FourPlayerAction));
+  }
+  if (state.pending?.step === "barter-orb") {
+    const orbs = state.players[state.activeSeat].orbs;
+    return [
+      ...(orbs.light > 0 ? [{ type: "orb", orb: "light" } as FourPlayerAction] : []),
+      ...(orbs.dark > 0 ? [{ type: "orb", orb: "dark" } as FourPlayerAction] : []),
+      { type: "orb" },
+    ];
+  }
+  if (
+    state.pending?.step === "rage-choice" ||
+    state.pending?.step === "marked-choice" ||
+    state.pending?.step === "resurrect-more"
+  ) {
+    return [{ type: "choice", value: true }, { type: "choice", value: false }];
+  }
+  if (
+    state.pending?.step === "confirm-stone-gaze" ||
+    state.pending?.step === "confirm-march-home"
+  ) {
+    return [{ type: "confirm-ability" }];
+  }
+  if (!state.selectedGod) {
+    return state.players[state.activeSeat].gods
+      .filter((godId) => !state.rested.includes(godId))
+      .map((godId) => ({ type: "select-god", godId }));
+  }
+  if (!state.selectedAbility) return availableAbilityActions(state);
+
+  const actions: FourPlayerAction[] = [];
+  if (state.legalTargets.length) {
+    actions.push(...state.legalTargets.map(
+      (square) => ({ type: "square", square } as FourPlayerAction),
+    ));
+  } else if (state.pending?.step === "source") {
+    actions.push(...Object.keys(state.board).map(
+      (square) => ({ type: "square", square } as FourPlayerAction),
+    ));
+  }
+  if (canPassAction(state)) actions.push({ type: "pass" });
+  return actions;
+};
+
+const checkmateStateSignature = (state: FourPlayerState) => JSON.stringify({
+  phase: state.phase,
+  activeSeat: state.activeSeat,
+  turn: state.turn,
+  round: state.round,
+  selectedGod: state.selectedGod,
+  selectedAbility: state.selectedAbility,
+  selectedSquare: state.selectedSquare,
+  legalTargets: state.legalTargets,
+  legalSeats: state.legalSeats,
+  pending: state.pending,
+  board: state.board,
+  players: state.players,
+  rested: state.rested,
+  seatTurns: state.seatTurns,
+  hostileTurns: state.hostileTurns,
+  godTurns: state.godTurns,
+  bananas: state.bananas,
+  stealth: state.stealth,
+  enPassant: state.enPassant,
+  bonusTurn: state.bonusTurn,
+  winner: state.winner,
+});
+
+const completedTurnFor = (
+  initial: FourPlayerState,
+  candidate: FourPlayerState,
+) =>
+  candidate.phase === "gameover" ||
+  candidate.phase !== initial.phase ||
+  candidate.turn !== initial.turn ||
+  candidate.activeSeat !== initial.activeSeat;
+
+const hasCheckEscape = (state: FourPlayerState) => {
+  const defender = state.activeSeat;
+  const seen = new Set<string>([checkmateStateSignature(state)]);
+  let frontier = [state];
+  for (let depth = 0; depth < 16 && frontier.length; depth += 1) {
+    const nextFrontier: FourPlayerState[] = [];
+    for (const candidate of frontier) {
+      for (const action of availableFourPlayerActions(candidate)) {
+        const next = reduceFourPlayerState(candidate, action, false);
+        const signature = checkmateStateSignature(next);
+        if (signature === checkmateStateSignature(candidate) || seen.has(signature)) continue;
+        seen.add(signature);
+        if (completedTurnFor(state, next)) {
+          if (
+            !next.players[defender].eliminated &&
+            !fourPlayerIsInCheck(next.board, defender, next.config, next.bananas)
+          ) return true;
+          continue;
+        }
+        nextFrontier.push(next);
+      }
+    }
+    frontier = nextFrontier;
+  }
+  return false;
+};
+
+const mostRecentCheckingSeat = (state: FourPlayerState, defender: Seat) => {
+  ensureKingAttackTracking(state);
+  const attackers = checkingSeats(state, defender);
+  return attackers.sort((first, second) =>
+    (state.kingAttackRecency![defender][second] ?? 0) -
+    (state.kingAttackRecency![defender][first] ?? 0)
+  )[0];
+};
+
+const resolveTurnStartCheckmates = (state: FourPlayerState) => {
+  while (
+    state.phase === "play" &&
+    !state.winner &&
+    fourPlayerIsInCheck(state.board, state.activeSeat, state.config, state.bananas) &&
+    !hasCheckEscape(state)
+  ) {
+    const eliminated = state.activeSeat;
+    const captor = mostRecentCheckingSeat(state, eliminated);
+    const kingSquare = fourPlayerKingSquare(state.board, eliminated);
+    const king = kingSquare ? state.board[kingSquare] : undefined;
+    if (!captor || !kingSquare || !king) return;
+    delete state.board[kingSquare];
+    sendToGraveyard(state, king, kingSquare, captor);
+    log(state, `${name(eliminated)} was checkmated by ${name(captor)}.`);
+    state.selectedGod = undefined;
+    state.selectedAbility = undefined;
+    state.selectedSquare = undefined;
+    state.pending = undefined;
+    state.legalTargets = [];
+    state.legalSeats = [];
+    if (state.winner) return;
+    state.turn += 1;
+    state.activeSeat = nextLivingSeat(state, eliminated);
+    const beforeStart = clone(state);
+    resolveStartOfTurn(state);
+    recordKingAttackChanges(beforeStart, state);
+    if (!state.winner) {
+      state.notice = `${name(state.activeSeat)} to act. Choose an available God.`;
+    }
+  }
+};
+
+const beganPlayTurn = (previous: FourPlayerState, next: FourPlayerState) =>
+  next.phase === "play" &&
+  (
+    previous.phase !== "play" ||
+    next.turn !== previous.turn ||
+    next.activeSeat !== previous.activeSeat
+  );
+
+const reduceFourPlayerState = (
   state: FourPlayerState,
   action: FourPlayerAction,
+  resolveCheckmate: boolean,
 ): FourPlayerState => {
   if (action.type === "load") {
     if (!isFourPlayerState(action.state)) {
       throw new Error("Cannot load an invalid four-player state.");
     }
-    return clone(action.state);
+    const loaded = clone(action.state);
+    recordKingAttackChanges(undefined, loaded);
+    if (resolveCheckmate && loaded.phase === "play") resolveTurnStartCheckmates(loaded);
+    return loaded;
   }
   if (action.type === "restart") return createFourPlayerGame(state.config);
   const next = clone(state);
@@ -2607,5 +2882,14 @@ export const fourPlayerReducer = (
       }
     }
   }
+  recordKingAttackChanges(state, next);
+  if (resolveCheckmate && beganPlayTurn(state, next)) {
+    resolveTurnStartCheckmates(next);
+  }
   return next;
 };
+
+export const fourPlayerReducer = (
+  state: FourPlayerState,
+  action: FourPlayerAction,
+): FourPlayerState => reduceFourPlayerState(state, action, true);

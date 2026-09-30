@@ -35,13 +35,13 @@ import {
   useState,
 } from "react";
 import {
-  availableFourPlayerActions,
   chooseFourPlayerAiPlan,
   isFourPlayerAiTurn,
 } from "../game/fourPlayerAi";
 import { fourPlayerSquareAt } from "../game/fourPlayerChess";
 import { seatsAreAllies } from "../game/fourPlayerConfig";
 import {
+  availableFourPlayerActions,
   fourPlayerReducer,
   hasCommittedFourPlayerAction,
 } from "../game/fourPlayerEngine";
@@ -244,6 +244,47 @@ function PieceView({
   );
 }
 
+function LevelSelector({
+  level,
+  onChange,
+  label = "Preview",
+  className = "",
+}: {
+  level: number;
+  onChange: (level: number) => void;
+  label?: string;
+  className?: string;
+}) {
+  const selectLevel = (event: React.MouseEvent<HTMLButtonElement>, nextLevel: number) => {
+    event.stopPropagation();
+    onChange(nextLevel);
+  };
+
+  return (
+    <div className={`level-selector ${className}`} aria-label={`${label} levels`}>
+      <span>{label}</span>
+      <button
+        type="button"
+        aria-pressed={level >= 2}
+        className={level >= 2 ? "active" : ""}
+        onClick={(event) => selectLevel(event, level >= 2 ? 1 : 2)}
+        onKeyDown={(event) => event.stopPropagation()}
+      >
+        <i /> Lv 2
+      </button>
+      <button
+        type="button"
+        aria-pressed={level >= 3}
+        className={level >= 3 ? "active" : ""}
+        onClick={(event) => selectLevel(event, level >= 3 ? 2 : 3)}
+        onKeyDown={(event) => event.stopPropagation()}
+      >
+        <i /> Lv 3
+      </button>
+    </div>
+  );
+}
+
 function FourPlayerDraft({
   state,
   dispatch,
@@ -262,8 +303,13 @@ function FourPlayerDraft({
   onOpenSettings: () => void;
 }) {
   const [inspected, setInspected] = useState<GodId>(state.draft.available[0]);
+  const [godPreviewLevel, setGodPreviewLevel] = useState<number>();
   const activePlayer = state.players[state.activeSeat];
   const currentGod = GOD_BY_ID[inspected];
+
+  useEffect(() => {
+    setGodPreviewLevel(undefined);
+  }, [inspected]);
 
   return (
     <main className={`draft-page four-draft-page ${inputDisabled ? "input-locked" : ""}`}>
@@ -358,6 +404,12 @@ function FourPlayerDraft({
               <span>{currentGod.epithet}</span>
             </div>
           </div>
+          <LevelSelector
+            level={godPreviewLevel ?? 1}
+            onChange={setGodPreviewLevel}
+            label="All abilities"
+            className="god-level-selector"
+          />
           <div className="draft-abilities">
             {currentGod.abilities.map((ability, index) => (
               <div className="draft-ability" key={ability.id}>
@@ -365,6 +417,12 @@ function FourPlayerDraft({
                 <div>
                   <strong>{ability.name}</strong>
                   <p>{ability.summary}</p>
+                  {(godPreviewLevel ?? 1) >= 2 && ability.details[1] && (
+                    <p className="level-rule"><b>Lv 2:</b> {ability.details[1]}</p>
+                  )}
+                  {(godPreviewLevel ?? 1) >= 3 && ability.details[2] && (
+                    <p className="level-rule"><b>Lv 3:</b> {ability.details[2]}</p>
+                  )}
                 </div>
                 {ability.cost && (
                   <div className="mini-cost">
@@ -434,7 +492,7 @@ function FourPlayerPanel({
   const [toolsOpen, setToolsOpen] = useState(false);
   return (
     <section
-      className={`four-player-panel seat-${seat} ${active ? "active" : ""} ${player.eliminated ? "eliminated" : ""} ${selectableSeat ? "seat-target" : ""}`}
+      className={`four-player-panel seat-${seat} ${active ? "active" : ""} ${player.eliminated ? "eliminated" : ""} ${selectableSeat ? "seat-target" : ""} ${toolsOpen ? "tools-open" : ""}`}
       style={{ "--seat-color": player.displayColor } as React.CSSProperties}
       aria-label={`${player.name}, ${seatName(seat)}${player.eliminated ? ", eliminated" : ""}`}
     >
@@ -465,20 +523,20 @@ function FourPlayerPanel({
         >
           <Skull size={14} /><b>{player.graveyard.length}</b>
         </button>
+        <button
+          className="four-panel-menu"
+          onClick={() => setToolsOpen((open) => !open)}
+          aria-label={`${toolsOpen ? "Close" : "Open"} ${player.name} pantheon`}
+          aria-expanded={toolsOpen}
+        >
+          {toolsOpen ? <X size={15} /> : <Menu size={15} />}
+        </button>
         {controlled > 0 && (
           <span className="takeover-count" title="Pieces controlled through takeover">
             <Swords size={13} />{controlled}
           </span>
         )}
       </div>
-      <button
-        className="four-panel-menu"
-        onClick={() => setToolsOpen((open) => !open)}
-        aria-label={`${toolsOpen ? "Close" : "Open"} ${player.name} pantheon`}
-        aria-expanded={toolsOpen}
-      >
-        {toolsOpen ? <X size={15} /> : <Menu size={15} />}
-      </button>
       <div className={`four-panel-gods ${toolsOpen ? "open" : ""}`}>
         {player.gods.map((godId) => (
           <button
@@ -579,12 +637,14 @@ const canPass = (state: FourPlayerState) =>
 function AbilityCard({
   ability,
   level,
+  previewLevel,
   active,
   disabled,
   onClick,
 }: {
   ability: Ability;
   level: number;
+  previewLevel?: number;
   active: boolean;
   disabled: boolean;
   onClick: () => void;
@@ -600,6 +660,12 @@ function AbilityCard({
         <small>Level {level}</small>
       </span>
       <p>{ability.summary}</p>
+      {(previewLevel ?? level) >= 2 && ability.details[1] && (
+        <p className="level-rule"><b>Lv 2:</b> {ability.details[1]}</p>
+      )}
+      {(previewLevel ?? level) >= 3 && ability.details[2] && (
+        <p className="level-rule"><b>Lv 3:</b> {ability.details[2]}</p>
+      )}
       <div>
         {ability.cost?.white ? <Orb affinity="light" count={ability.cost.white} /> : null}
         {ability.cost?.black ? <Orb affinity="dark" count={ability.cost.black} /> : null}
@@ -735,6 +801,14 @@ function FourActionPanel({
   const owner = state.players[ownerSeat];
   const readOnly = Boolean(inspectedGod);
   const committed = hasCommittedFourPlayerAction(state);
+  const [godPreviewLevel, setGodPreviewLevel] = useState<number>();
+  const defaultGodPreviewLevel = god
+    ? Math.min(...god.abilities.map((ability) => abilityLevel(owner.upgrades, ability.id)))
+    : 1;
+
+  useEffect(() => {
+    setGodPreviewLevel(undefined);
+  }, [presentedGodId]);
 
   if (state.phase === "upgrade") {
     return (
@@ -900,6 +974,12 @@ function FourActionPanel({
               ))}
             </div>
           )}
+          <LevelSelector
+            level={godPreviewLevel ?? defaultGodPreviewLevel}
+            onChange={setGodPreviewLevel}
+            label="All abilities"
+            className="god-level-selector"
+          />
           <div className="four-ability-list">
             {god.abilities.map((ability) => {
               const level = abilityLevel(owner.upgrades, ability.id);
@@ -914,6 +994,7 @@ function FourActionPanel({
                 <AbilityCard
                   ability={ability}
                   level={level}
+                  previewLevel={godPreviewLevel}
                   active={!readOnly && state.selectedAbility === ability.id}
                   disabled={
                     readOnly ||
@@ -1200,7 +1281,7 @@ export function FourPlayerGame({
   const [state, baseDispatch] = useReducer(
     fourPlayerReducer,
     initialState,
-    prepareFourPlayerState,
+    (source) => fourPlayerReducer(source, { type: "load", state: source }),
   );
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -1232,8 +1313,9 @@ export function FourPlayerGame({
 
   const updateUndoDepth = () => setUndoDepth(undoStack.current.length);
   const receiveState = (next: FourPlayerState) => {
-    stateRef.current = next;
-    baseDispatch({ type: "load", state: next });
+    const loaded = fourPlayerReducer(next, { type: "load", state: next });
+    stateRef.current = loaded;
+    baseDispatch({ type: "load", state: loaded });
   };
   useEffect(() => {
     if (onlineSession) receiveState(prepareFourPlayerState(initialState));

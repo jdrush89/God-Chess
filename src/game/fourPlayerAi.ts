@@ -5,7 +5,10 @@ import {
   fourPlayerPseudoTargets,
 } from "./fourPlayerChess";
 import { seatsAreAllies, seatsAreHostile } from "./fourPlayerConfig";
-import { fourPlayerReducer } from "./fourPlayerEngine";
+import {
+  availableFourPlayerActions,
+  fourPlayerReducer,
+} from "./fourPlayerEngine";
 import {
   FOUR_PLAYER_SEATS,
   type FourPlayerAction,
@@ -13,7 +16,6 @@ import {
   type FourPlayerState,
   type Seat,
 } from "./fourPlayerTypes";
-import { abilityLevel, GOD_BY_ID } from "./gods";
 import type { GodId } from "./types";
 
 interface SearchNode {
@@ -142,112 +144,6 @@ export const evaluateFourPlayerState = (
   );
   if (allies.has(state.activeSeat)) score += 0.2;
   return score;
-};
-
-const abilityActions = (state: FourPlayerState): FourPlayerAction[] => {
-  if (!state.selectedGod) return [];
-  const orbs = state.players[state.activeSeat].orbs;
-  return GOD_BY_ID[state.selectedGod].abilities
-    .filter((ability) =>
-      orbs.light >= (ability.cost?.white ?? 0) &&
-      orbs.dark >= (ability.cost?.black ?? 0)
-    )
-    .map((ability) => ({ type: "select-ability", abilityId: ability.id }));
-};
-
-const canPass = (state: FourPlayerState) =>
-  state.pending?.abilityId === "snipe-shot" ||
-  state.selectedAbility === "construction" ||
-  state.selectedAbility === "marked" ||
-  state.pending?.step === "slither" ||
-  state.pending?.step === "mount-rider" ||
-  state.pending?.step === "funding" ||
-  state.pending?.step === "march-companions" ||
-  state.pending?.step === "barter-orb" ||
-  (state.pending?.step === "escort-companions" && Boolean(state.pending.selected?.length)) ||
-  (state.pending?.step === "hex-target" && Boolean(state.pending.selected?.length));
-
-export const availableFourPlayerActions = (
-  state: FourPlayerState,
-): FourPlayerAction[] => {
-  if (state.phase === "draft") {
-    return state.draft.available.map((godId) => ({ type: "draft", godId }));
-  }
-  if (state.phase === "upgrade") {
-    return state.players[state.activeSeat].gods.flatMap((godId) =>
-      GOD_BY_ID[godId].abilities
-        .filter((ability) =>
-          abilityLevel(state.players[state.activeSeat].upgrades, ability.id) < 3
-        )
-        .map((ability) => ({ type: "upgrade", abilityId: ability.id } as FourPlayerAction)),
-    );
-  }
-  if (state.phase !== "play") return [];
-
-  if (state.pending?.abilityId === "harden-choice") {
-    if (state.pending.step === "harden-choice") {
-      return state.legalTargets.map((square) => ({ type: "square", square }));
-    }
-    if (state.pending.step === "harden-decision") {
-      return [{ type: "choice", value: true }, { type: "choice", value: false }];
-    }
-  }
-  if (state.pending?.abilityId === "snipe-shot") {
-    return [
-      ...state.legalTargets.map((square) => ({ type: "square", square } as FourPlayerAction)),
-      { type: "pass" },
-    ];
-  }
-  if (state.pending?.step === "grave") {
-    return state.players[state.activeSeat].graveyard
-      .map(({ piece }) => ({ type: "grave", pieceId: piece.id }));
-  }
-  if (state.pending?.step === "siphon-seat" || state.pending?.step === "barter-seat") {
-    return state.legalSeats.map((seat) => ({ type: "seat", seat }));
-  }
-  if (state.pending?.step === "siphon-amount") {
-    return [2, 1, 0].map((amount) => ({ type: "amount", amount } as FourPlayerAction));
-  }
-  if (state.pending?.step === "barter-orb") {
-    const orbs = state.players[state.activeSeat].orbs;
-    return [
-      ...(orbs.light > 0 ? [{ type: "orb", orb: "light" } as FourPlayerAction] : []),
-      ...(orbs.dark > 0 ? [{ type: "orb", orb: "dark" } as FourPlayerAction] : []),
-      { type: "orb" },
-    ];
-  }
-  if (
-    state.pending?.step === "rage-choice" ||
-    state.pending?.step === "marked-choice" ||
-    state.pending?.step === "resurrect-more"
-  ) {
-    return [{ type: "choice", value: true }, { type: "choice", value: false }];
-  }
-  if (
-    state.pending?.step === "confirm-stone-gaze" ||
-    state.pending?.step === "confirm-march-home"
-  ) {
-    return [{ type: "confirm-ability" }];
-  }
-  if (!state.selectedGod) {
-    return state.players[state.activeSeat].gods
-      .filter((godId) => !state.rested.includes(godId))
-      .map((godId) => ({ type: "select-god", godId }));
-  }
-  if (!state.selectedAbility) return abilityActions(state);
-
-  const actions: FourPlayerAction[] = [];
-  if (state.legalTargets.length) {
-    actions.push(...state.legalTargets.map(
-      (square) => ({ type: "square", square } as FourPlayerAction),
-    ));
-  } else if (state.pending?.step === "source") {
-    actions.push(...Object.keys(state.board).map(
-      (square) => ({ type: "square", square } as FourPlayerAction),
-    ));
-  }
-  if (canPass(state)) actions.push({ type: "pass" });
-  return actions;
 };
 
 const isPlanComplete = (initial: FourPlayerState, next: FourPlayerState) => {

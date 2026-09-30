@@ -174,6 +174,14 @@ const isGodArray = (value: unknown): value is GodId[] =>
 const isSeatNumberRecord = (value: unknown) =>
   isRecord(value) && FOUR_PLAYER_SEATS.every((seat) => isInteger(value[seat]));
 
+const isKingAttackRecency = (value: unknown) =>
+  isRecord(value) && FOUR_PLAYER_SEATS.every((defender) => {
+    const recency = value[defender];
+    return isRecord(recency) && Object.entries(recency).every(
+      ([attacker, sequence]) => isSeat(attacker) && isInteger(sequence, 1),
+    );
+  });
+
 const isUpgrades = (value: unknown) =>
   isRecord(value) && Object.entries(value).every(
     ([abilityId, level]) =>
@@ -314,6 +322,8 @@ export const isFourPlayerState = (value: unknown): value is FourPlayerState => {
     value.selectedSquare !== undefined && !isSquare(value.selectedSquare) ||
     value.pending !== undefined && !isPending(value.pending) ||
     value.bonusTurn !== undefined && !isSeat(value.bonusTurn) ||
+    value.attackSequence !== undefined && !isInteger(value.attackSequence) ||
+    value.kingAttackRecency !== undefined && !isKingAttackRecency(value.kingAttackRecency) ||
     value.lastAction !== undefined && typeof value.lastAction !== "string"
   ) return false;
   if (
@@ -383,5 +393,13 @@ export const isFourPlayerState = (value: unknown): value is FourPlayerState => {
 
 export const prepareFourPlayerState = (state: FourPlayerState): FourPlayerState => {
   if (!isFourPlayerState(state)) throw new Error("Cannot serialize an invalid four-player state.");
-  return structuredClone(state);
+  const prepared = structuredClone(state);
+  prepared.attackSequence ??= 0;
+  prepared.kingAttackRecency ??= {
+    north: {},
+    east: {},
+    south: {},
+    west: {},
+  };
+  return prepared;
 };
