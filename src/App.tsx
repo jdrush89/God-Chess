@@ -2550,7 +2550,7 @@ function GameScreen({
         <aside className="history-drawer">
           <div><h3><History size={18} /> Chronicle</h3><button onClick={() => setHistoryOpen(false)}><X size={18} /></button></div>
           {state.history.map((entry, index) => (
-            <p key={`${entry}-${index}`}><span>{index === 0 ? "LATEST" : `${index + 1}`}</span>{entry}</p>
+            <p key={`${entry}-${index}`}><span>{index + 1}</span>{entry}</p>
           ))}
         </aside>
       )}
