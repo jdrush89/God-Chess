@@ -157,8 +157,9 @@ export const normalizeThreePlayerAction = (
   }
   if (value.type === "amount") {
     return hasExactKeys(value, ["type", "amount"]) &&
-        [0, 1, 2].includes(Number(value.amount)) &&
-        Number.isInteger(value.amount)
+        typeof value.amount === "number" &&
+        Number.isInteger(value.amount) &&
+        [0, 1, 2].includes(value.amount)
       ? { type: "amount", amount: value.amount as 0 | 1 | 2 }
       : undefined;
   }

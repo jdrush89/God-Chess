@@ -8,34 +8,107 @@ import { createThreePlayerStateEnvelope } from "../game/threePlayerSession";
 import type { ThreePlayerRoomSnapshot } from "./types";
 
 const peerHarness = vi.hoisted(() => ({
+  autoResolveHost: true,
+  autoResolvePeer: true,
+  hosts: [] as Array<{
+    callbacks: {
+      onSnapshot: (snapshot: unknown) => void;
+      onError: (error: string) => void;
+    };
+    resolveStart: () => void;
+    stopped: boolean;
+  }>,
   instances: [] as Array<{
     callbacks: {
+      onAccepted: (
+        participantId: string,
+        token: string,
+        roomCode: string,
+      ) => void;
+      onSnapshot: (snapshot: unknown) => void;
       onRejected: (reason: string) => void;
       onDisconnected: (roomEnded: boolean) => void;
+      onError: (error: string) => void;
     };
     connectArgs: unknown[][];
+    resolveConnect: () => void;
+    disconnected: boolean;
   }>,
 }));
 
 vi.mock("./threePlayerRoom", () => ({
   ThreePlayerRoomHost: class {
-    stop() {}
+    readonly hostParticipantId = "host";
+    readonly snapshot = {};
+    stopped = false;
+    private resolveStartPromise!: () => void;
+    private startPromise = new Promise<void>((resolve) => {
+      this.resolveStartPromise = resolve;
+    });
+
+    constructor(readonly name: string, readonly callbacks: {
+      onSnapshot: (snapshot: unknown) => void;
+      onError: (error: string) => void;
+    }) {
+      peerHarness.hosts.push({
+        callbacks,
+        resolveStart: () => this.resolveStartPromise(),
+        get stopped() {
+          return thisHost.stopped;
+        },
+      });
+      const thisHost = this;
+      if (peerHarness.autoResolveHost) this.resolveStartPromise();
+    }
+
+    async start() {
+      await this.startPromise;
+      return "HOST1";
+    }
+
+    stop() {
+      this.stopped = true;
+    }
   },
   ThreePlayerRoomPeer: class {
     connectArgs: unknown[][] = [];
+    disconnected = false;
+    private resolveConnectPromise!: () => void;
+    private connectPromise = new Promise<void>((resolve) => {
+      this.resolveConnectPromise = resolve;
+    });
 
     constructor(readonly callbacks: {
+      onAccepted: (
+        participantId: string,
+        token: string,
+        roomCode: string,
+      ) => void;
+      onSnapshot: (snapshot: unknown) => void;
       onRejected: (reason: string) => void;
       onDisconnected: (roomEnded: boolean) => void;
+      onError: (error: string) => void;
     }) {
-      peerHarness.instances.push(this);
+      peerHarness.instances.push({
+        callbacks,
+        connectArgs: this.connectArgs,
+        resolveConnect: () => this.resolveConnectPromise(),
+        get disconnected() {
+          return thisPeer.disconnected;
+        },
+      });
+      const thisPeer = this;
+      if (peerHarness.autoResolvePeer) this.resolveConnectPromise();
     }
 
     async connect(...args: unknown[]) {
       this.connectArgs.push(args);
+      await this.connectPromise;
     }
 
-    disconnect() {}
+    disconnect() {
+      this.disconnected = true;
+    }
     setReady() {}
     sendAction() {}
     requestUndo() {}
@@ -97,6 +170,9 @@ const snapshot = (
 
 describe("three-player online hook state", () => {
   beforeEach(() => {
+    peerHarness.autoResolveHost = true;
+    peerHarness.autoResolvePeer = true;
+    peerHarness.hosts.length = 0;
     peerHarness.instances.length = 0;
     window.sessionStorage.clear();
   });
@@ -164,6 +240,99 @@ describe("three-player online hook state", () => {
       peerHarness.instances[1].callbacks.onDisconnected(true);
     });
     expect(window.sessionStorage.getItem(reconnectStorageKey)).toBeNull();
+  });
+
+  it("cancels a delayed join before it completes and ignores late callbacks", async () => {
+    peerHarness.autoResolvePeer = false;
+    const { result } = renderHook(() => useThreePlayerOnlineGame());
+    let pending!: Promise<void>;
+    act(() => {
+      pending = result.current[1].joinGame("ABCDE", "Guest");
+    });
+    const peer = peerHarness.instances[0];
+
+    act(() => {
+      result.current[1].disconnect();
+    });
+    expect(peer.disconnected).toBe(true);
+    expect(result.current[0]).toEqual({
+      role: "none",
+      connecting: false,
+    });
+
+    act(() => {
+      peer.callbacks.onAccepted("stale", "late-token", "ABCDE");
+      peer.callbacks.onSnapshot(snapshot(4, "late"));
+      peer.callbacks.onError("late error");
+      peer.resolveConnect();
+    });
+    await act(async () => {
+      await pending;
+    });
+    expect(result.current[0]).toEqual({
+      role: "none",
+      connecting: false,
+    });
+    expect(window.sessionStorage.getItem(reconnectStorageKey)).toBeNull();
+  });
+
+  it("stops a delayed host when the hook unmounts", async () => {
+    peerHarness.autoResolveHost = false;
+    const { result, unmount } = renderHook(() => useThreePlayerOnlineGame());
+    let pending!: Promise<void>;
+    act(() => {
+      pending = result.current[1].hostGame("Host");
+    });
+    const host = peerHarness.hosts[0];
+
+    unmount();
+    expect(host.stopped).toBe(true);
+    act(() => {
+      host.callbacks.onSnapshot(snapshot(3, "late-host"));
+      host.callbacks.onError("late host error");
+      host.resolveStart();
+    });
+    await pending;
+    expect(host.stopped).toBe(true);
+  });
+
+  it("disconnects a pending join when switching attempts and rejects stale completion", async () => {
+    peerHarness.autoResolvePeer = false;
+    peerHarness.autoResolveHost = false;
+    const { result } = renderHook(() => useThreePlayerOnlineGame());
+    let pendingJoin!: Promise<void>;
+    let pendingHost!: Promise<void>;
+    act(() => {
+      pendingJoin = result.current[1].joinGame("ABCDE", "Guest");
+    });
+    const peer = peerHarness.instances[0];
+
+    act(() => {
+      pendingHost = result.current[1].hostGame("Host");
+    });
+    const host = peerHarness.hosts[0];
+    expect(peer.disconnected).toBe(true);
+    expect(result.current[0].playerName).toBe("Host");
+    expect(result.current[0].connecting).toBe(true);
+
+    act(() => {
+      peer.callbacks.onAccepted("stale", "late-token", "ABCDE");
+      peer.callbacks.onDisconnected(true);
+      peer.resolveConnect();
+    });
+    await act(async () => {
+      await pendingJoin;
+    });
+    expect(result.current[0].playerName).toBe("Host");
+    expect(result.current[0].connecting).toBe(true);
+    expect(window.sessionStorage.getItem(reconnectStorageKey)).toBeNull();
+
+    act(() => host.resolveStart());
+    await act(async () => {
+      await pendingHost;
+    });
+    expect(result.current[0].role).toBe("host");
+    expect(result.current[0].roomCode).toBe("HOST1");
   });
 
   it("ignores older snapshots and keeps action locks until acknowledgement", () => {

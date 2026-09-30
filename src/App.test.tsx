@@ -1,13 +1,128 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ThreePlayerOnlineState } from "./multiplayer/useThreePlayerOnlineGame";
+
+const threeOnlineHarness = vi.hoisted(() => ({
+  state: {
+    role: "none",
+    connecting: false,
+  } as ThreePlayerOnlineState,
+  setState: undefined as
+    | ((state: ThreePlayerOnlineState) => void)
+    | undefined,
+  disconnects: 0,
+}));
+
+vi.mock("./multiplayer/useThreePlayerOnlineGame", async () => {
+  const React = await import("react");
+  return {
+    threePlayerOnlineLocalSeat: (state: ThreePlayerOnlineState) =>
+      state.snapshot?.participants.find((participant) => participant.local)
+        ?.seat,
+    useThreePlayerOnlineGame: () => {
+      const [state, setState] = React.useState<ThreePlayerOnlineState>(
+        threeOnlineHarness.state,
+      );
+      threeOnlineHarness.setState = setState;
+      const disconnect = () => {
+        threeOnlineHarness.disconnects += 1;
+        setState({
+          role: "none",
+          connecting: false,
+        });
+      };
+      return [
+        state,
+        {
+          hostGame: async (playerName: string) => setState({
+            role: "none",
+            connecting: true,
+            playerName,
+          }),
+          joinGame: async (roomCode: string, playerName: string) => setState({
+            role: "none",
+            connecting: true,
+            roomCode,
+            playerName,
+          }),
+          setReady: vi.fn(),
+          assignSeat: vi.fn(),
+          updateConfig: vi.fn(),
+          startGame: vi.fn(),
+          sendAction: vi.fn(),
+          requestUndo: vi.fn(),
+          voteUndo: vi.fn(),
+          replaceWithAi: vi.fn(),
+          disconnect,
+        },
+      ] as const;
+    },
+  };
+});
+
 import App from "./App";
 import { createGame, gameReducer } from "./game/engine";
+import { createDefaultThreePlayerConfig } from "./game/threePlayerConfig";
+import { createThreePlayerGame } from "./game/threePlayerEngine";
+import { createThreePlayerStateEnvelope } from "./game/threePlayerSession";
 import { PUZZLES } from "./game/puzzles";
 
 const SAVE_KEY = "god-chess-saves-v2";
 const LEGACY_SAVE_KEY = "god-chess-save-v1";
+
+const activeThreeOnlineState = (
+  status: "playing" | "paused" = "playing",
+): ThreePlayerOnlineState => {
+  const config = createDefaultThreePlayerConfig();
+  config.seats.white.name = "Host";
+  config.seats.white.control = { kind: "online", local: true };
+  config.seats.red.name = "Guest";
+  config.seats.red.control = { kind: "online", local: false };
+  config.seats.black.name = "Black Divine AI";
+  config.seats.black.control = { kind: "ai", difficulty: 5 };
+  const state = createThreePlayerGame(config);
+  return {
+    role: "host",
+    connecting: false,
+    roomCode: "ABCDE",
+    participantId: "host",
+    snapshot: {
+      roomCode: "ABCDE",
+      status,
+      participants: [
+        {
+          participantId: "host",
+          name: "Host",
+          host: true,
+          connected: true,
+          ready: true,
+          local: true,
+          seat: "white",
+        },
+        {
+          participantId: "guest",
+          name: "Guest",
+          host: false,
+          connected: status !== "paused",
+          ready: true,
+          local: false,
+          seat: "red",
+        },
+      ],
+      config,
+      canonical: createThreePlayerStateEnvelope(state, "start"),
+      ...(status === "paused"
+        ? {
+          pausedSeat: "red" as const,
+          pausedParticipantName: "Guest",
+        }
+        : {}),
+      undoAvailable: false,
+    },
+  };
+};
 
 beforeAll(() => {
   Object.defineProperty(window, "matchMedia", {
@@ -32,6 +147,15 @@ beforeAll(() => {
 afterEach(() => {
   cleanup();
   window.localStorage.clear();
+});
+
+beforeEach(() => {
+  threeOnlineHarness.state = {
+    role: "none",
+    connecting: false,
+  };
+  threeOnlineHarness.setState = undefined;
+  threeOnlineHarness.disconnects = 0;
 });
 
 describe("game startup", () => {
@@ -79,6 +203,77 @@ describe("game startup", () => {
     await waitFor(() => {
       const saves = JSON.parse(window.localStorage.getItem(SAVE_KEY) ?? "[]");
       expect(saves[0]?.state?.variant).toBe("three-player");
+    });
+  });
+
+  it("leaves an existing local save untouched throughout online hosting and reconnect", async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /^new game$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /begin local duel/i }));
+    await waitFor(() => {
+      expect(JSON.parse(window.localStorage.getItem(SAVE_KEY) ?? "[]"))
+        .toHaveLength(1);
+    });
+    fireEvent.click(screen.getByRole("button", { name: /save & quit/i }));
+    await screen.findByRole("button", { name: /^new game$/i });
+    const existingSave = window.localStorage.getItem(SAVE_KEY);
+
+    fireEvent.click(screen.getByRole("button", { name: /^new game$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /online versus/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^three-player$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /create room/i }));
+    act(() => {
+      threeOnlineHarness.setState?.(activeThreeOnlineState());
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/three-player draft/i)).toBeTruthy();
+    });
+
+    act(() => {
+      threeOnlineHarness.setState?.({
+        ...activeThreeOnlineState("paused"),
+        connecting: true,
+      });
+    });
+    await new Promise((resolve) => window.setTimeout(resolve, 180));
+    expect(window.localStorage.getItem(SAVE_KEY)).toBe(existingSave);
+  });
+
+  it("does not create a hidden local save while joining an online room", async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /^new game$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /online versus/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^three-player$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^join$/i }));
+    const inputs = screen.getAllByRole("textbox");
+    fireEvent.change(inputs[1], { target: { value: "ABCDE" } });
+    fireEvent.click(screen.getByRole("button", { name: /join room/i }));
+    act(() => {
+      threeOnlineHarness.setState?.({
+        ...activeThreeOnlineState(),
+        role: "peer",
+      });
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/three-player draft/i)).toBeTruthy();
+    });
+    await new Promise((resolve) => window.setTimeout(resolve, 180));
+    expect(window.localStorage.getItem(SAVE_KEY)).toBeNull();
+  });
+
+  it("disconnects a pending three-player attempt when switching online variants", async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /^new game$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /online versus/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^three-player$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /create room/i }));
+    expect(screen.getByRole("button", { name: /connecting/i })).toBeTruthy();
+
+    const beforeSwitch = threeOnlineHarness.disconnects;
+    fireEvent.click(screen.getByRole("button", { name: /^four-player$/i }));
+    expect(threeOnlineHarness.disconnects).toBe(beforeSwitch + 1);
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /create room/i })).toBeTruthy();
     });
   });
 

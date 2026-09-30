@@ -3007,6 +3007,16 @@ export default function App() {
   });
   const [fourOnline, fourOnlineActions] = useFourPlayerOnlineGame();
   const [threeOnline, threeOnlineActions] = useThreePlayerOnlineGame();
+  const threeOnlineActive = threeOnline.connecting ||
+    threeOnline.role !== "none" ||
+    Boolean(threeOnline.roomCode) ||
+    Boolean(threeOnline.snapshot);
+  const threeOnlineActiveRef = useRef(threeOnlineActive);
+  threeOnlineActiveRef.current = threeOnlineActive;
+
+  useEffect(() => {
+    if (threeOnlineActive) activeSaveId.current = undefined;
+  }, [threeOnlineActive]);
 
   const dispatch: GameDispatch = (action) => {
     const current = stateRef.current;
@@ -3035,6 +3045,7 @@ export default function App() {
   };
 
   const persistSavedGame = useCallback(async (saved: SavedGame) => {
+    if (threeOnlineActiveRef.current) return false;
     const next = mergeSavedGame(savedGamesRef.current, saved);
     const account = accountService.account;
     try {
@@ -3050,7 +3061,7 @@ export default function App() {
         setLocalSavedGames(next);
       }
       setSaveError(undefined);
-      activeSaveId.current = saved.id;
+      if (!threeOnlineActiveRef.current) activeSaveId.current = saved.id;
       savedGamesRef.current = next;
       return true;
     } catch (error) {
@@ -3061,7 +3072,11 @@ export default function App() {
   }, [accountService.account]);
 
   const saveCurrentGame = async () => {
-    if (stateRef.current.gameMode === "online" || stateRef.current.gameMode === "puzzle") return false;
+    if (
+      threeOnlineActiveRef.current ||
+      stateRef.current.gameMode === "online" ||
+      stateRef.current.gameMode === "puzzle"
+    ) return false;
     const id = activeSaveId.current ?? saveId();
     const saved = createSavedGame(
       id,
@@ -3091,6 +3106,7 @@ export default function App() {
     threeUndoHistory: ThreePlayerState[],
     threeTurnStart?: ThreePlayerState,
   ) => {
+    if (threeOnlineActiveRef.current) return false;
     const id = activeSaveId.current ?? saveId();
     return persistSavedGame(createSavedGame(
       id,
@@ -3112,12 +3128,19 @@ export default function App() {
       startView !== "none" ||
       fourPlayerSession ||
       threePlayerSession ||
+      threeOnlineActive ||
       state.gameMode === "online" ||
       state.gameMode === "puzzle"
     ) return;
     const timer = window.setTimeout(() => void saveCurrentGame(), 120);
     return () => window.clearTimeout(timer);
-  }, [fourPlayerSession, threePlayerSession, startView, state]);
+  }, [
+    fourPlayerSession,
+    threeOnlineActive,
+    threePlayerSession,
+    startView,
+    state,
+  ]);
 
   useEffect(() => {
     if (
@@ -3728,11 +3751,15 @@ export default function App() {
           onHostThreeOnline={(name) => {
             onlineActions.disconnect();
             fourOnlineActions.disconnect();
+            activeSaveId.current = undefined;
+            threeOnlineActiveRef.current = true;
             void threeOnlineActions.hostGame(name);
           }}
           onJoinThreeOnline={(code, name) => {
             onlineActions.disconnect();
             fourOnlineActions.disconnect();
+            activeSaveId.current = undefined;
+            threeOnlineActiveRef.current = true;
             void threeOnlineActions.joinGame(code, name);
           }}
           onThreeReady={threeOnlineActions.setReady}

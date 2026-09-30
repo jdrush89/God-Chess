@@ -296,7 +296,9 @@ const isPieceStatus = (value: unknown): value is ThreePlayerPieceStatus => {
       isRecord(value.prepared) &&
       hasExactKeys(value.prepared, ["owner", "level"]) &&
       isSeat(value.prepared.owner) &&
-      [1, 2, 3].includes(Number(value.prepared.level))
+      typeof value.prepared.level === "number" &&
+      Number.isInteger(value.prepared.level) &&
+      [1, 2, 3].includes(value.prepared.level)
     )
   ) return false;
   if (
@@ -360,7 +362,10 @@ const isPiece = (value: unknown): value is ThreePlayerPiece => {
 const isUpgrades = (value: unknown) =>
   isRecord(value) && Object.entries(value).every(
     ([abilityId, level]) =>
-      ABILITY_IDS.has(abilityId) && [1, 2, 3].includes(Number(level)),
+      ABILITY_IDS.has(abilityId) &&
+      typeof level === "number" &&
+      Number.isInteger(level) &&
+      [1, 2, 3].includes(level),
   );
 
 const isSeatNumberRecord = (value: unknown) =>
@@ -466,7 +471,9 @@ const isThreePlayerStateVersion = (value: unknown): boolean => {
     "redAffinity" in value ||
     "pieceAffinities" in value ||
     value.variant !== "three-player" ||
-    ![1, 2].includes(Number(value.schemaVersion)) ||
+    typeof value.schemaVersion !== "number" ||
+    !Number.isInteger(value.schemaVersion) ||
+    ![1, 2].includes(value.schemaVersion) ||
     !isThreePlayerConfig(value.config) ||
     !PHASES.has(String(value.phase)) ||
     !isRecord(value.board) ||
@@ -861,7 +868,7 @@ const isThreePlayerStateVersion = (value: unknown): boolean => {
     }
     if (
       !isUnique(orbIds) ||
-      orbIds.some((id) => id >= Number(value.nextOrbEventId))
+      orbIds.some((id) => id >= (value.nextOrbEventId as number))
     ) return false;
 
     const presentationIds: number[] = [];
@@ -898,7 +905,9 @@ const isThreePlayerStateVersion = (value: unknown): boolean => {
     }
     if (
       !isUnique(presentationIds) ||
-      presentationIds.some((id) => id >= Number(value.nextPresentationEventId))
+      presentationIds.some((id) =>
+        id >= (value.nextPresentationEventId as number)
+      )
     ) return false;
   } else {
     if (value.phase === "upgrade") return false;

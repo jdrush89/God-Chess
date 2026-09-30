@@ -754,12 +754,14 @@ const normalizeThreePlayerUndoStatus = (
     !isRevision(value.targetRevision) ||
     typeof value.requestedByName !== "string" ||
     value.requestedByName.length > 24 ||
+    typeof value.eligibleCount !== "number" ||
     !Number.isInteger(value.eligibleCount) ||
-    Number(value.eligibleCount) < 1 ||
-    Number(value.eligibleCount) > 3 ||
+    value.eligibleCount < 1 ||
+    value.eligibleCount > 3 ||
+    typeof value.approvedCount !== "number" ||
     !Number.isInteger(value.approvedCount) ||
-    Number(value.approvedCount) < 0 ||
-    Number(value.approvedCount) > Number(value.eligibleCount) ||
+    value.approvedCount < 0 ||
+    value.approvedCount > value.eligibleCount ||
     !isBoolean(value.localEligible) ||
     !isBoolean(value.localApproved) ||
     (value.localApproved && !value.localEligible)

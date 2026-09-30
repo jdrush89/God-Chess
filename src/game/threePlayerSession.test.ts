@@ -203,6 +203,15 @@ describe("three-player session boundaries", () => {
         unexpected: true,
       },
     })).toBeUndefined();
+    const stringLevel = structuredClone(envelope) as unknown as {
+      state: {
+        players: {
+          white: { upgrades: Record<string, string> };
+        };
+      };
+    };
+    stringLevel.state.players.white.upgrades[GODS[0].abilities[0].id] = "2";
+    expect(normalizeThreePlayerStateEnvelope(stringLevel)).toBeUndefined();
 
     let proposal = createThreePlayerUndoProposal(
       "undo-1",

@@ -225,5 +225,24 @@ describe("versioned multiplayer protocol", () => {
         },
       },
     ))).toBeUndefined();
+
+    const coercedLevel = structuredClone(snapshot) as unknown as {
+      canonical: {
+        state: {
+          board: Record<string, {
+            status: {
+              prepared?: { owner: string; level: string };
+            };
+          }>;
+        };
+      };
+    };
+    const piece = Object.values(coercedLevel.canonical.state.board)[0];
+    piece.status.prepared = { owner: "white", level: "2" };
+    expect(normalizeProtocolMessage(createProtocolMessage(
+      "three-player",
+      "host",
+      { type: "room_state", snapshot: coercedLevel as never },
+    ))).toBeUndefined();
   });
 });

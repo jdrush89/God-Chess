@@ -184,6 +184,40 @@ describe("three-player persistence", () => {
     expect(() => prepareThreePlayerState(mislabeledLegacy)).toThrow(/invalid/i);
   });
 
+  it("requires exact numeric prepared and upgrade levels", () => {
+    const state = createThreePlayerGame();
+    const pieceCell = Object.keys(state.board)[0];
+    const abilityId = GODS[0].abilities[0].id;
+
+    const legal = structuredClone(state);
+    legal.board[pieceCell].status.prepared = { owner: "white", level: 2 };
+    legal.players.white.upgrades[abilityId] = 3;
+    expect(prepareThreePlayerState(legal)).toEqual(legal);
+
+    const preparedString = structuredClone(legal) as unknown as {
+      board: Record<string, {
+        status: { prepared: { owner: string; level: string } };
+      }>;
+    };
+    preparedString.board[pieceCell].status.prepared.level = "2";
+    expect(isThreePlayerState(preparedString)).toBe(false);
+    expect(() => prepareThreePlayerState(preparedString)).toThrow(/invalid/i);
+
+    const upgradeString = structuredClone(legal) as unknown as {
+      players: { white: { upgrades: Record<string, string> } };
+    };
+    upgradeString.players.white.upgrades[abilityId] = "3";
+    expect(isThreePlayerState(upgradeString)).toBe(false);
+    expect(() => prepareThreePlayerState(upgradeString)).toThrow(/invalid/i);
+
+    const schemaString = structuredClone(state) as unknown as {
+      schemaVersion: string;
+    };
+    schemaString.schemaVersion = "2";
+    expect(isThreePlayerState(schemaString)).toBe(false);
+    expect(() => prepareThreePlayerState(schemaString)).toThrow(/invalid/i);
+  });
+
   it("round-trips every reducer pending-step shape", () => {
     const state = finishDraft();
     const topology = getThreePlayerTopology(state.config.boardVariant);
