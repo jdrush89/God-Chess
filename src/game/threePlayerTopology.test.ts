@@ -177,30 +177,113 @@ describe("hex topologies", () => {
 });
 
 describe("branched and wrapped topologies", () => {
-  it("keeps distinct center continuations and knight orderings on Yalta", () => {
+  it("uses the exact Yalta rook and color-preserving bishop center continuations", () => {
     const topology = getThreePlayerTopology("three-player");
-    const centerEdge = topology.cellFromSourceIndex(3)!;
-    const branches = topology.bishopTraces(centerEdge)
-      .filter((trace) => trace.cells.some((cell) => topology.cellById.get(cell)!.half !== "white"));
-    expect(new Set(branches.map((trace) => trace.context)))
-      .toEqual(new Set(["white-red", "white-black"]));
-    expect(branches.some((trace) =>
-      trace.cells.some((cell) => topology.cellById.get(cell)!.half === "red")
-    )).toBe(true);
-    expect(branches.some((trace) =>
-      trace.cells.some((cell) => topology.cellById.get(cell)!.half === "black")
-    )).toBe(true);
+    const indexes = (cells: readonly string[]) =>
+      cells.map((cell) => topology.sourceIndex(cell));
+    const rayIndexes = (source: number, kind: "rook" | "bishop") =>
+      (kind === "rook"
+        ? topology.rookTraces(topology.cellFromSourceIndex(source)!)
+        : topology.bishopTraces(topology.cellFromSourceIndex(source)!))
+        .map((trace) => indexes(trace.cells).join(","))
+        .sort();
 
-    const knight = topology.cellFromSourceIndex(10)!;
-    const traces = topology.knightTraces(knight);
-    const duplicateTarget = traces.find((trace, index) =>
-      traces.slice(index + 1).some((other) =>
-        other.target === trace.target &&
-        other.context === trace.context &&
-        other.path.join(",") !== trace.path.join(",")
-      )
+    expect(
+      topology.rookTraces(topology.cellFromSourceIndex(9)!)
+        .find((trace) => trace.direction === "rank:-1")
+        ?.cells.map((cell) => topology.sourceIndex(cell)),
+    ).toEqual([1, 70, 78, 86, 94]);
+    expect(
+      topology.rookTraces(topology.cellFromSourceIndex(11)!)
+        .find((trace) => trace.direction === "rank:-1")
+        ?.cells.map((cell) => topology.sourceIndex(cell)),
+    ).toEqual([3, 68, 76, 84, 92]);
+
+    expect(rayIndexes(1, "bishop")).toEqual([
+      "10,19,28",
+      "69,76,83,90",
+      "71",
+      "8",
+    ].sort());
+    expect(rayIndexes(2, "bishop")).toEqual([
+      "11,20,29",
+      "68,75,82,89",
+      "70,79",
+      "9,16",
+    ].sort());
+    expect(rayIndexes(17, "bishop")).toEqual([
+      "10,3,35,42,49,56",
+      "10,3,67,74,81,88",
+      "24",
+      "26",
+      "8",
+    ].sort());
+    for (const source of [1, 2, 17]) {
+      const origin = topology.cellFromSourceIndex(source)!;
+      const color = topology.cellById.get(origin)!.geometricClass;
+      expect(
+        topology.bishopTraces(origin).every((trace) =>
+          trace.cells.every((cell) =>
+            topology.cellById.get(cell)!.geometricClass === color
+          )
+        ),
+      ).toBe(true);
+    }
+  });
+
+  it("matches exact Yalta king, knight, and pawn center destinations", () => {
+    const topology = getThreePlayerTopology("three-player");
+    const sourceIndexes = (cells: readonly string[]) =>
+      cells.map((cell) => topology.sourceIndex(cell)).sort((a, b) => a! - b!);
+    const exactTargets = [
+      [10, [0, 4, 16, 20, 25, 27, 68, 70]],
+      [2, [8, 12, 17, 19, 35, 67, 71, 76, 78]],
+      [3, [9, 13, 18, 20, 34, 43, 66, 70, 75, 77]],
+    ] as const;
+    expect(
+      sourceIndexes(topology.kingTargets(topology.cellFromSourceIndex(3)!)),
+    ).toEqual([2, 4, 10, 11, 12, 35, 67, 68, 69]);
+    expect(sourceIndexes([
+      ...topology.rookTraces(topology.cellFromSourceIndex(3)!)
+        .flatMap((trace) => trace.cells),
+      ...topology.bishopTraces(topology.cellFromSourceIndex(3)!)
+        .flatMap((trace) => trace.cells),
+    ])).toEqual([
+      0, 1, 2, 4, 5, 6, 7, 10, 11, 12, 17, 19, 21, 24, 27, 30, 35, 42,
+      49, 56, 67, 68, 69, 74, 76, 78, 81, 84, 87, 88, 92,
+    ]);
+    for (const [source, expectedTargets] of exactTargets) {
+      expect(
+        sourceIndexes(topology.knightTargets(
+          topology.cellFromSourceIndex(source)!,
+        )),
+      ).toEqual([...expectedTargets]);
+    }
+
+    const ownPawn = topology.pawnRules(
+      "white",
+      topology.cellFromSourceIndex(17)!,
     );
-    expect(duplicateTarget).toBeDefined();
+    expect(sourceIndexes(ownPawn.advances.map((move) => move.to)))
+      .toEqual([1, 9]);
+    expect(sourceIndexes(ownPawn.captures.map((move) => move.to)))
+      .toEqual([8, 10]);
+    const centerPawn = topology.pawnRules(
+      "white",
+      topology.cellFromSourceIndex(4)!,
+    );
+    expect(sourceIndexes(centerPawn.advances.map((move) => move.to)))
+      .toEqual([35]);
+    expect(sourceIndexes(centerPawn.captures.map((move) => move.to)))
+      .toEqual([34, 36, 68]);
+    const enemyThirdPawn = topology.pawnRules(
+      "white",
+      topology.cellFromSourceIndex(33)!,
+    );
+    expect(sourceIndexes(enemyThirdPawn.advances.map((move) => move.to)))
+      .toEqual([41]);
+    expect(sourceIndexes(enemyThirdPawn.captures.map((move) => move.to)))
+      .toEqual([40, 42]);
   });
 
   it("terminates circular rays before their origin and preserves pawn groups", () => {

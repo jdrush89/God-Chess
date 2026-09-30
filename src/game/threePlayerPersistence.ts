@@ -192,6 +192,25 @@ const isKingAttackRecency = (value: unknown, attackSequence: number) =>
     );
   });
 
+const expectedPieceController = (
+  owner: ThreePlayerSeat,
+  players: ThreePlayerState["players"],
+  takeover: boolean,
+): ThreePlayerSeat | null | undefined => {
+  if (!players[owner].eliminated) return owner;
+
+  const visited = new Set<ThreePlayerSeat>();
+  let successor = owner;
+  while (players[successor].eliminated) {
+    if (visited.has(successor)) return undefined;
+    visited.add(successor);
+    const eliminatedBy = players[successor].eliminatedBy;
+    if (!eliminatedBy) return undefined;
+    successor = eliminatedBy;
+  }
+  return takeover ? successor : null;
+};
+
 export const isThreePlayerState = (
   value: unknown,
 ): value is ThreePlayerState => {
@@ -252,7 +271,11 @@ export const isThreePlayerState = (
       typeof player.displayColor !== "string" ||
       !isSeatControl(player.control) ||
       typeof player.eliminated !== "boolean" ||
-      (player.eliminatedBy !== undefined && !isSeat(player.eliminatedBy)) ||
+      (
+        player.eliminated
+          ? !isSeat(player.eliminatedBy)
+          : player.eliminatedBy !== undefined
+      ) ||
       !isGodArray(player.gods) ||
       !isRecord(player.orbs) ||
       !isInteger(player.orbs.light) ||
@@ -289,9 +312,20 @@ export const isThreePlayerState = (
   if (!isUnique(pieceIds) || !isUnique(draftedGods)) return false;
 
   const players = value.players as unknown as ThreePlayerState["players"];
+  const takeover = (value.config as ThreePlayerConfig).takeover;
+  if (
+    THREE_PLAYER_SEATS.some((seat) =>
+      players[seat].eliminated &&
+      expectedPieceController(seat, players, takeover) === undefined
+    )
+  ) return false;
   for (const piece of Object.values(board)) {
-    if (piece.controller && players[piece.controller].eliminated) return false;
-    if (piece.controller === null && !players[piece.owner].eliminated) return false;
+    const expected = expectedPieceController(
+      piece.owner,
+      players,
+      takeover,
+    );
+    if (expected === undefined || piece.controller !== expected) return false;
   }
   if (passCycle.passedSeats.some((seat) => players[seat].eliminated)) {
     return false;

@@ -7,7 +7,10 @@ import {
   threePlayerLegalMoves,
   threePlayerPseudoTargets,
 } from "./threePlayerChess";
-import { createThreePlayerGame } from "./threePlayerEngine";
+import {
+  createThreePlayerGame,
+  threePlayerReducer,
+} from "./threePlayerEngine";
 import { getThreePlayerTopology } from "./threePlayerTopology";
 import {
   THREE_PLAYER_BOARD_VARIANTS,
@@ -116,6 +119,56 @@ describe("three-player ordinary chess", () => {
         ),
       );
     }
+  });
+
+  it("treats enemy Kings as attacked but never as ordinary capture targets", () => {
+    const topology = getThreePlayerTopology("three-player");
+    const cell = (sourceIndex: number) =>
+      topology.cellFromSourceIndex(sourceIndex)!;
+    const cases = [
+      { attacker: piece("rook", "rook", "white"), from: cell(9), king: cell(1) },
+      {
+        attacker: piece("knight", "knight", "white"),
+        from: cell(10),
+        king: cell(0),
+      },
+      { attacker: piece("pawn", "pawn", "white"), from: cell(17), king: cell(8) },
+    ];
+
+    for (const testCase of cases) {
+      const state = stateFor("three-player");
+      state.board = {
+        [testCase.from]: testCase.attacker,
+        [testCase.king]: piece("red-king", "king", "red"),
+      };
+      expect(threePlayerPseudoTargets(state, testCase.from))
+        .not.toContain(testCase.king);
+      expect(threePlayerPseudoTargets(state, testCase.from, {
+        attacksOnly: true,
+      })).toContain(testCase.king);
+      expect(threePlayerCheckingSeats(state, "red")).toContain("white");
+      expect(() =>
+        threePlayerApplyMove(state, {
+          from: testCase.from,
+          to: testCase.king,
+        })
+      ).toThrow("Ordinary moves cannot capture a King.");
+    }
+
+    const reducerState = stateFor("three-player");
+    reducerState.board = {
+      [cell(9)]: piece("rook", "rook", "white"),
+      [cell(31)]: piece("white-king", "king", "white"),
+      [cell(1)]: piece("red-king", "king", "red"),
+    };
+    const rejected = threePlayerReducer(reducerState, {
+      type: "move",
+      from: cell(9),
+      to: cell(1),
+    });
+    expect(rejected).toBe(reducerState);
+    expect(rejected.players.red.eliminated).toBe(false);
+    expect(rejected.board[cell(1)]?.type).toBe("king");
   });
 
   it("applies pawn blocking, double moves, en passant, and promotion metadata", () => {

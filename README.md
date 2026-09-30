@@ -236,8 +236,9 @@ work.
   stalemate pass-cycle state.
 - `src/game/threePlayerTopology.ts` and `src/game/threePlayerTopologies/`
   describe boards as directed traces rather than rectangular coordinates.
-  This supports center branches, wrapped circular lines, hex movement, and
-  Three Half Chess pairwise embeddings without five separate move engines.
+  This supports Yalta's dedicated piece-specific center bending and branching,
+  wrapped circular lines, hex movement, and Three Half Chess pairwise
+  embeddings without five separate move engines.
 - `src/game/threePlayerChess.ts` applies ordinary chess movement, attacks,
   self-check prevention against both opponents, castling where defined,
   en passant where defined, and promotion over those topology contracts.
@@ -295,7 +296,10 @@ seat may remove the threat. If several enemies still check the King, durable
 attack recency credits the most recent hostile attacker. The match either ends
 on that first mate or eliminates the seat and continues. Takeover transfers
 surviving piece control only; otherwise eliminated pieces stay inert and
-capturable.
+capturable. Ordinary moves attack but never capture a King; King removal and
+elimination occur only through start-of-turn checkmate resolution. Persisted
+takeover controllers must match the living successor reached through the full
+elimination-credit chain.
 
 In first-checkmate mode, ordinary stalemate ends the match as a draw. In
 continuation mode, a stalemated seat is skipped rather than eliminated and is

@@ -5,6 +5,38 @@ import {
   isThreePlayerState,
   prepareThreePlayerState,
 } from "./threePlayerPersistence";
+import type {
+  ThreePlayerSeat,
+  ThreePlayerState,
+} from "./threePlayerTypes";
+
+const eliminateForSnapshot = (
+  state: ThreePlayerState,
+  seat: ThreePlayerSeat,
+  eliminatedBy?: ThreePlayerSeat,
+) => {
+  state.players[seat].eliminated = true;
+  state.players[seat].eliminatedBy = eliminatedBy;
+  for (const [cell, piece] of Object.entries(state.board)) {
+    if (piece.owner !== seat || piece.type !== "king") continue;
+    state.players[seat].graveyard.push({
+      piece: structuredClone(piece),
+      capturedOnTurn: state.turn,
+    });
+    delete state.board[cell];
+    break;
+  }
+};
+
+const setOwnerController = (
+  state: ThreePlayerState,
+  owner: ThreePlayerSeat,
+  controller: ThreePlayerSeat | null,
+) => {
+  for (const piece of Object.values(state.board)) {
+    if (piece.owner === owner) piece.controller = controller;
+  }
+};
 
 describe("three-player persistence", () => {
   it("round-trips canonical states for every topology", () => {
@@ -68,5 +100,56 @@ describe("three-player persistence", () => {
     };
     Object.values(staleAffinity.board)[0].orbAffinity = "dark";
     expect(isThreePlayerState(staleAffinity)).toBe(false);
+  });
+
+  it("requires inert eliminated pieces when takeover is disabled", () => {
+    const state = createThreePlayerGame();
+    eliminateForSnapshot(state, "red", "white");
+    setOwnerController(state, "red", null);
+    expect(isThreePlayerState(state)).toBe(true);
+
+    const controlled = structuredClone(state);
+    Object.values(controlled.board).find(
+      (piece) => piece.owner === "red",
+    )!.controller = "white";
+    expect(isThreePlayerState(controlled)).toBe(false);
+  });
+
+  it("accepts only the living takeover successor as controller", () => {
+    const direct = createThreePlayerGame();
+    direct.config.takeover = true;
+    eliminateForSnapshot(direct, "red", "white");
+    setOwnerController(direct, "red", "white");
+    expect(isThreePlayerState(direct)).toBe(true);
+
+    const arbitrary = structuredClone(direct);
+    Object.values(arbitrary.board).find(
+      (piece) => piece.owner === "red",
+    )!.controller = "black";
+    expect(isThreePlayerState(arbitrary)).toBe(false);
+
+    const chained = createThreePlayerGame();
+    chained.config.takeover = true;
+    eliminateForSnapshot(chained, "red", "black");
+    eliminateForSnapshot(chained, "black", "white");
+    setOwnerController(chained, "red", "white");
+    setOwnerController(chained, "black", "white");
+    expect(isThreePlayerState(chained)).toBe(true);
+  });
+
+  it("rejects takeover chains with missing successors or cycles", () => {
+    const missing = createThreePlayerGame();
+    missing.config.takeover = true;
+    eliminateForSnapshot(missing, "red");
+    setOwnerController(missing, "red", null);
+    expect(isThreePlayerState(missing)).toBe(false);
+
+    const cycle = createThreePlayerGame();
+    cycle.config.takeover = true;
+    eliminateForSnapshot(cycle, "red", "black");
+    eliminateForSnapshot(cycle, "black", "red");
+    setOwnerController(cycle, "red", "white");
+    setOwnerController(cycle, "black", "white");
+    expect(isThreePlayerState(cycle)).toBe(false);
   });
 });

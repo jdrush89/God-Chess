@@ -36,8 +36,7 @@ interface PairContext {
 }
 
 interface JoinedSpec {
-  variant: "three-player" | "three-half";
-  knightOrderings: boolean;
+  variant: "three-half";
   render(halfIndex: number, file: number, rank: number): { x: number; y: number };
 }
 
@@ -203,10 +202,7 @@ const createJoinedTopology = (spec: JoinedSpec): ThreePlayerTopology => {
         const longFirst = Math.abs(dx) === 2
           ? [[Math.sign(dx), 0], [Math.sign(dx) * 2, 0], [dx, dy]] as const
           : [[0, Math.sign(dy)], [0, Math.sign(dy) * 2], [dx, dy]] as const;
-        const shortFirst = Math.abs(dx) === 2
-          ? [[0, Math.sign(dy)], [Math.sign(dx), Math.sign(dy)], [dx, dy]] as const
-          : [[Math.sign(dx), 0], [Math.sign(dx), Math.sign(dy)], [dx, dy]] as const;
-        const orderings = spec.knightOrderings ? [longFirst, shortFirst] : [longFirst];
+        const orderings = [longFirst];
         return orderings.map((steps, orderIndex) => ({
           id: `${spec.variant}:knight:${from}:${context.id}:${directionIndex}:${orderIndex}`,
           origin: from,
@@ -335,24 +331,8 @@ const createJoinedTopology = (spec: JoinedSpec): ThreePlayerTopology => {
 export const createThreeHalfTopology = (): ThreePlayerTopology =>
   createJoinedTopology({
     variant: "three-half",
-    knightOrderings: false,
     render: (halfIndex, file, rank) => ({
       x: file,
       y: halfIndex * 5 + rank,
     }),
-  });
-
-export const createYaltaTopology = (): ThreePlayerTopology =>
-  createJoinedTopology({
-    variant: "three-player",
-    knightOrderings: true,
-    render: (halfIndex, file, rank) => {
-      const angle = halfIndex * Math.PI * 2 / 3;
-      const lateral = file - 3.5;
-      const radial = rank + 1;
-      return {
-        x: lateral * Math.cos(angle) - radial * Math.sin(angle),
-        y: lateral * Math.sin(angle) + radial * Math.cos(angle),
-      };
-    },
   });

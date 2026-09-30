@@ -12,8 +12,8 @@ import {
 } from "./threePlayerTopologies/hex";
 import {
   createThreeHalfTopology,
-  createYaltaTopology,
 } from "./threePlayerTopologies/joined";
+import { createYaltaTopology } from "./threePlayerTopologies/yalta";
 
 export type ThreePlayerStandardPieceType = ThreePlayerPiece["type"];
 export type ThreePlayerTraceKind = "rook" | "bishop";
