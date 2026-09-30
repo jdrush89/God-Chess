@@ -220,3 +220,95 @@ session boundaries intended for the later multiparty-networking layer.
   replacement behavior, and unanimous connected-Human undo.
 - `src/multiplayer/useFourPlayerOnlineGame.ts` exposes lobby and canonical game
   state to React while preserving the existing classic online hook.
+
+## Three-player Layer 1 architecture
+
+The deterministic three-player core is intentionally separate from the
+two-player and four-player state APIs. Layer 1 contains drafting, topology,
+ordinary chess legality, elimination, persistence, and transport-neutral
+session validation. God ability execution, React setup/gameplay, AI strategy,
+save-menu integration, and authoritative room orchestration remain Layer 2/3
+work.
+
+- `src/game/threePlayerTypes.ts` defines White, Red, and Black seats; original
+  piece ownership versus current control; Human/AI/online controller metadata;
+  the nine-God draft; attack recency; completed-turn counters; and persisted
+  stalemate pass-cycle state.
+- `src/game/threePlayerTopology.ts` and `src/game/threePlayerTopologies/`
+  describe boards as directed traces rather than rectangular coordinates.
+  This supports center branches, wrapped circular lines, hex movement, and
+  Three Half Chess pairwise embeddings without five separate move engines.
+- `src/game/threePlayerChess.ts` applies ordinary chess movement, attacks,
+  self-check prevention against both opponents, castling where defined,
+  en passant where defined, and promotion over those topology contracts.
+- `src/game/threePlayerEngine.ts` exports `createThreePlayerGame`,
+  `threePlayerReducer`, and `availableThreePlayerActions`.
+- `src/game/threePlayerPersistence.ts` exports `isThreePlayerState` and
+  `prepareThreePlayerState`; `src/game/threePlayerSession.ts` adds strict
+  revisioned action/snapshot, participant authorization, reconnect, and
+  unanimous-undo foundations.
+
+White, Red, then Black move in that fixed order. The draft claims nine of the
+twelve Gods in order
+`White, Red, Black, Black, Red, White, White, Red, Black`, giving every seat
+three Gods and leaving three unused.
+
+The board definitions follow Green Chess's rule text, diagrams, and “Try the
+rules” position data:
+
+- [Three-Player Chess](https://greenchess.net/rules.php?v=three-player) has 96
+  cells and three standard 16-piece armies on joined 8x4 thirds. Rook and
+  bishop traces bend through the center, bishops can branch there, and knight
+  destinations preserve distinct one-plus-two orthogonal step orderings.
+  Standard-like castling and en passant are supported.
+- [Three Hexagonal Chess](https://greenchess.net/rules.php?v=three-hexagonal)
+  has 217 cells and 28 pieces per seat: 19 pawns, two rooks, two knights, three
+  bishops, a queen, and a king. It uses six rook and six bishop directions,
+  twelve knight destinations, two pawn-forward directions, and the documented
+  three-cell queenside castling.
+- [Triad Chess](https://greenchess.net/rules.php?v=triad) has 144 cells and 24
+  pieces per seat: 12 pawns, three each of rooks/knights/bishops, two queens,
+  and a king. Pawns advance toward the opposite wall. Castling is unavailable.
+- [Three Circular Chess](https://greenchess.net/rules.php?v=three-circular)
+  has 24 sectors and four rings. Wrapped traces stop before returning to their
+  origin, so full-loop null moves are never emitted. Each seat's two pawn
+  groups travel in opposite directions toward the nearest enemy base.
+  Castling is unavailable.
+- [Three Half Chess](https://greenchess.net/rules.php?v=three-half) has three
+  simultaneous 8x4 halves. Each pair is evaluated as one conventional 8x8
+  board; a move may use one pairwise embedding but cannot mix paths from two.
+  The visual ordering of the halves has no rules effect. Standard castling is
+  retained within a seat's home half.
+
+En passant is enabled wherever a variant defines an initial two-cell pawn
+advance and an opposing pawn capture path through the crossed cell. The
+opportunity lasts through the next actual move; an automatically skipped
+stalemated seat does not consume a turn or expire it.
+
+Hex geometry retains all three cell-color classes. Classes zero and one map
+consistently to light and dark; class two is divided by a deterministic parity
+in canonical axial coordinates to provide a balanced God Chess light/dark
+pattern.
+
+Checkmate is evaluated when the checked seat's turn begins, so an intervening
+seat may remove the threat. If several enemies still check the King, durable
+attack recency credits the most recent hostile attacker. The match either ends
+on that first mate or eliminates the seat and continues. Takeover transfers
+surviving piece control only; otherwise eliminated pieces stay inert and
+capturable.
+
+In first-checkmate mode, ordinary stalemate ends the match as a draw. In
+continuation mode, a stalemated seat is skipped rather than eliminated and is
+reconsidered after another move changes the position. If every surviving seat
+is successively unable to act against one unchanged position, the result is a
+draw. Skips do not count as completed turns.
+
+White-owned pieces are always light and Black-owned pieces are always dark.
+Red-owned pieces begin light and alternate after each completed Red turn.
+Affinity is derived from the persisted Red completed-turn counter and original
+owner, so it does not toggle on a stalemate skip and remains deterministic
+through takeover, reconnect, undo, and replay.
+
+Shared three-player and hex-board references:
+[three-player rules](https://greenchess.net/rules.php?type=three-player) and
+[hex-board rules](https://greenchess.net/rules.php?type=hex-board).
