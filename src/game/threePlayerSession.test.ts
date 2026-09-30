@@ -15,6 +15,8 @@ import {
   isThreePlayerUndoUnanimous,
   normalizeThreePlayerAction,
   normalizeThreePlayerStateEnvelope,
+  normalizeThreePlayerUndoProposal,
+  normalizeThreePlayerUndoVote,
 } from "./threePlayerSession";
 import { GODS } from "./gods";
 import { getThreePlayerTopology } from "./threePlayerTopology";
@@ -194,6 +196,13 @@ describe("three-player session boundaries", () => {
       ...envelope,
       revision: envelope.revision + 1,
     })).toBeUndefined();
+    expect(normalizeThreePlayerStateEnvelope({
+      ...envelope,
+      state: {
+        ...envelope.state,
+        unexpected: true,
+      },
+    })).toBeUndefined();
 
     let proposal = createThreePlayerUndoProposal(
       "undo-1",
@@ -204,6 +213,26 @@ describe("three-player session boundaries", () => {
     expect(isThreePlayerUndoUnanimous(proposal)).toBe(false);
     proposal = approveThreePlayerUndo(proposal, "two");
     expect(isThreePlayerUndoUnanimous(proposal)).toBe(true);
+    expect(normalizeThreePlayerUndoProposal(proposal)).toEqual(proposal);
+    expect(normalizeThreePlayerUndoProposal({
+      ...proposal,
+      approvedParticipantIds: ["missing"],
+    })).toBeUndefined();
+    expect(normalizeThreePlayerUndoVote({
+      requestId: "undo-1",
+      targetRevision: 0,
+      approved: false,
+    })).toEqual({
+      requestId: "undo-1",
+      targetRevision: 0,
+      approved: false,
+    });
+    expect(normalizeThreePlayerUndoVote({
+      requestId: "undo-1",
+      targetRevision: 0,
+      approved: true,
+      extra: true,
+    })).toBeUndefined();
   });
 
   it("normalizes legal synthetic, unlimited, and generated-area pending states", () => {

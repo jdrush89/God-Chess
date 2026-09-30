@@ -9,7 +9,10 @@ import {
 } from "../game/threePlayerEngine";
 import { createDefaultThreePlayerConfig } from "../game/threePlayerConfig";
 import type { ThreePlayerState } from "../game/threePlayerTypes";
-import { ThreePlayerGame } from "./ThreePlayerGame";
+import {
+  ThreePlayerGame,
+  type ThreePlayerOnlineSession,
+} from "./ThreePlayerGame";
 
 beforeAll(() => {
   Object.defineProperty(window, "matchMedia", {
@@ -135,5 +138,119 @@ describe("ThreePlayerGame", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Save & quit/i }));
     await waitFor(() => expect(onQuit).not.toHaveBeenCalled());
+  });
+
+  it("routes online actions to the host and waits for canonical acknowledgement", () => {
+    const config = createDefaultThreePlayerConfig();
+    config.seats.white.control = { kind: "online", local: true };
+    config.seats.red.control = { kind: "online", local: false };
+    config.seats.black.control = { kind: "ai", difficulty: 5 };
+    const state = createThreePlayerGame(config);
+    const onAction = vi.fn();
+    const onlineSession: ThreePlayerOnlineSession = {
+      roomCode: "ABCDE",
+      role: "peer",
+      participantSeat: "white",
+      status: "playing",
+      awaitingSync: false,
+      undoAvailable: false,
+      onAction,
+      onUndoRequest: vi.fn(),
+      onUndoVote: vi.fn(),
+    };
+    const { rerender } = render(
+      <ThreePlayerGame
+        initialState={state}
+        onQuit={() => undefined}
+        onNewGame={() => undefined}
+        onlineSession={onlineSession}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", {
+      name: /Claim Quetzacoatl/i,
+    }));
+    expect(onAction).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/White picks/i)).toBeTruthy();
+
+    const next = threePlayerReducer(
+      state,
+      onAction.mock.calls[0][0],
+    );
+    rerender(
+      <ThreePlayerGame
+        initialState={next}
+        onQuit={() => undefined}
+        onNewGame={() => undefined}
+        onlineSession={{
+          ...onlineSession,
+          awaitingSync: true,
+        }}
+      />,
+    );
+    expect(screen.getByText(/Red picks/i)).toBeTruthy();
+    expect(screen.queryByText(/Save & quit/i)).toBeNull();
+    expect(screen.getByText(/Leave room/i)).toBeTruthy();
+  });
+
+  it("locks online input during pause and unanimous undo voting", () => {
+    const config = createDefaultThreePlayerConfig();
+    config.seats.white.control = { kind: "online", local: true };
+    config.seats.red.control = { kind: "online", local: false };
+    config.seats.black.control = { kind: "ai", difficulty: 5 };
+    const state = createThreePlayerGame(config);
+    const onVote = vi.fn();
+    const onlineSession: ThreePlayerOnlineSession = {
+      roomCode: "ABCDE",
+      role: "peer",
+      participantSeat: "white",
+      status: "playing",
+      awaitingSync: false,
+      undoAvailable: true,
+      undoProposal: {
+        requestId: "undo-1",
+        targetRevision: 0,
+        requestedByName: "Host",
+        eligibleCount: 2,
+        approvedCount: 1,
+        localEligible: true,
+        localApproved: false,
+      },
+      onAction: vi.fn(),
+      onUndoRequest: vi.fn(),
+      onUndoVote: onVote,
+    };
+    const { rerender } = render(
+      <ThreePlayerGame
+        initialState={state}
+        onQuit={() => undefined}
+        onNewGame={() => undefined}
+        onlineSession={onlineSession}
+      />,
+    );
+
+    expect(screen.getByRole("heading", {
+      name: /requested a rollback/i,
+    })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /approve undo/i }));
+    expect(onVote).toHaveBeenCalledWith(true);
+
+    rerender(
+      <ThreePlayerGame
+        initialState={state}
+        onQuit={() => undefined}
+        onNewGame={() => undefined}
+        onlineSession={{
+          ...onlineSession,
+          undoProposal: undefined,
+          status: "paused",
+          pausedSeat: "red",
+          pausedParticipantName: "Guest",
+        }}
+      />,
+    );
+    expect(screen.getByRole("heading", {
+      name: /waiting for guest/i,
+    })).toBeTruthy();
   });
 });

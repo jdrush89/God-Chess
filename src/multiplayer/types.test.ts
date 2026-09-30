@@ -2,12 +2,16 @@ import { describe, expect, it } from "vitest";
 import { createGame } from "../game/engine";
 import { createFourPlayerGame } from "../game/fourPlayerEngine";
 import { createFourPlayerStateEnvelope } from "../game/fourPlayerSession";
+import { createDefaultThreePlayerConfig } from "../game/threePlayerConfig";
+import { createThreePlayerGame } from "../game/threePlayerEngine";
+import { createThreePlayerStateEnvelope } from "../game/threePlayerSession";
 import {
   createProtocolMessage,
   MULTIPLAYER_PROTOCOL_VERSION,
   normalizeProtocolMessage,
   normalizeFourPlayerRoomSnapshot,
   type FourPlayerRoomSnapshot,
+  type ThreePlayerRoomSnapshot,
 } from "./types";
 
 const fourSnapshot = (): FourPlayerRoomSnapshot => {
@@ -41,8 +45,44 @@ const fourSnapshot = (): FourPlayerRoomSnapshot => {
   };
 };
 
+const threeSnapshot = (): ThreePlayerRoomSnapshot => {
+    const config = createDefaultThreePlayerConfig();
+    config.seats.white.name = "Host";
+    config.seats.white.control = { kind: "online", local: true };
+    config.seats.red.name = "Guest";
+    config.seats.red.control = { kind: "online", local: false };
+    config.seats.black.name = "Black Divine AI";
+    config.seats.black.control = { kind: "ai", difficulty: 5 };
+    const state = createThreePlayerGame(config);
+    return {
+      roomCode: "ABCDE",
+      status: "playing",
+      participants: [
+        {
+          name: "Host",
+          host: true,
+          connected: true,
+          ready: true,
+          local: true,
+          seat: "white",
+        },
+        {
+          name: "Guest",
+          host: false,
+          connected: true,
+          ready: true,
+          local: false,
+          seat: "red",
+        },
+      ],
+      config,
+      canonical: createThreePlayerStateEnvelope(state, "action-1"),
+      undoAvailable: false,
+  };
+};
+
 describe("versioned multiplayer protocol", () => {
-  it("round-trips classic and four-player messages without ambiguity", () => {
+  it("round-trips classic, four-player, and three-player messages without ambiguity", () => {
     const classic = createProtocolMessage("classic", "host", {
       type: "state_sync",
       state: createGame(undefined, { mode: "online" }),
@@ -51,9 +91,14 @@ describe("versioned multiplayer protocol", () => {
       type: "room_state",
       snapshot: fourSnapshot(),
     });
+    const three = createProtocolMessage("three-player", "host", {
+      type: "room_state",
+      snapshot: threeSnapshot(),
+    });
 
     expect(normalizeProtocolMessage(classic)).toEqual(classic);
     expect(normalizeProtocolMessage(four)).toEqual(four);
+    expect(normalizeProtocolMessage(three)).toEqual(three);
     expect(normalizeProtocolMessage({
       ...classic,
       variant: "four-player",
@@ -126,5 +171,59 @@ describe("versioned multiplayer protocol", () => {
       ...snapshot,
       reconnectToken: "must-never-broadcast",
     })).toBeUndefined();
+  });
+
+  it("rejects leaked three-player authorization identities and inconsistent room state", () => {
+    const snapshot = threeSnapshot();
+    const message = createProtocolMessage("three-player", "host", {
+      type: "room_state",
+      snapshot,
+    });
+    expect(normalizeProtocolMessage(message)).toEqual(message);
+
+    expect(normalizeProtocolMessage({
+      ...message,
+      payload: {
+        type: "room_state",
+        snapshot: {
+          ...snapshot,
+          participants: [{
+            ...snapshot.participants[0],
+            participantId: "must-stay-private",
+          }, snapshot.participants[1]],
+        },
+      },
+    })).toBeUndefined();
+
+    const leakedCanonical = structuredClone(snapshot);
+    leakedCanonical.config.seats.white.control = {
+      kind: "online",
+      participantId: "host-private",
+      local: true,
+    };
+    leakedCanonical.canonical!.state.config.seats.white.control =
+      structuredClone(leakedCanonical.config.seats.white.control);
+    leakedCanonical.canonical!.state.players.white.control =
+      structuredClone(leakedCanonical.config.seats.white.control);
+    expect(normalizeProtocolMessage(createProtocolMessage(
+      "three-player",
+      "host",
+      { type: "room_state", snapshot: leakedCanonical },
+    ))).toBeUndefined();
+
+    expect(normalizeProtocolMessage(createProtocolMessage(
+      "three-player",
+      "host",
+      {
+        type: "room_state",
+        snapshot: {
+          ...snapshot,
+          participants: snapshot.participants.map((participant) => ({
+            ...participant,
+            seat: "white" as const,
+          })),
+        },
+      },
+    ))).toBeUndefined();
   });
 });

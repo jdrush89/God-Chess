@@ -57,6 +57,7 @@ describe("game startup", () => {
     fireEvent.click(screen.getByRole("button", { name: /online versus/i }));
     expect(screen.getByRole("button", { name: /^two-player$/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /^four-player$/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^three-player$/i })).toBeTruthy();
   });
 
   it("opens the local three-player setup without exposing an online room mode", () => {

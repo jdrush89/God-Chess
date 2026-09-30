@@ -24,6 +24,7 @@ import {
   availableThreePlayerActions,
   threePlayerReducer,
 } from "../game/threePlayerEngine";
+import type { ThreePlayerUndoStatus } from "../multiplayer/types";
 import {
   threePlayerOwnerAffinity,
 } from "../game/threePlayerConfig";
@@ -259,13 +260,21 @@ function ThreePlayerDraft({
   actions,
   inputDisabled,
   onAction,
-  onSaveAndQuit,
+  onExit,
+  exitLabel,
+  canUndo,
+  onUndo,
+  roomCode,
 }: {
   state: UiState;
   actions: UiAction[];
   inputDisabled: boolean;
   onAction: (action: UiAction) => void;
-  onSaveAndQuit: () => void;
+  onExit: () => void;
+  exitLabel: string;
+  canUndo: boolean;
+  onUndo: () => void;
+  roomCode?: string;
 }) {
   const [inspected, setInspected] = useState<GodId>(GODS[0].id);
   const [level, setLevel] = useState(1);
@@ -281,9 +290,19 @@ function ThreePlayerDraft({
           <p className="eyebrow">THREE-PLAYER DRAFT</p>
           <strong>Nine divine claims</strong>
         </div>
-        <button className="secondary-button" onClick={onSaveAndQuit}>
-          <Save size={16} /> Save & quit
-        </button>
+        <div className="three-game-actions">
+          {roomCode && <span>ROOM <strong>{roomCode}</strong></span>}
+          <button
+            disabled={!canUndo}
+            onClick={onUndo}
+            aria-label="Undo"
+          >
+            <Undo2 size={16} />
+          </button>
+          <button className="secondary-button" onClick={onExit}>
+            <Save size={16} /> {exitLabel}
+          </button>
+        </div>
       </header>
       <section className="three-draft-hero">
         <p style={{ "--seat-color": THREE_PLAYER_PALETTES[currentSeat] } as React.CSSProperties}>
@@ -435,6 +454,111 @@ function SettingsModal({
   );
 }
 
+function ThreePlayerPauseOverlay({
+  seat,
+  participantName,
+  canReplace,
+  onReplace,
+}: {
+  seat?: ThreePlayerSeat;
+  participantName?: string;
+  canReplace: boolean;
+  onReplace?: (difficulty: number) => void;
+}) {
+  const [difficulty, setDifficulty] = useState(5);
+  return (
+    <div className="modal-backdrop three-online-pause">
+      <section className="gameover-modal">
+        <p className="eyebrow">ROOM PAUSED</p>
+        <h2>Waiting for {participantName ?? "a participant"}</h2>
+        <p>
+          {seat
+            ? `${THREE_PLAYER_SEAT_LABELS[seat]} remains reserved for secure reconnection.`
+            : "Canonical play will resume after the participant reconnects."}
+        </p>
+        {canReplace && onReplace && seat && (
+          <div className="three-replace-ai">
+            <label>
+              AI difficulty <strong>{difficulty}</strong>
+              <input
+                type="range"
+                min="1"
+                max="10"
+                value={difficulty}
+                onChange={(event) => setDifficulty(Number(event.target.value))}
+              />
+            </label>
+            <button
+              className="primary-button"
+              onClick={() => onReplace(difficulty)}
+            >
+              Replace permanently with AI
+            </button>
+          </div>
+        )}
+        {!canReplace && (
+          <small>Waiting for the host or the reserved participant.</small>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function ThreePlayerUndoOverlay({
+  proposal,
+  onVote,
+}: {
+  proposal: ThreePlayerUndoStatus;
+  onVote: (approved: boolean) => void;
+}) {
+  return (
+    <div className="modal-backdrop three-online-undo">
+      <section className="gameover-modal">
+        <p className="eyebrow">UNDO VOTE</p>
+        <h2>{proposal.requestedByName} requested a rollback</h2>
+        <p>
+          {proposal.approvedCount} of {proposal.eligibleCount} connected Humans
+          have approved the previous stable Human boundary and its AI chain.
+        </p>
+        <div className="three-online-vote-actions">
+          {!proposal.localApproved && proposal.localEligible && (
+            <button
+              className="primary-button"
+              onClick={() => onVote(true)}
+            >
+              Approve undo
+            </button>
+          )}
+          {proposal.localEligible && (
+            <button
+              className="secondary-button"
+              onClick={() => onVote(false)}
+            >
+              {proposal.localApproved ? "Cancel vote" : "Reject undo"}
+            </button>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+export interface ThreePlayerOnlineSession {
+  roomCode: string;
+  role: "host" | "peer";
+  participantSeat?: ThreePlayerSeat;
+  status: "playing" | "paused" | "finished";
+  awaitingSync: boolean;
+  undoAvailable: boolean;
+  undoProposal?: ThreePlayerUndoStatus;
+  pausedSeat?: ThreePlayerSeat;
+  pausedParticipantName?: string;
+  onAction: (action: ThreePlayerAction) => void;
+  onUndoRequest: () => void;
+  onUndoVote: (approved: boolean) => void;
+  onReplaceWithAi?: (difficulty: number) => void;
+}
+
 export interface ThreePlayerGameProps {
   initialState: ThreePlayerState;
   initialUndoHistory?: ThreePlayerState[];
@@ -448,6 +572,7 @@ export interface ThreePlayerGameProps {
   ) => boolean | Promise<boolean>;
   onQuit: () => void;
   onNewGame: () => void;
+  onlineSession?: ThreePlayerOnlineSession;
 }
 
 export function ThreePlayerGame({
@@ -459,6 +584,7 @@ export function ThreePlayerGame({
   onPersist,
   onQuit,
   onNewGame,
+  onlineSession,
 }: ThreePlayerGameProps) {
   const [state, setState] = useState<UiState>(() => clone(initialState) as UiState);
   const stateRef = useRef(state);
@@ -485,7 +611,23 @@ export function ThreePlayerGame({
     () => availableThreePlayerActions(state as ThreePlayerState) as UiAction[],
     [state],
   );
-  const inputDisabled = isThreePlayerAiTurn(state as ThreePlayerState);
+  const onlineControl = onlineSession?.participantSeat
+    ? state.players[onlineSession.participantSeat].control
+    : undefined;
+  const inputDisabled = onlineSession
+    ? (
+      onlineSession.status !== "playing" ||
+      onlineSession.awaitingSync ||
+      Boolean(onlineSession.undoProposal) ||
+      !onlineSession.participantSeat ||
+      state.activeSeat !== onlineSession.participantSeat ||
+      onlineControl?.kind !== "online" ||
+      onlineControl.local !== true ||
+      helpOpen ||
+      settingsOpen ||
+      menuOpen
+    )
+    : isThreePlayerAiTurn(state as ThreePlayerState);
   const selectedCell = state.selectedCell ?? localSelectedCell;
   const moveActions = actions.filter((action) => action.type === "move");
   const legalCells = state.legalCells?.length
@@ -508,6 +650,12 @@ export function ThreePlayerGame({
   const dispatchAction = (action: UiAction, source: "human" | "ai" = "human") => {
     const current = stateRef.current;
     if (source === "human" && inputDisabled) return;
+    if (onlineSession) {
+      if (source === "human") {
+        onlineSession.onAction(action as ThreePlayerAction);
+      }
+      return;
+    }
     if (source === "human" && isStableState(current) && !chainStart.current) {
       chainStart.current = clone(current);
     }
@@ -528,7 +676,20 @@ export function ThreePlayerGame({
   };
 
   useEffect(() => {
-    if (typeof Worker === "undefined") return;
+    if (!onlineSession) return;
+    const loaded = threePlayerReducer(initialState, {
+      type: "load",
+      state: initialState,
+    }) as UiState;
+    stateRef.current = loaded;
+    setState(loaded);
+    setLocalSelectedCell(undefined);
+    aiPlan.current = [];
+    aiRequestRevision.current = undefined;
+  }, [initialState, onlineSession?.roomCode]);
+
+  useEffect(() => {
+    if (onlineSession || typeof Worker === "undefined") return;
     const worker = new Worker(
       new URL("../game/threePlayerAi.worker.ts", import.meta.url),
       { type: "module" },
@@ -549,9 +710,14 @@ export function ThreePlayerGame({
       worker.terminate();
       aiWorker.current = undefined;
     };
-  }, []);
+  }, [onlineSession]);
 
   useEffect(() => {
+    if (onlineSession) {
+      aiPlan.current = [];
+      aiRequestRevision.current = undefined;
+      return;
+    }
     if (!isThreePlayerAiTurn(state as ThreePlayerState)) {
       aiPlan.current = [];
       aiRequestRevision.current = undefined;
@@ -585,10 +751,10 @@ export function ThreePlayerGame({
       reducedMotion() ? 0 : 180,
     );
     return () => window.clearTimeout(timer);
-  }, [aiPlanReady, state.phase, state.revision]);
+  }, [aiPlanReady, onlineSession, state.phase, state.revision]);
 
   useEffect(() => {
-    if (!onPersist || !isStableState(state)) return;
+    if (onlineSession || !onPersist || !isStableState(state)) return;
     const timer = window.setTimeout(() => {
       void onPersist(
         stateRef.current as ThreePlayerState,
@@ -597,7 +763,7 @@ export function ThreePlayerGame({
       );
     }, 120);
     return () => window.clearTimeout(timer);
-  }, [onPersist, state]);
+  }, [onPersist, onlineSession, state]);
 
   const selectCell = (cell: ThreePlayerCell) => {
     if (inputDisabled) return;
@@ -625,6 +791,16 @@ export function ThreePlayerGame({
   };
 
   const undo = () => {
+    if (onlineSession) {
+      if (
+        onlineSession.undoAvailable &&
+        !onlineSession.awaitingSync &&
+        !onlineSession.undoProposal
+      ) {
+        onlineSession.onUndoRequest();
+      }
+      return;
+    }
     if (!undoEnabled || !isStableState(stateRef.current)) return;
     const snapshot = undoStack.current.pop();
     if (!snapshot) return;
@@ -637,6 +813,10 @@ export function ThreePlayerGame({
   };
 
   const saveAndQuit = async () => {
+    if (onlineSession) {
+      onQuit();
+      return;
+    }
     if (!onPersist) {
       onQuit();
       return;
@@ -649,15 +829,44 @@ export function ThreePlayerGame({
     if (persisted) onQuit();
   };
 
+  const canUndo = onlineSession
+    ? (
+      onlineSession.undoAvailable &&
+      onlineSession.status === "playing" &&
+      !onlineSession.awaitingSync &&
+      !onlineSession.undoProposal
+    )
+    : undoEnabled && undoDepth > 0 && isStableState(state);
+
   if (state.phase === "draft") {
     return (
-      <ThreePlayerDraft
-        state={state}
-        actions={actions}
-        inputDisabled={inputDisabled}
-        onAction={dispatchAction}
-        onSaveAndQuit={() => void saveAndQuit()}
-      />
+      <>
+        <ThreePlayerDraft
+          state={state}
+          actions={actions}
+          inputDisabled={inputDisabled}
+          onAction={dispatchAction}
+          onExit={() => void saveAndQuit()}
+          exitLabel={onlineSession ? "Leave room" : "Save & quit"}
+          canUndo={canUndo}
+          onUndo={undo}
+          roomCode={onlineSession?.roomCode}
+        />
+        {onlineSession?.status === "paused" && (
+          <ThreePlayerPauseOverlay
+            seat={onlineSession.pausedSeat}
+            participantName={onlineSession.pausedParticipantName}
+            canReplace={onlineSession.role === "host"}
+            onReplace={onlineSession.onReplaceWithAi}
+          />
+        )}
+        {onlineSession?.undoProposal && (
+          <ThreePlayerUndoOverlay
+            proposal={onlineSession.undoProposal}
+            onVote={onlineSession.onUndoVote}
+          />
+        )}
+      </>
     );
   }
 
@@ -682,13 +891,18 @@ export function ThreePlayerGame({
       <header className="three-game-topbar">
         <div>
           <p className="eyebrow">{variant?.name ?? "THREE-PLAYER"}</p>
-          <strong>Round {state.round} · Turn {state.turn}</strong>
+          <strong>
+            Round {state.round} · Turn {state.turn}
+            {onlineSession ? ` · Room ${onlineSession.roomCode}` : ""}
+          </strong>
         </div>
         <div className="three-game-actions">
           <button onClick={() => setHelpOpen(true)} aria-label="Help"><BookOpen size={17} /></button>
-          <button onClick={() => setSettingsOpen(true)} aria-label="Settings"><Settings size={17} /></button>
+          {!onlineSession && (
+            <button onClick={() => setSettingsOpen(true)} aria-label="Settings"><Settings size={17} /></button>
+          )}
           <button
-            disabled={!undoEnabled || undoDepth === 0 || !isStableState(state)}
+            disabled={!canUndo}
             onClick={undo}
             aria-label="Undo"
           >
@@ -698,9 +912,15 @@ export function ThreePlayerGame({
         </div>
         {menuOpen && (
           <div className="three-game-menu">
-            <button onClick={() => void saveAndQuit()}><Save size={15} /> Save & quit</button>
-            <button onClick={() => dispatchAction({ type: "restart" })}><RotateCcw size={15} /> Restart</button>
-            <button onClick={onNewGame}><Crown size={15} /> New setup</button>
+            <button onClick={() => void saveAndQuit()}>
+              <Save size={15} /> {onlineSession ? "Leave room" : "Save & quit"}
+            </button>
+            {!onlineSession && (
+              <button onClick={() => dispatchAction({ type: "restart" })}><RotateCcw size={15} /> Restart</button>
+            )}
+            <button onClick={onNewGame}>
+              <Crown size={15} /> {onlineSession ? "New online room" : "New setup"}
+            </button>
           </div>
         )}
       </header>
@@ -734,7 +954,17 @@ export function ThreePlayerGame({
             <div>
               <strong>{state.notice}</strong>
               <small>
-                {inputDisabled ? "AI is choosing a divine action." : "Select a God, ability, piece, or highlighted target."}
+                {onlineSession?.status === "paused"
+                  ? "The room is paused for reconnection."
+                  : onlineSession?.undoProposal
+                    ? "Canonical play is locked during the undo vote."
+                    : onlineSession?.awaitingSync
+                      ? "Waiting for the host to acknowledge the action."
+                      : inputDisabled
+                        ? onlineSession
+                          ? "Waiting for the assigned active participant."
+                          : "AI is choosing a divine action."
+                        : "Select a God, ability, piece, or highlighted target."}
               </small>
             </div>
           </div>
@@ -852,6 +1082,20 @@ export function ThreePlayerGame({
         </aside>
       </section>
 
+      {onlineSession?.status === "paused" && (
+        <ThreePlayerPauseOverlay
+          seat={onlineSession.pausedSeat}
+          participantName={onlineSession.pausedParticipantName}
+          canReplace={onlineSession.role === "host"}
+          onReplace={onlineSession.onReplaceWithAi}
+        />
+      )}
+      {onlineSession?.undoProposal && (
+        <ThreePlayerUndoOverlay
+          proposal={onlineSession.undoProposal}
+          onVote={onlineSession.onUndoVote}
+        />
+      )}
       {state.phase === "gameover" && (
         <div className="modal-backdrop">
           <section className="gameover-modal">

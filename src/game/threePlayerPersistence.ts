@@ -179,6 +179,8 @@ const hasExactKeys = (
   return required.every((key) => Object.hasOwn(value, key)) &&
     Object.keys(value).every((key) => allowed.has(key));
 };
+const hasExactSeatKeys = (value: Record<string, unknown>) =>
+  hasExactKeys(value, [...THREE_PLAYER_SEATS]);
 const isSeat = (value: unknown): value is ThreePlayerSeat =>
   typeof value === "string" &&
   THREE_PLAYER_SEATS.includes(value as ThreePlayerSeat);
@@ -226,17 +228,20 @@ export const isThreePlayerConfig = (
 ): value is ThreePlayerConfig => {
   if (
     !isRecord(value) ||
+    !hasExactKeys(value, ["boardVariant", "victoryMode", "takeover", "seats"]) ||
     !THREE_PLAYER_BOARD_VARIANTS.includes(
       value.boardVariant as (typeof THREE_PLAYER_BOARD_VARIANTS)[number],
     ) ||
     !["first-checkmate", "last-survivor"].includes(String(value.victoryMode)) ||
     typeof value.takeover !== "boolean" ||
-    !isRecord(value.seats)
+    !isRecord(value.seats) ||
+    !hasExactSeatKeys(value.seats)
   ) return false;
   for (const seat of THREE_PLAYER_SEATS) {
     const candidate = value.seats[seat];
     if (
       !isRecord(candidate) ||
+      !hasExactKeys(candidate, ["name", "displayColor", "control"]) ||
       typeof candidate.name !== "string" ||
       !candidate.name.trim() ||
       typeof candidate.displayColor !== "string" ||
@@ -253,7 +258,26 @@ export const isThreePlayerConfig = (
 };
 
 const isPieceStatus = (value: unknown): value is ThreePlayerPieceStatus => {
-  if (!isRecord(value)) return false;
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, [], [
+      "hardened",
+      "frozen",
+      "frozenBy",
+      "gazing",
+      "poisoned",
+      "poisonedBy",
+      "polymorphed",
+      "luredBy",
+      "hexedBy",
+      "prepared",
+      "ritual",
+      "markedForDeath",
+      "hired",
+      "movedThisTurn",
+      "chargeUntil",
+    ])
+  ) return false;
   if (value.hardened !== undefined &&
       !isDuration(value.hardened, ["choice", "god"])) return false;
   if (value.frozen !== undefined && !isDuration(value.frozen, ["god"])) return false;
@@ -270,6 +294,7 @@ const isPieceStatus = (value: unknown): value is ThreePlayerPieceStatus => {
     typeof value.prepared !== "boolean" &&
     !(
       isRecord(value.prepared) &&
+      hasExactKeys(value.prepared, ["owner", "level"]) &&
       isSeat(value.prepared.owner) &&
       [1, 2, 3].includes(Number(value.prepared.level))
     )
@@ -278,6 +303,7 @@ const isPieceStatus = (value: unknown): value is ThreePlayerPieceStatus => {
     value.ritual !== undefined &&
     !(
       isRecord(value.ritual) &&
+      hasExactKeys(value.ritual, ["owner", "expires"]) &&
       isSeat(value.ritual.owner) &&
       isDuration(value.ritual.expires, ["kangus"])
     )
@@ -286,6 +312,11 @@ const isPieceStatus = (value: unknown): value is ThreePlayerPieceStatus => {
     value.markedForDeath !== undefined &&
     !(
       isRecord(value.markedForDeath) &&
+      hasExactKeys(
+        value.markedForDeath,
+        ["owner", "round"],
+        ["immediate"],
+      ) &&
       isSeat(value.markedForDeath.owner) &&
       isInteger(value.markedForDeath.round, 1) &&
       (
@@ -303,7 +334,18 @@ const isPieceStatus = (value: unknown): value is ThreePlayerPieceStatus => {
 };
 
 const isPiece = (value: unknown): value is ThreePlayerPiece => {
-  if (!isRecord(value) || "orbAffinity" in value) return false;
+  if (
+    !isRecord(value) ||
+    "orbAffinity" in value ||
+    !hasExactKeys(value, [
+      "id",
+      "type",
+      "owner",
+      "controller",
+      "hasMoved",
+      "status",
+    ])
+  ) return false;
   return (
     typeof value.id === "string" &&
     Boolean(value.id) &&
@@ -323,12 +365,12 @@ const isUpgrades = (value: unknown) =>
 
 const isSeatNumberRecord = (value: unknown) =>
   isRecord(value) &&
-  Object.keys(value).length === THREE_PLAYER_SEATS.length &&
+  hasExactSeatKeys(value) &&
   THREE_PLAYER_SEATS.every((seat) => isInteger(value[seat]));
 
 const isGodTurnRecord = (value: unknown) =>
   isRecord(value) &&
-  Object.keys(value).length === THREE_PLAYER_SEATS.length &&
+  hasExactSeatKeys(value) &&
   THREE_PLAYER_SEATS.every((seat) => {
     const turns = value[seat];
     return isRecord(turns) && Object.entries(turns).every(
@@ -337,7 +379,8 @@ const isGodTurnRecord = (value: unknown) =>
   });
 
 const isKingAttackRecency = (value: unknown, attackSequence: number) =>
-  isRecord(value) && THREE_PLAYER_SEATS.every((defender) => {
+  isRecord(value) && hasExactSeatKeys(value) &&
+  THREE_PLAYER_SEATS.every((defender) => {
     const recency = value[defender];
     return isRecord(recency) && Object.entries(recency).every(
       ([attacker, sequence]) =>
@@ -370,6 +413,56 @@ const expectedPieceController = (
 const isThreePlayerStateVersion = (value: unknown): boolean => {
   if (
     !isRecord(value) ||
+    !hasExactKeys(
+      value,
+      [
+        "variant",
+        "schemaVersion",
+        "phase",
+        "config",
+        "board",
+        "players",
+        "activeSeat",
+        "turnOrder",
+        "draft",
+        "rested",
+        "round",
+        "turn",
+        "completedTurns",
+        "castlingRights",
+        "attackSequence",
+        "kingAttackRecency",
+        "revision",
+        "positionRevision",
+        "passCycle",
+        "history",
+        "notice",
+      ],
+      [
+        "seatTurns",
+        "hostileTurns",
+        "godTurns",
+        "upgradeQueue",
+        "selectedGod",
+        "selectedAbility",
+        "selectedCell",
+        "selectedPath",
+        "legalCells",
+        "legalSeats",
+        "legalPaths",
+        "pending",
+        "enPassant",
+        "bananas",
+        "stealth",
+        "bonusTurn",
+        "orbEvents",
+        "nextOrbEventId",
+        "presentationEvents",
+        "nextPresentationEventId",
+        "result",
+        "lastAction",
+      ],
+    ) ||
     "redAffinity" in value ||
     "pieceAffinities" in value ||
     value.variant !== "three-player" ||
@@ -378,6 +471,7 @@ const isThreePlayerStateVersion = (value: unknown): boolean => {
     !PHASES.has(String(value.phase)) ||
     !isRecord(value.board) ||
     !isRecord(value.players) ||
+    !hasExactSeatKeys(value.players) ||
     !isSeat(value.activeSeat) ||
     !Array.isArray(value.turnOrder) ||
     value.turnOrder.length !== THREE_PLAYER_SEATS.length ||
@@ -388,11 +482,13 @@ const isThreePlayerStateVersion = (value: unknown): boolean => {
     !isInteger(value.turn, 1) ||
     !isSeatNumberRecord(value.completedTurns) ||
     !isRecord(value.castlingRights) ||
+    !hasExactSeatKeys(value.castlingRights) ||
     !isInteger(value.attackSequence) ||
     !isKingAttackRecency(value.kingAttackRecency, value.attackSequence) ||
     !isInteger(value.revision) ||
     !isInteger(value.positionRevision) ||
     !isRecord(value.passCycle) ||
+    !hasExactKeys(value.passCycle, ["positionRevision", "passedSeats"]) ||
     !isInteger(value.passCycle.positionRevision) ||
     value.passCycle.positionRevision !== value.positionRevision ||
     !isSeatArray(value.passCycle.passedSeats) ||
@@ -444,6 +540,21 @@ const isThreePlayerStateVersion = (value: unknown): boolean => {
     const rights = value.castlingRights[seat];
     if (
       !isRecord(player) ||
+      !hasExactKeys(
+        player,
+        [
+          "seat",
+          "name",
+          "displayColor",
+          "control",
+          "eliminated",
+          "gods",
+          "orbs",
+          "graveyard",
+          "upgrades",
+        ],
+        ["eliminatedBy"],
+      ) ||
       player.seat !== seat ||
       typeof player.name !== "string" ||
       typeof player.displayColor !== "string" ||
@@ -456,16 +567,19 @@ const isThreePlayerStateVersion = (value: unknown): boolean => {
       ) ||
       !isGodArray(player.gods) ||
       !isRecord(player.orbs) ||
+      !hasExactKeys(player.orbs, ["light", "dark"]) ||
       !isInteger(player.orbs.light) ||
       !isInteger(player.orbs.dark) ||
       !Array.isArray(player.graveyard) ||
       !player.graveyard.every((entry) =>
         isRecord(entry) &&
+        hasExactKeys(entry, ["piece", "capturedOnTurn"]) &&
         isPiece(entry.piece) &&
         isInteger(entry.capturedOnTurn)
       ) ||
       !isUpgrades(player.upgrades) ||
       !isRecord(rights) ||
+      !hasExactKeys(rights, ["king", "queen"]) ||
       typeof rights.king !== "boolean" ||
       typeof rights.queen !== "boolean"
     ) return false;
@@ -533,6 +647,12 @@ const isThreePlayerStateVersion = (value: unknown): boolean => {
     "black",
   ];
   if (
+    !hasExactKeys(value.draft, [
+      "order",
+      "pickIndex",
+      "available",
+      "unused",
+    ]) ||
     !Array.isArray(value.draft.order) ||
     value.draft.order.length !== expectedDraftOrder.length ||
     value.draft.order.some((seat, index) => seat !== expectedDraftOrder[index]) ||
@@ -574,6 +694,7 @@ const isThreePlayerStateVersion = (value: unknown): boolean => {
       !isPathArray(value.legalPaths) ||
       !Array.isArray(value.bananas) ||
       !isRecord(value.stealth) ||
+      !hasExactSeatKeys(value.stealth) ||
       !Array.isArray(value.orbEvents) ||
       !isInteger(value.nextOrbEventId, 1) ||
       !Array.isArray(value.presentationEvents) ||
@@ -808,6 +929,12 @@ const isThreePlayerStateVersion = (value: unknown): boolean => {
   if (value.enPassant !== undefined) {
     if (
       !isRecord(value.enPassant) ||
+      !hasExactKeys(value.enPassant, [
+        "target",
+        "capturedCell",
+        "pawnId",
+        "expiresOnTurn",
+      ]) ||
       typeof value.enPassant.target !== "string" ||
       !validCells.has(value.enPassant.target) ||
       typeof value.enPassant.capturedCell !== "string" ||
@@ -828,13 +955,17 @@ const isThreePlayerStateVersion = (value: unknown): boolean => {
     if (
       value.result.kind === "winner" &&
       !(
+        hasExactKeys(value.result, ["kind", "seat", "reason"]) &&
         isSeat(value.result.seat) &&
         ["first-checkmate", "last-survivor"].includes(String(value.result.reason))
       )
     ) return false;
     if (
       value.result.kind === "draw" &&
-      !["stalemate", "stalemate-cycle"].includes(String(value.result.reason))
+      !(
+        hasExactKeys(value.result, ["kind", "reason"]) &&
+        ["stalemate", "stalemate-cycle"].includes(String(value.result.reason))
+      )
     ) return false;
     if (!["winner", "draw"].includes(value.result.kind)) return false;
     const result = value.result as unknown as NonNullable<

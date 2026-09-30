@@ -5,7 +5,7 @@ pantheons, shared orb economies, resting turns, status effects, and ability
 upgrades. Play a two-player duel locally, challenge a difficulty-adjustable AI,
 share a three-player Green Chess board, contest a four-player cross-board in
 free-for-all or 2v2, solve prepared divine
-puzzles, or play host-authoritative two-player and four-player online matches
+puzzles, or play host-authoritative two-player, three-player, and four-player online matches
 through WebRTC rooms with five-character codes.
 
 Play the latest version at [playgodchess.com](https://playgodchess.com/).
@@ -107,11 +107,46 @@ bananas, takeover controllers, and stalemate-cycle metadata. Undo operates at
 stable draft, completed-turn, and upgrade boundaries; in mixed games it rewinds
 the following AI chain together with the preceding Human action.
 
+## Three-player online
+
+Choose **Online versus**, then **Three-player**, to host or join an
+authoritative room on any of the five Green Chess boards.
+
+- A room requires 2–3 connected Human participants. The host assigns each
+  participant to one White, Red, or Black seat; duplicate assignments are
+  rejected and every unoccupied seat becomes Divine AI.
+- Before starting, the host selects the board variant, first-checkmate or
+  continuation play, takeover, and a separate difficulty from 1–10 for each AI
+  seat. Guests see the synchronized setup but cannot change it. Every connected
+  Human must be assigned and ready.
+- The normal deterministic nine-pick draft, Red affinity alternation,
+  stalemate skips and full-cycle draw, takeover rules, all 36 abilities,
+  upgrades, and complete-plan AI are identical to local three-player play.
+- Only the host reduces canonical state and runs AI. The participant assigned
+  to the active Human seat submits an action, then all clients wait for the
+  host's next revision or matching acknowledgement before input reopens.
+- A transient guest disconnect pauses the room before further Human or AI
+  actions. The reserved participant can securely reconnect with the private
+  token issued by the host; retryable connection failures do not discard that
+  credential.
+- While paused, the host can permanently replace the disconnected Human with a
+  chosen AI difficulty. The participant's private authorization is removed and
+  every undo boundary is rewritten so undo cannot restore the removed Human.
+  Original piece ownership and Red affinity semantics do not change.
+- Any connected Human may propose undo to the previous stable Human boundary.
+  Rollback occurs only after every currently connected Human approves. A
+  rejection, canonical action, participant change, reconnect, replacement, or
+  room end invalidates the proposal. If AI replacement leaves one connected
+  Human, that participant can approve alone.
+- Host disconnect ends the room. Voluntary guest departure follows the normal
+  lobby or in-game cleanup path. **Save & Quit** is unavailable, and live room
+  state is never written as a local or cloud saved game.
+
 ## Four-player online
 
 Choose **Online versus**, then **Four-player**, to host or join a multiparty
-room. The existing two-player online flow remains available under
-**Two-player**.
+room. Two-player and three-player online flows remain available in the same
+mode chooser.
 
 - A room supports 2–4 connected Human participants. The host assigns every
   Human to exactly one north/east/south/west seat; all unassigned seats become
@@ -254,7 +289,7 @@ session boundaries intended for the later multiparty-networking layer.
   rules. Opponent-turn effects count hostile turns, so allied turns do not
   consume them.
 - `src/game/fourPlayerPersistence.ts` exposes a strict clone/type-guard boundary
-  used by saves and future online snapshots. Malformed or
+  used by saves and online snapshots. Malformed or
   configuration-inconsistent serialized states are rejected before loading.
 - `src/game/fourPlayerAi.ts` plans deterministic draft, ability, movement,
   choice, and upgrade action sequences for multiple enemies or teams with
@@ -263,9 +298,9 @@ session boundaries intended for the later multiparty-networking layer.
   action UI, animations, AI turn loop, save integration, and snapshot undo.
 - `src/game/fourPlayerSession.ts` defines transport-neutral revisioned actions,
   strict state snapshots, and seat authorization.
-- `src/multiplayer/types.ts` defines the exact versioned `classic` and
-  `four-player` message protocol and validates every decoded application
-  payload.
+- `src/multiplayer/types.ts` defines the exact versioned `classic`,
+  `four-player`, and `three-player` message protocol and validates every
+  decoded application payload.
 - `src/multiplayer/fourPlayerRoom.ts` owns the multiparty host state machine,
   private reconnect bindings, canonical revisions, host-run AI, pause and
   replacement behavior, and unanimous connected-Human undo.
@@ -277,8 +312,7 @@ session boundaries intended for the later multiparty-networking layer.
 The deterministic three-player core is intentionally separate from the
 two-player and four-player state APIs. The same pure action boundary drives
 local React gameplay, complete action-plan enumeration, AI, saves, undo, and
-the transport-neutral session validation reserved for a later authoritative
-online layer.
+the host-authoritative online room.
 
 - `src/game/threePlayerTypes.ts` defines White, Red, and Black seats; original
   piece ownership versus current control; Human/AI/online controller metadata;
@@ -304,11 +338,20 @@ online layer.
 - `src/game/threePlayerPersistence.ts` exports `isThreePlayerState` and
   `prepareThreePlayerState`, including explicit migration from the Layer 1
   schema; `src/game/threePlayerSession.ts` adds strict revisioned
-  action/snapshot, participant authorization, reconnect, and unanimous-undo
-  foundations.
+  action/snapshot, participant authorization, reconnect, and proposal-based
+  unanimous-undo boundaries.
 - `src/threePlayer/` contains the shared-device setup, five topology-driven SVG
-  board layouts, draft/game UI, AI loop, reduced-motion presentation, saves,
-  and stable snapshot undo.
+  board layouts, shared local/online draft and game UI, responsive online
+  lobby, AI loop, reduced-motion presentation, saves, and stable snapshot undo.
+- `src/multiplayer/threePlayerRoom.ts` owns private participant and reconnect
+  credentials, seat authorization, canonical revisions, host-run AI chains,
+  disconnect pause, permanent AI replacement, and connected-Human unanimous
+  undo. Recipient-specific snapshots never expose another participant's
+  credentials or private binding.
+- `src/multiplayer/useThreePlayerOnlineGame.ts` reconciles exact revisions,
+  retains action acknowledgement gating until canonical advancement, preserves
+  retryable reconnect credentials, and adapts the room into React without
+  reducing guest state or creating local saves.
 
 White, Red, then Black move in that fixed order. The draft claims nine of the
 twelve Gods in order

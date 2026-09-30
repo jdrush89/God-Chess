@@ -42,6 +42,12 @@ export interface ThreePlayerUndoProposal {
   approvedParticipantIds: string[];
 }
 
+export interface ThreePlayerUndoVote {
+  requestId: string;
+  targetRevision: number;
+  approved: boolean;
+}
+
 const GOD_IDS = new Set(GODS.map((god) => god.id));
 const ABILITY_IDS = new Set(
   GODS.flatMap((god) => god.abilities.map((ability) => ability.id)),
@@ -66,6 +72,13 @@ const hasExactKeys = (
 };
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === "string" && Boolean(value.trim());
+const isBoundedString = (
+  value: unknown,
+  maximum: number,
+): value is string =>
+  isNonEmptyString(value) && value.length <= maximum;
+const isRevision = (value: unknown): value is number =>
+  typeof value === "number" && Number.isInteger(value) && value >= 0;
 const isSeat = (value: unknown): value is ThreePlayerSeat =>
   typeof value === "string" &&
   THREE_PLAYER_SEATS.includes(value as ThreePlayerSeat);
@@ -220,10 +233,9 @@ export const normalizeThreePlayerActionEnvelope = (
       "seat",
       "action",
     ]) ||
-    !Number.isInteger(value.revision) ||
-    Number(value.revision) < 0 ||
-    !isNonEmptyString(value.actionId) ||
-    !isNonEmptyString(value.participantId) ||
+    !isRevision(value.revision) ||
+    !isBoundedString(value.actionId, 128) ||
+    !isBoundedString(value.participantId, 128) ||
     !isSeat(value.seat)
   ) return undefined;
   const action = normalizeThreePlayerAction(value.action);
@@ -321,15 +333,30 @@ export const createThreePlayerStateEnvelope = (
   };
 };
 
+export const createRevisedThreePlayerStateEnvelope = (
+  state: ThreePlayerState,
+  revision: number,
+  lastActionId?: string,
+): ThreePlayerStateEnvelope => {
+  if (!isRevision(revision)) {
+    throw new Error("Three-player canonical revision is invalid.");
+  }
+  const prepared = prepareThreePlayerState(state);
+  prepared.revision = revision;
+  return createThreePlayerStateEnvelope(
+    prepareThreePlayerState(prepared),
+    lastActionId,
+  );
+};
+
 export const normalizeThreePlayerStateEnvelope = (
   value: unknown,
 ): ThreePlayerStateEnvelope | undefined => {
   if (!isRecord(value) ||
       !hasExactKeys(value, ["revision", "state"], ["lastActionId"]) ||
-      !Number.isInteger(value.revision) ||
-      Number(value.revision) < 0 ||
+      !isRevision(value.revision) ||
       (value.lastActionId !== undefined &&
-        typeof value.lastActionId !== "string")) return undefined;
+        !isBoundedString(value.lastActionId, 128))) return undefined;
   try {
     const state = prepareThreePlayerState(value.state);
     if (state.revision !== value.revision) return undefined;
@@ -344,15 +371,90 @@ export const createThreePlayerUndoProposal = (
   targetRevision: number,
   requestedBy: string,
   eligibleParticipantIds: string[],
-): ThreePlayerUndoProposal => ({
-  requestId,
-  targetRevision,
-  requestedBy,
-  eligibleParticipantIds: [...new Set(eligibleParticipantIds)],
-  approvedParticipantIds: eligibleParticipantIds.includes(requestedBy)
-    ? [requestedBy]
-    : [],
-});
+): ThreePlayerUndoProposal => {
+  if (
+    !isBoundedString(requestId, 128) ||
+    !isRevision(targetRevision) ||
+    !isBoundedString(requestedBy, 128) ||
+    !eligibleParticipantIds.every((participantId) =>
+      isBoundedString(participantId, 128)
+    )
+  ) {
+    throw new Error("Three-player undo proposal is invalid.");
+  }
+  const eligible = [...new Set(eligibleParticipantIds)];
+  return {
+    requestId,
+    targetRevision,
+    requestedBy,
+    eligibleParticipantIds: eligible,
+    approvedParticipantIds: eligible.includes(requestedBy)
+      ? [requestedBy]
+      : [],
+  };
+};
+
+export const normalizeThreePlayerUndoProposal = (
+  value: unknown,
+): ThreePlayerUndoProposal | undefined => {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, [
+      "requestId",
+      "targetRevision",
+      "requestedBy",
+      "eligibleParticipantIds",
+      "approvedParticipantIds",
+    ]) ||
+    !isBoundedString(value.requestId, 128) ||
+    !isRevision(value.targetRevision) ||
+    !isBoundedString(value.requestedBy, 128) ||
+    !Array.isArray(value.eligibleParticipantIds) ||
+    !Array.isArray(value.approvedParticipantIds)
+  ) return undefined;
+  const eligibleParticipantIds = value.eligibleParticipantIds;
+  const approvedParticipantIds = value.approvedParticipantIds;
+  if (
+    !eligibleParticipantIds.every((participantId) =>
+      isBoundedString(participantId, 128)
+    ) ||
+    new Set(eligibleParticipantIds).size !== eligibleParticipantIds.length ||
+    !approvedParticipantIds.every((participantId) =>
+      isBoundedString(participantId, 128) &&
+      eligibleParticipantIds.includes(participantId)
+    ) ||
+    new Set(approvedParticipantIds).size !== approvedParticipantIds.length ||
+    !eligibleParticipantIds.includes(value.requestedBy)
+  ) return undefined;
+  return {
+    requestId: value.requestId,
+    targetRevision: value.targetRevision,
+    requestedBy: value.requestedBy,
+    eligibleParticipantIds: [...eligibleParticipantIds] as string[],
+    approvedParticipantIds: [...approvedParticipantIds] as string[],
+  };
+};
+
+export const normalizeThreePlayerUndoVote = (
+  value: unknown,
+): ThreePlayerUndoVote | undefined => {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, [
+      "requestId",
+      "targetRevision",
+      "approved",
+    ]) ||
+    !isBoundedString(value.requestId, 128) ||
+    !isRevision(value.targetRevision) ||
+    typeof value.approved !== "boolean"
+  ) return undefined;
+  return {
+    requestId: value.requestId,
+    targetRevision: value.targetRevision,
+    approved: value.approved,
+  };
+};
 
 export const approveThreePlayerUndo = (
   proposal: ThreePlayerUndoProposal,

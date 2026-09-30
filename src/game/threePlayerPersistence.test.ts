@@ -314,6 +314,22 @@ describe("three-player persistence", () => {
   it("rejects malformed topology, pass-cycle, controller, and affinity data", () => {
     const state = createThreePlayerGame();
 
+    const extraState = structuredClone(state) as unknown as Record<string, unknown>;
+    extraState.unexpected = true;
+    expect(isThreePlayerState(extraState)).toBe(false);
+
+    const extraConfig = structuredClone(state) as unknown as {
+      config: Record<string, unknown>;
+    };
+    extraConfig.config.unexpected = true;
+    expect(isThreePlayerState(extraConfig)).toBe(false);
+
+    const extraPiece = structuredClone(state) as unknown as {
+      board: Record<string, Record<string, unknown>>;
+    };
+    Object.values(extraPiece.board)[0].unexpected = true;
+    expect(isThreePlayerState(extraPiece)).toBe(false);
+
     const badCell = structuredClone(state) as unknown as {
       board: Record<string, unknown>;
     };
