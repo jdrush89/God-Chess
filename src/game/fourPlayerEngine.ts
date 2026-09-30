@@ -825,6 +825,9 @@ const escortPlan = (
     if (!to) return undefined;
     landings.push({ ...companion, to });
   }
+  if (new Set(landings.map((landing) => landing.to)).size !== landings.length) {
+    return undefined;
+  }
   const simulated = structuredClone(state.board);
   for (const landing of landings) delete simulated[landing.from];
   for (const landing of landings) {
@@ -852,7 +855,7 @@ const escortPlan = (
 
 const sourceIsAllowed = (state: FourPlayerState, square: Square) => {
   const piece = state.board[square];
-  if (!piece || piece.status.gazing || !state.selectedAbility) return false;
+  if (!piece || piece.status.gazing || piece.status.frozen || !state.selectedAbility) return false;
   const abilityId = state.selectedAbility;
   const level = currentLevel(state, abilityId);
   const fundingRepeat =

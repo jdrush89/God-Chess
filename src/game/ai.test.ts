@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { chooseAiPlan, evaluateGameState } from "./ai";
 import { createGame, gameReducer } from "./engine";
+import { PUZZLE_BY_ID } from "./puzzles";
 import type { Piece, PieceType } from "./types";
 
 const piece = (type: PieceType, controller: "white" | "black", id: string): Piece => ({
@@ -92,5 +93,48 @@ describe("Divine AI", () => {
 
     expect(plan).toContainEqual({ type: "select-ability", abilityId: "threaten" });
     expect(plan).not.toContainEqual({ type: "select-ability", abilityId: "pick-a-fight" });
+  });
+
+  it.each(["turncoat-charge", "cleared-lane"] as const)(
+    "moves the King away from an incoming Charge in the %s pattern",
+    (puzzleId) => {
+      const puzzle = PUZZLE_BY_ID[puzzleId];
+      let state = puzzle.createState();
+      for (const action of puzzle.solutionTurns[0]) state = gameReducer(state, action);
+      delete state.board.f8;
+
+      const response = chooseAiPlan(state, () => 0);
+      for (const action of response) state = gameReducer(state, action);
+
+      expect(state.board.f8).toMatchObject({ type: "king", controller: "black" });
+      expect(state.board.e8?.type).not.toBe("king");
+    },
+  );
+
+  it("takes the available backward King escape in the Position Thirteen pattern", () => {
+    const puzzle = PUZZLE_BY_ID["royal-landing"];
+    let state = puzzle.createState();
+    for (const action of puzzle.solutionTurns[0]) state = gameReducer(state, action);
+    delete state.board.h8;
+
+    const response = chooseAiPlan(state, () => 0);
+    for (const action of response) state = gameReducer(state, action);
+
+    expect(state.board.h8).toMatchObject({ type: "king", controller: "black" });
+    expect(state.board.h7?.type).not.toBe("king");
+  });
+
+  it("captures the hanging Pick a Fight knight when the apparent defender is unpinned", () => {
+    const puzzle = PUZZLE_BY_ID["provoked-fury"];
+    let state = puzzle.createState();
+    for (const action of puzzle.solutionTurns[0]) state = gameReducer(state, action);
+    delete state.board.e6;
+
+    const response = chooseAiPlan(state, () => 0);
+    for (const action of response) state = gameReducer(state, action);
+
+    expect(state.board.g6).toMatchObject({ id: "black-provoker", controller: "black" });
+    expect(Object.values(state.board).some((candidate) => candidate.id === "white-provoked-knight"))
+      .toBe(false);
   });
 });

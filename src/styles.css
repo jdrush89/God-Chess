@@ -600,11 +600,12 @@ body::before {
 .god-back-button:hover { color: #fff; border-color: var(--gold); background: rgba(7,8,11,.88); transform: translateX(-2px); }
 .ability-list { padding: 10px; }
 .ability-card {
-  width: 100%; padding: 14px; margin-bottom: 8px; color: #d7d3ca; text-align: left;
+  width: 100%; margin-bottom: 8px; color: #d7d3ca; text-align: left;
   border: 1px solid var(--line); background: #13161c; cursor: pointer; transition: .15s;
 }
 .ability-card:hover:not(.disabled), .ability-card.active { border-color: rgba(198,161,91,.52); background: #1a1c22; }
 .ability-card.active { box-shadow: inset 3px 0 var(--gold); }
+.ability-card-main { padding: 14px; }
 .ability-card.opponent-selecting, .chosen-god.opponent-selecting {
   animation: opponent-selection-pulse 900ms ease-in-out infinite;
 }
@@ -617,6 +618,16 @@ body::before {
 }
 .ability-card.disabled { opacity: .42; cursor: not-allowed; }
 .ability-card.read-only { cursor: default; }
+.ability-pending {
+  cursor: default; border-top: 1px solid rgba(198,161,91,.22);
+  background: rgba(198,161,91,.035);
+}
+.ability-pending-prompt, .four-ability-prompt {
+  margin: 0; padding: 10px 12px; color: #aaa69d; font-size: 9px; line-height: 1.5;
+}
+.ability-pending .action-buttons { flex-wrap: wrap; padding-top: 2px; }
+.ability-pending .action-buttons > button { min-width: 0; }
+.ability-pending .grave-picker { border-top: 0; padding-top: 4px; }
 .ability-topline { display: flex; align-items: center; justify-content: space-between; }
 .ability-topline strong { font: 600 12px "Cinzel"; }
 .level-pips { display: flex; gap: 3px; }
@@ -1900,21 +1911,35 @@ body::before {
 .four-action-panel .god-row { height: 132px; min-height: 132px; margin: 0; aspect-ratio: auto; }
 .four-ability-list, .four-upgrade-list { display: grid; gap: 8px; padding: 10px; }
 .four-ability-card {
-  width: 100%; display: grid; gap: 8px; padding: 12px; color: #bbb7ae; background: rgba(255,255,255,.018);
-  border: 1px solid var(--line); text-align: left; cursor: pointer;
+  width: 100%; min-width: 0; display: block; padding: 0; color: #bbb7ae; background: rgba(255,255,255,.018);
+  border: 1px solid var(--line); text-align: left;
 }
 .four-ability-card:hover:not(:disabled), .four-ability-card.active {
   color: #eee8da; border-color: rgba(198,161,91,.58); background: rgba(198,161,91,.07);
 }
-.four-ability-card:disabled { opacity: .42; cursor: not-allowed; }
-.four-ability-card > span { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.four-ability-card-main {
+  width: 100%; min-width: 0; display: grid; gap: 8px; padding: 12px; color: inherit;
+  background: transparent; border: 0; text-align: left; cursor: pointer;
+}
+.four-ability-card-main:disabled { opacity: .42; cursor: not-allowed; }
+.four-ability-card-main > span { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
 .four-ability-card strong { color: #e9e3d7; font: 600 12px "Cinzel"; }
 .four-ability-card small { color: #777981; font-size: 7px; letter-spacing: .1em; text-transform: uppercase; }
 .four-ability-card p { margin: 0; color: #7f8188; font-size: 9px; line-height: 1.5; }
-.four-ability-card > div { display: flex; gap: 8px; align-items: center; }
+.four-ability-card .four-ability-prompt {
+  margin: 0; padding: 10px 12px; color: #aaa69d; line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.four-ability-card-main > div { display: flex; gap: 8px; align-items: center; }
 .four-ability-card .orb-count { font-size: 9px; }
 .four-ability-card .orb { width: 9px; height: 9px; }
 .four-ability-card em { color: #7da989; font-size: 7px; font-style: normal; letter-spacing: .1em; text-transform: uppercase; }
+.four-ability-pending {
+  min-width: 0; border-top: 1px solid rgba(198,161,91,.22);
+  background: rgba(198,161,91,.035);
+}
+.four-ability-pending .four-choice-buttons,
+.four-ability-pending .four-action-buttons { border-top: 0; padding-top: 4px; }
 .four-choice-buttons, .four-action-buttons {
   display: grid; gap: 8px; padding: 10px; border-top: 1px solid var(--line);
 }

@@ -292,6 +292,12 @@ describe("four-player app integration", () => {
     expect(
       (screen.getByRole("button", { name: /barter/i }) as HTMLButtonElement).disabled,
     ).toBe(true);
+    const fundingCard = screen.getByRole("button", { name: /military funding/i })
+      .closest(".four-ability-card");
+    expect(fundingCard).toBeTruthy();
+    expect(within(fundingCard as HTMLElement).getByText("Move another pawn or finish.")).toBeTruthy();
+    expect(within(fundingCard as HTMLElement).getByRole("button", { name: /pass \/ finish/i }))
+      .toBeTruthy();
   });
 
   it("saves and reloads four-player draft state without misclassifying it", async () => {

@@ -1,10 +1,15 @@
-import { allSquares, coords, isInCheck, pieceValue, pseudoTargets } from "./chess";
+import { allSquares, coords, isInCheck, kingSquare, pieceValue, pseudoTargets } from "./chess";
 import { gameReducer, type GameAction } from "./engine";
 import { GOD_BY_ID } from "./gods";
 import type { Color, GameState, GodId, Piece } from "./types";
 import { opposite } from "./types";
 
 interface SearchNode {
+  state: GameState;
+  actions: GameAction[];
+}
+
+export interface AiTurnPlan {
   state: GameState;
   actions: GameAction[];
 }
@@ -291,7 +296,7 @@ const pruneFrontier = (nodes: SearchNode[], color: Color) => {
     .slice(0, MAX_FRONTIER);
 };
 
-const searchPlans = (state: GameState, color: Color) => {
+export const enumerateTurnPlans = (state: GameState, color: Color = state.activeColor): AiTurnPlan[] => {
   let frontier: SearchNode[] = [{ state, actions: [] }];
   const completed: SearchNode[] = [];
   const seen = new Set<string>();
@@ -323,19 +328,91 @@ const searchPlans = (state: GameState, color: Color) => {
   });
 };
 
+const hypotheticalTurnFor = (state: GameState, color: Color) => {
+  const next = structuredClone(state);
+  next.activeColor = color;
+  next.selectedGod = undefined;
+  next.selectedAbility = undefined;
+  next.selectedSquare = undefined;
+  next.pending = undefined;
+  next.legalTargets = [];
+  return next;
+};
+
+const hasWinningTurn = (state: GameState, color: Color) => {
+  const isWin = (candidate: GameState) =>
+    candidate.phase === "gameover" &&
+    candidate.winner === color &&
+    Boolean(kingSquare(candidate.board, color)) &&
+    !kingSquare(candidate.board, opposite(color));
+  if (state.phase === "gameover") return isWin(state);
+  const turn = state.activeColor === color ? state : hypotheticalTurnFor(state, color);
+  return enumerateTurnPlans(turn, color).some(
+    (plan) => isWin(plan.state),
+  );
+};
+
+const bestTacticalDefense = (
+  state: GameState,
+  color: Color,
+  plans: AiTurnPlan[],
+) => {
+  const enemy = opposite(color);
+  if (!hasWinningTurn(state, enemy)) return undefined;
+
+  const initialKing = Object.entries(state.board).find(
+    ([, piece]) => piece.controller === color && piece.type === "king",
+  )?.[0];
+  const initialEnemyIds = new Set(
+    Object.values(state.board)
+      .filter((piece) => piece.controller === enemy)
+      .map((piece) => piece.id),
+  );
+  const candidates = plans
+    .map((plan, index) => {
+      const king = Object.entries(plan.state.board).find(
+        ([, piece]) => piece.controller === color && piece.type === "king",
+      )?.[0];
+      const remainingEnemyIds = new Set(
+        Object.values(plan.state.board)
+          .filter((piece) => piece.controller === enemy)
+          .map((piece) => piece.id),
+      );
+      const capturesEnemy = [...initialEnemyIds].some((id) => !remainingEnemyIds.has(id));
+      return {
+        plan,
+        priority:
+          (king !== initialKing ? 2 : 0) +
+          (capturesEnemy ? 1 : 0),
+        index,
+      };
+    })
+    .sort((a, b) => b.priority - a.priority || a.index - b.index)
+    .slice(0, 32);
+
+  for (const { plan } of candidates) {
+    if (!hasWinningTurn(plan.state, enemy)) return plan;
+  }
+  return undefined;
+};
+
 export const chooseAiPlan = (
   state: GameState,
   random: () => number = Math.random,
 ): GameAction[] => {
   const color = state.activeColor;
-  const plans = searchPlans(state, color);
+  const plans = enumerateTurnPlans(state, color);
   let actions: GameAction[];
   if (!plans.length) {
     actions = availableActions(state).slice(0, 1);
   } else {
     const optimalChance = Math.max(0.1, Math.min(1, state.aiDifficulty / 10));
     if (random() < optimalChance || plans.length === 1) {
-      actions = plans[0].actions;
+      actions = (
+        state.aiDifficulty >= 8
+          ? bestTacticalDefense(state, color, plans)
+          : undefined
+      )?.actions ?? plans[0].actions;
     } else {
       const alternative = plans[1 + Math.floor(random() * Math.max(1, plans.length - 1))];
       actions = (alternative ?? plans[0]).actions;

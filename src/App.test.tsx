@@ -62,7 +62,7 @@ vi.mock("./multiplayer/useThreePlayerOnlineGame", async () => {
   };
 });
 
-import App from "./App";
+import App, { ActionPanel } from "./App";
 import { createGame, gameReducer } from "./game/engine";
 import { createDefaultThreePlayerConfig } from "./game/threePlayerConfig";
 import { createThreePlayerGame } from "./game/threePlayerEngine";
@@ -388,6 +388,28 @@ describe("game startup", () => {
     expect(screen.getByText(/you found a winning line/i)).toBeTruthy();
     expect(screen.queryByText(puzzle.solutionSummary)).toBeNull();
     expect(JSON.parse(window.localStorage.getItem("god-chess-puzzle-progress-v1") ?? "[]")).toContain(puzzle.id);
+  });
+
+  it("attaches pending graveyard choices to the selected ability card", () => {
+    let state = PUZZLES.find((puzzle) => puzzle.id === "hidden-reserve")!.createState();
+    state = gameReducer(state, { type: "select-god", godId: "death" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "resurrect" });
+
+    render(
+      <ActionPanel
+        state={state}
+        dispatch={vi.fn()}
+        onInspectGod={vi.fn()}
+        onCloseInspection={vi.fn()}
+      />,
+    );
+
+    const resurrectCard = screen.getByText("Resurrect").closest(".ability-card");
+    expect(resurrectCard).toBeTruthy();
+    expect(within(resurrectCard as HTMLElement).getByText(/choose a piece from your graveyard/i)).toBeTruthy();
+    expect(within(resurrectCard as HTMLElement).getByText("YOUR GRAVEYARD")).toBeTruthy();
+    expect((resurrectCard as HTMLElement).querySelector(".grave-picker")).toBeTruthy();
+    expect(document.querySelector(".action-panel > .grave-picker")).toBeNull();
   });
 
   it("restores the saved position instead of the fresh initial game", () => {
