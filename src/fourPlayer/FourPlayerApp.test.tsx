@@ -160,6 +160,13 @@ describe("four-player app integration", () => {
     expect(
       northPanel.querySelector(".four-panel-resources > .four-panel-menu"),
     ).toBeTruthy();
+    expect(container.querySelectorAll("[data-orb-target]")).toHaveLength(8);
+    expect(
+      container.querySelector('[data-orb-target="north-light"]'),
+    ).toBeTruthy();
+    expect(
+      container.querySelector('[data-orb-target="west-dark"]'),
+    ).toBeTruthy();
   });
 
   it("labels inert and takeover-controlled pieces accessibly", () => {
@@ -214,6 +221,30 @@ describe("four-player app integration", () => {
     fireEvent.click(finish);
     expect(screen.queryByRole("button", { name: /pass \/ finish/i })).toBeNull();
     expect(screen.getAllByText(/skipped the prepared shot/i).length).toBeGreaterThan(0);
+  });
+
+  it("previews higher levels while listing every four-player upgrade", () => {
+    let state = createFourPlayerGame();
+    for (const god of GODS) state = fourPlayerReducer(state, { type: "draft", godId: god.id });
+    state.phase = "upgrade";
+    state.activeSeat = "north";
+    state.upgradeQueue = ["north"];
+
+    render(
+      <FourPlayerGame
+        initialState={state}
+        undoPreferred={false}
+        onUndoPreferenceChange={vi.fn()}
+        onPersist={vi.fn(async () => false)}
+        onQuit={vi.fn()}
+        onNewGame={vi.fn()}
+      />,
+    );
+
+    expect(document.querySelectorAll(".four-upgrade-list .four-ability-card")).toHaveLength(9);
+    expect(screen.queryByText(/enemy piece you fly over/i)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /lv 2/i }));
+    expect(screen.getByText(/enemy piece you fly over/i)).toBeTruthy();
   });
 
   it("disables back, cancellation, and ability switching after committed progress", () => {

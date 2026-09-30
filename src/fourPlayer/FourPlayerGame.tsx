@@ -49,6 +49,7 @@ import { prepareFourPlayerState } from "../game/fourPlayerPersistence";
 import {
   FOUR_PLAYER_SEATS,
   type FourPlayerAction,
+  type FourPlayerOrbAnimation,
   type FourPlayerPiece,
   type FourPlayerState,
   type OrbAffinity,
@@ -141,6 +142,23 @@ const boardPositionSignature = (state: FourPlayerState) =>
 
 const stateSignature = (state: FourPlayerState) => JSON.stringify(state);
 
+type FourPlayerOrbTotals = Record<Seat, Record<OrbAffinity, number>>;
+
+interface FourPlayerOrbFlight extends FourPlayerOrbAnimation {
+  startX: number;
+  startY: number;
+  deltaX: number;
+  deltaY: number;
+}
+
+const fourPlayerOrbTotals = (state: FourPlayerState): FourPlayerOrbTotals =>
+  Object.fromEntries(
+    FOUR_PLAYER_SEATS.map((seat) => [seat, { ...state.players[seat].orbs }]),
+  ) as FourPlayerOrbTotals;
+
+const fourPlayerOrbTargetKey = (seat: Seat, affinity: OrbAffinity) =>
+  `${seat}-${affinity}`;
+
 const isStableState = (state: FourPlayerState) => {
   if (state.phase === "draft" || state.phase === "upgrade" || state.phase === "gameover") {
     return true;
@@ -189,11 +207,24 @@ function GodSigil({ godId }: { godId: GodId }) {
   );
 }
 
-function Orb({ affinity, count }: { affinity: OrbAffinity; count: number }) {
+function Orb({
+  affinity,
+  count,
+  targetSeat,
+  arriving = false,
+}: {
+  affinity: OrbAffinity;
+  count: number;
+  targetSeat?: Seat;
+  arriving?: boolean;
+}) {
   const visualClass = affinity === "light" ? "white" : "black";
   return (
     <span
-      className="orb-count"
+      className={`orb-count ${arriving ? "arriving" : ""}`}
+      data-orb-target={
+        targetSeat ? fourPlayerOrbTargetKey(targetSeat, affinity) : undefined
+      }
       aria-label={`${count} ${affinity} orb${count === 1 ? "" : "s"}`}
     >
       <i className={`orb ${visualClass}`} />
@@ -477,12 +508,16 @@ function FourPlayerPanel({
   onGodClick,
   onGraveyard,
   dispatch,
+  displayedOrbs,
+  arrivingOrbs,
 }: {
   state: FourPlayerState;
   seat: Seat;
   onGodClick: (godId: GodId, seat: Seat) => void;
   onGraveyard: (seat: Seat) => void;
   dispatch: FourPlayerDispatch;
+  displayedOrbs: Record<OrbAffinity, number>;
+  arrivingOrbs: Set<string>;
 }) {
   const player = state.players[seat];
   const active = state.activeSeat === seat && state.phase !== "gameover";
@@ -514,8 +549,18 @@ function FourPlayerPanel({
         {player.control.kind === "ai" ? <Bot size={16} /> : <UserRound size={16} />}
       </button>
       <div className="four-panel-resources">
-        <Orb affinity="light" count={player.orbs.light} />
-        <Orb affinity="dark" count={player.orbs.dark} />
+        <Orb
+          affinity="light"
+          count={displayedOrbs.light}
+          targetSeat={seat}
+          arriving={arrivingOrbs.has(fourPlayerOrbTargetKey(seat, "light"))}
+        />
+        <Orb
+          affinity="dark"
+          count={displayedOrbs.dark}
+          targetSeat={seat}
+          arriving={arrivingOrbs.has(fourPlayerOrbTargetKey(seat, "dark"))}
+        />
         <button
           className="graveyard-button"
           onClick={() => onGraveyard(seat)}
@@ -805,6 +850,13 @@ function FourActionPanel({
   const defaultGodPreviewLevel = god
     ? Math.min(...god.abilities.map((ability) => abilityLevel(owner.upgrades, ability.id)))
     : 1;
+  const defaultUpgradePreviewLevel = Math.min(
+    ...active.gods.flatMap((godId) =>
+      GOD_BY_ID[godId].abilities.map((ability) =>
+        abilityLevel(active.upgrades, ability.id)
+      )
+    ),
+  );
 
   useEffect(() => {
     setGodPreviewLevel(undefined);
@@ -817,6 +869,12 @@ function FourActionPanel({
           <span>DIVINE UPGRADE</span>
           <small>{active.name}</small>
         </div>
+        <LevelSelector
+          level={godPreviewLevel ?? defaultUpgradePreviewLevel}
+          onChange={setGodPreviewLevel}
+          label="All abilities"
+          className="god-level-selector"
+        />
         <div className="four-upgrade-list">
           {active.gods.map((godId) => {
             const upgradeGod = GOD_BY_ID[godId];
@@ -833,6 +891,7 @@ function FourActionPanel({
                     <AbilityCard
                       ability={ability}
                       level={level}
+                      previewLevel={godPreviewLevel}
                       active={false}
                       disabled={level >= 3}
                       onClick={() => dispatch({ type: "upgrade", abilityId: ability.id })}
@@ -1303,9 +1362,20 @@ export function FourPlayerGame({
   const [rulesOpen, setRulesOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [aiWorking, setAiWorking] = useState(false);
+  const [displayedOrbs, setDisplayedOrbs] = useState<FourPlayerOrbTotals>(
+    () => fourPlayerOrbTotals(state),
+  );
+  const [orbFlights, setOrbFlights] = useState<FourPlayerOrbFlight[]>([]);
+  const [arrivingOrbs, setArrivingOrbs] = useState<Set<string>>(() => new Set());
   const aiPlan = useRef<FourPlayerAction[]>([]);
   const aiActionsThisTurn = useRef(0);
   const animationTimer = useRef<number | undefined>(undefined);
+  const orbAnimationTimers = useRef<number[]>([]);
+  const processedOrbAnimations = useRef(
+    new Set((state.orbAnimations ?? []).map((event) => event.id)),
+  );
+  const pendingOrbArrivals = useRef<Record<string, number>>({});
+  const latestOrbTotals = useRef(fourPlayerOrbTotals(state));
   const previousPieceSquares = useRef(new Map(
     Object.entries(state.board).map(([square, piece]) => [piece.id, square]),
   ));
@@ -1453,7 +1523,113 @@ export function FourPlayerGame({
 
   useEffect(() => () => {
     if (animationTimer.current) window.clearTimeout(animationTimer.current);
+    for (const timer of orbAnimationTimers.current) window.clearTimeout(timer);
   }, []);
+
+  const orbAnimationKey = (state.orbAnimations ?? [])
+    .map((event) => event.id)
+    .join(",");
+
+  useLayoutEffect(() => {
+    const actualTotals = fourPlayerOrbTotals(state);
+    latestOrbTotals.current = actualTotals;
+    const newEvents = (state.orbAnimations ?? [])
+      .filter((event) => !processedOrbAnimations.current.has(event.id));
+    newEvents.forEach((event) => processedOrbAnimations.current.add(event.id));
+
+    if (reducedMotion()) {
+      setDisplayedOrbs(actualTotals);
+      return;
+    }
+
+    const flights = newEvents.flatMap((event): FourPlayerOrbFlight[] => {
+      const source = document.querySelector<HTMLElement>(`[data-square="${event.source}"]`);
+      const target = document.querySelector<HTMLElement>(
+        `[data-orb-target="${fourPlayerOrbTargetKey(event.player, event.orb)}"]`,
+      );
+      if (!source || !target) return [];
+      const sourceRect = source.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      const startX = sourceRect.left + sourceRect.width / 2;
+      const startY = sourceRect.top + sourceRect.height / 2;
+      return [{
+        ...event,
+        startX,
+        startY,
+        deltaX: targetRect.left + targetRect.width / 2 - startX,
+        deltaY: targetRect.top + targetRect.height / 2 - startY,
+      }];
+    });
+    const animatedIds = new Set(flights.map((flight) => flight.id));
+
+    setDisplayedOrbs((current) => {
+      const next = Object.fromEntries(
+        FOUR_PLAYER_SEATS.map((seat) => [seat, { ...current[seat] }]),
+      ) as FourPlayerOrbTotals;
+      for (const seat of FOUR_PLAYER_SEATS) {
+        for (const orb of ["light", "dark"] as const) {
+          const key = fourPlayerOrbTargetKey(seat, orb);
+          if (!pendingOrbArrivals.current[key]) {
+            next[seat][orb] = actualTotals[seat][orb];
+          }
+        }
+      }
+      for (const event of newEvents) {
+        if (!animatedIds.has(event.id)) continue;
+        const key = fourPlayerOrbTargetKey(event.player, event.orb);
+        pendingOrbArrivals.current[key] = event.id;
+        next[event.player][event.orb] = event.total - event.amount;
+      }
+      return next;
+    });
+
+    if (!flights.length) return;
+    setOrbFlights((current) => [...current, ...flights]);
+
+    const arrivalTimer = window.setTimeout(() => {
+      const arriving = new Set<string>();
+      setDisplayedOrbs((current) => {
+        const next = Object.fromEntries(
+          FOUR_PLAYER_SEATS.map((seat) => [seat, { ...current[seat] }]),
+        ) as FourPlayerOrbTotals;
+        for (const event of flights) {
+          const key = fourPlayerOrbTargetKey(event.player, event.orb);
+          if (pendingOrbArrivals.current[key] !== event.id) continue;
+          next[event.player][event.orb] =
+            latestOrbTotals.current[event.player][event.orb];
+          delete pendingOrbArrivals.current[key];
+          arriving.add(key);
+        }
+        return next;
+      });
+      if (arriving.size) {
+        setArrivingOrbs((current) => new Set([...current, ...arriving]));
+      }
+    }, 780);
+
+    const cleanupTimer = window.setTimeout(() => {
+      const ids = new Set(flights.map((flight) => flight.id));
+      const keys = new Set(
+        flights.map((flight) => fourPlayerOrbTargetKey(flight.player, flight.orb)),
+      );
+      setOrbFlights((current) => current.filter((flight) => !ids.has(flight.id)));
+      setArrivingOrbs((current) =>
+        new Set([...current].filter((key) => !keys.has(key)))
+      );
+    }, 1050);
+
+    orbAnimationTimers.current.push(arrivalTimer, cleanupTimer);
+  }, [
+    orbAnimationKey,
+    state.players.north.orbs.light,
+    state.players.north.orbs.dark,
+    state.players.east.orbs.light,
+    state.players.east.orbs.dark,
+    state.players.south.orbs.light,
+    state.players.south.orbs.dark,
+    state.players.west.orbs.light,
+    state.players.west.orbs.dark,
+  ]);
 
   useLayoutEffect(() => {
     const current = new Map(Object.entries(state.board).map(([square, piece]) => [piece.id, square]));
@@ -1692,6 +1868,8 @@ export function FourPlayerGame({
           onGodClick={handleGodClick}
           onGraveyard={setGraveyardSeat}
           dispatch={humanDispatch}
+          displayedOrbs={displayedOrbs.north}
+          arrivingOrbs={arrivingOrbs}
         />
         <FourPlayerPanel
           state={state}
@@ -1699,6 +1877,8 @@ export function FourPlayerGame({
           onGodClick={handleGodClick}
           onGraveyard={setGraveyardSeat}
           dispatch={humanDispatch}
+          displayedOrbs={displayedOrbs.west}
+          arrivingOrbs={arrivingOrbs}
         />
         <section className="four-board-column">
           <FourPlayerBoard
@@ -1719,6 +1899,8 @@ export function FourPlayerGame({
           onGodClick={handleGodClick}
           onGraveyard={setGraveyardSeat}
           dispatch={humanDispatch}
+          displayedOrbs={displayedOrbs.east}
+          arrivingOrbs={arrivingOrbs}
         />
         <FourPlayerPanel
           state={state}
@@ -1726,6 +1908,8 @@ export function FourPlayerGame({
           onGodClick={handleGodClick}
           onGraveyard={setGraveyardSeat}
           dispatch={humanDispatch}
+          displayedOrbs={displayedOrbs.south}
+          arrivingOrbs={arrivingOrbs}
         />
         <FourActionPanel
           state={state}
@@ -1736,6 +1920,29 @@ export function FourPlayerGame({
         />
       </div>
 
+      {orbFlights.map((flight) => {
+        const visualClass = flight.orb === "light" ? "white" : "black";
+        return (
+          <div
+            className={`orb-flight ${visualClass}`}
+            style={{
+              left: `${flight.startX}px`,
+              top: `${flight.startY}px`,
+              "--orb-flight-x": `${flight.deltaX}px`,
+              "--orb-flight-y": `${flight.deltaY}px`,
+            } as React.CSSProperties}
+            key={flight.id}
+            aria-hidden="true"
+          >
+            <span className="orb-flight-path">
+              <span className="orb-flight-badge">
+                <span className={`orb ${visualClass}`} />
+                <b>+{flight.amount}</b>
+              </span>
+            </span>
+          </div>
+        );
+      })}
       {historyOpen && (
         <aside className="history-drawer">
           <div><h3><History size={18} /> Chronicle</h3><button onClick={() => setHistoryOpen(false)}><X size={18} /></button></div>

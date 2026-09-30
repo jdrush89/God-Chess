@@ -1147,19 +1147,17 @@ function UpgradePanel({
   dispatch,
   selectedGodId,
   presentation,
-  onSelectGod,
   onCloseGod,
 }: {
   state: GameState;
   dispatch: GameDispatch;
   selectedGodId?: GodId;
   presentation?: ActionPresentation;
-  onSelectGod: (godId: GodId) => void;
   onCloseGod: () => void;
 }) {
   const [godPreviewLevel, setGodPreviewLevel] = useState<number>();
   const [selectedAbilityId, setSelectedAbilityId] = useState<string>();
-  const presentedGodId = presentation?.godId ?? selectedGodId ?? state.upgradePreview?.godId;
+  const presentedGodId = presentation?.godId ?? selectedGodId;
   const selectedGod = presentedGodId ? GOD_BY_ID[presentedGodId] : undefined;
   const selectedOwner: Color = presentation?.color ??
     (presentedGodId && state.players.black.gods.includes(presentedGodId) ? "black" : "white");
@@ -1181,6 +1179,22 @@ function UpgradePanel({
   const selectedAbilityLevel = selectedAbility
     ? abilityLevel(selectedPlayer.upgrades, selectedAbility.id)
     : undefined;
+  const activePlayer = state.players[state.activeColor];
+  const queuedAbilityId = state.upgradePreview?.abilityId ?? selectedAbilityId;
+  const queuedGod = activePlayer.gods
+    .map((godId) => GOD_BY_ID[godId])
+    .find((god) => god.abilities.some((ability) => ability.id === queuedAbilityId));
+  const queuedAbility = queuedGod?.abilities.find((ability) => ability.id === queuedAbilityId);
+  const queuedAbilityLevel = queuedAbility
+    ? abilityLevel(activePlayer.upgrades, queuedAbility.id)
+    : undefined;
+  const defaultUpgradePreviewLevel = Math.min(
+    ...activePlayer.gods.flatMap((godId) =>
+      GOD_BY_ID[godId].abilities.map((ability) =>
+        abilityLevel(activePlayer.upgrades, ability.id)
+      )
+    ),
+  );
 
   return (
     <aside className="action-panel upgrade-panel">
@@ -1192,31 +1206,67 @@ function UpgradePanel({
         <>
           <div className="panel-empty">
             <Zap size={25} />
-            <h3>Choose a God to strengthen</h3>
-            <p>Select one of your gods below. You can inspect either player’s gods using the portraits beside the board.</p>
+            <h3>Choose an ability to strengthen</h3>
+            <p>Compare every ability in your pantheon, preview its higher levels, then confirm one upgrade.</p>
           </div>
-          <div className="god-list">
-            {state.players[state.activeColor].gods.map((godId) => {
+          <LevelSelector
+            level={godPreviewLevel ?? defaultUpgradePreviewLevel}
+            onChange={setGodPreviewLevel}
+            label="All abilities"
+            className="god-level-selector"
+          />
+          <div className="four-upgrade-list">
+            {activePlayer.gods.map((godId) => {
               const god = GOD_BY_ID[godId];
-              const maxed = god.abilities.every((ability) =>
-                abilityLevel(state.players[state.activeColor].upgrades, ability.id) >= 3,
-              );
               return (
-                <button
-                  className={`god-row ${maxed ? "maxed" : ""}`}
-                  key={godId}
-                  onClick={() => onSelectGod(godId)}
-                  style={{ "--accent": god.accent } as React.CSSProperties}
-                >
-                  <GodPortrait godId={godId} className="god-row-portrait" />
-                  <span className="god-row-copy">
+                <section key={godId}>
+                  <div className="four-panel-god-heading">
+                    <GodPortrait godId={godId} />
                     <strong>{god.name}</strong>
-                    <small>{maxed ? "ALL ABILITIES MAXED" : god.domain}</small>
-                  </span>
-                  <ChevronRight size={17} />
-                </button>
+                    <small>{god.domain}</small>
+                  </div>
+                  {god.abilities.map((ability) => {
+                    const level = abilityLevel(activePlayer.upgrades, ability.id);
+                    return (
+                      <AbilityCard
+                        ability={ability}
+                        level={level}
+                        previewLevel={godPreviewLevel}
+                        active={state.upgradePreview?.abilityId === ability.id}
+                        selectable={level < 3}
+                        disabled={level >= 3}
+                        footerLabel={`CURRENT LVL ${level}`}
+                        footerAction={level >= 3 ? "MAX LEVEL" : `SELECT LVL ${level + 1}`}
+                        onClick={() => {
+                          setSelectedAbilityId(ability.id);
+                          dispatch({
+                            type: "preview-upgrade",
+                            godId: god.id,
+                            abilityId: ability.id,
+                          });
+                        }}
+                        key={ability.id}
+                      />
+                    );
+                  })}
+                </section>
               );
             })}
+          </div>
+          <div className="upgrade-confirmation">
+            <button
+              className="primary-button"
+              disabled={!queuedAbility || queuedAbilityLevel === undefined || queuedAbilityLevel >= 3}
+              onClick={() => {
+                if (queuedAbility) {
+                  dispatch({ type: "upgrade", abilityId: queuedAbility.id });
+                }
+              }}
+            >
+              {queuedAbility && queuedAbilityLevel !== undefined
+                ? `Confirm ${queuedAbility.name} · Lv ${queuedAbilityLevel + 1}`
+                : "Select an ability to upgrade"}
+            </button>
           </div>
         </>
       ) : (
@@ -2476,12 +2526,6 @@ function GameScreen({
               dispatch={dispatch}
               selectedGodId={inspectedGodId}
               presentation={opponentPresentation}
-              onSelectGod={(godId) => {
-                setInspectedGodId(godId);
-                if (state.players[state.activeColor].gods.includes(godId)) {
-                  dispatch({ type: "preview-upgrade", godId });
-                }
-              }}
               onCloseGod={() => {
                 setInspectedGodId(undefined);
                 dispatch({ type: "preview-upgrade" });

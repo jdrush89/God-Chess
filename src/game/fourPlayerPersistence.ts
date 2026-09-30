@@ -182,6 +182,15 @@ const isKingAttackRecency = (value: unknown) =>
     );
   });
 
+const isOrbAnimation = (value: unknown) =>
+  isRecord(value) &&
+  isInteger(value.id, 1) &&
+  isSeat(value.player) &&
+  AFFINITIES.has(String(value.orb)) &&
+  isInteger(value.amount, 1) &&
+  isInteger(value.total) &&
+  isSquare(value.source);
+
 const isUpgrades = (value: unknown) =>
   isRecord(value) && Object.entries(value).every(
     ([abilityId, level]) =>
@@ -322,6 +331,12 @@ export const isFourPlayerState = (value: unknown): value is FourPlayerState => {
     value.selectedSquare !== undefined && !isSquare(value.selectedSquare) ||
     value.pending !== undefined && !isPending(value.pending) ||
     value.bonusTurn !== undefined && !isSeat(value.bonusTurn) ||
+    value.orbAnimations !== undefined &&
+      (
+        !Array.isArray(value.orbAnimations) ||
+        !value.orbAnimations.every(isOrbAnimation)
+      ) ||
+    value.nextOrbAnimationId !== undefined && !isInteger(value.nextOrbAnimationId, 1) ||
     value.attackSequence !== undefined && !isInteger(value.attackSequence) ||
     value.kingAttackRecency !== undefined && !isKingAttackRecency(value.kingAttackRecency) ||
     value.lastAction !== undefined && typeof value.lastAction !== "string"
@@ -395,6 +410,9 @@ export const prepareFourPlayerState = (state: FourPlayerState): FourPlayerState 
   if (!isFourPlayerState(state)) throw new Error("Cannot serialize an invalid four-player state.");
   const prepared = structuredClone(state);
   prepared.attackSequence ??= 0;
+  prepared.orbAnimations ??= [];
+  prepared.nextOrbAnimationId ??=
+    Math.max(0, ...prepared.orbAnimations.map((event) => event.id)) + 1;
   prepared.kingAttackRecency ??= {
     north: {},
     east: {},

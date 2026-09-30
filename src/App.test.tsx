@@ -166,7 +166,7 @@ describe("game startup", () => {
     expect(screen.getByRole("button", { name: /auto-pick random god/i })).toBeTruthy();
   });
 
-  it("shows ability orb costs while choosing an upgrade", () => {
+  it("lists every ability with costs and level previews while choosing an upgrade", () => {
     let savedState = createGame(1);
     (["quetzacoatl", "chiron", "midas", "death", "artemis", "medusa"] as const).forEach((godId) => {
       savedState = gameReducer(savedState, { type: "draft", godId });
@@ -183,12 +183,15 @@ describe("game startup", () => {
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: /load game/i }));
     fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
-    const quetzButtons = screen.getAllByRole("button", { name: /quetzacoatl/i });
-    fireEvent.click(quetzButtons.at(-1)!);
 
     const airLiftCard = screen.getByText("Air Lift").closest(".ability-card");
     expect(airLiftCard).toBeTruthy();
     expect(within(airLiftCard as HTMLElement).getByLabelText("3 white orbs")).toBeTruthy();
+    expect(document.querySelectorAll(".upgrade-panel .ability-card")).toHaveLength(9);
+    expect(screen.queryByText(/King may teleport within 4 spaces/i)).toBeNull();
+    const allAbilities = screen.getByLabelText(/all abilities levels/i);
+    fireEvent.click(within(allAbilities).getByRole("button", { name: /lv 2/i }));
+    expect(screen.getByText(/King may teleport within 4 spaces/i)).toBeTruthy();
   });
 
   it("renders distinct artwork for each active piece marker", () => {

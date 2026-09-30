@@ -633,6 +633,8 @@ export const createFourPlayerGame = (
     seatTurns: { north: 0, east: 0, south: 0, west: 0 },
     hostileTurns: { north: 0, east: 0, south: 0, west: 0 },
     godTurns: { north: {}, east: {}, south: {}, west: {} },
+    orbAnimations: [],
+    nextOrbAnimationId: 1,
     attackSequence: 0,
     kingAttackRecency: emptyKingAttackRecency(),
     upgradeQueue: [],
@@ -2695,12 +2697,25 @@ const reduceFourPlayerState = (
       throw new Error("Cannot load an invalid four-player state.");
     }
     const loaded = clone(action.state);
+    loaded.orbAnimations ??= [];
+    loaded.nextOrbAnimationId ??=
+      Math.max(0, ...loaded.orbAnimations.map((event) => event.id)) + 1;
     recordKingAttackChanges(undefined, loaded);
     if (resolveCheckmate && loaded.phase === "play") resolveTurnStartCheckmates(loaded);
     return loaded;
   }
   if (action.type === "restart") return createFourPlayerGame(state.config);
+  const previousOrbs = Object.fromEntries(
+    FOUR_PLAYER_SEATS.map((seat) => [seat, { ...state.players[seat].orbs }]),
+  ) as Record<Seat, Record<OrbAffinity, number>>;
+  const animationSource =
+    action.type === "square"
+      ? action.square
+      : state.pending?.destination ?? state.pending?.source ?? state.selectedSquare;
   const next = clone(state);
+  next.orbAnimations ??= [];
+  next.nextOrbAnimationId ??=
+    Math.max(0, ...next.orbAnimations.map((event) => event.id)) + 1;
   if (action.type === "draft" && next.phase === "draft") {
     draftGod(next, action.godId);
   } else if (
@@ -2881,6 +2896,24 @@ const reduceFourPlayerState = (
         finishTurn(next, abilityDescription(next, ": declined the trade"));
       }
     }
+  }
+  if (animationSource) {
+    for (const seat of FOUR_PLAYER_SEATS) {
+      for (const orb of ["light", "dark"] as const) {
+        const amount = next.players[seat].orbs[orb] - previousOrbs[seat][orb];
+        if (amount <= 0) continue;
+        next.orbAnimations.push({
+          id: next.nextOrbAnimationId,
+          player: seat,
+          orb,
+          amount,
+          total: next.players[seat].orbs[orb],
+          source: animationSource,
+        });
+        next.nextOrbAnimationId += 1;
+      }
+    }
+    next.orbAnimations = next.orbAnimations.slice(-16);
   }
   recordKingAttackChanges(state, next);
   if (resolveCheckmate && beganPlayTurn(state, next)) {

@@ -195,6 +195,20 @@ describe("four-player configuration and flow", () => {
     });
   });
 
+  it("records orb rewards with their source and receiving seat for animation", () => {
+    const result = captureSouthKing(readyGame());
+
+    expect(result.orbAnimations).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        player: "north",
+        orb: "dark",
+        amount: 2,
+        total: 22,
+        source: "g1",
+      }),
+    ]));
+  });
+
   it("eliminates a checkmated player when their turn begins and credits the latest attacker", () => {
     const state = doubleQueenMate();
     expect(fourPlayerIsInCheck(state.board, "north", state.config)).toBe(true);

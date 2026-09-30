@@ -105,6 +105,15 @@ export interface FourPlayerEnPassant {
   expiresOnTurn: number;
 }
 
+export interface FourPlayerOrbAnimation {
+  id: number;
+  player: Seat;
+  orb: OrbAffinity;
+  amount: number;
+  total: number;
+  source: Square;
+}
+
 export interface FourPlayerPendingAction {
   godId: GodId;
   abilityId: string;
@@ -149,6 +158,8 @@ export interface FourPlayerState {
   bananas: FourPlayerBanana[];
   stealth: Record<Seat, FourPlayerStealthMove[]>;
   bonusTurn?: Seat;
+  orbAnimations?: FourPlayerOrbAnimation[];
+  nextOrbAnimationId?: number;
   attackSequence?: number;
   kingAttackRecency?: Record<Seat, Partial<Record<Seat, number>>>;
   winner?: FourPlayerWinner;
