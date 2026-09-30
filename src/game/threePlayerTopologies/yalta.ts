@@ -14,8 +14,10 @@ import {
   buildCellLookups,
   placementsFromSource,
   SEATS,
+  squareRender,
   standardArmySource,
   topologyAdjacent,
+  topologyContracts,
   topologyDistance,
   topologyPaths,
   unique,
@@ -104,11 +106,10 @@ export const createYaltaTopology = (): ThreePlayerTopology => {
           sourceIndex,
           half,
           local: { file, rank },
-          render: {
-            x: lateral * Math.cos(angle) - radial * Math.sin(angle),
-            y: lateral * Math.sin(angle) + radial * Math.cos(angle),
-            size: 1,
-          },
+          render: squareRender(
+            lateral * Math.cos(angle) - radial * Math.sin(angle),
+            lateral * Math.sin(angle) + radial * Math.cos(angle),
+          ),
           geometricClass,
           affinity: geometricClass === 0 ? "light" : "dark",
         });
@@ -398,6 +399,15 @@ export const createYaltaTopology = (): ThreePlayerTopology => {
     lookups.cellFromSourceIndex,
   );
   const castlingBySeat = createCastling();
+  const contracts = topologyContracts({
+    cells: cellDescriptors.map((cell) => cell.id),
+    cellDescriptors,
+    initialPlacements,
+    rookTraces,
+    bishopTraces,
+    kingNeighbors,
+    pawnMetadata,
+  });
 
   return {
     variant: "three-player",
@@ -407,6 +417,7 @@ export const createYaltaTopology = (): ThreePlayerTopology => {
     ...lookups,
     initialPlacements,
     castlingBySeat,
+    ...contracts,
     rookTraces,
     rookRays: rookTraces,
     bishopTraces,

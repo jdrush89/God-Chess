@@ -8,6 +8,7 @@ import {
   createThreePlayerGame,
   threePlayerReducer,
 } from "./threePlayerEngine";
+import { enumerateCompleteThreePlayerPlans } from "./threePlayerPlans";
 import { GODS } from "./gods";
 
 const finishDraft = () => {
@@ -17,6 +18,12 @@ const finishDraft = () => {
   }
   return state;
 };
+
+const playFirstPlan = (state: ReturnType<typeof createThreePlayerGame>) =>
+  enumerateCompleteThreePlayerPlans(state, {
+    maxPlans: 1,
+    maxStates: 4_000,
+  })[0].actions.reduce(threePlayerReducer, state);
 
 describe("three-player deterministic lifecycle", () => {
   it("drafts nine Gods in the documented order and leaves three unused", () => {
@@ -69,15 +76,11 @@ describe("three-player deterministic lifecycle", () => {
     )!;
     expect(threePlayerPieceAffinity(state, redPiece)).toBe("light");
 
-    const whiteMove = availableThreePlayerActions(state)[0];
-    expect(whiteMove?.type).toBe("move");
-    state = threePlayerReducer(state, whiteMove);
+    state = playFirstPlan(state);
     expect(state.completedTurns.red).toBe(0);
     expect(threePlayerPieceAffinity(state, redPiece)).toBe("light");
 
-    const redMove = availableThreePlayerActions(state)[0];
-    expect(redMove?.type).toBe("move");
-    state = threePlayerReducer(state, redMove);
+    state = playFirstPlan(state);
     expect(state.completedTurns.red).toBe(1);
     expect(threePlayerPieceAffinity(state, redPiece)).toBe("dark");
   });
@@ -105,9 +108,13 @@ describe("three-player deterministic lifecycle", () => {
         availableThreePlayerActions(structuredClone(state)),
       );
       expect(actions.every((action) =>
-        action.type === "move" &&
+        action.type === "select-god" &&
         threePlayerReducer(state, action) !== state
       )).toBe(true);
+      expect(enumerateCompleteThreePlayerPlans(state, {
+        maxPlans: 2,
+        maxStates: 4_000,
+      }).length).toBeGreaterThan(0);
     }
   });
 

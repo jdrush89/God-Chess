@@ -3,7 +3,8 @@
 A divine strategy game that combines legal chess movement with snake-drafted
 pantheons, shared orb economies, resting turns, status effects, and ability
 upgrades. Play a two-player duel locally, challenge a difficulty-adjustable AI,
-share a four-player cross-board in free-for-all or 2v2, solve prepared divine
+share a three-player Green Chess board, contest a four-player cross-board in
+free-for-all or 2v2, solve prepared divine
 puzzles, or play host-authoritative two-player and four-player online matches
 through WebRTC rooms with five-character codes.
 
@@ -55,6 +56,56 @@ corners are outside the playable board.
 - Local and cloud saves include the full four-player state and stable snapshot
   undo history. In mixed games, undo rewinds a completed AI chain together with
   the preceding Human turn.
+
+## Local three-player
+
+Choose **Three-player local** from the new-game menu to play with White, Red,
+and Black on one of five Green Chess layouts:
+
+- **Three-Player / Yalta** bends and branches rook, bishop, and knight paths
+  through a shared center.
+- **Three Hexagonal** uses the large 217-cell hex board, six rook directions,
+  six bishop directions, and two pawn-forward directions.
+- **Triad** uses a compact 144-cell hex board with three armies advancing
+  toward the opposite wall.
+- **Three Circular** wraps traces around four rings and 24 sectors.
+- **Three Half** evaluates each move within one of three pairwise 8x8
+  embeddings while presenting all three connected halves together.
+
+Configure each seat as Human or Divine AI with its own difficulty from 1–10;
+at least one local Human is required. Turns always run White, Red, Black.
+Drafting claims exactly nine unique Gods in order
+`White, Red, Black, Black, Red, White, White, Red, Black`; claimed Gods stay
+inspectable but cannot be selected by another seat, and the remaining three
+are shown as unused.
+
+Every God and all 36 abilities are available. Ability geometry comes from the
+selected topology rather than rectangular coordinates: rows and columns are
+rook traces, diagonals are bishop traces, range uses shortest King-neighbor
+distance, line of sight retains its exact trace, areas are topology-defined
+pairs or parallelograms, and formation movement preserves a valid
+topology-relative offset. When more than one branched or wrapped path reaches
+the same cell, path-sensitive abilities explicitly select the path.
+
+Original ownership determines home, pawn direction, advancement, graveyard,
+and orb affinity; current control determines movement, friendly/hostile
+targeting, payments, and rewards. White-owned pieces are light, Black-owned
+pieces are dark, and Red-owned pieces begin light and alternate after each
+completed non-skipped Red turn. Takeover changes control without changing that
+original-owner affinity.
+
+Choose whether the first checkmate wins immediately or play on after
+elimination. In continuation mode, a stalemated seat is skipped until the
+position changes enough to restore a legal action; a complete unchanged
+unable-to-act cycle is a draw. With takeover enabled, the credited mating seat
+permanently controls the eliminated seat's surviving pieces. Without it, those
+pieces remain inert and capturable.
+
+Local and cloud saves strictly preserve the selected board, full divine
+lifecycle, undo history, Red affinity counter, status durations, stealth,
+bananas, takeover controllers, and stalemate-cycle metadata. Undo operates at
+stable draft, completed-turn, and upgrade boundaries; in mixed games it rewinds
+the following AI chain together with the preceding Human action.
 
 ## Four-player online
 
@@ -221,19 +272,19 @@ session boundaries intended for the later multiparty-networking layer.
 - `src/multiplayer/useFourPlayerOnlineGame.ts` exposes lobby and canonical game
   state to React while preserving the existing classic online hook.
 
-## Three-player Layer 1 architecture
+## Three-player architecture
 
 The deterministic three-player core is intentionally separate from the
-two-player and four-player state APIs. Layer 1 contains drafting, topology,
-ordinary chess legality, elimination, persistence, and transport-neutral
-session validation. God ability execution, React setup/gameplay, AI strategy,
-save-menu integration, and authoritative room orchestration remain Layer 2/3
-work.
+two-player and four-player state APIs. The same pure action boundary drives
+local React gameplay, complete action-plan enumeration, AI, saves, undo, and
+the transport-neutral session validation reserved for a later authoritative
+online layer.
 
 - `src/game/threePlayerTypes.ts` defines White, Red, and Black seats; original
   piece ownership versus current control; Human/AI/online controller metadata;
-  the nine-God draft; attack recency; completed-turn counters; and persisted
-  stalemate pass-cycle state.
+  the nine-God draft; divine pending flows; rest and upgrades; attack recency;
+  completed-turn counters; presentation events; and persisted stalemate
+  pass-cycle state.
 - `src/game/threePlayerTopology.ts` and `src/game/threePlayerTopologies/`
   describe boards as directed traces rather than rectangular coordinates.
   This supports Yalta's dedicated piece-specific center bending and branching,
@@ -243,11 +294,21 @@ work.
   self-check prevention against both opponents, castling where defined,
   en passant where defined, and promotion over those topology contracts.
 - `src/game/threePlayerEngine.ts` exports `createThreePlayerGame`,
-  `threePlayerReducer`, and `availableThreePlayerActions`.
+  `threePlayerReducer`, and `availableThreePlayerActions`. It implements all
+  God abilities as deterministic primitive actions, checks King safety through
+  every multi-step mutation, and uses complete divine plans when resolving
+  start-of-turn mate.
+- `src/game/threePlayerPlans.ts` expands primitive actions into complete draft,
+  divine-turn, and upgrade plans. `src/game/threePlayerAi.ts` searches those
+  same plans with deterministic difficulty-scaled budgets.
 - `src/game/threePlayerPersistence.ts` exports `isThreePlayerState` and
-  `prepareThreePlayerState`; `src/game/threePlayerSession.ts` adds strict
-  revisioned action/snapshot, participant authorization, reconnect, and
-  unanimous-undo foundations.
+  `prepareThreePlayerState`, including explicit migration from the Layer 1
+  schema; `src/game/threePlayerSession.ts` adds strict revisioned
+  action/snapshot, participant authorization, reconnect, and unanimous-undo
+  foundations.
+- `src/threePlayer/` contains the shared-device setup, five topology-driven SVG
+  board layouts, draft/game UI, AI loop, reduced-motion presentation, saves,
+  and stable snapshot undo.
 
 White, Red, then Black move in that fixed order. The draft claims nine of the
 twelve Gods in order

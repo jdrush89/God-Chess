@@ -5,6 +5,7 @@ import {
   isThreePlayerState,
   prepareThreePlayerState,
 } from "./threePlayerPersistence";
+import { GODS } from "./gods";
 import type {
   ThreePlayerSeat,
   ThreePlayerState,
@@ -55,11 +56,24 @@ describe("three-player persistence", () => {
     }
   });
 
-  it("fills only intentional compatibility metadata", () => {
-    const legacy = structuredClone(createThreePlayerGame()) as unknown as Record<
-      string,
-      unknown
-    >;
+  it("migrates valid schema-version-1 states with deterministic defaults", () => {
+    const legacy = structuredClone(createThreePlayerGame()) as unknown as Record<string, unknown>;
+    legacy.schemaVersion = 1;
+    for (const field of [
+      "seatTurns",
+      "hostileTurns",
+      "godTurns",
+      "upgradeQueue",
+      "legalCells",
+      "legalSeats",
+      "legalPaths",
+      "bananas",
+      "stealth",
+      "orbEvents",
+      "nextOrbEventId",
+      "presentationEvents",
+      "nextPresentationEventId",
+    ]) delete legacy[field];
     delete legacy.attackSequence;
     delete legacy.kingAttackRecency;
     delete legacy.completedTurns;
@@ -67,12 +81,72 @@ describe("three-player persistence", () => {
     delete legacy.positionRevision;
     delete legacy.passCycle;
     const prepared = prepareThreePlayerState(legacy);
+    expect(prepared.schemaVersion).toBe(2);
     expect(prepared.attackSequence).toBe(0);
     expect(prepared.completedTurns).toEqual({ white: 0, red: 0, black: 0 });
+    expect(prepared.seatTurns).toEqual({ white: 0, red: 0, black: 0 });
+    expect(prepared.hostileTurns).toEqual({ white: 0, red: 0, black: 0 });
+    expect(prepared.godTurns).toEqual({ white: {}, red: {}, black: {} });
+    expect(prepared.upgradeQueue).toEqual([]);
+    expect(prepared.legalCells).toEqual([]);
+    expect(prepared.legalSeats).toEqual([]);
+    expect(prepared.legalPaths).toEqual([]);
+    expect(prepared.bananas).toEqual([]);
+    expect(prepared.stealth).toEqual({ white: [], red: [], black: [] });
+    expect(prepared.orbEvents).toEqual([]);
+    expect(prepared.nextOrbEventId).toBe(1);
+    expect(prepared.presentationEvents).toEqual([]);
+    expect(prepared.nextPresentationEventId).toBe(1);
     expect(prepared.passCycle).toEqual({
       positionRevision: 0,
       passedSeats: [],
     });
+  });
+
+  it("rejects malformed Layer 2 selections, events, and pending identifiers", () => {
+    const state = createThreePlayerGame();
+
+    const badCell = structuredClone(state);
+    badCell.legalCells = ["wrong-topology:1"];
+    expect(isThreePlayerState(badCell)).toBe(false);
+
+    const badPath = structuredClone(state);
+    badPath.legalPaths = ["missing-path"];
+    expect(isThreePlayerState(badPath)).toBe(false);
+
+    const badPending = structuredClone(state);
+    badPending.pending = {
+      godId: GODS[0].id,
+      abilityId: GODS[1].abilities[0].id,
+      step: "cell",
+    };
+    expect(isThreePlayerState(badPending)).toBe(false);
+
+    const badOrbEvent = structuredClone(state);
+    badOrbEvent.orbEvents = [{
+      id: 1,
+      player: "white",
+      orb: "light",
+      amount: 1,
+      total: 1,
+      source: Object.keys(state.board)[0],
+    }];
+    badOrbEvent.nextOrbEventId = 1;
+    expect(isThreePlayerState(badOrbEvent)).toBe(false);
+
+    const badPresentation = structuredClone(state);
+    badPresentation.presentationEvents = [{
+      id: 1,
+      kind: "move",
+      source: Object.keys(state.board)[0],
+      destination: "wrong-topology:1",
+    }];
+    badPresentation.nextPresentationEventId = 2;
+    expect(isThreePlayerState(badPresentation)).toBe(false);
+
+    const mislabeledLegacy = structuredClone(state) as unknown as Record<string, unknown>;
+    mislabeledLegacy.schemaVersion = 1;
+    expect(() => prepareThreePlayerState(mislabeledLegacy)).toThrow(/invalid/i);
   });
 
   it("rejects malformed topology, pass-cycle, controller, and affinity data", () => {

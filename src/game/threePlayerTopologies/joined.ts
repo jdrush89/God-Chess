@@ -16,8 +16,10 @@ import {
   buildCellLookups,
   placementsFromSource,
   SEATS,
+  squareRender,
   standardArmySource,
   topologyAdjacent,
+  topologyContracts,
   topologyDistance,
   topologyPaths,
   unique,
@@ -126,7 +128,7 @@ const createJoinedTopology = (spec: JoinedSpec): ThreePlayerTopology => {
           sourceIndex,
           half,
           local: { file, rank },
-          render: { ...render, size: 1 },
+          render: squareRender(render.x, render.y),
           geometricClass,
           affinity: geometricClass === 0 ? "light" : "dark",
         });
@@ -300,6 +302,41 @@ const createJoinedTopology = (spec: JoinedSpec): ThreePlayerTopology => {
     lookups.cellFromSourceIndex,
   );
   const castlingBySeat = createCastling(spec.variant);
+  const contracts = topologyContracts({
+    cells: cellDescriptors.map((cell) => cell.id),
+    cellDescriptors,
+    initialPlacements,
+    rookTraces,
+    bishopTraces,
+    kingNeighbors,
+    pawnMetadata,
+    formationTransform: (anchorFrom, anchorTo, cell, contextId) => {
+      const from = local(anchorFrom);
+      const to = local(anchorTo);
+      const member = local(cell);
+      if (!from || !to || !member) return undefined;
+      if (cell === anchorFrom) return anchorTo;
+      const contexts = pairContexts().filter((context) =>
+        (contextId === undefined || context.id === contextId) &&
+        localToPair(from, context) &&
+        localToPair(to, context) &&
+        localToPair(member, context)
+      );
+      if (contextId === undefined && contexts.length !== 1) return undefined;
+      const destinations = unique(contexts.flatMap((context) => {
+        const fromPair = localToPair(from, context)!;
+        const toPair = localToPair(to, context)!;
+        const memberPair = localToPair(member, context)!;
+        const target = pairToLocal(
+          memberPair.x + toPair.x - fromPair.x,
+          memberPair.y + toPair.y - fromPair.y,
+          context,
+        );
+        return target ? [idOf(target)] : [];
+      }));
+      return destinations.length === 1 ? destinations[0] : undefined;
+    },
+  });
 
   return {
     variant: spec.variant,
@@ -309,6 +346,7 @@ const createJoinedTopology = (spec: JoinedSpec): ThreePlayerTopology => {
     ...lookups,
     initialPlacements,
     castlingBySeat,
+    ...contracts,
     rookTraces,
     rookRays: rookTraces,
     bishopTraces,

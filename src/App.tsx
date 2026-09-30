@@ -82,6 +82,7 @@ import {
   prepareSavedState,
   saveId,
   isFourPlayerSavedGame,
+  isThreePlayerSavedGame,
   type SavedGame,
 } from "./saves";
 import {
@@ -91,15 +92,30 @@ import {
 import { FourPlayerGame } from "./fourPlayer/FourPlayerGame";
 import { FourPlayerOnlineLobby } from "./fourPlayer/FourPlayerOnlineLobby";
 import { FourPlayerSetup } from "./fourPlayer/FourPlayerSetup";
+import { createThreePlayerGame } from "./game/threePlayerEngine";
+import type {
+  ThreePlayerConfig,
+  ThreePlayerState,
+} from "./game/threePlayerTypes";
+import { THREE_PLAYER_SEATS } from "./game/threePlayerTypes";
+import { ThreePlayerGame } from "./threePlayer/ThreePlayerGame";
+import { ThreePlayerSetup } from "./threePlayer/ThreePlayerSetup";
 
 type GameDispatch = (action: GameAction) => void;
-type StartMode = GameMode | "four-player";
+type StartMode = GameMode | "four-player" | "three-player";
 
 interface FourPlayerSession {
   key: string;
   state: FourPlayerState;
   undoHistory: FourPlayerState[];
   turnStart?: FourPlayerState;
+}
+
+interface ThreePlayerSession {
+  key: string;
+  state: ThreePlayerState;
+  undoHistory: ThreePlayerState[];
+  turnStart?: ThreePlayerState;
 }
 
 const PIECES: Record<Color, Record<Piece["type"], string>> = {
@@ -1555,6 +1571,8 @@ function MainMenu({
                       <span>
                         {isFourPlayerSavedGame(game)
                           ? `Four-player ${game.state.config.mode === "teams" ? "2v2" : "FFA"} · ${game.state.players[game.state.activeSeat].name} to act`
+                          : isThreePlayerSavedGame(game)
+                            ? `Three-player ${game.state.config.boardVariant} · ${game.state.players[game.state.activeSeat].name} to act`
                           : `${game.state.gameMode === "ai" ? "Divine AI" : "Local duel"} · Round ${game.state.round} · Turn ${game.state.turn}`}
                       </span>
                     </div>
@@ -1595,7 +1613,34 @@ function MainMenu({
                           </div>
                         );
                       })
-                      : (["white", "black"] as const).map((color) => (
+                      : isThreePlayerSavedGame(game)
+                        ? THREE_PLAYER_SEATS.map((seat) => {
+                          const player = game.state.players[seat];
+                          return (
+                            <div className="saved-pantheon four-saved-pantheon" key={seat}>
+                              <span
+                                className="four-player-crest"
+                                style={{ "--seat-color": player.displayColor } as React.CSSProperties}
+                              >
+                                {seat[0].toUpperCase()}
+                              </span>
+                              <div>
+                                <strong>{player.name}</strong>
+                                <small>{seat} · {player.control.kind === "ai" ? `AI ${player.control.difficulty ?? 5}` : "Human"}</small>
+                              </div>
+                              <div className="saved-gods">
+                                {player.gods.length
+                                  ? player.gods.map((godId) => (
+                                    <span className="saved-god" title={GOD_BY_ID[godId].name} key={godId}>
+                                      <GodSigil godId={godId} size="small" />
+                                    </span>
+                                  ))
+                                  : <em>No gods drafted</em>}
+                              </div>
+                            </div>
+                          );
+                        })
+                        : (["white", "black"] as const).map((color) => (
                       <div className="saved-pantheon" key={color}>
                         <span className={`player-crest ${color}`}>{color[0].toUpperCase()}</span>
                         <div>
@@ -1663,6 +1708,7 @@ function StartGamePrompt({
   onStart,
   onOpenPuzzles,
   onOpenFourPlayer,
+  onOpenThreePlayer,
   onHost,
   onJoin,
   onStartOnline,
@@ -1683,6 +1729,7 @@ function StartGamePrompt({
   onStart: (mode: Exclude<GameMode, "online" | "puzzle">, difficulty: number) => void;
   onOpenPuzzles: () => void;
   onOpenFourPlayer: () => void;
+  onOpenThreePlayer: () => void;
   onHost: (name: string) => void;
   onJoin: (code: string, name: string) => void;
   onStartOnline: () => void;
@@ -1725,6 +1772,17 @@ function StartGamePrompt({
             <Bot size={24} />
             <strong>Divine AI</strong>
             <span>Challenge a computer opponent.</span>
+          </button>
+          <button
+            className={mode === "three-player" ? "active" : ""}
+            onClick={() => {
+              chooseMode("three-player");
+              onOpenThreePlayer();
+            }}
+          >
+            <Users size={24} />
+            <strong>Three-player local</strong>
+            <span>Five boards, nine Gods, one shared device.</span>
           </button>
           <button
             className={mode === "four-player" ? "active" : ""}
@@ -1889,7 +1947,7 @@ function StartGamePrompt({
           </div>
         )}
 
-        {mode !== "online" && mode !== "puzzle" && mode !== "four-player" && (
+        {mode !== "online" && mode !== "puzzle" && mode !== "four-player" && mode !== "three-player" && (
           <button className="primary-button start-match-button" onClick={() => onStart(mode, difficulty)}>
             {mode === "ai" ? "Challenge the AI" : "Begin local duel"}
           </button>
@@ -2669,11 +2727,12 @@ export default function App() {
   const savedGamesRef = useRef(savedGames);
   savedGamesRef.current = savedGames;
   const activeSaveId = useRef<string | undefined>(undefined);
-  const [startView, setStartView] = useState<"menu" | "setup" | "four-setup" | "puzzles" | "none">("menu");
+  const [startView, setStartView] = useState<"menu" | "setup" | "three-setup" | "four-setup" | "puzzles" | "none">("menu");
   const [setupCanCancel, setSetupCanCancel] = useState(false);
   const [setupReturnView, setSetupReturnView] = useState<"menu" | "none">("menu");
   const [setupInitialMode, setSetupInitialMode] = useState<StartMode>("local");
   const [fourPlayerSession, setFourPlayerSession] = useState<FourPlayerSession>();
+  const [threePlayerSession, setThreePlayerSession] = useState<ThreePlayerSession>();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [undoPreferred, setUndoPreferred] = useState(loadUndoSetting);
   const [undoDepth, setUndoDepth] = useState(0);
@@ -2968,6 +3027,20 @@ export default function App() {
     ));
   }, [persistSavedGame]);
 
+  const persistThreePlayerGame = useCallback((
+    threeState: ThreePlayerState,
+    threeUndoHistory: ThreePlayerState[],
+    threeTurnStart?: ThreePlayerState,
+  ) => {
+    const id = activeSaveId.current ?? saveId();
+    return persistSavedGame(createSavedGame(
+      id,
+      threeState,
+      threeUndoHistory,
+      threeTurnStart,
+    ));
+  }, [persistSavedGame]);
+
   const saveAndQuit = async () => {
     if (!await saveCurrentGame()) return;
     aiPlan.current = [];
@@ -2979,15 +3052,21 @@ export default function App() {
     if (
       startView !== "none" ||
       fourPlayerSession ||
+      threePlayerSession ||
       state.gameMode === "online" ||
       state.gameMode === "puzzle"
     ) return;
     const timer = window.setTimeout(() => void saveCurrentGame(), 120);
     return () => window.clearTimeout(timer);
-  }, [fourPlayerSession, startView, state]);
+  }, [fourPlayerSession, threePlayerSession, startView, state]);
 
   useEffect(() => {
-    if (fourPlayerSession || startView !== "none" || !isAiTurn(state)) {
+    if (
+      fourPlayerSession ||
+      threePlayerSession ||
+      startView !== "none" ||
+      !isAiTurn(state)
+    ) {
       aiPlan.current = [];
       return;
     }
@@ -2999,7 +3078,7 @@ export default function App() {
       dispatch(action);
     }, aiActionDelay(action));
     return () => window.clearTimeout(timer);
-  }, [fourPlayerSession, startView, state]);
+  }, [fourPlayerSession, threePlayerSession, startView, state]);
 
   useEffect(() => {
     if (online.started) setStartView("none");
@@ -3040,7 +3119,22 @@ export default function App() {
       setStartView("none");
       return;
     }
+    if (isThreePlayerSavedGame(game)) {
+      setFourPlayerSession(undefined);
+      setThreePlayerSession({
+        key: `${game.id}-${game.savedAt}`,
+        state: structuredClone(game.state),
+        undoHistory: game.undoHistory.map((snapshot) => structuredClone(snapshot)),
+        turnStart: game.turnStart ? structuredClone(game.turnStart) : undefined,
+      });
+      aiPlan.current = [];
+      clearUndoHistory();
+      setSettingsOpen(false);
+      setStartView("none");
+      return;
+    }
     setFourPlayerSession(undefined);
+    setThreePlayerSession(undefined);
     const next = structuredClone(game.state);
     restoreUndoTracking(game.undoHistory, game.turnStart, next);
     receiveState(next);
@@ -3077,6 +3171,7 @@ export default function App() {
     onlineActions.disconnect();
     fourOnlineActions.disconnect();
     setFourPlayerSession(undefined);
+    setThreePlayerSession(undefined);
     activeSaveId.current = saveId();
     const next = createGame(undefined, {
       mode,
@@ -3103,10 +3198,29 @@ export default function App() {
     });
     setStartView("none");
   };
+  const beginThreePlayerGame = (config: ThreePlayerConfig) => {
+    onlineActions.disconnect();
+    fourOnlineActions.disconnect();
+    const id = saveId();
+    const next = createThreePlayerGame(config);
+    const session: ThreePlayerSession = {
+      key: id,
+      state: next,
+      undoHistory: [],
+    };
+    setFourPlayerSession(undefined);
+    setThreePlayerSession(session);
+    activeSaveId.current = id;
+    aiPlan.current = [];
+    clearUndoHistory();
+    setSettingsOpen(false);
+    setStartView("none");
+  };
   const beginPuzzle = (puzzleId: PuzzleId) => {
     onlineActions.disconnect();
     fourOnlineActions.disconnect();
     setFourPlayerSession(undefined);
+    setThreePlayerSession(undefined);
     activeSaveId.current = undefined;
     const next = createPuzzleGame(puzzleId, accountService.account?.displayName);
     resetUndoTracking(next);
@@ -3131,6 +3245,14 @@ export default function App() {
     setStartView("none");
   };
   const openNewGame = () => {
+    if (threePlayerSession) {
+      setThreePlayerSession(undefined);
+      setSetupCanCancel(false);
+      setSetupInitialMode("three-player");
+      setSetupReturnView("none");
+      setStartView("three-setup");
+      return;
+    }
     if (fourPlayerSession) {
       setFourPlayerSession(undefined);
       setSetupCanCancel(false);
@@ -3275,6 +3397,16 @@ export default function App() {
     );
   }
 
+  if (startView === "three-setup") {
+    return (
+      <ThreePlayerSetup
+        defaultPlayerName={accountService.account?.displayName}
+        onStart={beginThreePlayerGame}
+        onBack={() => setStartView("setup")}
+      />
+    );
+  }
+
   if (startView === "none" && fourOnlineCanonical && fourOnline.snapshot) {
     const pausedSeat = fourOnline.snapshot.pausedSeat;
     return (
@@ -3360,6 +3492,28 @@ export default function App() {
     );
   }
 
+  if (startView === "none" && threePlayerSession) {
+    return (
+      <ThreePlayerGame
+        key={threePlayerSession.key}
+        initialState={threePlayerSession.state}
+        initialUndoHistory={threePlayerSession.undoHistory}
+        initialTurnStart={threePlayerSession.turnStart}
+        undoPreferred={undoPreferred}
+        onUndoPreferenceChange={changeUndoPreference}
+        onPersist={persistThreePlayerGame}
+        onQuit={() => setStartView("menu")}
+        onNewGame={() => {
+          setThreePlayerSession(undefined);
+          setSetupCanCancel(false);
+          setSetupInitialMode("three-player");
+          setSetupReturnView("none");
+          setStartView("three-setup");
+        }}
+      />
+    );
+  }
+
   return (
     <>
       {saveError && (
@@ -3415,6 +3569,7 @@ export default function App() {
           canCancel={setupCanCancel}
           onStart={beginGame}
           onOpenPuzzles={() => setStartView("puzzles")}
+          onOpenThreePlayer={() => setStartView("three-setup")}
           onOpenFourPlayer={() => setStartView("four-setup")}
           onHost={(name) => {
             fourOnlineActions.disconnect();

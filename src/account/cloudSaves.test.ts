@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createGame } from "../game/engine";
-import { createSavedGame } from "../saves";
+import { createThreePlayerGame } from "../game/threePlayerEngine";
+import {
+  createSavedGame,
+  isThreePlayerSavedGame,
+} from "../saves";
 import { loadCloudSavedGames } from "./cloudSaves";
 
 const mocks = vi.hoisted(() => ({
@@ -53,5 +57,25 @@ describe("cloud saves", () => {
 
     await expect(loadCloudSavedGames("user-1")).resolves.toEqual([valid]);
     expect(mocks.from).toHaveBeenCalledWith("game_saves");
+  });
+
+  it("loads strict three-player saves through the generic cloud boundary", async () => {
+    const valid = createSavedGame(
+      "three",
+      createThreePlayerGame(),
+      [],
+    );
+    mocks.order.mockResolvedValue({
+      data: [{
+        id: valid.id,
+        saved_at: valid.savedAt,
+        game: valid,
+      }],
+      error: null,
+    });
+
+    const games = await loadCloudSavedGames("user-1");
+    expect(games).toHaveLength(1);
+    expect(isThreePlayerSavedGame(games[0])).toBe(true);
   });
 });

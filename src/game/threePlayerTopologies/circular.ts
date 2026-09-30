@@ -16,6 +16,7 @@ import {
   mod,
   placementsFromSource,
   topologyAdjacent,
+  topologyContracts,
   topologyDistance,
   topologyPaths,
   unique,
@@ -82,15 +83,27 @@ export const createCircularTopology = (): ThreePlayerTopology => {
       const sourceIndex = ring * SECTORS + sector;
       const angle = (sector / SECTORS) * Math.PI * 2;
       const geometricClass = mod(ring + sector, 2) as 0 | 1;
+      const startAngle = (sector - 0.5) / SECTORS * Math.PI * 2;
+      const endAngle = (sector + 0.5) / SECTORS * Math.PI * 2;
+      const contentRadius = RINGS - ring - 0.5;
       cellDescriptors.push({
         id: cellId(ring, sector),
         ordinal: sourceIndex,
         sourceIndex,
         circular: { ring, sector },
         render: {
-          x: (RINGS - ring) * Math.sin(angle),
-          y: (RINGS - ring) * Math.cos(angle),
+          x: contentRadius * Math.sin(angle),
+          y: contentRadius * Math.cos(angle),
           size: 1,
+          shape: {
+            kind: "annular-sector",
+            cx: 0,
+            cy: 0,
+            innerRadius: RINGS - ring - 1,
+            outerRadius: RINGS - ring,
+            startAngle,
+            endAngle,
+          },
         },
         geometricClass,
         affinity: geometricClass === 0 ? "light" : "dark",
@@ -230,6 +243,30 @@ export const createCircularTopology = (): ThreePlayerTopology => {
     groupForSource,
   );
   const castlingBySeat = { white: [], red: [], black: [] } as const;
+  const contracts = topologyContracts({
+    cells: cellDescriptors.map((cell) => cell.id),
+    cellDescriptors,
+    initialPlacements,
+    rookTraces,
+    bishopTraces,
+    kingNeighbors,
+    pawnMetadata,
+    formationTransform: (anchorFrom, anchorTo, cell) => {
+      const from = coordinates(anchorFrom);
+      const to = coordinates(anchorTo);
+      const member = coordinates(cell);
+      if (!from || !to || !member) return undefined;
+      if (cell === anchorFrom) return anchorTo;
+      let sectorDelta = to.sector - from.sector;
+      if (sectorDelta > SECTORS / 2) sectorDelta -= SECTORS;
+      if (sectorDelta < -SECTORS / 2) sectorDelta += SECTORS;
+      if (Math.abs(sectorDelta) === SECTORS / 2) return undefined;
+      return at(
+        member.ring + to.ring - from.ring,
+        member.sector + sectorDelta,
+      );
+    },
+  });
 
   return {
     variant: "three-circular",
@@ -239,6 +276,7 @@ export const createCircularTopology = (): ThreePlayerTopology => {
     ...lookups,
     initialPlacements,
     castlingBySeat,
+    ...contracts,
     rookTraces,
     rookRays: rookTraces,
     bishopTraces,

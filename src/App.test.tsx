@@ -51,11 +51,34 @@ describe("game startup", () => {
 
     expect(screen.getByRole("button", { name: /two players share this device/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /divine ai/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /three-player local/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /online versus/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /divine puzzles/i })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /online versus/i }));
     expect(screen.getByRole("button", { name: /^two-player$/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /^four-player$/i })).toBeTruthy();
+  });
+
+  it("opens the local three-player setup without exposing an online room mode", () => {
+    const { container } = render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /^new game$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /three-player local/i }));
+
+    expect(screen.getByRole("heading", { name: /choose the battlefield/i })).toBeTruthy();
+    expect(container.querySelectorAll(".three-variant-card")).toHaveLength(5);
+    expect(screen.queryByText(/room code/i)).toBeNull();
+  });
+
+  it("autosaves the active three-player state without overwriting it with the hidden duel", async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /^new game$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /three-player local/i }));
+    fireEvent.click(screen.getByRole("button", { name: /begin three-player draft/i }));
+
+    await waitFor(() => {
+      const saves = JSON.parse(window.localStorage.getItem(SAVE_KEY) ?? "[]");
+      expect(saves[0]?.state?.variant).toBe("three-player");
+    });
   });
 
   it("browses puzzle difficulties and starts a selected position", () => {

@@ -1144,6 +1144,334 @@ body::before {
   .rule-columns { grid-template-columns: 1fr; }
 }
 
+/* Three-player local */
+.three-setup-page, .three-game-page {
+  min-height: 100vh; overflow-x: hidden;
+  background:
+    radial-gradient(circle at 50% 0, rgba(198,161,91,.08), transparent 36rem),
+    #0b0d12;
+}
+.three-setup-page { padding: 52px max(18px, calc((100vw - 1240px) / 2)) 42px; }
+.three-setup-header {
+  position: relative; display: flex; justify-content: space-between; gap: 24px;
+  padding: 0 52px 25px 0; border-bottom: 1px solid var(--line);
+}
+.three-setup-header h1 {
+  margin: 8px 0 10px; color: #f1ece2; font: 600 clamp(30px, 4vw, 50px)/1.08 "Cinzel";
+}
+.three-setup-header p:last-child { max-width: 720px; margin: 0; color: #85868d; font-size: 12px; line-height: 1.6; }
+.three-setup-header .close-button { top: 0; right: 0; border: 1px solid var(--line); }
+.three-variant-grid {
+  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 18px;
+}
+.three-variant-card {
+  min-width: 0; min-height: 205px; display: grid; grid-template-rows: 126px auto 1fr;
+  gap: 7px; padding: 10px; color: #d8d3c8; background: #11141a; border: 1px solid var(--line);
+  text-align: left; cursor: pointer;
+}
+.three-variant-card:hover, .three-variant-card.active {
+  border-color: rgba(198,161,91,.7); background: rgba(198,161,91,.06);
+  box-shadow: inset 0 0 0 1px rgba(198,161,91,.12);
+}
+.three-variant-preview {
+  min-width: 0; display: grid; place-items: center; overflow: hidden; background: #080a0e;
+}
+.three-variant-preview .three-board { width: 100%; height: 118px; }
+.three-variant-card strong { font: 600 12px "Cinzel"; }
+.three-variant-card small { color: #767880; font-size: 8px; line-height: 1.45; }
+.three-setup-options {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px;
+}
+.three-setup-option, .three-setup-toggle {
+  min-width: 0; padding: 16px; border: 1px solid var(--line); background: rgba(18,21,28,.82);
+}
+.three-setup-option > span {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 12px; color: #d8d3c8; font: 600 11px "Cinzel";
+}
+.three-setup-toggle {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; cursor: pointer;
+}
+.three-setup-toggle > span {
+  min-width: 0; display: grid; grid-template-columns: auto 1fr; gap: 3px 9px; align-items: center;
+}
+.three-setup-toggle svg { grid-row: 1 / 3; color: var(--gold); }
+.three-setup-toggle strong { color: #d8d3c8; font: 600 11px "Cinzel"; }
+.three-setup-toggle small { color: #73757d; font-size: 9px; line-height: 1.45; }
+.three-setup-toggle input { width: 20px; height: 20px; flex: none; accent-color: var(--gold); }
+.three-seat-setup-grid {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 14px;
+}
+.three-seat-setup-card {
+  min-width: 0; padding: 16px; border: 1px solid color-mix(in srgb, var(--seat-color) 38%, var(--line));
+  background: linear-gradient(150deg, color-mix(in srgb, var(--seat-color) 7%, #171a21), #101219 58%);
+}
+.three-seat-setup-card > header {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center;
+  margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--line);
+}
+.three-seat-setup-card > header > i {
+  width: 13px; height: 13px; border-radius: 50%; background: var(--seat-color);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--seat-color) 46%, transparent);
+}
+.three-seat-setup-card > header span { display: block; color: #f0ebe0; font: 600 14px "Cinzel"; }
+.three-seat-setup-card > header small { color: #787a81; font-size: 7px; letter-spacing: .1em; text-transform: uppercase; }
+.three-seat-setup-card > header svg { color: var(--seat-color); }
+.three-seat-setup-card > label, .three-seat-control {
+  display: grid; gap: 7px; margin-top: 12px; color: #8f9096; font-size: 8px; font-weight: 700;
+  letter-spacing: .1em; text-transform: uppercase;
+}
+.three-seat-setup-card > label > input:not([type="range"]) {
+  width: 100%; height: 40px; padding: 0 10px; color: #ece7dc; background: #0b0d12; border: 1px solid #30333b;
+}
+.three-ai-level > span { display: flex; justify-content: space-between; align-items: baseline; }
+.three-ai-level strong { color: var(--seat-color); font: 600 18px "Cinzel"; }
+.three-ai-level input { width: 100%; accent-color: var(--seat-color); }
+.three-setup-footer {
+  display: grid; grid-template-columns: 1fr minmax(260px, 360px); gap: 20px; align-items: center;
+  margin-top: 14px; padding: 15px; border: 1px solid var(--line); background: rgba(8,10,14,.7);
+}
+.three-setup-footer p { margin: 3px 0; color: #e39a8e; font-size: 10px; }
+.three-setup-footer p.valid { color: #95c3a4; }
+
+.three-board { width: 100%; height: 100%; overflow: visible; touch-action: manipulation; }
+.three-board-cell {
+  stroke: rgba(16,18,24,.88); stroke-width: .07; vector-effect: non-scaling-stroke;
+  transition: filter .15s, stroke .15s, opacity .15s;
+}
+.three-board-cell.light { fill: #c5b99f; }
+.three-board-cell.dark { fill: #514e4c; }
+.three-board-cell.selected { stroke: #f5d98e; stroke-width: .18; filter: brightness(1.14); }
+.three-board-cell.legal { stroke: #e1ba66; stroke-width: .15; filter: brightness(1.18); }
+.three-board-cell.legal-occupied { stroke: #a23f38; stroke-width: .2; }
+.three-board-cell.path { fill: #85875d; }
+.three-cell-hit { cursor: pointer; outline: none; }
+.three-cell-hit:focus .three-board-cell { stroke: #fff0bd; stroke-width: .22; }
+.three-board-piece {
+  fill: var(--piece-color); stroke: rgba(10,11,14,.8); stroke-width: .025; paint-order: stroke;
+  font: .78px Georgia, serif; text-anchor: middle; dominant-baseline: central; pointer-events: none;
+  filter: drop-shadow(0 .08px .04px rgba(0,0,0,.7));
+}
+.three-board-piece.inert { opacity: .38; }
+.three-board-banana {
+  font: .46px sans-serif;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+  filter: drop-shadow(0 .05px .03px rgba(0,0,0,.7));
+}
+.three-board.preview .three-board-cell { pointer-events: none; }
+
+.three-draft-page { min-height: 100vh; padding-bottom: 48px; background: #0b0d12; }
+.three-game-topbar {
+  position: relative; min-height: 66px; display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 11px max(18px, calc((100vw - 1420px) / 2)); border-bottom: 1px solid var(--line); background: #101219;
+}
+.three-game-topbar > div:first-child { display: grid; gap: 3px; }
+.three-game-topbar > div:first-child strong { color: #e5dfd3; font: 600 12px "Cinzel"; }
+.three-game-topbar .secondary-button { display: flex; align-items: center; gap: 7px; }
+.three-draft-hero { display: grid; place-items: center; padding: 30px 16px 20px; text-align: center; }
+.three-draft-hero > p { margin: 0; color: var(--seat-color); font: 700 10px "Cinzel"; text-transform: uppercase; }
+.three-draft-hero h1 { margin: 8px 0 14px; color: #eee8dc; font: 600 clamp(27px, 4vw, 42px) "Cinzel"; }
+.three-draft-progress { display: flex; gap: 12px; }
+.three-draft-progress > span {
+  width: 14px; height: 14px; border: 2px solid color-mix(in srgb, var(--seat-color) 52%, #34363d);
+  border-radius: 50%;
+}
+.three-draft-progress > span.done { background: var(--seat-color); }
+.three-draft-progress > span.current { box-shadow: 0 0 0 4px color-mix(in srgb, var(--seat-color) 18%, transparent); }
+.three-level-preview { display: flex; gap: 5px; margin-top: 14px; }
+.three-level-preview button {
+  min-height: 30px; padding: 5px 9px; color: #74767e; background: #0c0e13; border: 1px solid var(--line);
+  font-size: 7px; font-weight: 800; text-transform: uppercase;
+}
+.three-level-preview button.active { color: #f1dda9; border-color: rgba(198,161,91,.65); }
+.three-draft-grid {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px;
+  width: min(1240px, calc(100% - 28px)); margin: 0 auto;
+}
+.three-god-card {
+  min-width: 0; overflow: hidden; border: 1px solid var(--line); background: #11141a;
+}
+.three-god-card.active { border-color: var(--accent); }
+.three-god-card.claimed { opacity: .72; }
+.three-god-card.unused { filter: grayscale(.7); }
+.three-god-inspect {
+  position: relative; width: 100%; min-height: 126px; display: flex; align-items: flex-end;
+  padding: 12px; overflow: hidden; color: #fff; background: #0d0f14; border: 0; text-align: left;
+}
+.three-god-inspect::after { content: ""; position: absolute; inset: 0; background: linear-gradient(transparent, rgba(4,5,8,.96)); }
+.three-god-inspect > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.three-god-inspect > span { position: relative; z-index: 1; display: grid; }
+.three-god-inspect strong { font: 600 13px "Cinzel"; }
+.three-god-inspect small { color: #d5c69f; font-size: 7px; text-transform: uppercase; }
+.three-claimed-by {
+  position: absolute; z-index: 2; top: 8px; right: 8px; width: 24px; height: 24px; display: grid; place-items: center;
+  color: #0b0d11; background: var(--seat-color); border-radius: 50%; font: 700 9px "Cinzel"; font-style: normal;
+}
+.three-god-inspect > em {
+  position: absolute; z-index: 2; top: 9px; left: 9px; padding: 4px 6px; color: #bbb5aa;
+  background: rgba(6,7,10,.8); font-size: 7px; font-style: normal; text-transform: uppercase;
+}
+.three-god-choose {
+  width: 100%; min-height: 38px; color: #d9c48f; background: rgba(198,161,91,.06);
+  border: 0; border-top: 1px solid var(--line); font-size: 8px; font-weight: 800; text-transform: uppercase;
+}
+.three-god-choose:disabled { color: #676971; cursor: not-allowed; }
+.three-god-abilities { display: grid; gap: 7px; padding: 10px; }
+.three-god-abilities > span { display: grid; gap: 2px; }
+.three-god-abilities strong { color: #c8c3b9; font-size: 8px; }
+.three-god-abilities small { color: #74767d; font-size: 7px; line-height: 1.35; }
+
+.three-game-actions { display: flex; gap: 6px; }
+.three-game-actions button {
+  width: 38px; height: 38px; display: grid; place-items: center; padding: 0;
+  color: #aaa69d; background: #0d0f14; border: 1px solid var(--line);
+}
+.three-game-actions button:disabled { opacity: .35; }
+.three-game-menu {
+  position: absolute; z-index: 20; top: 57px; right: max(18px, calc((100vw - 1420px) / 2));
+  display: grid; min-width: 180px; padding: 6px; background: #11141a; border: 1px solid var(--line);
+  box-shadow: 0 16px 40px rgba(0,0,0,.45);
+}
+.three-game-menu button {
+  min-height: 40px; display: flex; align-items: center; gap: 8px; color: #c6c1b7;
+  background: transparent; border: 0; text-align: left;
+}
+.three-game-layout {
+  display: grid; grid-template-columns: 210px minmax(420px, 780px) minmax(290px, 350px);
+  grid-template-areas: "players board actions"; gap: 14px; align-items: start;
+  width: min(1420px, calc(100% - 28px)); margin: 16px auto 36px;
+}
+.three-player-panels { grid-area: players; display: grid; gap: 9px; }
+.three-player-panel {
+  min-width: 0; display: grid; gap: 8px; padding: 10px; opacity: .7;
+  color: #bbb6ac; background: linear-gradient(145deg, color-mix(in srgb, var(--seat-color) 7%, #171a21), #101219);
+  border: 1px solid color-mix(in srgb, var(--seat-color) 28%, var(--line));
+}
+.three-player-panel.active { opacity: 1; border-color: color-mix(in srgb, var(--seat-color) 72%, #fff); }
+.three-player-panel.eliminated { opacity: .42; filter: grayscale(.8); }
+.three-player-panel.seat-target { box-shadow: inset 0 0 0 2px var(--seat-color); }
+.three-seat-summary {
+  min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center;
+  padding: 0; color: inherit; background: transparent; border: 0; text-align: left;
+}
+.three-seat-summary:disabled { opacity: 1; }
+.three-player-avatar {
+  width: 31px; height: 31px; display: grid; place-items: center; color: #101217; background: var(--seat-color); border-radius: 50%;
+}
+.three-seat-summary strong { display: block; overflow: hidden; color: #ece7dc; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.three-seat-summary small { color: #74767d; font-size: 7px; text-transform: uppercase; }
+.three-seat-summary > svg { color: var(--seat-color); }
+.three-player-resources { display: flex; flex-wrap: wrap; gap: 7px; font-size: 9px; }
+.three-player-gods { display: flex; gap: 5px; }
+.three-player-gods span { width: 43px; height: 28px; overflow: hidden; border: 1px solid var(--line); }
+.three-player-gods span.resting { opacity: .36; filter: grayscale(1); }
+.three-player-gods img { width: 100%; height: 100%; object-fit: cover; }
+.three-graveyard { color: #72747b; font-size: 7px; text-transform: uppercase; }
+.three-board-column { grid-area: board; min-width: 0; }
+.three-turn-status {
+  min-height: 54px; display: grid; grid-template-columns: auto 1fr; gap: 9px; align-items: center;
+  padding: 9px 12px; border: 1px solid var(--line); border-bottom: 0; background: #11141a;
+}
+.three-turn-status > span { width: 11px; height: 11px; border-radius: 50%; background: var(--seat-color); }
+.three-turn-status strong, .three-turn-status small { display: block; }
+.three-turn-status strong { color: #ddd7cc; font-size: 10px; }
+.three-turn-status small { margin-top: 3px; color: #777981; font-size: 8px; }
+.three-board-frame {
+  width: 100%; height: min(72vh, 760px); min-height: 430px; display: grid; place-items: center;
+  padding: 14px; overflow: hidden; border: 1px solid #705c39;
+  background: radial-gradient(circle, #252932, #101218 72%);
+  box-shadow: 0 24px 64px rgba(0,0,0,.38), inset 0 0 0 3px #0c0e13;
+}
+.three-history-strip {
+  min-height: 38px; display: flex; align-items: center; gap: 8px; padding: 8px 11px;
+  color: #85868d; border: 1px solid var(--line); border-top: 0; font-size: 8px;
+}
+.three-action-panel {
+  grid-area: actions; min-width: 0; max-height: calc(72vh + 92px); overflow: auto;
+  border: 1px solid var(--line); background: linear-gradient(#161920, #101218);
+}
+.three-action-panel > header { padding: 16px; border-bottom: 1px solid var(--line); }
+.three-action-panel h2 { margin: 5px 0 0; color: #ebe5da; font: 600 17px "Cinzel"; }
+.three-pantheon-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; padding: 8px; }
+.three-pantheon-list button {
+  min-width: 0; min-height: 70px; position: relative; overflow: hidden; padding: 0; color: #fff;
+  background: #0c0e13; border: 1px solid var(--line); text-align: left;
+}
+.three-pantheon-list button.active { border-color: var(--gold); }
+.three-pantheon-list button.resting { opacity: .42; filter: grayscale(1); }
+.three-pantheon-list img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .6; }
+.three-pantheon-list span { position: absolute; inset: auto 5px 5px; display: grid; text-shadow: 0 1px 4px #000; }
+.three-pantheon-list strong { overflow: hidden; font-size: 7px; text-overflow: ellipsis; }
+.three-pantheon-list small { font-size: 6px; text-transform: uppercase; }
+.three-ability-list { display: grid; gap: 6px; padding: 8px; }
+.three-ability-list button {
+  display: grid; gap: 6px; padding: 10px; color: #aaa69d; background: rgba(255,255,255,.018);
+  border: 1px solid var(--line); text-align: left;
+}
+.three-ability-list button.active { border-color: rgba(198,161,91,.7); }
+.three-ability-list button > span { display: flex; justify-content: space-between; gap: 8px; }
+.three-ability-list strong { color: #e4ded3; font: 600 10px "Cinzel"; }
+.three-ability-list small, .three-ability-list em { color: #7a7c83; font-size: 7px; font-style: normal; text-transform: uppercase; }
+.three-ability-list p { margin: 0; color: #7f8188; font-size: 8px; line-height: 1.45; }
+.three-generic-actions { display: grid; gap: 6px; padding: 8px; border-top: 1px solid var(--line); }
+.three-generic-actions button { min-height: 40px; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.three-pending-summary, .three-unused-gods {
+  display: grid; gap: 5px; padding: 11px; color: #797b82; border-top: 1px solid var(--line); font-size: 7px;
+}
+.three-pending-summary strong, .three-unused-gods > strong { color: #c7c1b6; font: 600 9px "Cinzel"; }
+.three-unused-gods > div { display: flex; gap: 5px; }
+.three-unused-gods button { width: 44px; height: 35px; padding: 0; overflow: hidden; background: #0b0d12; border: 1px solid var(--line); }
+.three-unused-gods img { width: 100%; height: 100%; object-fit: cover; filter: grayscale(.6); }
+.three-history { padding: 11px; border-top: 1px solid var(--line); color: #85878d; font-size: 8px; }
+.three-history summary { cursor: pointer; color: #c2bdb2; }
+.three-history ol { display: grid; gap: 5px; padding-left: 17px; }
+.three-rules-modal p { color: #85868d; line-height: 1.65; }
+.three-game-page.input-gated .three-board { cursor: wait; }
+
+@media (max-width: 1100px) {
+  .three-variant-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .three-game-layout {
+    grid-template-columns: minmax(390px, 1fr) minmax(280px, 340px);
+    grid-template-areas: "players players" "board actions";
+  }
+  .three-player-panels { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 760px) {
+  .three-setup-page { padding: 28px 12px; }
+  .three-setup-header { padding-right: 42px; }
+  .three-variant-grid { grid-template-columns: 1fr 1fr; }
+  .three-variant-card { min-height: 186px; grid-template-rows: 110px auto 1fr; }
+  .three-variant-preview .three-board { height: 104px; }
+  .three-setup-options, .three-seat-setup-grid, .three-setup-footer { grid-template-columns: 1fr; }
+  .three-draft-grid { grid-template-columns: 1fr 1fr; }
+  .three-game-layout {
+    width: 100%; grid-template-columns: 1fr; grid-template-areas: "players" "board" "actions";
+    margin-top: 0;
+  }
+  .three-player-panels { grid-template-columns: 1fr; gap: 0; }
+  .three-player-panel { border-left: 0; border-right: 0; }
+  .three-board-frame { height: min(72vh, 620px); min-height: 390px; padding: 7px; border-left: 0; border-right: 0; }
+  .three-action-panel { max-height: none; border-left: 0; border-right: 0; }
+  .three-game-topbar { padding-inline: 12px; }
+  .three-game-topbar .secondary-button { min-width: 44px; }
+  .three-game-menu { right: 12px; }
+  .three-cell-hit { -webkit-tap-highlight-color: transparent; }
+}
+
+@media (max-width: 430px) {
+  .three-variant-grid, .three-draft-grid { grid-template-columns: 1fr; }
+  .three-variant-card { grid-template-columns: 120px 1fr; grid-template-rows: auto 1fr; min-height: 128px; }
+  .three-variant-preview { grid-row: 1 / 3; }
+  .three-variant-card small { align-self: start; }
+  .three-board-frame { min-height: 340px; height: 58vh; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .three-board-cell { transition: none; }
+}
+
 /* Four-player local */
 .game-mode-grid { grid-template-columns: repeat(auto-fit, minmax(138px, 1fr)); }
 .four-player-crest {

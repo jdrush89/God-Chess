@@ -2,10 +2,12 @@
 
 import { describe, expect, it } from "vitest";
 import { createFourPlayerGame, fourPlayerReducer } from "./game/fourPlayerEngine";
+import { createThreePlayerGame, threePlayerReducer } from "./game/threePlayerEngine";
 import { createGame } from "./game/engine";
 import {
   createSavedGame,
   isFourPlayerSavedGame,
+  isThreePlayerSavedGame,
   LEGACY_SAVE_KEY,
   loadLocalSavedGames,
   normalizeSavedGame,
@@ -36,6 +38,33 @@ describe("saved-game variants", () => {
       undoHistory: [createGame(1)],
     };
     expect(normalizeSavedGame(malformed)).toBeUndefined();
+  });
+
+  it("normalizes strict three-player states and matching undo snapshots", () => {
+    const initial = createThreePlayerGame();
+    const state = threePlayerReducer(initial, {
+      type: "draft",
+      godId: "ares",
+    });
+    const saved = createSavedGame("three", state, [initial], initial);
+    const normalized = normalizeSavedGame(JSON.parse(JSON.stringify(saved)));
+    expect(normalized && isThreePlayerSavedGame(normalized)).toBe(true);
+    if (!normalized || !isThreePlayerSavedGame(normalized)) return;
+    expect(normalized.state.variant).toBe("three-player");
+    expect(normalized.state.players.white.gods).toEqual(["ares"]);
+    expect(normalized.undoHistory).toHaveLength(1);
+    expect(normalized.turnStart?.variant).toBe("three-player");
+  });
+
+  it("rejects mixed three-player undo histories", () => {
+    const state = createThreePlayerGame();
+    expect(normalizeSavedGame({
+      version: 3,
+      id: "mixed-three",
+      savedAt: new Date().toISOString(),
+      state,
+      undoHistory: [createFourPlayerGame()],
+    })).toBeUndefined();
   });
 
   it("continues normalizing existing two-player saves", () => {

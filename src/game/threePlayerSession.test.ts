@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { createDefaultThreePlayerConfig } from "./threePlayerConfig";
 import {
+  availableThreePlayerActions,
   createThreePlayerGame,
   threePlayerReducer,
 } from "./threePlayerEngine";
+import { threePlayerLegalMoves } from "./threePlayerChess";
 import {
   applyAuthorizedThreePlayerAction,
   approveThreePlayerUndo,
@@ -15,6 +17,7 @@ import {
   normalizeThreePlayerStateEnvelope,
 } from "./threePlayerSession";
 import { GODS } from "./gods";
+import { getThreePlayerTopology } from "./threePlayerTopology";
 
 describe("three-player session boundaries", () => {
   it("normalizes exact action shapes and rejects extra keys", () => {
@@ -32,6 +35,47 @@ describe("three-player session boundaries", () => {
       from: "not-a-cell",
       to: "also-not-a-cell",
     })).toBeUndefined();
+
+    const yalta = getThreePlayerTopology("three-player");
+    const circular = getThreePlayerTopology("three-circular");
+    const cell = yalta.cells[0];
+    const trace = yalta.rookTraces(cell)[0];
+    const actions = [
+      { type: "select-god", godId: GODS[0].id },
+      { type: "clear-god" },
+      { type: "select-ability", abilityId: GODS[0].abilities[0].id },
+      { type: "confirm-ability" },
+      { type: "cell", cell },
+      { type: "path", pathId: trace.id },
+      { type: "seat", seat: "red" },
+      { type: "grave", pieceId: "piece-1" },
+      { type: "choice", value: true },
+      { type: "amount", amount: 2 },
+      { type: "orb", orb: "dark" },
+      { type: "orb" },
+      { type: "pass" },
+      { type: "cancel" },
+      { type: "upgrade", abilityId: GODS[0].abilities[0].id },
+      { type: "restart" },
+    ] as const;
+    for (const action of actions) {
+      expect(normalizeThreePlayerAction(action), action.type).toEqual(action);
+      expect(normalizeThreePlayerAction({ ...action, extra: true }), action.type)
+        .toBeUndefined();
+    }
+    expect(normalizeThreePlayerAction({
+      type: "move",
+      from: yalta.cells[0],
+      to: circular.cells[0],
+    })).toBeUndefined();
+    expect(normalizeThreePlayerAction({
+      type: "path",
+      pathId: "three-player:missing",
+    })).toBeUndefined();
+    expect(normalizeThreePlayerAction({ type: "amount", amount: 3 }))
+      .toBeUndefined();
+    expect(normalizeThreePlayerAction({ type: "orb", orb: "red" }))
+      .toBeUndefined();
   });
 
   it("authorizes only the active online participant at the expected revision", () => {
@@ -84,6 +128,34 @@ describe("three-player session boundaries", () => {
       },
       0,
     )).toThrow(/revision/i);
+  });
+
+  it("rejects normalized actions outside the currently enumerated boundary", () => {
+    const config = createDefaultThreePlayerConfig();
+    for (const seat of ["white", "red", "black"] as const) {
+      config.seats[seat].control = {
+        kind: "online",
+        participantId: `${seat}-player`,
+      };
+    }
+    let state = createThreePlayerGame(config);
+    while (state.phase === "draft") {
+      state = threePlayerReducer(state, availableThreePlayerActions(state)[0]);
+    }
+    const move = threePlayerLegalMoves(state, state.activeSeat)[0];
+    expect(move).toBeTruthy();
+    expect(canParticipantSubmitThreePlayerAction(
+      state,
+      "white-player",
+      "white",
+      { type: "move", ...move },
+    )).toBe(false);
+    expect(canParticipantSubmitThreePlayerAction(
+      state,
+      "white-player",
+      "white",
+      availableThreePlayerActions(state)[0],
+    )).toBe(true);
   });
 
   it("normalizes revisioned snapshots and requires unanimous undo consent", () => {

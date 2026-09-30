@@ -4,6 +4,11 @@ import {
   prepareFourPlayerState,
 } from "./game/fourPlayerPersistence";
 import type { FourPlayerState } from "./game/fourPlayerTypes";
+import {
+  isThreePlayerState,
+  prepareThreePlayerState,
+} from "./game/threePlayerPersistence";
+import type { ThreePlayerState } from "./game/threePlayerTypes";
 import { GOD_BY_ID, GODS } from "./game/gods";
 import type {
   ActionPresentation,
@@ -42,12 +47,28 @@ export interface FourPlayerSavedGame {
   turnStart?: FourPlayerState;
 }
 
-export type SavedGame = TwoPlayerSavedGame | FourPlayerSavedGame;
-export type SavedGameState = GameState | FourPlayerState;
+export interface ThreePlayerSavedGame {
+  version: 3;
+  id: string;
+  savedAt: string;
+  state: ThreePlayerState;
+  undoHistory: ThreePlayerState[];
+  turnStart?: ThreePlayerState;
+}
+
+export type SavedGame =
+  | TwoPlayerSavedGame
+  | FourPlayerSavedGame
+  | ThreePlayerSavedGame;
+export type SavedGameState = GameState | FourPlayerState | ThreePlayerState;
 
 export const isFourPlayerSavedGame = (
   game: SavedGame,
 ): game is FourPlayerSavedGame => isFourPlayerState(game.state);
+
+export const isThreePlayerSavedGame = (
+  game: SavedGame,
+): game is ThreePlayerSavedGame => isThreePlayerState(game.state);
 
 interface StoredSavedGame {
   version?: number;
@@ -401,10 +422,11 @@ export const prepareTwoPlayerState = (state: GameState) => {
 
 export function prepareSavedState(state: GameState): GameState;
 export function prepareSavedState(state: FourPlayerState): FourPlayerState;
+export function prepareSavedState(state: ThreePlayerState): ThreePlayerState;
 export function prepareSavedState(state: SavedGameState): SavedGameState {
-  return isFourPlayerState(state)
-    ? prepareFourPlayerState(state)
-    : prepareTwoPlayerState(state);
+  if (isFourPlayerState(state)) return prepareFourPlayerState(state);
+  if (isThreePlayerState(state)) return prepareThreePlayerState(state);
+  return prepareTwoPlayerState(state);
 }
 
 export const isTwoPlayerGameState = (state: unknown): state is GameState => {
@@ -565,10 +587,20 @@ export const isStrictOnlineTwoPlayerGameState = (
   state.puzzlePlayerTurnsRemaining === undefined &&
   state.puzzleFailed === undefined;
 
-const isSavedGameState = (state: unknown): state is SavedGameState =>
-  Boolean(
-    isFourPlayerState(state) || isTwoPlayerGameState(state),
-  );
+const prepareSavedGameState = (
+  state: unknown,
+): SavedGameState | undefined => {
+  if (isFourPlayerState(state)) return prepareFourPlayerState(state);
+  if (isRecord(state) && state.variant === "three-player") {
+    try {
+      return prepareThreePlayerState(state);
+    } catch {
+      return undefined;
+    }
+  }
+  if (isTwoPlayerGameState(state)) return prepareTwoPlayerState(state);
+  return undefined;
+};
 
 export const saveId = () => globalThis.crypto?.randomUUID?.() ??
   `save-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -581,10 +613,11 @@ const normalizeSavedGameValue = (value: unknown): SavedGame | undefined => {
     typeof saved.id !== "string" ||
     !saved.id ||
     typeof saved.savedAt !== "string" ||
-    !saved.savedAt ||
-    !isSavedGameState(saved.state)
+    !saved.savedAt
   ) return undefined;
-  if (isFourPlayerState(saved.state)) {
+  const state = prepareSavedGameState(saved.state);
+  if (!state) return undefined;
+  if (isFourPlayerState(state)) {
     const undoHistory = (Array.isArray(saved.undoHistory) ? saved.undoHistory : []);
     if (undoHistory.some((state) => !isFourPlayerState(state))) return undefined;
     if (saved.turnStart !== undefined && !isFourPlayerState(saved.turnStart)) return undefined;
@@ -592,13 +625,35 @@ const normalizeSavedGameValue = (value: unknown): SavedGame | undefined => {
       version: 3,
       id: saved.id,
       savedAt: saved.savedAt,
-      state: prepareFourPlayerState(saved.state),
+      state,
       undoHistory: undoHistory.map((state) => prepareFourPlayerState(state as FourPlayerState)),
       turnStart: saved.turnStart
         ? prepareFourPlayerState(saved.turnStart as FourPlayerState)
         : undefined,
     };
   }
+  if (isThreePlayerState(state)) {
+    const undoHistory = (Array.isArray(saved.undoHistory) ? saved.undoHistory : [])
+      .map((snapshot) => prepareSavedGameState(snapshot));
+    if (
+      undoHistory.some((snapshot) => !snapshot || !isThreePlayerState(snapshot))
+    ) return undefined;
+    const turnStart = saved.turnStart === undefined
+      ? undefined
+      : prepareSavedGameState(saved.turnStart);
+    if (turnStart !== undefined && !isThreePlayerState(turnStart)) {
+      return undefined;
+    }
+    return {
+      version: 3,
+      id: saved.id,
+      savedAt: saved.savedAt,
+      state,
+      undoHistory: undoHistory as ThreePlayerState[],
+      turnStart,
+    };
+  }
+  if (!isTwoPlayerGameState(state)) return undefined;
   const undoHistory = (Array.isArray(saved.undoHistory) ? saved.undoHistory : []);
   if (undoHistory.some((state) => !isTwoPlayerGameState(state))) return undefined;
   if (saved.turnStart !== undefined && !isTwoPlayerGameState(saved.turnStart)) return undefined;
@@ -606,7 +661,7 @@ const normalizeSavedGameValue = (value: unknown): SavedGame | undefined => {
     version: 3,
     id: saved.id,
     savedAt: saved.savedAt,
-    state: prepareTwoPlayerState(saved.state),
+    state: prepareTwoPlayerState(state),
     undoHistory: undoHistory.map((state) => prepareTwoPlayerState(state as GameState)),
     turnStart: isTwoPlayerGameState(saved.turnStart)
       ? prepareTwoPlayerState(saved.turnStart)
@@ -691,6 +746,12 @@ export function createSavedGame(
 ): FourPlayerSavedGame;
 export function createSavedGame(
   id: string,
+  state: ThreePlayerState,
+  undoHistory: ThreePlayerState[],
+  turnStart?: ThreePlayerState,
+): ThreePlayerSavedGame;
+export function createSavedGame(
+  id: string,
   state: SavedGameState,
   undoHistory: SavedGameState[],
   turnStart?: SavedGameState,
@@ -712,6 +773,26 @@ export function createSavedGame(
       ),
       turnStart: turnStart
         ? prepareFourPlayerState(turnStart as FourPlayerState)
+        : undefined,
+    };
+  }
+  if (isThreePlayerState(state)) {
+    if (
+      undoHistory.some((snapshot) => !isThreePlayerState(snapshot)) ||
+      (turnStart !== undefined && !isThreePlayerState(turnStart))
+    ) {
+      throw new Error("Three-player saves require three-player undo snapshots.");
+    }
+    return {
+      version: 3,
+      id,
+      savedAt: new Date().toISOString(),
+      state: prepareThreePlayerState(state),
+      undoHistory: undoHistory.map((snapshot) =>
+        prepareThreePlayerState(snapshot as ThreePlayerState)
+      ),
+      turnStart: turnStart
+        ? prepareThreePlayerState(turnStart as ThreePlayerState)
         : undefined,
     };
   }

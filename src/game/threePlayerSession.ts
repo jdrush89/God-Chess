@@ -1,4 +1,7 @@
-import { threePlayerReducer } from "./threePlayerEngine";
+import {
+  availableThreePlayerActions,
+  threePlayerReducer,
+} from "./threePlayerEngine";
 import {
   isThreePlayerPromotion,
   prepareThreePlayerState,
@@ -8,6 +11,8 @@ import {
   THREE_PLAYER_BOARD_VARIANTS,
   THREE_PLAYER_SEATS,
   type ThreePlayerAction,
+  type ThreePlayerBoardVariant,
+  type ThreePlayerOrbAffinity,
   type ThreePlayerSeat,
   type ThreePlayerState,
 } from "./threePlayerTypes";
@@ -37,11 +42,15 @@ export interface ThreePlayerUndoProposal {
 }
 
 const GOD_IDS = new Set(GODS.map((god) => god.id));
+const ABILITY_IDS = new Set(
+  GODS.flatMap((god) => god.abilities.map((ability) => ability.id)),
+);
 const VALID_CELLS = new Set(
   THREE_PLAYER_BOARD_VARIANTS.flatMap(
     (variant) => getThreePlayerTopology(variant).cells,
   ),
 );
+const ORB_AFFINITIES = new Set<ThreePlayerOrbAffinity>(["light", "dark"]);
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -63,6 +72,18 @@ const isGodId = (value: unknown): value is GodId =>
   typeof value === "string" && GOD_IDS.has(value as GodId);
 const isCell = (value: unknown): value is string =>
   typeof value === "string" && VALID_CELLS.has(value);
+const cellVariant = (value: string): ThreePlayerBoardVariant | undefined =>
+  THREE_PLAYER_BOARD_VARIANTS.find((variant) =>
+    getThreePlayerTopology(variant).cellSet.has(value)
+  );
+const pathVariant = (value: unknown): ThreePlayerBoardVariant | undefined =>
+  typeof value === "string"
+    ? THREE_PLAYER_BOARD_VARIANTS.find((variant) =>
+      Boolean(getThreePlayerTopology(variant).trace(value))
+    )
+    : undefined;
+const isAbilityId = (value: unknown): value is string =>
+  typeof value === "string" && ABILITY_IDS.has(value);
 
 export const normalizeThreePlayerAction = (
   value: unknown,
@@ -73,11 +94,78 @@ export const normalizeThreePlayerAction = (
       ? { type: "draft", godId: value.godId }
       : undefined;
   }
+  if (value.type === "select-god") {
+    return hasExactKeys(value, ["type", "godId"]) && isGodId(value.godId)
+      ? { type: "select-god", godId: value.godId }
+      : undefined;
+  }
+  if (value.type === "clear-god" || value.type === "confirm-ability" ||
+      value.type === "pass" || value.type === "cancel" ||
+      value.type === "restart") {
+    return hasExactKeys(value, ["type"])
+      ? { type: value.type }
+      : undefined;
+  }
+  if (value.type === "select-ability" || value.type === "upgrade") {
+    if (
+      !hasExactKeys(value, ["type", "abilityId"]) ||
+      !isAbilityId(value.abilityId)
+    ) return undefined;
+    return { type: value.type, abilityId: value.abilityId };
+  }
+  if (value.type === "cell") {
+    return hasExactKeys(value, ["type", "cell"]) && isCell(value.cell)
+      ? { type: "cell", cell: value.cell }
+      : undefined;
+  }
+  if (value.type === "path") {
+    return hasExactKeys(value, ["type", "pathId"]) &&
+        typeof value.pathId === "string" && pathVariant(value.pathId)
+      ? { type: "path", pathId: value.pathId }
+      : undefined;
+  }
+  if (value.type === "seat") {
+    return hasExactKeys(value, ["type", "seat"]) && isSeat(value.seat)
+      ? { type: "seat", seat: value.seat }
+      : undefined;
+  }
+  if (value.type === "grave") {
+    return hasExactKeys(value, ["type", "pieceId"]) &&
+        isNonEmptyString(value.pieceId)
+      ? { type: "grave", pieceId: value.pieceId }
+      : undefined;
+  }
+  if (value.type === "choice") {
+    return hasExactKeys(value, ["type", "value"]) &&
+        typeof value.value === "boolean"
+      ? { type: "choice", value: value.value }
+      : undefined;
+  }
+  if (value.type === "amount") {
+    return hasExactKeys(value, ["type", "amount"]) &&
+        [0, 1, 2].includes(Number(value.amount)) &&
+        Number.isInteger(value.amount)
+      ? { type: "amount", amount: value.amount as 0 | 1 | 2 }
+      : undefined;
+  }
+  if (value.type === "orb") {
+    return hasExactKeys(value, ["type"], ["orb"]) &&
+        (value.orb === undefined ||
+          ORB_AFFINITIES.has(value.orb as ThreePlayerOrbAffinity))
+      ? {
+        type: "orb",
+        ...(value.orb !== undefined
+          ? { orb: value.orb as ThreePlayerOrbAffinity }
+          : {}),
+      }
+      : undefined;
+  }
   if (value.type === "move") {
     if (
       !hasExactKeys(value, ["type", "from", "to"], ["promotion"]) ||
       !isCell(value.from) ||
       !isCell(value.to) ||
+      cellVariant(value.from) !== cellVariant(value.to) ||
       (
         value.promotion !== undefined &&
         !isThreePlayerPromotion(value.promotion)
@@ -98,10 +186,20 @@ export const normalizeThreePlayerAction = (
       return undefined;
     }
   }
-  if (value.type === "restart") {
-    return hasExactKeys(value, ["type"]) ? { type: "restart" } : undefined;
-  }
   return undefined;
+};
+
+const actionMatchesVariant = (
+  state: ThreePlayerState,
+  action: ThreePlayerAction,
+) => {
+  const topology = getThreePlayerTopology(state.config.boardVariant);
+  if (action.type === "move") {
+    return topology.cellSet.has(action.from) && topology.cellSet.has(action.to);
+  }
+  if (action.type === "cell") return topology.cellSet.has(action.cell);
+  if (action.type === "path") return Boolean(topology.trace(action.pathId));
+  return true;
 };
 
 export const normalizeThreePlayerActionEnvelope = (
@@ -159,12 +257,16 @@ export const canParticipantSubmitThreePlayerAction = (
   if (!action || state.phase === "gameover" || state.activeSeat !== seat) {
     return false;
   }
+  if (!actionMatchesVariant(state, action)) return false;
   if (action.type === "load" || action.type === "restart") return false;
   const control = state.config.seats[seat].control;
   if (
     control.kind !== "online" ||
     control.participantId !== participantId
   ) return false;
+  if (!availableThreePlayerActions(state).some(
+    (available) => JSON.stringify(available) === JSON.stringify(action),
+  )) return false;
   return threePlayerReducer(state, action) !== state;
 };
 

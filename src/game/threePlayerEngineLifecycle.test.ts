@@ -107,7 +107,6 @@ vi.mock("./threePlayerChess", () => {
 
 import { threePlayerPieceAffinity } from "./threePlayerConfig";
 import {
-  availableThreePlayerActions,
   createThreePlayerGame,
   threePlayerReducer,
 } from "./threePlayerEngine";
@@ -120,6 +119,17 @@ const finishDraft = (
   state,
 );
 
+const playLegacyMove = (state: ThreePlayerState) => {
+  const from = Object.entries(state.board).find(
+    ([, piece]) => piece.controller === state.activeSeat,
+  )?.[0]!;
+  return threePlayerReducer(state, {
+    type: "move",
+    from,
+    to: `${state.activeSeat}-target-${state.positionRevision}`,
+  });
+};
+
 beforeEach(() => {
   mockedChess.mode = "normal";
 });
@@ -129,7 +139,7 @@ describe("three-player turn-start resolution", () => {
     mockedChess.mode = "red-skip-once";
     let state = finishDraft();
 
-    state = threePlayerReducer(state, availableThreePlayerActions(state)[0]);
+    state = playLegacyMove(state);
     expect(state.activeSeat).toBe("black");
     expect(state.completedTurns.red).toBe(0);
     const redPiece = Object.values(state.board).find(
@@ -137,13 +147,13 @@ describe("three-player turn-start resolution", () => {
     )!;
     expect(threePlayerPieceAffinity(state, redPiece)).toBe("light");
 
-    state = threePlayerReducer(state, availableThreePlayerActions(state)[0]);
+    state = playLegacyMove(state);
     expect(state.activeSeat).toBe("white");
-    state = threePlayerReducer(state, availableThreePlayerActions(state)[0]);
+    state = playLegacyMove(state);
     expect(state.activeSeat).toBe("red");
     expect(state.passCycle.passedSeats).toEqual([]);
 
-    state = threePlayerReducer(state, availableThreePlayerActions(state)[0]);
+    state = playLegacyMove(state);
     expect(state.completedTurns.red).toBe(1);
     expect(threePlayerPieceAffinity(state, redPiece)).toBe("dark");
   });

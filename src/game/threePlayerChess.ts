@@ -1,6 +1,7 @@
 import { getThreePlayerTopology } from "./threePlayerTopology";
 import {
   THREE_PLAYER_SEATS,
+  type ThreePlayerBanana,
   type ThreePlayerBoardVariant,
   type ThreePlayerCastlingRights,
   type ThreePlayerCell,
@@ -29,6 +30,13 @@ export interface ThreePlayerAppliedMove {
 export interface ThreePlayerMoveOptions {
   attacksOnly?: boolean;
   ignoreCheck?: boolean;
+  ignoreBlockers?: boolean;
+  noCapture?: boolean;
+  maxDistance?: number;
+  forceType?: ThreePlayerPiece["type"];
+  includeAlliedTargets?: boolean;
+  pathId?: string;
+  bananas?: readonly ThreePlayerBanana[];
 }
 
 const topologyFor = (state: Pick<ThreePlayerState, "config">) =>
@@ -38,12 +46,22 @@ const canTarget = (
   actor: ThreePlayerSeat,
   target: ThreePlayerPiece,
   attacksOnly = false,
+  includeAlliedTargets = false,
 ) => {
-  const hostile = target.controller === null || target.controller !== actor;
+  const hostile = target.controller === null || target.controller !== actor ||
+    includeAlliedTargets;
   if (!hostile) return false;
   if (target.type === "king") return attacksOnly;
   return !target.status.hardened;
 };
+
+const stoppedByBanana = (
+  bananas: readonly ThreePlayerBanana[],
+  target: ThreePlayerCell,
+  actor: ThreePlayerSeat,
+) => bananas.some((banana) =>
+  banana.cell === target && banana.owner !== actor
+);
 
 const uniqueCells = (cells: ThreePlayerCell[]) => [...new Set(cells)];
 
@@ -85,7 +103,7 @@ const rayTargets = (
   from: ThreePlayerCell,
   actor: ThreePlayerSeat,
   kind: "rook" | "bishop",
-  attacksOnly: boolean,
+  options: ThreePlayerMoveOptions,
 ) => {
   const topology = topologyFor(state);
   const rays = kind === "rook"
@@ -93,15 +111,31 @@ const rayTargets = (
     : topology.bishopRays(from);
   const targets: ThreePlayerCell[] = [];
   for (const ray of rays) {
-    for (const target of ray.cells) {
+    if (options.pathId && ray.id !== options.pathId) continue;
+    for (const [index, target] of ray.cells.entries()) {
+      if (index >= (options.maxDistance ?? Number.POSITIVE_INFINITY)) break;
       if (target === from) break;
       const occupying = state.board[target];
+      const banana = stoppedByBanana(
+        options.bananas ?? state.bananas ?? [],
+        target,
+        actor,
+      );
       if (!occupying) {
         targets.push(target);
+        if (banana) break;
         continue;
       }
-      if (canTarget(actor, occupying, attacksOnly)) targets.push(target);
-      break;
+      if (
+        !options.noCapture &&
+        canTarget(
+          actor,
+          occupying,
+          Boolean(options.attacksOnly),
+          options.includeAlliedTargets,
+        )
+      ) targets.push(target);
+      if (!options.ignoreBlockers) break;
     }
   }
   return uniqueCells(targets);
@@ -112,10 +146,10 @@ const pawnTargets = (
   from: ThreePlayerCell,
   piece: ThreePlayerPiece,
   actor: ThreePlayerSeat,
-  attacksOnly: boolean,
+  options: ThreePlayerMoveOptions,
 ) => {
   const rules = topologyFor(state).pawnRules(piece.owner, from);
-  if (attacksOnly) return rules.captures.map((capture) => capture.to);
+  if (options.attacksOnly) return rules.captures.map((capture) => capture.to);
   const targets: ThreePlayerCell[] = [];
   for (const capture of rules.captures) {
     const occupying = state.board[capture.to];
@@ -124,15 +158,28 @@ const pawnTargets = (
       ? state.board[state.enPassant.capturedCell]
       : undefined;
     if (
-      occupying && canTarget(actor, occupying) ||
+      occupying && canTarget(
+        actor,
+        occupying,
+        false,
+        options.includeAlliedTargets,
+      ) ||
       enPassantPawn &&
         enPassantPawn.type === "pawn" &&
-        canTarget(actor, enPassantPawn)
+        canTarget(actor, enPassantPawn, false, options.includeAlliedTargets)
     ) targets.push(capture.to);
   }
   for (const advance of rules.advances) {
     if (advance.initialOnly && piece.hasMoved) continue;
-    if (advance.path.some((cell) => state.board[cell])) continue;
+    if (!options.ignoreBlockers && advance.path.some((cell) => state.board[cell])) {
+      continue;
+    }
+    if (state.board[advance.to]) continue;
+    if (
+      advance.path.some((cell) =>
+        stoppedByBanana(options.bananas ?? state.bananas ?? [], cell, actor)
+      )
+    ) continue;
     targets.push(advance.to);
   }
   return uniqueCells(targets);
@@ -198,7 +245,9 @@ export const threePlayerPseudoTargets = (
     (piece.status.hardened || piece.status.frozen || piece.status.gazing)
   ) return [];
   const topology = topologyFor(state);
-  const type = piece.status.polymorphed ? "pawn" : piece.type;
+  const type = piece.status.polymorphed
+    ? "pawn"
+    : options.forceType ?? piece.type;
   let targets: ThreePlayerCell[];
   if (type === "pawn") {
     targets = pawnTargets(
@@ -206,7 +255,7 @@ export const threePlayerPseudoTargets = (
       from,
       piece,
       actor,
-      Boolean(options.attacksOnly),
+      options,
     );
   } else if (type === "knight") {
     targets = [...topology.knightTargets(from)];
@@ -216,7 +265,7 @@ export const threePlayerPseudoTargets = (
       from,
       actor,
       "bishop",
-      Boolean(options.attacksOnly),
+      options,
     );
   } else if (type === "rook") {
     targets = rayTargets(
@@ -224,7 +273,7 @@ export const threePlayerPseudoTargets = (
       from,
       actor,
       "rook",
-      Boolean(options.attacksOnly),
+      options,
     );
   } else if (type === "queen") {
     targets = uniqueCells([
@@ -233,19 +282,22 @@ export const threePlayerPseudoTargets = (
         from,
         actor,
         "rook",
-        Boolean(options.attacksOnly),
+        options,
       ),
       ...rayTargets(
         state,
         from,
         actor,
         "bishop",
-        Boolean(options.attacksOnly),
+        options,
       ),
     ]);
   } else {
-    targets = [...topology.kingTargets(from)];
-    if (!options.attacksOnly && piece.owner === actor) {
+    targets = [...topology.kingTargets(from)].filter((target) =>
+      (topology.distance(from, target) ?? Number.POSITIVE_INFINITY) <=
+        (options.maxDistance ?? 1)
+    );
+    if (!options.attacksOnly && !options.forceType && piece.owner === actor) {
       if (canCastle(state, actor, "king")) {
         const descriptor = topology.castling(actor).find(
           (candidate) => candidate.side === "king",
@@ -260,10 +312,23 @@ export const threePlayerPseudoTargets = (
       }
     }
   }
+  if (piece.status.poisoned && !options.attacksOnly) {
+    targets = targets.filter((target) =>
+      (topology.distance(from, target) ?? Number.POSITIVE_INFINITY) <= 3
+    );
+  }
   return uniqueCells(targets).filter((target) => {
     const occupying = state.board[target];
     return !occupying ||
-      canTarget(actor, occupying, Boolean(options.attacksOnly));
+      (
+        !options.noCapture &&
+        canTarget(
+          actor,
+          occupying,
+          Boolean(options.attacksOnly),
+          options.includeAlliedTargets,
+        )
+      );
   });
 };
 
@@ -368,8 +433,12 @@ export const threePlayerApplyMove = (
 
   const movedPiece = {
     ...moving,
-    type: move.promotion ?? moving.type,
+    type: moving.type === "pawn" &&
+        topologyFor(state).isPromotionCell(moving.owner, move.to)
+      ? move.promotion ?? "queen"
+      : moving.type,
     hasMoved: true,
+    status: { ...moving.status, movedThisTurn: true },
   };
   board[move.to] = movedPiece;
 
@@ -458,8 +527,81 @@ export const threePlayerLegalMoves = (
 export const threePlayerLegalTargets = (
   state: ThreePlayerState,
   from: ThreePlayerCell,
+  options: ThreePlayerMoveOptions = {},
 ) => uniqueCells(
-  threePlayerLegalMoves(state)
-    .filter((move) => move.from === from)
-    .map((move) => move.to),
+  options.ignoreCheck
+    ? threePlayerPseudoTargets(state, from, options)
+    : threePlayerPseudoTargets(state, from, options).filter((to) => {
+      const moving = state.board[from];
+      if (!moving?.controller || state.board[to]?.type === "king") return false;
+      const applied = threePlayerApplyMove(state, { from, to });
+      return !threePlayerIsInCheck({
+        ...state,
+        board: applied.board,
+        castlingRights: applied.castlingRights,
+        enPassant: applied.enPassant,
+      }, moving.controller);
+    }),
 );
+
+export const threePlayerPathCells = (
+  state: Pick<ThreePlayerState, "config">,
+  from: ThreePlayerCell,
+  to: ThreePlayerCell,
+  pathId?: string,
+) => {
+  const topology = topologyFor(state);
+  const path = pathId
+    ? topology.path(pathId, to)
+    : topology.paths(from, to)[0];
+  if (!path) return [];
+  const cells = [...path.cells];
+  if (cells.at(-1) === to) cells.pop();
+  return cells;
+};
+
+export const threePlayerLineOfSight = (
+  state: ThreePlayerState,
+  from: ThreePlayerCell,
+  to: ThreePlayerCell,
+  pathId?: string,
+) => {
+  if (from === to) return true;
+  const topology = topologyFor(state);
+  const paths = pathId
+    ? [topology.path(pathId, to)].filter(Boolean)
+    : topology.linePaths(from, to);
+  return paths.some((path) =>
+    path && path.cells.slice(0, -1).every((cell) => !state.board[cell])
+  );
+};
+
+export const threePlayerPieceValue = (type: ThreePlayerPiece["type"]) =>
+  ({ pawn: 1, knight: 3, bishop: 3, rook: 5, queen: 9, king: 100 })[type];
+
+export const threePlayerCanOrdinarilyCapture = (
+  actor: ThreePlayerSeat,
+  target: ThreePlayerPiece,
+) => canTarget(actor, target);
+
+export const threePlayerPiecesAreAllied = (
+  first: ThreePlayerPiece,
+  second: ThreePlayerPiece,
+) => Boolean(
+  first.controller &&
+  second.controller &&
+  first.controller === second.controller
+);
+
+export const threePlayerSimulateMove = (
+  state: ThreePlayerState,
+  move: ThreePlayerMove,
+) => {
+  const applied = threePlayerApplyMove(state, move);
+  return {
+    ...state,
+    board: applied.board,
+    castlingRights: applied.castlingRights,
+    enPassant: applied.enPassant,
+  };
+};

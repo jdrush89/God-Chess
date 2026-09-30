@@ -4,8 +4,10 @@ import {
   THREE_PLAYER_BOARD_VARIANTS,
   THREE_PLAYER_SEATS,
   type ThreePlayerConfig,
+  type ThreePlayerOrbAffinity,
   type ThreePlayerPiece,
   type ThreePlayerPieceStatus,
+  type ThreePlayerPresentationEventKind,
   type ThreePlayerPromotion,
   type ThreePlayerSeat,
   type ThreePlayerSeatControl,
@@ -18,6 +20,9 @@ const GOD_IDS = new Set(GODS.map((god) => god.id));
 const ABILITY_IDS = new Set(
   GODS.flatMap((god) => god.abilities.map((ability) => ability.id)),
 );
+const ABILITY_GODS = new Map(
+  GODS.flatMap((god) => god.abilities.map((ability) => [ability.id, god.id])),
+);
 const PIECE_TYPES = new Set([
   "king",
   "queen",
@@ -26,14 +31,32 @@ const PIECE_TYPES = new Set([
   "knight",
   "pawn",
 ]);
-const PHASES = new Set(["draft", "play", "gameover"]);
+const PHASES = new Set(["draft", "play", "upgrade", "gameover"]);
 const PROMOTIONS = new Set(["queen", "rook", "bishop", "knight"]);
+const ORB_AFFINITIES = new Set<ThreePlayerOrbAffinity>(["light", "dark"]);
+const PRESENTATION_KINDS = new Set<ThreePlayerPresentationEventKind>([
+  "move",
+  "capture",
+  "god",
+  "ability",
+  "upgrade",
+  "orb",
+]);
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
 const isInteger = (value: unknown, minimum = 0): value is number =>
   typeof value === "number" && Number.isInteger(value) && value >= minimum;
 const isUnique = <T>(values: T[]) => new Set(values).size === values.length;
+const hasExactKeys = (
+  value: Record<string, unknown>,
+  required: string[],
+  optional: string[] = [],
+) => {
+  const allowed = new Set([...required, ...optional]);
+  return required.every((key) => Object.hasOwn(value, key)) &&
+    Object.keys(value).every((key) => allowed.has(key));
+};
 const isSeat = (value: unknown): value is ThreePlayerSeat =>
   typeof value === "string" &&
   THREE_PLAYER_SEATS.includes(value as ThreePlayerSeat);
@@ -178,7 +201,18 @@ const isUpgrades = (value: unknown) =>
 
 const isSeatNumberRecord = (value: unknown) =>
   isRecord(value) &&
+  Object.keys(value).length === THREE_PLAYER_SEATS.length &&
   THREE_PLAYER_SEATS.every((seat) => isInteger(value[seat]));
+
+const isGodTurnRecord = (value: unknown) =>
+  isRecord(value) &&
+  Object.keys(value).length === THREE_PLAYER_SEATS.length &&
+  THREE_PLAYER_SEATS.every((seat) => {
+    const turns = value[seat];
+    return isRecord(turns) && Object.entries(turns).every(
+      ([godId, count]) => isGodId(godId) && isInteger(count),
+    );
+  });
 
 const isKingAttackRecency = (value: unknown, attackSequence: number) =>
   isRecord(value) && THREE_PLAYER_SEATS.every((defender) => {
@@ -211,15 +245,13 @@ const expectedPieceController = (
   return takeover ? successor : null;
 };
 
-export const isThreePlayerState = (
-  value: unknown,
-): value is ThreePlayerState => {
+const isThreePlayerStateVersion = (value: unknown): boolean => {
   if (
     !isRecord(value) ||
     "redAffinity" in value ||
     "pieceAffinities" in value ||
     value.variant !== "three-player" ||
-    value.schemaVersion !== 1 ||
+    ![1, 2].includes(Number(value.schemaVersion)) ||
     !isThreePlayerConfig(value.config) ||
     !PHASES.has(String(value.phase)) ||
     !isRecord(value.board) ||
@@ -250,6 +282,18 @@ export const isThreePlayerState = (
 
   const topology = getThreePlayerTopology(value.config.boardVariant);
   const validCells = new Set(topology.cells);
+  const isCell = (candidate: unknown): candidate is string =>
+    typeof candidate === "string" && validCells.has(candidate);
+  const isPathId = (candidate: unknown): candidate is string =>
+    typeof candidate === "string" && Boolean(topology.trace(candidate));
+  const isCellArray = (candidate: unknown): candidate is string[] =>
+    Array.isArray(candidate) && candidate.every(isCell) && isUnique(candidate);
+  const isStringArray = (candidate: unknown): candidate is string[] =>
+    Array.isArray(candidate) &&
+    candidate.every((entry) => typeof entry === "string" && Boolean(entry)) &&
+    isUnique(candidate);
+  const isPathArray = (candidate: unknown): candidate is string[] =>
+    Array.isArray(candidate) && candidate.every(isPathId) && isUnique(candidate);
   const passCycle = value.passCycle as unknown as ThreePlayerState["passCycle"];
   const pieceIds: string[] = [];
   const allPieces: ThreePlayerPiece[] = [];
@@ -325,7 +369,13 @@ export const isThreePlayerState = (
       players,
       takeover,
     );
-    if (expected === undefined || piece.controller !== expected) return false;
+    const hiredControllerIsValid = piece.status.hired === true &&
+      piece.controller !== null &&
+      !players[piece.controller].eliminated;
+    if (
+      expected === undefined ||
+      (!hiredControllerIsValid && piece.controller !== expected)
+    ) return false;
   }
   if (passCycle.passedSeats.some((seat) => players[seat].eliminated)) {
     return false;
@@ -378,6 +428,227 @@ export const isThreePlayerState = (
     value.draft.available.length !== 0 ||
     value.draft.unused.length !== 3
   ) return false;
+
+  if (value.schemaVersion === 2) {
+    if (
+      !isSeatNumberRecord(value.seatTurns) ||
+      !isSeatNumberRecord(value.hostileTurns) ||
+      !isGodTurnRecord(value.godTurns) ||
+      !isSeatArray(value.upgradeQueue) ||
+      !isCellArray(value.legalCells) ||
+      !isSeatArray(value.legalSeats) ||
+      !isPathArray(value.legalPaths) ||
+      !Array.isArray(value.bananas) ||
+      !isRecord(value.stealth) ||
+      !Array.isArray(value.orbEvents) ||
+      !isInteger(value.nextOrbEventId, 1) ||
+      !Array.isArray(value.presentationEvents) ||
+      !isInteger(value.nextPresentationEventId, 1)
+    ) return false;
+
+    if (
+      value.selectedGod !== undefined &&
+      (
+        !isGodId(value.selectedGod) ||
+        !players[value.activeSeat].gods.includes(value.selectedGod)
+      )
+    ) return false;
+    if (
+      value.selectedAbility !== undefined &&
+      (
+        typeof value.selectedAbility !== "string" ||
+        !ABILITY_IDS.has(value.selectedAbility) ||
+        value.selectedGod === undefined ||
+        ABILITY_GODS.get(value.selectedAbility) !== value.selectedGod
+      )
+    ) return false;
+    if (value.selectedCell !== undefined && !isCell(value.selectedCell)) return false;
+    if (value.selectedPath !== undefined && !isPathId(value.selectedPath)) return false;
+    if (
+      value.bonusTurn !== undefined &&
+      (!isSeat(value.bonusTurn) || players[value.bonusTurn].eliminated)
+    ) return false;
+
+    const godTurns = value.godTurns as unknown as Record<
+      ThreePlayerSeat,
+      Record<string, number>
+    >;
+    for (const seat of THREE_PLAYER_SEATS) {
+      if (Object.keys(godTurns[seat]).some((godId) =>
+        !players[seat].gods.includes(godId as GodId)
+      )) return false;
+    }
+    if (
+      value.phase === "upgrade"
+        ? value.upgradeQueue.length === 0 ||
+          value.activeSeat !== value.upgradeQueue[0]
+        : value.upgradeQueue.length !== 0
+    ) return false;
+    if (value.upgradeQueue.some((seat) => players[seat].eliminated)) return false;
+
+    if (value.pending !== undefined) {
+      if (
+        !isRecord(value.pending) ||
+        !hasExactKeys(
+          value.pending,
+          ["godId", "abilityId", "step"],
+          [
+            "source",
+            "destination",
+            "selected",
+            "selectedCellIds",
+            "selectedPieceIds",
+            "selectedPathIds",
+            "movedPieceId",
+            "movesRemaining",
+            "targetSeat",
+          ],
+        ) ||
+        !isGodId(value.pending.godId) ||
+        !players[value.activeSeat].gods.includes(value.pending.godId) ||
+        typeof value.pending.abilityId !== "string" ||
+        ABILITY_GODS.get(value.pending.abilityId) !== value.pending.godId ||
+        typeof value.pending.step !== "string" ||
+        !value.pending.step ||
+        (value.pending.source !== undefined && !isCell(value.pending.source)) ||
+        (value.pending.destination !== undefined &&
+          !isCell(value.pending.destination)) ||
+        (value.pending.selected !== undefined &&
+          !isStringArray(value.pending.selected)) ||
+        (value.pending.selectedCellIds !== undefined &&
+          !isCellArray(value.pending.selectedCellIds)) ||
+        (value.pending.selectedPieceIds !== undefined &&
+          (
+            !isStringArray(value.pending.selectedPieceIds) ||
+            value.pending.selectedPieceIds.some((pieceId) =>
+              !pieceIds.includes(pieceId)
+            )
+          )) ||
+        (value.pending.selectedPathIds !== undefined &&
+          !isPathArray(value.pending.selectedPathIds)) ||
+        (value.pending.movedPieceId !== undefined &&
+          (typeof value.pending.movedPieceId !== "string" ||
+            !pieceIds.includes(value.pending.movedPieceId))) ||
+        (value.pending.movesRemaining !== undefined &&
+          !isInteger(value.pending.movesRemaining)) ||
+        (value.pending.targetSeat !== undefined &&
+          !isSeat(value.pending.targetSeat))
+      ) return false;
+    }
+
+    for (const banana of value.bananas) {
+      if (
+        !isRecord(banana) ||
+        !hasExactKeys(banana, ["cell", "owner", "expires"]) ||
+        !isCell(banana.cell) ||
+        !isSeat(banana.owner) ||
+        !isDuration(banana.expires, ["kangus", "god"])
+      ) return false;
+    }
+    if (!isUnique(value.bananas.map((banana) => banana.cell))) return false;
+
+    for (const seat of THREE_PLAYER_SEATS) {
+      const moves = value.stealth[seat];
+      if (!Array.isArray(moves)) return false;
+      for (const move of moves) {
+        if (
+          !isRecord(move) ||
+          !hasExactKeys(move, ["piece", "destination", "returnOnTurn"]) ||
+          !isPiece(move.piece) ||
+          !isCell(move.destination) ||
+          !isInteger(move.returnOnTurn, 1) ||
+          move.piece.controller !== seat ||
+          players[seat].eliminated
+        ) return false;
+        pieceIds.push(move.piece.id);
+        allPieces.push(move.piece);
+      }
+    }
+    if (!isUnique(pieceIds)) return false;
+
+    const orbIds: number[] = [];
+    for (const event of value.orbEvents) {
+      if (
+        !isRecord(event) ||
+        !hasExactKeys(
+          event,
+          ["id", "player", "orb", "amount", "total", "source"],
+        ) ||
+        !isInteger(event.id, 1) ||
+        !isSeat(event.player) ||
+        !ORB_AFFINITIES.has(event.orb as ThreePlayerOrbAffinity) ||
+        !isInteger(event.amount, 1) ||
+        !isInteger(event.total) ||
+        !isCell(event.source)
+      ) return false;
+      orbIds.push(event.id);
+    }
+    if (
+      !isUnique(orbIds) ||
+      orbIds.some((id) => id >= Number(value.nextOrbEventId))
+    ) return false;
+
+    const presentationIds: number[] = [];
+    for (const event of value.presentationEvents) {
+      if (
+        !isRecord(event) ||
+        !hasExactKeys(
+          event,
+          ["id", "kind"],
+          [
+            "seat",
+            "source",
+            "destination",
+            "pieceId",
+            "godId",
+            "abilityId",
+          ],
+        ) ||
+        !isInteger(event.id, 1) ||
+        !PRESENTATION_KINDS.has(
+          event.kind as ThreePlayerPresentationEventKind,
+        ) ||
+        (event.seat !== undefined && !isSeat(event.seat)) ||
+        (event.source !== undefined && !isCell(event.source)) ||
+        (event.destination !== undefined && !isCell(event.destination)) ||
+        (event.pieceId !== undefined &&
+          (typeof event.pieceId !== "string" || !event.pieceId)) ||
+        (event.godId !== undefined && !isGodId(event.godId)) ||
+        (event.abilityId !== undefined &&
+          (typeof event.abilityId !== "string" ||
+            !ABILITY_IDS.has(event.abilityId)))
+      ) return false;
+      presentationIds.push(event.id);
+    }
+    if (
+      !isUnique(presentationIds) ||
+      presentationIds.some((id) => id >= Number(value.nextPresentationEventId))
+    ) return false;
+  } else {
+    if (value.phase === "upgrade") return false;
+    const layerTwoFields = [
+      "seatTurns",
+      "hostileTurns",
+      "godTurns",
+      "upgradeQueue",
+      "selectedGod",
+      "selectedAbility",
+      "selectedCell",
+      "selectedPath",
+      "legalCells",
+      "legalSeats",
+      "legalPaths",
+      "pending",
+      "bananas",
+      "stealth",
+      "bonusTurn",
+      "orbEvents",
+      "nextOrbEventId",
+      "presentationEvents",
+      "nextPresentationEventId",
+    ];
+    if (layerTwoFields.some((field) => Object.hasOwn(value, field))) return false;
+  }
 
   if (value.enPassant !== undefined) {
     if (
@@ -463,6 +734,13 @@ export const isThreePlayerState = (
   return true;
 };
 
+export const isThreePlayerState = (
+  value: unknown,
+): value is ThreePlayerState =>
+  isRecord(value) &&
+  value.schemaVersion === 2 &&
+  isThreePlayerStateVersion(value);
+
 const emptyRecency = () => ({
   white: {},
   red: {},
@@ -475,15 +753,42 @@ export const prepareThreePlayerState = (value: unknown): ThreePlayerState => {
   }
   const prepared = structuredClone(value) as Record<string, unknown>;
   prepared.schemaVersion ??= 1;
-  prepared.attackSequence ??= 0;
-  prepared.kingAttackRecency ??= emptyRecency();
-  prepared.completedTurns ??= { white: 0, red: 0, black: 0 };
-  prepared.revision ??= 0;
-  prepared.positionRevision ??= 0;
-  prepared.passCycle ??= {
-    positionRevision: prepared.positionRevision,
-    passedSeats: [],
-  };
+  if (prepared.schemaVersion === 1) {
+    prepared.attackSequence ??= 0;
+    prepared.kingAttackRecency ??= emptyRecency();
+    prepared.completedTurns ??= { white: 0, red: 0, black: 0 };
+    prepared.revision ??= 0;
+    prepared.positionRevision ??= 0;
+    prepared.passCycle ??= {
+      positionRevision: prepared.positionRevision,
+      passedSeats: [],
+    };
+    if (!isThreePlayerStateVersion(prepared)) {
+      throw new Error("Cannot serialize an invalid three-player state.");
+    }
+    const completed = prepared.completedTurns as Record<
+      ThreePlayerSeat,
+      number
+    >;
+    prepared.schemaVersion = 2;
+    prepared.seatTurns = structuredClone(completed);
+    prepared.hostileTurns = {
+      white: completed.red + completed.black,
+      red: completed.white + completed.black,
+      black: completed.white + completed.red,
+    };
+    prepared.godTurns = { white: {}, red: {}, black: {} };
+    prepared.upgradeQueue = [];
+    prepared.legalCells = [];
+    prepared.legalSeats = [];
+    prepared.legalPaths = [];
+    prepared.bananas = [];
+    prepared.stealth = { white: [], red: [], black: [] };
+    prepared.orbEvents = [];
+    prepared.nextOrbEventId = 1;
+    prepared.presentationEvents = [];
+    prepared.nextPresentationEventId = 1;
+  }
   if (!isThreePlayerState(prepared)) {
     throw new Error("Cannot serialize an invalid three-player state.");
   }

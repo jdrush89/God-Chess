@@ -13,7 +13,7 @@ export const THREE_PLAYER_BOARD_VARIANTS = [
 export type ThreePlayerBoardVariant = (typeof THREE_PLAYER_BOARD_VARIANTS)[number];
 export type ThreePlayerCell = string;
 export type ThreePlayerOrbAffinity = "light" | "dark";
-export type ThreePlayerPhase = "draft" | "play" | "gameover";
+export type ThreePlayerPhase = "draft" | "play" | "upgrade" | "gameover";
 export type ThreePlayerVictoryMode = "first-checkmate" | "last-survivor";
 
 export type ThreePlayerSeatControl =
@@ -103,6 +103,61 @@ export interface ThreePlayerPassCycle {
   passedSeats: ThreePlayerSeat[];
 }
 
+export interface ThreePlayerBanana {
+  cell: ThreePlayerCell;
+  owner: ThreePlayerSeat;
+  expires: number | "kangus" | "god";
+}
+
+export interface ThreePlayerStealthMove {
+  piece: ThreePlayerPiece;
+  destination: ThreePlayerCell;
+  returnOnTurn: number;
+}
+
+export interface ThreePlayerOrbEvent {
+  id: number;
+  player: ThreePlayerSeat;
+  orb: ThreePlayerOrbAffinity;
+  amount: number;
+  total: number;
+  source: ThreePlayerCell;
+}
+
+export type ThreePlayerPresentationEventKind =
+  | "move"
+  | "capture"
+  | "god"
+  | "ability"
+  | "upgrade"
+  | "orb";
+
+export interface ThreePlayerPresentationEvent {
+  id: number;
+  kind: ThreePlayerPresentationEventKind;
+  seat?: ThreePlayerSeat;
+  source?: ThreePlayerCell;
+  destination?: ThreePlayerCell;
+  pieceId?: string;
+  godId?: GodId;
+  abilityId?: string;
+}
+
+export interface ThreePlayerPendingAction {
+  godId: GodId;
+  abilityId: string;
+  step: string;
+  source?: ThreePlayerCell;
+  destination?: ThreePlayerCell;
+  selected?: string[];
+  selectedCellIds?: ThreePlayerCell[];
+  selectedPieceIds?: string[];
+  selectedPathIds?: string[];
+  movedPieceId?: string;
+  movesRemaining?: number;
+  targetSeat?: ThreePlayerSeat;
+}
+
 export type ThreePlayerResult =
   | {
     kind: "winner";
@@ -116,7 +171,7 @@ export type ThreePlayerResult =
 
 export interface ThreePlayerState {
   variant: "three-player";
-  schemaVersion: 1;
+  schemaVersion: 2;
   phase: ThreePlayerPhase;
   config: ThreePlayerConfig;
   board: Record<ThreePlayerCell, ThreePlayerPiece>;
@@ -128,8 +183,27 @@ export interface ThreePlayerState {
   round: number;
   turn: number;
   completedTurns: Record<ThreePlayerSeat, number>;
+  seatTurns: Record<ThreePlayerSeat, number>;
+  hostileTurns: Record<ThreePlayerSeat, number>;
+  godTurns: Record<ThreePlayerSeat, Partial<Record<GodId, number>>>;
+  upgradeQueue: ThreePlayerSeat[];
+  selectedGod?: GodId;
+  selectedAbility?: string;
+  selectedCell?: ThreePlayerCell;
+  selectedPath?: string;
+  legalCells: ThreePlayerCell[];
+  legalSeats: ThreePlayerSeat[];
+  legalPaths: string[];
+  pending?: ThreePlayerPendingAction;
   castlingRights: Record<ThreePlayerSeat, ThreePlayerCastlingRights>;
   enPassant?: ThreePlayerEnPassant;
+  bananas: ThreePlayerBanana[];
+  stealth: Record<ThreePlayerSeat, ThreePlayerStealthMove[]>;
+  bonusTurn?: ThreePlayerSeat;
+  orbEvents: ThreePlayerOrbEvent[];
+  nextOrbEventId: number;
+  presentationEvents: ThreePlayerPresentationEvent[];
+  nextPresentationEventId: number;
   attackSequence: number;
   kingAttackRecency: Record<
     ThreePlayerSeat,
@@ -157,6 +231,20 @@ export interface ThreePlayerMove {
 
 export type ThreePlayerAction =
   | { type: "draft"; godId: GodId }
+  | { type: "select-god"; godId: GodId }
+  | { type: "clear-god" }
+  | { type: "select-ability"; abilityId: string }
+  | { type: "confirm-ability" }
+  | { type: "cell"; cell: ThreePlayerCell }
+  | { type: "path"; pathId: string }
+  | { type: "seat"; seat: ThreePlayerSeat }
+  | { type: "grave"; pieceId: string }
+  | { type: "choice"; value: boolean }
+  | { type: "amount"; amount: 0 | 1 | 2 }
+  | { type: "orb"; orb?: ThreePlayerOrbAffinity }
+  | { type: "pass" }
+  | { type: "cancel" }
+  | { type: "upgrade"; abilityId: string }
   | { type: "move"; from: ThreePlayerCell; to: ThreePlayerCell; promotion?: ThreePlayerPromotion }
   | { type: "load"; state: ThreePlayerState }
   | { type: "restart" };

@@ -16,9 +16,11 @@ import {
 } from "../threePlayerTopology";
 import {
   buildCellLookups,
+  hexRender,
   mod,
   placementsFromSource,
   topologyAdjacent,
+  topologyContracts,
   topologyDistance,
   topologyPaths,
   unique,
@@ -77,11 +79,7 @@ const createAxialTopology = (spec: AxialTopologySpec): ThreePlayerTopology => {
       ordinal,
       sourceIndex,
       axial: { q, r },
-      render: {
-        x: q * 1.5,
-        y: (r + q / 2) * Math.sqrt(3),
-        size: 1,
-      },
+      render: hexRender(q * 1.5, (r + q / 2) * Math.sqrt(3)),
       geometricClass,
       affinity: hexCellAffinity(geometricClass, q, r),
     };
@@ -196,6 +194,25 @@ const createAxialTopology = (spec: AxialTopologySpec): ThreePlayerTopology => {
   );
   const emptyCastling = { white: [], red: [], black: [] } as const;
   const castling = spec.castling?.(lookups.cellFromSourceIndex) ?? emptyCastling;
+  const contracts = topologyContracts({
+    cells: cellDescriptors.map((cell) => cell.id),
+    cellDescriptors,
+    initialPlacements,
+    rookTraces,
+    bishopTraces,
+    kingNeighbors,
+    pawnMetadata,
+    formationTransform: (anchorFrom, anchorTo, cell) => {
+      const from = coordinates(anchorFrom);
+      const to = coordinates(anchorTo);
+      const member = coordinates(cell);
+      if (!from || !to || !member) return undefined;
+      return at(
+        member[0] + to[0] - from[0],
+        member[1] + to[1] - from[1],
+      );
+    },
+  });
 
   return {
     variant: spec.variant,
@@ -205,6 +222,7 @@ const createAxialTopology = (spec: AxialTopologySpec): ThreePlayerTopology => {
     ...lookups,
     initialPlacements,
     castlingBySeat: castling,
+    ...contracts,
     rookTraces,
     rookRays: rookTraces,
     bishopTraces,

@@ -18,11 +18,32 @@ import { createYaltaTopology } from "./threePlayerTopologies/yalta";
 export type ThreePlayerStandardPieceType = ThreePlayerPiece["type"];
 export type ThreePlayerTraceKind = "rook" | "bishop";
 export type ThreePlayerAdjacencyKind = "rook" | "bishop" | "king" | "knight";
+export type ThreePlayerAdvanceClass = "forward" | "sideways" | "backward";
 
 export interface ThreePlayerRenderCoordinate {
   x: number;
   y: number;
   size: number;
+  shape:
+    | { kind: "polygon"; points: readonly [number, number][] }
+    | {
+      kind: "annular-sector";
+      cx: number;
+      cy: number;
+      innerRadius: number;
+      outerRadius: number;
+      startAngle: number;
+      endAngle: number;
+    };
+}
+
+export interface ThreePlayerRenderBounds {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+  width: number;
+  height: number;
 }
 
 export interface ThreePlayerTopologyCell {
@@ -49,8 +70,19 @@ export interface ThreePlayerDirectedTrace {
 
 export interface ThreePlayerPath {
   traceId: string;
+  kind?: ThreePlayerTraceKind;
+  origin?: ThreePlayerCell;
+  destination?: ThreePlayerCell;
   context?: string;
   cells: readonly ThreePlayerCell[];
+}
+
+export interface ThreePlayerArea {
+  id: string;
+  kind: "1x2" | "2x1" | "2x2";
+  cells: readonly ThreePlayerCell[];
+  traceIds: readonly string[];
+  context?: string;
 }
 
 export interface ThreePlayerKnightTrace {
@@ -113,6 +145,7 @@ export interface ThreePlayerTopology {
   cellSet: ReadonlySet<ThreePlayerCell>;
   cellDescriptors: readonly ThreePlayerTopologyCell[];
   cellById: ReadonlyMap<ThreePlayerCell, ThreePlayerTopologyCell>;
+  renderBounds: ThreePlayerRenderBounds;
   initialPlacements: readonly ThreePlayerInitialPlacement[];
   castlingBySeat: Readonly<Record<ThreePlayerSeat, readonly ThreePlayerCastlingDescriptor[]>>;
   cellFromSourceIndex(sourceIndex: number): ThreePlayerCell | undefined;
@@ -130,12 +163,55 @@ export interface ThreePlayerTopology {
   isPromotionCell(seat: ThreePlayerSeat, cell: ThreePlayerCell): boolean;
   castling(seat: ThreePlayerSeat): readonly ThreePlayerCastlingDescriptor[];
   adjacent(from: ThreePlayerCell, kind?: ThreePlayerAdjacencyKind): readonly ThreePlayerCell[];
+  orthogonalNeighbors(from: ThreePlayerCell): readonly ThreePlayerCell[];
+  diagonalNeighbors(from: ThreePlayerCell): readonly ThreePlayerCell[];
+  trace(traceId: string): ThreePlayerDirectedTrace | undefined;
+  path(traceId: string, to?: ThreePlayerCell): ThreePlayerPath | undefined;
   paths(
     from: ThreePlayerCell,
     to: ThreePlayerCell,
     kind?: ThreePlayerTraceKind,
   ): readonly ThreePlayerPath[];
+  linePaths(
+    from: ThreePlayerCell,
+    to: ThreePlayerCell,
+    kind?: ThreePlayerTraceKind,
+  ): readonly ThreePlayerPath[];
+  sharesTrace(
+    from: ThreePlayerCell,
+    to: ThreePlayerCell,
+    kind: ThreePlayerTraceKind,
+  ): boolean;
+  crossedCells(traceId: string, to?: ThreePlayerCell): readonly ThreePlayerCell[];
+  unobstructedPaths(
+    from: ThreePlayerCell,
+    to: ThreePlayerCell,
+    occupied: ReadonlySet<ThreePlayerCell>,
+    kind?: ThreePlayerTraceKind,
+  ): readonly ThreePlayerPath[];
+  hasLineOfSight(
+    from: ThreePlayerCell,
+    to: ThreePlayerCell,
+    occupied: ReadonlySet<ThreePlayerCell>,
+    kind?: ThreePlayerTraceKind,
+  ): boolean;
+  areas(from: ThreePlayerCell, kind: ThreePlayerArea["kind"]): readonly ThreePlayerArea[];
   distance(from: ThreePlayerCell, to: ThreePlayerCell): number | undefined;
+  homeCell(seat: ThreePlayerSeat): ThreePlayerCell | undefined;
+  promotionFrontier(seat: ThreePlayerSeat): readonly ThreePlayerCell[];
+  advancement(seat: ThreePlayerSeat, cell: ThreePlayerCell): number | undefined;
+  classifyAdvance(
+    seat: ThreePlayerSeat,
+    from: ThreePlayerCell,
+    to: ThreePlayerCell,
+  ): ThreePlayerAdvanceClass | undefined;
+  frontCells(seat: ThreePlayerSeat, from: ThreePlayerCell): readonly ThreePlayerCell[];
+  formationTransform(
+    anchorFrom: ThreePlayerCell,
+    anchorTo: ThreePlayerCell,
+    cell: ThreePlayerCell,
+    context?: string,
+  ): ThreePlayerCell | undefined;
 }
 
 export const hexCellAffinity = (

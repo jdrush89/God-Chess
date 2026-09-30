@@ -70,6 +70,110 @@ describe("three-player topology fixtures", () => {
     }
   });
 
+  it("exposes stable Layer 2 geometry primitives on every variant", () => {
+    for (const [variant, topology] of Object.entries(threePlayerTopologies()) as Array<
+      [ThreePlayerBoardVariant, ThreePlayerTopology]
+    >) {
+      expect(topology.renderBounds.width, variant).toBeGreaterThan(0);
+      expect(topology.renderBounds.height, variant).toBeGreaterThan(0);
+      expect(
+        topology.cellDescriptors.every((cell) =>
+          cell.render.shape.kind === "polygon"
+            ? cell.render.shape.points.length >= 4
+            : cell.render.shape.outerRadius > cell.render.shape.innerRadius
+        ),
+        variant,
+      ).toBe(true);
+
+      const origin = topology.cells.find((cell) =>
+        topology.rookTraces(cell).length > 1 &&
+        topology.bishopTraces(cell).length > 1
+      )!;
+      const rook = topology.rookTraces(origin)[0];
+      const destination = rook.cells[0];
+      expect(topology.trace(rook.id), variant).toEqual(rook);
+      expect(topology.path(rook.id, destination), variant).toMatchObject({
+        traceId: rook.id,
+        kind: "rook",
+        origin,
+        destination,
+        cells: [destination],
+      });
+      expect(topology.linePaths(origin, destination, "rook"), variant)
+        .toContainEqual(topology.path(rook.id, destination));
+      expect(topology.sharesTrace(origin, destination, "rook"), variant).toBe(true);
+      expect(topology.sharesTrace(origin, destination, "bishop"), variant).toBe(false);
+      const farDestination = rook.cells.at(-1)!;
+      const occupied = new Set([rook.cells[0]]);
+      expect(topology.hasLineOfSight(origin, origin, occupied), variant).toBe(true);
+      if (rook.cells.length > 1) {
+        expect(
+          topology.unobstructedPaths(origin, farDestination, occupied, "rook"),
+          variant,
+        ).toEqual([]);
+        expect(
+          topology.unobstructedPaths(origin, farDestination, new Set(), "rook")
+            .length,
+          variant,
+        ).toBeGreaterThan(0);
+        expect(topology.crossedCells(rook.id, farDestination), variant)
+          .toEqual(rook.cells.slice(0, -1));
+      }
+      expect(topology.orthogonalNeighbors(origin), variant)
+        .toEqual(topology.adjacent(origin, "rook"));
+      expect(topology.diagonalNeighbors(origin), variant)
+        .toEqual(topology.adjacent(origin, "bishop"));
+      expect(topology.areas(origin, "1x2").length, variant).toBeGreaterThan(0);
+      const areaOrigin = topology.cells.find((cell) =>
+        topology.areas(cell, "2x2").length > 0
+      );
+      expect(areaOrigin, `${variant}:2x2`).toBeDefined();
+
+      for (const seat of seats) {
+        const home = topology.homeCell(seat);
+        expect(home, `${variant}:${seat}:home`).toBeDefined();
+        expect(
+          topology.initialPlacements.find((placement) =>
+            placement.cell === home &&
+            placement.seat === seat &&
+            placement.type === "king"
+          ),
+        ).toBeDefined();
+        const frontier = topology.promotionFrontier(seat);
+        expect(frontier.length, `${variant}:${seat}:frontier`).toBeGreaterThan(0);
+        expect(frontier.every((cell) => topology.isPromotionCell(seat, cell)))
+          .toBe(true);
+        expect(topology.advancement(seat, frontier[0])).toBe(1);
+        for (const front of topology.frontCells(seat, home!)) {
+          expect(topology.classifyAdvance(seat, home!, front)).toBeDefined();
+        }
+      }
+
+      const transform = topology.cells.flatMap((anchorFrom) =>
+        topology.orthogonalNeighbors(anchorFrom).flatMap((anchorTo) =>
+          topology.orthogonalNeighbors(anchorFrom).map((member) => ({
+            anchorFrom,
+            anchorTo,
+            member,
+            destination: topology.formationTransform(
+              anchorFrom,
+              anchorTo,
+              member,
+            ),
+          }))
+        )
+      ).find((candidate) => candidate.destination);
+      expect(transform?.destination, `${variant}:formation`).toBeDefined();
+      expect(
+        topology.formationTransform(
+          transform!.anchorFrom,
+          transform!.anchorTo,
+          transform!.anchorFrom,
+        ),
+      ).toBe(transform!.anchorTo);
+    }
+  });
+
   it("retains exact source indexes for representative initial pieces", () => {
     const checks: Array<
       [ThreePlayerBoardVariant, number, ThreePlayerSeat, string]
@@ -309,6 +413,12 @@ describe("branched and wrapped topologies", () => {
     );
     expect(beforeBoundary.advances[0]).toMatchObject({ promotes: true });
     expect(topology.castling("white")).toEqual([]);
+
+    expect(topology.formationTransform(
+      topology.cellFromSourceIndex(0)!,
+      topology.cellFromSourceIndex(12)!,
+      topology.cellFromSourceIndex(1)!,
+    )).toBeUndefined();
   });
 
   it("never mixes pair mappings on Three Half traces", () => {
@@ -333,6 +443,16 @@ describe("branched and wrapped topologies", () => {
       .cells.find((cell) => topology.cellById.get(cell)!.half === "red")!;
     expect(topology.paths(origin, redTarget, "bishop").map((path) => path.context))
       .toEqual(["white-red"]);
+    const localTarget = topology.cellFromSourceIndex(4)!;
+    const localMember = topology.cellFromSourceIndex(2)!;
+    expect(topology.formationTransform(origin, localTarget, localMember))
+      .toBeUndefined();
+    expect(topology.formationTransform(
+      origin,
+      localTarget,
+      localMember,
+      "white-red",
+    )).toBeDefined();
     expect(topology.castling("white")).toHaveLength(2);
   });
 });
