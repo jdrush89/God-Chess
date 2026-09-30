@@ -215,6 +215,77 @@ describe("game flow", () => {
     expect(state.legalTargets).not.toContain("f4");
   });
 
+  it("does not treat a two-file King teleport as castling", () => {
+    let state = createGame(1);
+    state.phase = "play";
+    state.players.white.gods = ["quetzacoatl"];
+    state.players.white.orbs.white = 3;
+    state.board = {
+      b1: testPiece("king", "white", "white-king"),
+      a1: testPiece("rook", "white", "white-rook"),
+      h8: testPiece("king", "black", "black-king"),
+    };
+
+    state = gameReducer(state, { type: "select-god", godId: "quetzacoatl" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "air-lift" });
+    state = gameReducer(state, { type: "square", square: "b1" });
+    state = gameReducer(state, { type: "square", square: "d3" });
+
+    expect(state.board.d3?.id).toBe("white-king");
+    expect(state.board.a1?.id).toBe("white-rook");
+    expect(state.board.c1).toBeUndefined();
+  });
+
+  it("rejects Escort formations that would capture a non-moving friendly piece", () => {
+    let state = createGame(1);
+    state.phase = "play";
+    state.players.white.gods = ["leonidas"];
+    state.players.white.orbs.black = 1;
+    state.board = {
+      a8: testPiece("king", "black", "black-king"),
+      e4: testPiece("king", "white", "white-king"),
+      f4: testPiece("rook", "white", "white-escort"),
+      g4: testPiece("bishop", "white", "white-blocker"),
+    };
+
+    state = gameReducer(state, { type: "select-god", godId: "leonidas" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "escort" });
+    state = gameReducer(state, { type: "square", square: "e4" });
+    state = gameReducer(state, { type: "square", square: "f4" });
+
+    expect(state.legalTargets).not.toContain("f4");
+  });
+
+  it("moves every selected Escort piece from its simultaneously vacated source", () => {
+    let state = createGame(1);
+    state.phase = "play";
+    state.players.white.gods = ["leonidas"];
+    state.players.white.orbs.black = 1;
+    state.players.white.upgrades.escort = 2;
+    state.board = {
+      a8: testPiece("king", "black", "black-king"),
+      e4: testPiece("king", "white", "white-king"),
+      f4: testPiece("rook", "white", "white-rook"),
+      e5: testPiece("bishop", "white", "white-bishop"),
+    };
+
+    state = gameReducer(state, { type: "select-god", godId: "leonidas" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "escort" });
+    state = gameReducer(state, { type: "square", square: "e4" });
+    state = gameReducer(state, { type: "square", square: "f4" });
+    state = gameReducer(state, { type: "square", square: "e5" });
+    state = gameReducer(state, { type: "pass" });
+
+    expect(state.legalTargets).toContain("f4");
+    state = gameReducer(state, { type: "square", square: "f4" });
+
+    expect(state.board.f4?.id).toBe("white-king");
+    expect(state.board.g4?.id).toBe("white-rook");
+    expect(state.board.f5?.id).toBe("white-bishop");
+    expect(new Set(Object.values(state.board).map((piece) => piece.id)).size)
+      .toBe(Object.keys(state.board).length);
+  });
+
   it("previews and records an opponent upgrade with its god and ability names", () => {
     let state = createGame(1);
     (["ares", "medusa", "midas", "death", "artemis", "chiron"] as const).forEach((godId) => {

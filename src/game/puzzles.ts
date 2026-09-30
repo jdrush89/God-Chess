@@ -154,6 +154,12 @@ const denseTwoTurnBoard = (
   return result;
 };
 
+const enableBestDefense = (state: GameState) => {
+  for (const piece of Object.values(state.board)) {
+    if (piece.controller === "black") delete piece.status.movedThisTurn;
+  }
+};
+
 const centaursLance = (playerName?: string) => {
   const state = preparePuzzle(
     "centaurs-lance",
@@ -404,20 +410,44 @@ const risingMonument = (playerName?: string) => {
     playerName,
     2,
   );
-  state.board = denseTwoTurnBoard(
-    ["a4", "b4", "c4", "d3", "e2", "f4", "h4"],
-    ["a4", piece("white-monument-pawn-a", "pawn", "white")],
-    ["b4", piece("white-passenger", "pawn", "white")],
-    ["c4", piece("white-flight-blocker", "bishop", "white")],
+  state.board = board(
+    ["b1", piece("white-king", "king", "white")],
+    ["d1", piece("white-queen", "queen", "white")],
+    ["a1", piece("white-rook-a", "rook", "white")],
+    ["h1", piece("white-rook-h", "rook", "white")],
+    ["c2", piece("white-bishop-c", "bishop", "white")],
+    ["h3", piece("white-bishop-h", "bishop", "white")],
+    ["a3", piece("white-knight", "knight", "white")],
+    ["a2", piece("white-pawn-a", "pawn", "white")],
+    ["b2", piece("white-pawn-b", "pawn", "white")],
+    ["c3", piece("white-pawn-c", "pawn", "white")],
     ["d3", piece("white-monument-pawn-d", "pawn", "white")],
     ["e2", piece("white-monument-pawn-e", "pawn", "white")],
-    ["f4", piece("black-king", "king", "black", { movedThisTurn: true })],
+    ["f2", piece("white-monument-pawn-f", "pawn", "white")],
+    ["f5", piece("white-flight-screen", "pawn", "white")],
+    ["g2", piece("white-passenger", "pawn", "white")],
+    ["h2", piece("white-pawn-h", "pawn", "white")],
+    ["f7", piece("black-king", "king", "black")],
+    ["b8", piece("black-queen", "queen", "black")],
+    ["a8", piece("black-rook-a", "rook", "black")],
+    ["g8", piece("black-rook-g", "rook", "black", { frozen: 2, frozenBy: "white" })],
+    ["c8", piece("black-bishop", "bishop", "black", { frozen: 2, frozenBy: "white" })],
+    ["e8", piece("black-knight-e", "knight", "black", { frozen: 2, frozenBy: "white" })],
+    ["b7", piece("black-pawn-b", "pawn", "black")],
+    ["c7", piece("black-pawn-c", "pawn", "black")],
+    ["d7", piece("black-pawn-d", "pawn", "black")],
+    ["e7", piece("black-pawn-e", "pawn", "black")],
+    ["g7", piece("black-pawn-g", "pawn", "black")],
+    ["h7", piece("black-pawn-h", "pawn", "black")],
   );
   state.players.white.upgrades = {
     "air-strike": 2,
     construction: 2,
     resonance: 2,
+    harden: 2,
+    lure: 2,
   };
+  enableBestDefense(state);
   return state;
 };
 
@@ -430,12 +460,42 @@ const turncoatCharge = (playerName?: string) => {
     playerName,
     2,
   );
-  state.board = denseTwoTurnBoard(
-    ["c3", "d4", "e4", "e8"],
+  state.board = board(
+    ["b1", piece("white-king", "king", "white")],
+    ["d1", piece("white-queen", "queen", "white")],
+    ["a1", piece("white-rook-a", "rook", "white")],
+    ["h1", piece("white-rook-h", "rook", "white")],
     ["c3", piece("white-recruiter", "bishop", "white")],
+    ["h4", piece("white-guard-bishop", "bishop", "white")],
+    ["a3", piece("white-knight", "knight", "white")],
+    ["a2", piece("white-pawn-a", "pawn", "white")],
+    ["b2", piece("white-pawn-b", "pawn", "white")],
+    ["c2", piece("white-pawn-c", "pawn", "white")],
+    ["d2", piece("white-pawn-d", "pawn", "white")],
+    ["f2", piece("white-pawn-f", "pawn", "white")],
+    ["g2", piece("white-pawn-g", "pawn", "white")],
+    ["h2", piece("white-pawn-h", "pawn", "white")],
     ["e4", piece("black-turncoat", "knight", "black", { movedThisTurn: true })],
-    ["e8", piece("black-king", "king", "black", { movedThisTurn: true })],
+    ["e8", piece("black-king", "king", "black")],
+    ["d8", piece("black-rook-d", "rook", "black")],
+    ["f8", piece("black-rook-f", "rook", "black")],
+    ["b8", piece("black-queen", "queen", "black")],
+    ["c8", piece("black-bishop-c", "bishop", "black", { frozen: 2, frozenBy: "white" })],
+    ["g8", piece("black-bishop-g", "bishop", "black", { frozen: 2, frozenBy: "white" })],
+    ["a7", piece("black-pawn-a", "pawn", "black")],
+    ["b7", piece("black-pawn-b", "pawn", "black")],
+    ["c7", piece("black-pawn-c", "pawn", "black")],
+    ["d7", piece("black-pawn-d", "pawn", "black")],
+    ["f7", piece("black-pawn-f", "pawn", "black")],
+    ["g7", piece("black-pawn-g", "pawn", "black")],
+    ["h7", piece("black-pawn-h", "pawn", "black")],
   );
+  state.players.white.upgrades = {
+    leverage: 2,
+    gallop: 2,
+    polymorph: 2,
+  };
+  enableBestDefense(state);
   return state;
 };
 
@@ -448,19 +508,41 @@ const fundedFlight = (playerName?: string) => {
     playerName,
     2,
   );
-  state.board = denseTwoTurnBoard(
-    ["a3", "a4", "b4", "c3", "c4", "e1", "f4", "h4"],
-    ["a4", piece("white-carrier", "rook", "white")],
-    ["b4", piece("black-passenger", "bishop", "black", { movedThisTurn: true })],
-    ["c4", piece("white-flight-blocker", "bishop", "white")],
-    ["e1", piece("white-recruiter", "bishop", "white")],
-    ["f4", piece("black-king", "king", "black", { movedThisTurn: true })],
+  state.board = board(
+    ["b1", piece("white-king", "king", "white")],
+    ["d1", piece("white-queen", "queen", "white")],
+    ["a7", piece("white-carrier", "rook", "white")],
+    ["f1", piece("white-rook-f", "rook", "white")],
+    ["e4", piece("white-recruiter", "bishop", "white")],
+    ["h4", piece("white-guard-bishop", "bishop", "white")],
+    ["a3", piece("white-knight", "knight", "white")],
+    ["a2", piece("white-pawn-a", "pawn", "white")],
+    ["b2", piece("white-pawn-b", "pawn", "white")],
+    ["c2", piece("white-pawn-c", "pawn", "white")],
+    ["d2", piece("white-pawn-d", "pawn", "white")],
+    ["e2", piece("white-pawn-e", "pawn", "white")],
+    ["f2", piece("white-pawn-f", "pawn", "white")],
+    ["g2", piece("white-pawn-g", "pawn", "white")],
+    ["h2", piece("white-pawn-h", "pawn", "white")],
+    ["b7", piece("black-passenger", "bishop", "black")],
+    ["f7", piece("black-king", "king", "black")],
+    ["e8", piece("black-knight", "knight", "black", { frozen: 2, frozenBy: "white" })],
+    ["g8", piece("black-rook", "rook", "black", { frozen: 2, frozenBy: "white" })],
+    ["e6", piece("black-pawn-e", "pawn", "black")],
+    ["g6", piece("black-pawn-g6", "pawn", "black")],
+    ["g7", piece("black-pawn-g7", "pawn", "black")],
+    ["a6", piece("black-pawn-a", "pawn", "black")],
+    ["b6", piece("black-pawn-b", "pawn", "black")],
+    ["h6", piece("black-pawn-h", "pawn", "black")],
   );
   state.players.white.upgrades = {
     "air-strike": 3,
     barter: 3,
     construction: 2,
+    leverage: 2,
+    "poison-cloud": 2,
   };
+  enableBestDefense(state);
   return state;
 };
 
@@ -473,17 +555,45 @@ const clearedLane = (playerName?: string) => {
     playerName,
     2,
   );
-  state.board = denseTwoTurnBoard(
-    ["e2", "e4", "e8", "f5"],
+  state.board = board(
+    ["b1", piece("white-king", "king", "white")],
+    ["d1", piece("white-queen", "queen", "white")],
+    ["a1", piece("white-rook-a", "rook", "white")],
+    ["h1", piece("white-rook-h", "rook", "white")],
+    ["h4", piece("white-guard-bishop", "bishop", "white")],
+    ["a3", piece("white-knight-a", "knight", "white")],
     ["e2", piece("white-charge-knight", "knight", "white")],
     ["e4", piece("white-doomed-bishop", "bishop", "white")],
-    ["e8", piece("black-king", "king", "black", { movedThisTurn: true })],
+    ["a2", piece("white-pawn-a", "pawn", "white")],
+    ["b2", piece("white-pawn-b", "pawn", "white")],
+    ["c2", piece("white-pawn-c", "pawn", "white")],
+    ["d2", piece("white-pawn-d", "pawn", "white")],
+    ["f2", piece("white-pawn-f", "pawn", "white")],
+    ["g2", piece("white-pawn-g", "pawn", "white")],
+    ["h2", piece("white-pawn-h", "pawn", "white")],
+    ["e8", piece("black-king", "king", "black")],
+    ["d8", piece("black-rook-d", "rook", "black")],
+    ["f8", piece("black-rook-f", "rook", "black")],
+    ["b8", piece("black-queen", "queen", "black")],
+    ["c8", piece("black-bishop-c", "bishop", "black", { frozen: 2, frozenBy: "white" })],
+    ["g8", piece("black-bishop-g", "bishop", "black", { frozen: 2, frozenBy: "white" })],
+    ["a7", piece("black-pawn-a", "pawn", "black")],
+    ["b7", piece("black-pawn-b", "pawn", "black")],
+    ["c7", piece("black-pawn-c", "pawn", "black")],
+    ["d7", piece("black-pawn-d", "pawn", "black")],
+    ["f7", piece("black-pawn-f", "pawn", "black")],
+    ["g7", piece("black-pawn-g", "pawn", "black")],
+    ["h7", piece("black-pawn-h", "pawn", "black")],
   );
   state.players.white.upgrades = {
     marked: 3,
     gallop: 2,
     resonance: 2,
+    lure: 2,
+    "royal-step": 2,
   };
+  state.players.white.orbs.black = 0;
+  enableBestDefense(state);
   return state;
 };
 
@@ -496,17 +606,43 @@ const royalLanding = (playerName?: string) => {
     playerName,
     2,
   );
-  state.board = denseTwoTurnBoard(
-    ["b1", "f6", "g6", "g7", "h7"],
+  state.board = board(
     ["b1", piece("white-king", "king", "white")],
+    ["d1", piece("white-queen", "queen", "white")],
+    ["a1", piece("white-rook-a", "rook", "white")],
     ["g6", piece("white-escort", "rook", "white")],
-    ["h7", piece("black-king", "king", "black", { movedThisTurn: true })],
+    ["c1", piece("white-bishop-c", "bishop", "white")],
+    ["f1", piece("white-bishop-f", "bishop", "white")],
+    ["a3", piece("white-knight-a", "knight", "white")],
+    ["f3", piece("white-knight-f", "knight", "white")],
+    ["a2", piece("white-pawn-a", "pawn", "white")],
+    ["b2", piece("white-pawn-b", "pawn", "white")],
+    ["c2", piece("white-pawn-c", "pawn", "white")],
+    ["d2", piece("white-pawn-d", "pawn", "white")],
+    ["e2", piece("white-pawn-e", "pawn", "white")],
+    ["f2", piece("white-pawn-f", "pawn", "white")],
+    ["g2", piece("white-pawn-g", "pawn", "white")],
+    ["h2", piece("white-pawn-h", "pawn", "white")],
+    ["h7", piece("black-king", "king", "black")],
+    ["g8", piece("black-rook-g", "rook", "black", { frozen: 2, frozenBy: "white" })],
+    ["h8", piece("black-rook-h", "rook", "black")],
+    ["b8", piece("black-queen", "queen", "black")],
+    ["a8", piece("black-rook-a", "rook", "black")],
+    ["c8", piece("black-bishop-c", "bishop", "black", { frozen: 2, frozenBy: "white" })],
+    ["f8", piece("black-bishop-f", "bishop", "black", { frozen: 2, frozenBy: "white" })],
+    ["a7", piece("black-pawn-a", "pawn", "black")],
+    ["b7", piece("black-pawn-b", "pawn", "black")],
+    ["c7", piece("black-pawn-c", "pawn", "black")],
+    ["d7", piece("black-pawn-d", "pawn", "black")],
   );
   state.players.white.upgrades = {
     "air-lift": 3,
     "royal-step": 2,
     barter: 2,
+    "march-home": 2,
+    leverage: 2,
   };
+  enableBestDefense(state);
   return state;
 };
 
@@ -515,15 +651,41 @@ const skywardCharge = (playerName?: string) => {
     "skyward-charge",
     "Position Fourteen",
     "Capture the black King in two divine turns.",
-    ["quetzacoatl", "chiron", "artemis"],
+    ["quetzacoatl", "kangus", "medusa"],
     playerName,
     2,
   );
-  state.board = denseTwoTurnBoard(
-    ["c4", "e5", "e8"],
-    ["c4", piece("white-flying-knight", "knight", "white")],
-    ["e8", piece("black-king", "king", "black", { movedThisTurn: true })],
+  state.board = board(
+    ["b1", piece("white-king", "king", "white")],
+    ["d1", piece("white-queen", "queen", "white")],
+    ["a7", piece("white-flying-rook", "rook", "white")],
+    ["g3", piece("white-guard-rook", "rook", "white")],
+    ["f1", piece("white-bishop-f", "bishop", "white")],
+    ["a3", piece("white-knight-a", "knight", "white")],
+    ["f3", piece("white-knight-f", "knight", "white")],
+    ["a2", piece("white-pawn-a", "pawn", "white")],
+    ["b7", piece("white-flight-screen", "pawn", "white")],
+    ["c2", piece("white-pawn-c", "pawn", "white")],
+    ["d2", piece("white-pawn-d", "pawn", "white")],
+    ["e2", piece("white-pawn-e", "pawn", "white")],
+    ["f2", piece("white-pawn-f", "pawn", "white")],
+    ["h2", piece("white-pawn-h", "pawn", "white")],
+    ["h8", piece("black-king", "king", "black")],
+    ["a8", piece("black-rook-a", "rook", "black")],
+    ["d8", piece("black-queen", "queen", "black")],
+    ["c8", piece("black-bishop", "bishop", "black", { frozen: 2, frozenBy: "white" })],
+    ["e7", piece("black-pawn-e", "pawn", "black")],
+    ["c6", piece("black-pawn-c", "pawn", "black")],
+    ["d7", piece("black-pawn-d", "pawn", "black")],
+    ["f7", piece("black-pawn-f", "pawn", "black")],
   );
+  state.players.white.upgrades = {
+    flight: 2,
+    rage: 2,
+    captivate: 2,
+    "stone-gaze": 2,
+  };
+  enableBestDefense(state);
   return state;
 };
 
@@ -536,12 +698,41 @@ const provokedFury = (playerName?: string) => {
     playerName,
     2,
   );
-  state.board = denseTwoTurnBoard(
-    ["c5", "g6", "g7", "g8", "h6"],
+  state.board = board(
+    ["b1", piece("white-king", "king", "white")],
+    ["h3", piece("white-queen", "queen", "white")],
+    ["a7", piece("white-rook-a", "rook", "white")],
+    ["h1", piece("white-rook-h", "rook", "white")],
+    ["e6", piece("white-pin-bishop", "bishop", "white")],
+    ["c3", piece("white-guard-bishop", "bishop", "white")],
     ["c5", piece("white-provoked-knight", "knight", "white")],
-    ["h6", piece("black-provoker", "rook", "black", { movedThisTurn: true })],
-    ["g8", piece("black-king", "king", "black", { movedThisTurn: true })],
+    ["a2", piece("white-pawn-a", "pawn", "white")],
+    ["b2", piece("white-pawn-b", "pawn", "white")],
+    ["c2", piece("white-pawn-c", "pawn", "white")],
+    ["d2", piece("white-pawn-d", "pawn", "white")],
+    ["e2", piece("white-pawn-e", "pawn", "white")],
+    ["f2", piece("white-pawn-f", "pawn", "white")],
+    ["g2", piece("white-pawn-g", "pawn", "white")],
+    ["h2", piece("white-pawn-h", "pawn", "white")],
+    ["f7", piece("black-provoker", "bishop", "black")],
+    ["g8", piece("black-king", "king", "black")],
+    ["h8", piece("black-rook", "rook", "black")],
+    ["d8", piece("black-queen", "queen", "black")],
+    ["c8", piece("black-bishop-c", "bishop", "black")],
+    ["b8", piece("black-knight-b", "knight", "black")],
+    ["a8", piece("black-rook-a", "rook", "black")],
+    ["b7", piece("black-pawn-b", "pawn", "black")],
+    ["c7", piece("black-pawn-c", "pawn", "black")],
+    ["d7", piece("black-pawn-d", "pawn", "black")],
+    ["e7", piece("black-pawn-e", "pawn", "black")],
   );
+  state.players.white.upgrades = {
+    "pick-a-fight": 2,
+    gallop: 2,
+    hex: 2,
+    "poison-cloud": 2,
+  };
+  enableBestDefense(state);
   return state;
 };
 
@@ -706,25 +897,25 @@ export const PUZZLES: PuzzleDefinition[] = [
     title: "Position Nine",
     difficulty: "medium",
     objective: "Capture the black King in two divine turns.",
-    hint: "Three pawns can create the only carrier capable of delivering the nearby passenger through the blocked rank.",
-    solutionSummary: "Raise a Monument rook on a4, then Air Strike to h4 and drop the pawn onto the King at f4.",
+    hint: "A new carrier can open a vertical delivery route through the defended King.",
+    solutionSummary: "Raise a Monument rook on f2, then Air Strike to f8 and drop the pawn onto the King at f7.",
     playerTurns: 2,
     solutionTurns: [
       [
         { type: "select-god", godId: "anubis" },
         { type: "select-ability", abilityId: "monument" },
-        { type: "square", square: "a4" },
+        { type: "square", square: "f2" },
         { type: "square", square: "d3" },
         { type: "square", square: "e2" },
-        { type: "square", square: "a4" },
+        { type: "square", square: "f2" },
       ],
       [
         { type: "select-god", godId: "quetzacoatl" },
         { type: "select-ability", abilityId: "air-strike" },
-        { type: "square", square: "a4" },
-        { type: "square", square: "b4" },
-        { type: "square", square: "h4" },
-        { type: "square", square: "f4" },
+        { type: "square", square: "f2" },
+        { type: "square", square: "g2" },
+        { type: "square", square: "f8" },
+        { type: "square", square: "f7" },
       ],
     ],
     createState: risingMonument,
@@ -734,7 +925,7 @@ export const PUZZLES: PuzzleDefinition[] = [
     title: "Position Ten",
     difficulty: "medium",
     objective: "Capture the black King in two divine turns.",
-    hint: "An enemy knight can change allegiance before charging up the open file.",
+    hint: "The needed attacker begins on the other side, but its allegiance is negotiable.",
     solutionSummary: "Use Leverage to hire the knight on e4, then Charge it from e4 to e8.",
     playerTurns: 2,
     solutionTurns: [
@@ -759,24 +950,24 @@ export const PUZZLES: PuzzleDefinition[] = [
     title: "Position Eleven",
     difficulty: "medium",
     objective: "Capture the black King in two divine turns.",
-    hint: "The carrier cannot lift an enemy piece, but ownership can change before the second turn.",
-    solutionSummary: "Hire the bishop on b4 with Leverage, then use level 3 Air Strike from a4 to h4 and drop it on the King at f4.",
+    hint: "The carrier needs a passenger that does not begin under your control.",
+    solutionSummary: "Hire the bishop on b7 with Leverage, then use level 3 Air Strike from a7 to h7 and drop it on the King at f7.",
     playerTurns: 2,
     solutionTurns: [
       [
         { type: "select-god", godId: "midas" },
         { type: "select-ability", abilityId: "leverage" },
-        { type: "square", square: "e1" },
-        { type: "square", square: "c3" },
-        { type: "square", square: "b4" },
+        { type: "square", square: "e4" },
+        { type: "square", square: "c6" },
+        { type: "square", square: "b7" },
       ],
       [
         { type: "select-god", godId: "quetzacoatl" },
         { type: "select-ability", abilityId: "air-strike" },
-        { type: "square", square: "a4" },
-        { type: "square", square: "b4" },
-        { type: "square", square: "h4" },
-        { type: "square", square: "f4" },
+        { type: "square", square: "a7" },
+        { type: "square", square: "b7" },
+        { type: "square", square: "h7" },
+        { type: "square", square: "f7" },
       ],
     ],
     createState: fundedFlight,
@@ -786,7 +977,7 @@ export const PUZZLES: PuzzleDefinition[] = [
     title: "Position Twelve",
     difficulty: "medium",
     objective: "Capture the black King in two divine turns.",
-    hint: "The piece obstructing the knight can be moved and immediately claimed before the charge.",
+    hint: "Clearing the file can also fund the attack that follows.",
     solutionSummary: "Mark the bishop from e4 to f5 and execute it, then Charge the knight from e2 to e8.",
     playerTurns: 2,
     solutionTurns: [
@@ -811,7 +1002,7 @@ export const PUZZLES: PuzzleDefinition[] = [
     title: "Position Thirteen",
     difficulty: "medium",
     objective: "Capture the black King in two divine turns.",
-    hint: "The King can arrive beside an escort before commanding that escort into the target.",
+    hint: "Bring your King to the formation; the crowded back rank prevents the opposing King from retreating.",
     solutionSummary: "Air Lift the white King to f6, then Escort the rook from g6 onto the King at h7.",
     playerTurns: 2,
     solutionTurns: [
@@ -836,21 +1027,21 @@ export const PUZZLES: PuzzleDefinition[] = [
     title: "Position Fourteen",
     difficulty: "medium",
     objective: "Capture the black King in two divine turns.",
-    hint: "First place the knight beneath the King, then abandon the knight's usual movement.",
-    solutionSummary: "Use Flight from c4 to e5, then Charge the knight up the e-file to e8.",
+    hint: "Cross the crowded seventh rank without capturing, then turn the protected landing square into the center of destruction.",
+    solutionSummary: "Use Flight to move the rook from a7 to g7, then use Rage to engulf the boxed-in King.",
     playerTurns: 2,
     solutionTurns: [
       [
         { type: "select-god", godId: "quetzacoatl" },
         { type: "select-ability", abilityId: "flight" },
-        { type: "square", square: "c4" },
-        { type: "square", square: "e5" },
+        { type: "square", square: "a7" },
+        { type: "square", square: "g7" },
       ],
       [
-        { type: "select-god", godId: "chiron" },
-        { type: "select-ability", abilityId: "charge" },
-        { type: "square", square: "e5" },
-        { type: "square", square: "e8" },
+        { type: "select-god", godId: "kangus" },
+        { type: "select-ability", abilityId: "rage" },
+        { type: "square", square: "g7" },
+        { type: "rage-resolve", spareFriendly: false },
       ],
     ],
     createState: skywardCharge,
@@ -860,8 +1051,8 @@ export const PUZZLES: PuzzleDefinition[] = [
     title: "Position Fifteen",
     difficulty: "medium",
     objective: "Capture the black King in two divine turns.",
-    hint: "A square attacked by the enemy rook places the knight directly beneath the King.",
-    solutionSummary: "Pick a Fight to teleport the knight from c5 to g6, then Charge it to the King on g8.",
+    hint: "A pinned defender still attacks a square, even when it cannot safely capture there.",
+    solutionSummary: "Pick a Fight to teleport the knight from c5 to g6, where the pinned bishop cannot take it, then Charge to g8.",
     playerTurns: 2,
     solutionTurns: [
       [

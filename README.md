@@ -126,7 +126,7 @@ must update this documentation.
 | Position Eleven | Midas, Quetzacoatl, Anubis | Ares, Chiron, Salem | Midas (leverage); Quetzacoatl (air-strike) |
 | Position Twelve | Death, Chiron, Teles | Ares, Anubis, Salem | Death (marked); Chiron (charge) |
 | Position Thirteen | Quetzacoatl, Leonidas, Midas | Ares, Chiron, Anubis | Quetzacoatl (air-lift); Leonidas (escort) |
-| Position Fourteen | Quetzacoatl, Chiron, Artemis | Ares, Anubis, Salem | Quetzacoatl (flight); Chiron (charge) |
+| Position Fourteen | Quetzacoatl, Kangus Kong, Medusa | Ares, Chiron, Anubis | Quetzacoatl (flight); Kangus Kong (rage) |
 | Position Fifteen | Ares, Chiron, Salem | Artemis, Anubis, Medusa | Ares (pick-a-fight); Chiron (charge) |
 
 ## Accounts and cloud saves

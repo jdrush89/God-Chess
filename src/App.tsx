@@ -837,6 +837,7 @@ function AbilityCard({
   highlighted = false,
   showCost = true,
   onClick,
+  children,
 }: {
   ability: Ability;
   level: number;
@@ -849,45 +850,176 @@ function AbilityCard({
   highlighted?: boolean;
   showCost?: boolean;
   onClick: () => void;
+  children?: React.ReactNode;
 }) {
   return (
     <div
       className={`ability-card ${active ? "active" : ""} ${highlighted ? "opponent-selecting" : ""} ${disabled ? "disabled" : ""} ${!selectable && !disabled ? "read-only" : ""}`}
-      role={selectable ? "button" : undefined}
-      tabIndex={selectable ? 0 : undefined}
-      aria-disabled={disabled || undefined}
-      onClick={() => {
-        if (selectable) onClick();
-      }}
-      onKeyDown={(event) => {
-        if (selectable && (event.key === "Enter" || event.key === " ")) onClick();
-      }}
     >
-      <div className="ability-topline">
-        <strong>{ability.name}</strong>
-        <span className="level-pips">
-          {[1, 2, 3].map((item) => <i className={item <= level ? "filled" : ""} key={item} />)}
-        </span>
-      </div>
-      <AbilityRules ability={ability} level={level} previewLevelOverride={previewLevel} />
-      <div className="ability-footer">
-        <span>{footerLabel ?? `LVL ${level}`}</span>
-        <div className="ability-footer-meta">
-          {showCost && (
-            <div className="ability-cost">
-              {ability.cost?.white ? <Orb color="white" count={ability.cost.white} small /> : null}
-              {ability.cost?.black ? <Orb color="black" count={ability.cost.black} small /> : null}
-              {!ability.cost && <span className="free-tag">GENERATES</span>}
-            </div>
-          )}
-          {footerAction && <b className="upgrade-tag">{footerAction}</b>}
+      <div
+        className="ability-card-main"
+        role={selectable ? "button" : undefined}
+        tabIndex={selectable ? 0 : undefined}
+        aria-disabled={disabled || undefined}
+        onClick={() => {
+          if (selectable) onClick();
+        }}
+        onKeyDown={(event) => {
+          if (selectable && (event.key === "Enter" || event.key === " ")) {
+            event.preventDefault();
+            onClick();
+          }
+        }}
+      >
+        <div className="ability-topline">
+          <strong>{ability.name}</strong>
+          <span className="level-pips">
+            {[1, 2, 3].map((item) => <i className={item <= level ? "filled" : ""} key={item} />)}
+          </span>
+        </div>
+        <AbilityRules ability={ability} level={level} previewLevelOverride={previewLevel} />
+        <div className="ability-footer">
+          <span>{footerLabel ?? `LVL ${level}`}</span>
+          <div className="ability-footer-meta">
+            {showCost && (
+              <div className="ability-cost">
+                {ability.cost?.white ? <Orb color="white" count={ability.cost.white} small /> : null}
+                {ability.cost?.black ? <Orb color="black" count={ability.cost.black} small /> : null}
+                {!ability.cost && <span className="free-tag">GENERATES</span>}
+              </div>
+            )}
+            {footerAction && <b className="upgrade-tag">{footerAction}</b>}
+          </div>
         </div>
       </div>
+      {children && (
+        <div className="ability-pending">
+          {children}
+        </div>
+      )}
     </div>
   );
 }
 
-function ActionPanel({
+function PendingAbilityChoices({
+  state,
+  dispatch,
+  canPass,
+}: {
+  state: GameState;
+  dispatch: GameDispatch;
+  canPass: boolean;
+}) {
+  const player = state.players[state.activeColor];
+  return (
+    <>
+      <p className="ability-pending-prompt" role="status">{state.notice}</p>
+      {state.pending?.step === "grave" && (
+        <div className="grave-picker">
+          <span>YOUR GRAVEYARD</span>
+          <div>
+            {player.graveyard.map(({ piece }) => (
+              <button key={piece.id} onClick={() => dispatch({ type: "grave", pieceId: piece.id })}>
+                <PieceView piece={piece} /><small>{piece.type}</small>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      <div className="action-buttons">
+        {(state.pending?.step === "confirm-stone-gaze" ||
+          state.pending?.step === "confirm-march-home") && (
+          <button className="primary-button" onClick={() => dispatch({ type: "confirm-ability" })}>
+            Confirm {GOD_BY_ID[state.selectedGod!].abilities.find(
+              (ability) => ability.id === state.selectedAbility,
+            )?.name ?? "ability"}
+          </button>
+        )}
+        {state.pending?.step === "marked-choice" && (
+          <button className="danger-button" onClick={() => dispatch({ type: "marked-execute" })}>
+            Execute now
+          </button>
+        )}
+        {state.pending?.step === "rage-choice" && (
+          <>
+            <button className="danger-button" onClick={() => dispatch({ type: "rage-resolve", spareFriendly: false })}>
+              Capture all
+            </button>
+            <button className="secondary-button" onClick={() => dispatch({ type: "rage-resolve", spareFriendly: true })}>
+              Spare allies
+            </button>
+          </>
+        )}
+        {state.pending?.step === "barter-choice" && (
+          <>
+            <button
+              className="secondary-button"
+              disabled={player.orbs.white < 1}
+              onClick={() => dispatch({ type: "barter", give: "white" })}
+            >
+              Give white
+            </button>
+            <button
+              className="secondary-button"
+              disabled={player.orbs.black < 1}
+              onClick={() => dispatch({ type: "barter", give: "black" })}
+            >
+              Give black
+            </button>
+            <button className="text-button" onClick={() => dispatch({ type: "barter" })}>
+              Decline
+            </button>
+          </>
+        )}
+        {state.pending?.step === "resurrect-more" && (
+          <>
+            <button
+              className="secondary-button"
+              disabled={player.orbs.white < 2}
+              onClick={() => dispatch({ type: "resurrect-more", revive: true })}
+            >
+              Revive second · 2 white
+            </button>
+            <button className="text-button" onClick={() => dispatch({ type: "resurrect-more", revive: false })}>
+              Finish
+            </button>
+          </>
+        )}
+        {state.pending?.step === "siphon-choice" && (
+          <>
+            <button
+              className="secondary-button"
+              disabled={state.players[state.activeColor === "white" ? "black" : "white"].orbs.white < 2}
+              onClick={() => dispatch({ type: "siphon", amount: 2 })}
+            >
+              Steal 2
+            </button>
+            <button
+              className="secondary-button"
+              disabled={state.players[state.activeColor === "white" ? "black" : "white"].orbs.white < 1}
+              onClick={() => dispatch({ type: "siphon", amount: 1 })}
+            >
+              Steal 1
+            </button>
+            <button className="text-button" onClick={() => dispatch({ type: "siphon", amount: 0 })}>
+              Steal none
+            </button>
+          </>
+        )}
+        {canPass && (
+          <button className="secondary-button" onClick={() => dispatch({ type: "pass" })}>
+            Pass / finish
+          </button>
+        )}
+        <button className="text-button" onClick={() => dispatch({ type: "cancel" })}>
+          Cancel ability
+        </button>
+      </div>
+    </>
+  );
+}
+
+export function ActionPanel({
   state,
   dispatch,
   inspectedGodId,
@@ -1024,119 +1156,32 @@ function ActionPanel({
             className="god-level-selector"
           />
           <div className="ability-list">
-            {selectedGod.abilities.map((item) => (
-              <AbilityCard
-                ability={item}
-                level={abilityLevel(presentedPlayer.upgrades, item.id)}
-                previewLevel={godPreviewLevel}
-                active={(!readOnly && state.selectedAbility === item.id) || presentation?.abilityId === item.id}
-                highlighted={presentation?.abilityId === item.id}
-                selectable={!readOnly && canAfford(item) && (item.id !== "lure" || hasQueen)}
-                disabled={presentedGodResting || (!readOnly && (!canAfford(item) || (item.id === "lure" && !hasQueen)))}
-                footerAction={!readOnly && item.id === "lure" && !hasQueen ? "REQUIRES QUEEN" : undefined}
-                onClick={() => {
-                  if (!readOnly) dispatch({ type: "select-ability", abilityId: item.id });
-                }}
-                key={item.id}
-              />
-            ))}
+            {selectedGod.abilities.map((item) => {
+              const active = (!readOnly && state.selectedAbility === item.id) ||
+                presentation?.abilityId === item.id;
+              return (
+                <AbilityCard
+                  ability={item}
+                  level={abilityLevel(presentedPlayer.upgrades, item.id)}
+                  previewLevel={godPreviewLevel}
+                  active={active}
+                  highlighted={presentation?.abilityId === item.id}
+                  selectable={!readOnly && canAfford(item) && (item.id !== "lure" || hasQueen)}
+                  disabled={presentedGodResting || (!readOnly && (!canAfford(item) || (item.id === "lure" && !hasQueen)))}
+                  footerAction={!readOnly && item.id === "lure" && !hasQueen ? "REQUIRES QUEEN" : undefined}
+                  onClick={() => {
+                    if (!readOnly) dispatch({ type: "select-ability", abilityId: item.id });
+                  }}
+                  key={item.id}
+                >
+                  {!readOnly && active && state.selectedAbility && (
+                    <PendingAbilityChoices state={state} dispatch={dispatch} canPass={canPass} />
+                  )}
+                </AbilityCard>
+              );
+            })}
           </div>
-          {!readOnly && state.selectedAbility && (
-            <div className="action-buttons">
-              {(state.pending?.step === "confirm-stone-gaze" ||
-                state.pending?.step === "confirm-march-home") && (
-                <button className="primary-button" onClick={() => dispatch({ type: "confirm-ability" })}>
-                  Confirm {selectedGod.abilities.find((ability) => ability.id === state.selectedAbility)?.name}
-                </button>
-              )}
-              {state.pending?.step === "marked-choice" && (
-                <button className="danger-button" onClick={() => dispatch({ type: "marked-execute" })}>
-                  Execute now
-                </button>
-              )}
-              {state.pending?.step === "rage-choice" && (
-                <>
-                  <button className="danger-button" onClick={() => dispatch({ type: "rage-resolve", spareFriendly: false })}>
-                    Capture all
-                  </button>
-                  <button className="secondary-button" onClick={() => dispatch({ type: "rage-resolve", spareFriendly: true })}>
-                    Spare allies
-                  </button>
-                </>
-              )}
-              {state.pending?.step === "barter-choice" && (
-                <>
-                  <button
-                    className="secondary-button"
-                    disabled={player.orbs.white < 1}
-                    onClick={() => dispatch({ type: "barter", give: "white" })}
-                  >
-                    Give white
-                  </button>
-                  <button
-                    className="secondary-button"
-                    disabled={player.orbs.black < 1}
-                    onClick={() => dispatch({ type: "barter", give: "black" })}
-                  >
-                    Give black
-                  </button>
-                  <button className="text-button" onClick={() => dispatch({ type: "barter" })}>
-                    Decline
-                  </button>
-                </>
-              )}
-              {state.pending?.step === "resurrect-more" && (
-                <>
-                  <button
-                    className="secondary-button"
-                    disabled={player.orbs.white < 2}
-                    onClick={() => dispatch({ type: "resurrect-more", revive: true })}
-                  >
-                    Revive second · 2 white
-                  </button>
-                  <button className="text-button" onClick={() => dispatch({ type: "resurrect-more", revive: false })}>
-                    Finish
-                  </button>
-                </>
-              )}
-              {state.pending?.step === "siphon-choice" && (
-                <>
-                  <button
-                    className="secondary-button"
-                    disabled={state.players[state.activeColor === "white" ? "black" : "white"].orbs.white < 2}
-                    onClick={() => dispatch({ type: "siphon", amount: 2 })}
-                  >
-                    Steal 2
-                  </button>
-                  <button
-                    className="secondary-button"
-                    disabled={state.players[state.activeColor === "white" ? "black" : "white"].orbs.white < 1}
-                    onClick={() => dispatch({ type: "siphon", amount: 1 })}
-                  >
-                    Steal 1
-                  </button>
-                  <button className="text-button" onClick={() => dispatch({ type: "siphon", amount: 0 })}>
-                    Steal none
-                  </button>
-                </>
-              )}
-              {canPass && <button className="secondary-button" onClick={() => dispatch({ type: "pass" })}>Pass / finish</button>}
-              <button className="text-button" onClick={() => dispatch({ type: "cancel" })}>Cancel ability</button>
-            </div>
-          )}
         </>
-      )}
-      {state.pending?.step === "grave" && (
-        <div className="grave-picker">
-          <span>YOUR GRAVEYARD</span>
-          <div>
-            {player.graveyard.map(({ piece }) => (
-              <button key={piece.id} onClick={() => dispatch({ type: "grave", pieceId: piece.id })}>
-                <PieceView piece={piece} /><small>{piece.type}</small>
-              </button>
-            ))}
-          </div>
-        </div>
       )}
     </aside>
   );

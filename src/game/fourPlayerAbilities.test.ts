@@ -253,6 +253,36 @@ describe("four-player God abilities", () => {
     expect(result.board.h7?.id).toBe("escort");
   });
 
+  it("allows an Escort King onto a simultaneously vacated ally square", () => {
+    const state = gameFor("leonidas");
+    delete state.board.g14;
+    state.board.g8 = piece(state, "king", "north", "escort-king");
+    state.board.h8 = piece(state, "rook", "north", "escort-rook");
+
+    let result = activate(state, "leonidas", "escort");
+    result = fourPlayerReducer(result, { type: "square", square: "g8" });
+    result = fourPlayerReducer(result, { type: "square", square: "h8" });
+
+    expect(result.legalTargets).toContain("h8");
+    result = fourPlayerReducer(result, { type: "square", square: "h8" });
+    expect(result.board.h8?.id).toBe("escort-king");
+    expect(result.board.i8?.id).toBe("escort-rook");
+  });
+
+  it("rejects an Escort that would land on a non-moving ally", () => {
+    const state = gameFor("leonidas");
+    delete state.board.g14;
+    state.board.g8 = piece(state, "king", "north", "escort-king");
+    state.board.h8 = piece(state, "rook", "north", "escort-rook");
+    state.board.i8 = piece(state, "bishop", "north", "escort-blocker");
+
+    let result = activate(state, "leonidas", "escort");
+    result = fourPlayerReducer(result, { type: "square", square: "g8" });
+    result = fourPlayerReducer(result, { type: "square", square: "h8" });
+
+    expect(result.legalTargets).not.toContain("h8");
+  });
+
   it("generalizes Medusa's Captivate, Slither, and Stone Gaze", () => {
     let state = gameFor("medusa");
     state.board.g10 = piece(state, "queen", "north", "visible-queen");

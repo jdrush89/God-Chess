@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import readme from "../../README.md?raw";
-import { chooseAiPlan, isAiTurn } from "./ai";
-import { legalTargets } from "./chess";
+import { chooseAiPlan, enumerateTurnPlans, isAiTurn } from "./ai";
+import { isSquareAttacked, kingSquare, legalTargets } from "./chess";
 import { gameReducer } from "./engine";
 import { GOD_BY_ID, GODS } from "./gods";
 import {
@@ -30,7 +30,8 @@ describe("puzzle mode", () => {
   ])("%s disguises its required upgrade among multiple upgraded abilities", (puzzleId) => {
     const puzzle = PUZZLES.find((candidate) => candidate.id === puzzleId)!;
     const state = puzzle.createState("Solver");
-    expect(Object.values(state.players.white.upgrades).filter((level) => level > 1)).toHaveLength(3);
+    expect(Object.values(state.players.white.upgrades).filter((level) => level > 1).length)
+      .toBeGreaterThanOrEqual(3);
   });
 
   it.each(PUZZLES)("$title records its player, opponent, and required solution gods", (puzzle) => {
@@ -112,6 +113,102 @@ describe("puzzle mode", () => {
     expect(state.phase).toBe("gameover");
     expect(state.winner).toBe("white");
     expect(state.puzzleFailed).toBe(false);
+  });
+
+  it.each([
+    "rising-monument",
+    "turncoat-charge",
+    "funded-flight",
+    "cleared-lane",
+    "royal-landing",
+    "skyward-charge",
+    "provoked-fury",
+  ])("%s has no immediate winning turn before its setup", (puzzleId) => {
+    const puzzle = PUZZLES.find((candidate) => candidate.id === puzzleId)!;
+    const wins = enumerateTurnPlans(puzzle.createState("Solver"))
+      .filter((plan) =>
+        plan.state.phase === "gameover" &&
+        plan.state.winner === "white" &&
+        Boolean(kingSquare(plan.state.board, "white")) &&
+        !kingSquare(plan.state.board, "black")
+      );
+    expect(wins).toHaveLength(0);
+  });
+
+  it.each(["rising-monument", "funded-flight"])(
+    "%s has no first-turn Air Strike shortcut",
+    (puzzleId) => {
+      const puzzle = PUZZLES.find((candidate) => candidate.id === puzzleId)!;
+      const airStrikeWins = enumerateTurnPlans(puzzle.createState("Solver"))
+        .filter((plan) =>
+          plan.actions.some(
+            (action) => action.type === "select-ability" && action.abilityId === "air-strike",
+          ) &&
+          plan.state.phase === "gameover" &&
+          plan.state.winner === "white"
+        );
+      expect(airStrikeWins).toHaveLength(0);
+      expect(Object.values(puzzle.createState().board).some(
+        (piece) => piece.controller === "white" && piece.type === "knight" && piece.id.includes("knight-f"),
+      )).toBe(false);
+    },
+  );
+
+  it("removes the friendly-knight Charge alternative from Position Ten", () => {
+    const state = PUZZLES.find((puzzle) => puzzle.id === "turncoat-charge")!.createState();
+    const whiteKnights = Object.entries(state.board)
+      .filter(([, piece]) => piece.controller === "white" && piece.type === "knight");
+    expect(whiteKnights.map(([square]) => square)).toEqual(["a3"]);
+    expect(whiteKnights.every(([square]) =>
+      !legalTargets(state.board, square, { forceType: "rook" }).includes("e8")
+    )).toBe(true);
+  });
+
+  it("funds Position Twelve's Charge only by executing Marked", () => {
+    const puzzle = PUZZLES.find((candidate) => candidate.id === "cleared-lane")!;
+    let state = puzzle.createState();
+    expect(state.players.white.orbs.black).toBe(0);
+    for (const action of puzzle.solutionTurns[0]) state = gameReducer(state, action);
+    expect(state.players.white.orbs.black).toBeGreaterThanOrEqual(4);
+  });
+
+  it("blocks Position Thirteen's retreat without making the Air Lift landing illegal", () => {
+    const state = PUZZLES.find((puzzle) => puzzle.id === "royal-landing")!.createState();
+    expect(state.board.g8).toMatchObject({ type: "rook", controller: "black" });
+    expect(state.board.h8).toMatchObject({ type: "rook", controller: "black" });
+
+    const knightVariant = structuredClone(state.board);
+    knightVariant.g8 = {
+      ...knightVariant.g8,
+      id: "suggested-black-knight",
+      type: "knight",
+      status: {},
+    };
+    expect(isSquareAttacked(knightVariant, "f6", "black")).toBe(true);
+    expect(isSquareAttacked(state.board, "f6", "black")).toBe(false);
+  });
+
+  it("uses a new Flight setup concept in Position Fourteen", () => {
+    const usage = PUZZLE_GOD_USAGE_BY_ID["skyward-charge"];
+    expect(usage.solutionAbilities.quetzacoatl).toEqual(["flight"]);
+    expect(PUZZLE_GOD_INDEX.quetzacoatl.solutionAbilitiesByPuzzle["skyward-charge"])
+      .toEqual(["flight"]);
+    const earlierAbilities = PUZZLE_GOD_USAGE.slice(0, 13)
+      .flatMap((entry) => Object.values(entry.solutionAbilities).flat());
+    expect(earlierAbilities).not.toContain("flight");
+  });
+
+  it("keeps Position Fifteen within standard knight counts and makes the provoker pinned", () => {
+    const state = PUZZLES.find((puzzle) => puzzle.id === "provoked-fury")!.createState();
+    expect(Object.values(state.board).filter(
+      (piece) => piece.color === "white" && piece.type === "knight",
+    )).toHaveLength(1);
+
+    let staged = state;
+    for (const action of PUZZLES.find((puzzle) => puzzle.id === "provoked-fury")!.solutionTurns[0]) {
+      staged = gameReducer(staged, action);
+    }
+    expect(legalTargets(staged.board, "f7")).not.toContain("g6");
   });
 
   it("marks a missed one-turn solution and gives the level 10 AI a response", () => {
