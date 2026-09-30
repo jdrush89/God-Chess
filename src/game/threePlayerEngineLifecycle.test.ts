@@ -212,4 +212,41 @@ describe("three-player turn-start resolution", () => {
       reason: "last-survivor",
     });
   });
+
+  it("resolves checkmate before exposing the first turn of a new round", () => {
+    let state = finishDraft();
+    state.phase = "upgrade";
+    state.upgradeQueue = ["white"];
+    state.activeSeat = "white";
+    const abilityId = GODS.find((god) =>
+      state.players.white.gods.includes(god.id)
+    )!.abilities[0].id;
+    mockedChess.mode = "white-mated";
+
+    state = threePlayerReducer(state, { type: "upgrade", abilityId });
+
+    expect(state.players.white.eliminated).toBe(true);
+    expect(state.activeSeat).toBe("red");
+    expect(state.phase).toBe("play");
+    expect(state.pending).toBeUndefined();
+  });
+
+  it("records a full stalemate cycle when a new round cannot begin", () => {
+    let state = finishDraft();
+    state.phase = "upgrade";
+    state.upgradeQueue = ["white"];
+    state.activeSeat = "white";
+    const abilityId = GODS.find((god) =>
+      state.players.white.gods.includes(god.id)
+    )!.abilities[0].id;
+    mockedChess.mode = "all-stalemate";
+
+    state = threePlayerReducer(state, { type: "upgrade", abilityId });
+
+    expect(state.result).toEqual({
+      kind: "draw",
+      reason: "stalemate-cycle",
+    });
+    expect(state.passCycle.passedSeats).toEqual(["white", "red", "black"]);
+  });
 });

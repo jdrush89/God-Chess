@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { createDefaultThreePlayerConfig } from "./threePlayerConfig";
-import { createThreePlayerGame } from "./threePlayerEngine";
+import {
+  createThreePlayerGame,
+  threePlayerReducer,
+} from "./threePlayerEngine";
 import {
   isThreePlayerState,
   prepareThreePlayerState,
 } from "./threePlayerPersistence";
 import { GODS } from "./gods";
+import { getThreePlayerTopology } from "./threePlayerTopology";
 import type {
   ThreePlayerSeat,
   ThreePlayerState,
@@ -37,6 +41,37 @@ const setOwnerController = (
   for (const piece of Object.values(state.board)) {
     if (piece.owner === owner) piece.controller = controller;
   }
+};
+
+const finishDraft = () => GODS.slice(0, 9).reduce(
+  (state, god) =>
+    threePlayerReducer(state, { type: "draft", godId: god.id }),
+  createThreePlayerGame(),
+);
+
+const pendingState = (
+  godId: (typeof GODS)[number]["id"],
+  abilityId: string,
+  step: string,
+  fields: Record<string, unknown> = {},
+) => {
+  const state = finishDraft();
+  const remaining = GODS.map((god) => god.id).filter((id) => id !== godId);
+  state.players.white.gods = [godId, remaining[0], remaining[1]];
+  state.players.red.gods = remaining.slice(2, 5);
+  state.players.black.gods = remaining.slice(5, 8);
+  state.draft.unused = remaining.slice(8);
+  state.activeSeat = "white";
+  const synthetic = ["snipe-shot", "harden-choice"].includes(abilityId);
+  state.selectedGod = synthetic ? undefined : godId;
+  state.selectedAbility = synthetic ? undefined : abilityId;
+  state.pending = {
+    godId,
+    abilityId,
+    step,
+    ...fields,
+  };
+  return state;
 };
 
 describe("three-player persistence", () => {
@@ -147,6 +182,133 @@ describe("three-player persistence", () => {
     const mislabeledLegacy = structuredClone(state) as unknown as Record<string, unknown>;
     mislabeledLegacy.schemaVersion = 1;
     expect(() => prepareThreePlayerState(mislabeledLegacy)).toThrow(/invalid/i);
+  });
+
+  it("round-trips every reducer pending-step shape", () => {
+    const state = finishDraft();
+    const topology = getThreePlayerTopology(state.config.boardVariant);
+    const [source, destination] = topology.cells;
+    const movedPieceId = Object.values(state.board)[0].id;
+    const areaId = topology.cells.flatMap((cell) =>
+      (["1x2", "2x1", "2x2"] as const).flatMap((kind) =>
+        topology.areas(cell, kind)
+      )
+    )[0].id;
+    const cases: Array<[
+      (typeof GODS)[number]["id"],
+      string,
+      string,
+      Record<string, unknown>?,
+    ]> = [
+      ["quetzacoatl", "flight", "source"],
+      ["teles", "lure", "target"],
+      ["artemis", "snipe-shot", "snipe-source"],
+      ["artemis", "snipe-shot", "snipe-target"],
+      ["anubis", "harden-choice", "harden-choice"],
+      ["anubis", "harden-choice", "harden-decision", { source }],
+      ["medusa", "stone-gaze", "confirm-stone-gaze"],
+      ["death", "resurrect", "grave", { selected: ["revived"] }],
+      ["death", "resurrect", "revive-place", { movedPieceId }],
+      ["death", "resurrect", "resurrect-more", {
+        movedPieceId,
+        selected: ["revived"],
+      }],
+      ["anubis", "monument", "monument-sacrifice", { selected: [] }],
+      ["anubis", "monument", "monument-base", { selected: [source] }],
+      ["salem", "hex", "hex-target", { selected: [] }],
+      ["leonidas", "march-home", "march-companions", {
+        source,
+        selected: [],
+      }],
+      ["leonidas", "march-home", "confirm-march-home", { source }],
+      ["chiron", "mount", "mount-rider", {
+        source,
+        destination,
+        selected: [],
+      }],
+      ["chiron", "mount", "mount-place", {
+        source,
+        destination,
+        selected: [],
+        movedPieceId,
+      }],
+      ["kangus", "banana-peel", "banana", { movedPieceId }],
+      ["death", "marked", "marked-choice", { movedPieceId }],
+      ["death", "siphon", "siphon-seat", { destination }],
+      ["death", "siphon", "siphon-amount", {
+        destination,
+        targetSeat: "red",
+      }],
+      ["midas", "barter", "barter-seat", { destination }],
+      ["midas", "barter", "barter-orb", {
+        destination,
+        targetSeat: "red",
+      }],
+      ["midas", "leverage", "hire", { movedPieceId }],
+      ["ares", "cull-the-weak", "cull-choice", { movedPieceId }],
+      ["medusa", "slither", "slither", {
+        source,
+        movedPieceId,
+        movesRemaining: -1,
+      }],
+      ["midas", "military-funding", "funding", { selected: [movedPieceId] }],
+      ["salem", "poison-cloud", "poison-area", {
+        source,
+        selectedPathIds: [areaId],
+      }],
+      ["kangus", "rage", "rage-source"],
+      ["kangus", "rage", "rage-destination", { source }],
+      ["kangus", "rage", "rage-choice", { source, destination }],
+      ["quetzacoatl", "air-strike", "air-strike-passenger", { source }],
+      ["quetzacoatl", "air-strike", "air-strike-destination", {
+        source,
+        selected: [destination],
+      }],
+      ["quetzacoatl", "air-strike", "air-strike-path", {
+        source,
+        destination,
+        selected: [destination],
+      }],
+      ["quetzacoatl", "air-strike", "air-strike-drop", {
+        source,
+        destination,
+        selected: [destination],
+      }],
+      ["leonidas", "escort", "escort-companions", {
+        source,
+        selected: [],
+      }],
+      ["leonidas", "escort", "escort-move", {
+        source,
+        selected: [movedPieceId],
+      }],
+      ["chiron", "gallop", "path-choice", { source, destination }],
+    ];
+
+    for (const [godId, abilityId, step, fields] of cases) {
+      const candidate = pendingState(
+        godId,
+        abilityId,
+        step,
+        fields,
+      );
+      expect(
+        prepareThreePlayerState(structuredClone(candidate)),
+        `${abilityId}/${step}`,
+      ).toEqual(candidate);
+    }
+  });
+
+  it("rejects pending steps paired with the wrong ability or stale fields", () => {
+    const state = pendingState("death", "resurrect", "grave");
+    state.pending!.abilityId = "marked";
+    state.selectedAbility = "marked";
+    expect(isThreePlayerState(state)).toBe(false);
+
+    const stale = pendingState("kangus", "rage", "rage-source", {
+      movedPieceId: Object.values(state.board)[0].id,
+    });
+    expect(isThreePlayerState(stale)).toBe(false);
   });
 
   it("rejects malformed topology, pass-cycle, controller, and affinity data", () => {

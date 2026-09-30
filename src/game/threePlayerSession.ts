@@ -6,6 +6,7 @@ import {
   isThreePlayerPromotion,
   prepareThreePlayerState,
 } from "./threePlayerPersistence";
+import { threePlayerPathIdBelongsToVariant } from "./threePlayerDivineGeometry";
 import { getThreePlayerTopology } from "./threePlayerTopology";
 import {
   THREE_PLAYER_BOARD_VARIANTS,
@@ -79,7 +80,7 @@ const cellVariant = (value: string): ThreePlayerBoardVariant | undefined =>
 const pathVariant = (value: unknown): ThreePlayerBoardVariant | undefined =>
   typeof value === "string"
     ? THREE_PLAYER_BOARD_VARIANTS.find((variant) =>
-      Boolean(getThreePlayerTopology(variant).trace(value))
+      threePlayerPathIdBelongsToVariant(variant, value)
     )
     : undefined;
 const isAbilityId = (value: unknown): value is string =>
@@ -198,7 +199,12 @@ const actionMatchesVariant = (
     return topology.cellSet.has(action.from) && topology.cellSet.has(action.to);
   }
   if (action.type === "cell") return topology.cellSet.has(action.cell);
-  if (action.type === "path") return Boolean(topology.trace(action.pathId));
+  if (action.type === "path") {
+    return threePlayerPathIdBelongsToVariant(
+      state.config.boardVariant,
+      action.pathId,
+    );
+  }
   return true;
 };
 

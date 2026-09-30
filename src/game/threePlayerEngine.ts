@@ -421,7 +421,7 @@ const captureAt = (
   explicitFriendly = false,
 ) => {
   const piece = state.board[cell];
-  if (!piece || piece.status.hardened) return undefined;
+  if (!piece || piece.type === "king" || piece.status.hardened) return undefined;
   if (
     !explicitFriendly &&
     piece.controller === state.activeSeat
@@ -636,7 +636,16 @@ const resolveTurnStart = (state: ThreePlayerState) => {
       setResult(state, { kind: "draw", reason: "stalemate-cycle" });
       return;
     }
+    state.selectedGod = undefined;
+    state.selectedAbility = undefined;
+    state.selectedCell = undefined;
+    state.selectedPath = undefined;
+    state.pending = undefined;
+    state.legalCells = [];
+    state.legalSeats = [];
+    state.legalPaths = [];
     state.activeSeat = nextThreePlayerSeat(seat, survivors);
+    resolveStartOfDivineTurn(state);
   }
 };
 
@@ -869,7 +878,7 @@ const preparedShotTargets = (
   attacksOnly: true,
 }).filter((target) => {
   const victim = state.board[target];
-  if (!hostilePiece(state, victim)) return false;
+  if (!hostilePiece(state, victim) || victim.type === "king") return false;
   const simulated = clone(state);
   delete simulated.board[target];
   return !threePlayerIsInCheck(simulated, state.activeSeat);
@@ -951,7 +960,8 @@ const resolveMarkedForDeath = (state: ThreePlayerState) => {
   for (const [cell, piece] of Object.entries(state.board)) {
     if (
       piece.status.markedForDeath?.owner !== state.activeSeat ||
-      piece.status.markedForDeath.round > state.round
+      piece.status.markedForDeath.round > state.round ||
+      piece.type === "king"
     ) continue;
     delete state.board[cell];
     capturePiece(state, piece, state.activeSeat);
@@ -969,7 +979,10 @@ const startNextRound = (state: ThreePlayerState) => {
   state.activeSeat = survivors[0];
   state.turn += 1;
   resolveStartOfDivineTurn(state);
-  state.notice = `Round ${state.round}. ${name(state, state.activeSeat)} to act.`;
+  resolveTurnStart(state);
+  if (!state.result && !state.pending) {
+    state.notice = `Round ${state.round}. ${name(state, state.activeSeat)} to act.`;
+  }
 };
 
 const finishDivineTurn = (
@@ -1125,6 +1138,7 @@ const sourceIsAllowed = (state: ThreePlayerState, cell: string) => {
   if (abilityId === "charge") {
     return piece.controller === state.activeSeat && piece.type === "knight";
   }
+  if (abilityId === "marked" && piece.type === "king") return false;
   return piece.controller === state.activeSeat;
 };
 
@@ -1411,6 +1425,7 @@ const activateAbility = (
     state.notice = "You do not have enough orbs for that ability.";
     return;
   }
+  commitGodCall(state, god.id);
   state.selectedAbility = abilityId;
   state.selectedCell = undefined;
   state.selectedPath = undefined;
@@ -1437,7 +1452,10 @@ const activateAbility = (
       .filter(([, piece]) =>
         piece.controller === state.activeSeat && piece.type === "bishop"
       );
-    if (!bishops.length || !activePlayer(state).graveyard.length) {
+    if (
+      !bishops.length ||
+      !resurrectableGravePieces(state).length
+    ) {
       refundCost(state);
       state.selectedAbility = undefined;
       state.pending = undefined;
@@ -1529,6 +1547,10 @@ const selectGod = (state: ThreePlayerState, godId: GodId) => {
   state.legalCells = [];
   state.legalSeats = [];
   state.legalPaths = [];
+  state.notice = `${GOD_BY_ID[godId].name} answers. Choose an ability.`;
+};
+
+function commitGodCall(state: ThreePlayerState, godId: GodId) {
   for (const piece of Object.values(state.board)) {
     const prepared = preparedDetails(piece);
     if (
@@ -1569,8 +1591,7 @@ const selectGod = (state: ThreePlayerState, godId: GodId) => {
     seat: state.activeSeat,
     godId,
   });
-  state.notice = `${GOD_BY_ID[godId].name} answers. Choose an ability.`;
-};
+}
 
 const hostileControllersAdjacentTo = (
   state: ThreePlayerState,
@@ -1878,7 +1899,10 @@ const resolveMoveEffect = (
   } else if (abilityId === "cull-the-weak") {
     const attacked = threePlayerPseudoTargets(state, to, {
       attacksOnly: true,
-    }).filter((cell) => hostilePiece(state, state.board[cell]));
+    }).filter((cell) =>
+      hostilePiece(state, state.board[cell]) &&
+      state.board[cell].type !== "king"
+    );
     if (attacked.length >= 2) {
       const lowest = Math.min(
         ...attacked.map((cell) =>
@@ -1939,6 +1963,7 @@ const executeEscort = (
     const occupying = simulated.board[landing.to];
     if (
       occupying?.status.hardened ||
+      occupying?.type === "king" ||
       occupying?.controller === state.activeSeat
     ) return;
     delete simulated.board[landing.to];
@@ -1947,7 +1972,7 @@ const executeEscort = (
   if (threePlayerIsInCheck(simulated, state.activeSeat)) return;
   for (const landing of landings) delete state.board[landing.from];
   for (const landing of landings) {
-    if (state.board[landing.to]) captureAt(state, landing.to);
+    if (state.board[landing.to] && !captureAt(state, landing.to)) return;
     state.board[landing.to] = {
       ...landing.piece,
       hasMoved: true,
@@ -1993,7 +2018,8 @@ const executeMarchHome = (
   for (const landing of landings) {
     const occupying = simulated.board[landing.to];
     if (
-      occupying?.status.hardened
+      occupying?.status.hardened ||
+      occupying?.type === "king"
     ) return;
     delete simulated.board[landing.to];
     simulated.board[landing.to] = landing.piece;
@@ -2001,7 +2027,7 @@ const executeMarchHome = (
   if (threePlayerIsInCheck(simulated, state.activeSeat)) return;
   for (const landing of landings) {
     if (state.board[landing.to] && !moving.has(landing.to)) {
-      captureAt(state, landing.to, true);
+      if (!captureAt(state, landing.to, true)) return;
     }
   }
   for (const landing of landings) delete state.board[landing.from];
@@ -2158,6 +2184,33 @@ const resolveRage = (
   }
 };
 
+function resurrectionCells(state: ThreePlayerState) {
+  const level = currentLevel(state, "resurrect");
+  return [...new Set(
+    Object.entries(state.board)
+      .filter(([, piece]) =>
+        piece.controller === state.activeSeat && piece.type === "bishop"
+      )
+      .flatMap(([cell]) => threePlayerAdjacentCells(state, cell))
+      .filter((cell) => {
+        const occupying = state.board[cell];
+        return !occupying ||
+          (
+            level >= 3 &&
+            hostilePiece(state, occupying) &&
+            occupying.type !== "king" &&
+            !occupying.status.hardened
+          );
+      }),
+  )];
+}
+
+function resurrectableGravePieces(state: ThreePlayerState) {
+  return resurrectionCells(state).length
+    ? activePlayer(state).graveyard
+    : [];
+}
+
 const chooseTarget = (state: ThreePlayerState, cell: string) => {
   const abilityId = state.selectedAbility!;
   const level = currentLevel(state, abilityId);
@@ -2203,25 +2256,11 @@ const chooseGravePiece = (
   state: ThreePlayerState,
   pieceId: string,
 ) => {
-  const entry = activePlayer(state).graveyard.find(
+  const entry = resurrectableGravePieces(state).find(
     (candidate) => candidate.piece.id === pieceId,
   );
   if (!entry) return;
-  const level = currentLevel(state, "resurrect");
-  const cells = Object.entries(state.board)
-    .filter(([, piece]) =>
-      piece.controller === state.activeSeat && piece.type === "bishop"
-    )
-    .flatMap(([cell]) => threePlayerAdjacentCells(state, cell))
-    .filter((cell) => {
-      const occupying = state.board[cell];
-      return !occupying ||
-        (
-          level >= 3 &&
-          hostilePiece(state, occupying) &&
-              !occupying.status.hardened
-        );
-    });
+  const cells = resurrectionCells(state);
   if (!cells.length) return;
   state.pending = {
     ...state.pending!,
@@ -2264,7 +2303,7 @@ const completeSpecialTarget = (
     );
     if (index < 0) return;
     const revived = graveyard[index].piece;
-    if (state.board[cell]) captureAt(state, cell);
+    if (state.board[cell] && !captureAt(state, cell)) return;
     revived.controller = state.activeSeat;
     revived.status = {};
     revived.hasMoved = true;
@@ -2275,7 +2314,7 @@ const completeSpecialTarget = (
     if (
       currentLevel(state, "resurrect") >= 2 &&
       revivedIds.length < 2 &&
-      graveyard.length &&
+      resurrectableGravePieces(state).length &&
       activePlayer(state).orbs.light >= 2
     ) {
       state.pending = {
@@ -2360,7 +2399,10 @@ const airStrikeDrops = (
     ? crossed.slice(0, bananaIndex)
     : crossed;
   const firstEnemy = currentLevel(state, "air-strike") >= 2
-    ? reachable.find((cell) => hostilePiece(state, state.board[cell]))
+    ? reachable.find((cell) =>
+      hostilePiece(state, state.board[cell]) &&
+      state.board[cell].type !== "king"
+    )
     : undefined;
   return reachable.filter((cell) => {
     const occupying = state.board[cell];
@@ -2393,6 +2435,118 @@ const airStrikeDestinations = (
         path.traceId,
       ).length > 0
     )
+  );
+};
+
+const exactMovementPaths = (
+  state: ThreePlayerState,
+  from: string,
+  to: string,
+) => {
+  const piece = state.board[from];
+  if (!piece || !state.selectedAbility) return [];
+  if (
+    ["air-lift", "pick-a-fight", "escort", "stealth"].includes(
+      state.selectedAbility,
+    )
+  ) return [];
+  const topology = getThreePlayerTopology(state.config.boardVariant);
+  const effectiveType = piece.status.polymorphed
+    ? "pawn"
+    : state.selectedAbility === "slither"
+      ? "bishop"
+      : state.selectedAbility === "charge"
+        ? "rook"
+        : piece.type;
+  const lineKinds = new Set<"rook" | "bishop">();
+  if (effectiveType === "rook" || effectiveType === "queen") {
+    lineKinds.add("rook");
+  }
+  if (effectiveType === "bishop" || effectiveType === "queen") {
+    lineKinds.add("bishop");
+  }
+  if (
+    piece.type === "knight" &&
+    piece.status.chargeUntil &&
+    ![
+      "flight",
+      "air-lift",
+      "charge",
+      "slither",
+      "march-home",
+      "escort",
+      "pick-a-fight",
+      "enchant",
+    ].includes(state.selectedAbility)
+  ) lineKinds.add("rook");
+  const ignoresBlockers = state.selectedAbility === "flight";
+  const paths = [...lineKinds].flatMap((kind) =>
+    topology.paths(from, to, kind).filter((path) =>
+      ignoresBlockers ||
+      path.cells.slice(0, -1).every((cell) => !state.board[cell])
+    )
+  );
+  if (effectiveType === "knight") {
+    paths.push(...topology.knightTraces(from)
+      .filter((trace) => trace.target === to)
+      .map((trace) => ({
+        traceId: trace.id,
+        origin: from,
+        destination: to,
+        context: trace.context,
+        cells: trace.path,
+      })));
+  } else if (effectiveType === "pawn") {
+    const pawnRules = topology.pawnRules(piece.owner, from);
+    paths.push(...pawnRules.advances
+      .filter((advance) =>
+        advance.to === to &&
+        advance.path.slice(0, -1).every((cell) => !state.board[cell])
+      )
+      .map((advance, index) => ({
+        traceId: `pawn:${from}:${to}:${advance.group}:${index}`,
+        origin: from,
+        destination: to,
+        context: advance.context,
+        cells: advance.path,
+      })));
+    if (
+      !paths.length &&
+      pawnRules.captures.some((capture) => capture.to === to)
+    ) {
+      paths.push({
+        traceId: `step:${from}:${to}`,
+        origin: from,
+        destination: to,
+        cells: [to],
+      });
+    }
+  } else if (
+    effectiveType === "king"
+  ) {
+    if (topology.kingNeighbors(from).includes(to)) {
+      paths.push({
+        traceId: `step:${from}:${to}`,
+        origin: from,
+        destination: to,
+        cells: [to],
+      });
+    } else {
+      const castling = topology.castling(piece.owner).find((candidate) =>
+        candidate.kingFrom === from && candidate.kingTo === to
+      );
+      if (castling) {
+        paths.push({
+          traceId: `castle:${castling.id}`,
+          origin: from,
+          destination: to,
+          cells: castling.kingPath.filter((cell) => cell !== from),
+        });
+      }
+    }
+  }
+  return paths.filter((path, index) =>
+    paths.findIndex((candidate) => candidate.traceId === path.traceId) === index
   );
 };
 
@@ -2521,7 +2675,9 @@ const handleCell = (state: ThreePlayerState, cell: string) => {
         state.board[passengerCell] = passenger;
         return;
       }
-      if (state.board[cell]) captureAt(state, cell);
+      if (state.board[cell] && !captureAt(state, cell)) {
+        return;
+      }
       state.board[cell] = {
         ...passenger,
         hasMoved: true,
@@ -2594,15 +2750,26 @@ const handleCell = (state: ThreePlayerState, cell: string) => {
   ) {
     if (!state.legalCells!.includes(cell) || !state.board[cell]) return;
     const destination = state.pending.destination;
+    const placements = threePlayerOrthogonalCells(
+      state,
+      destination,
+    ).filter((target) => !state.board[target]);
+    if (!placements.length) {
+      finishDivineTurn(
+        state,
+        abilityDescription(
+          state,
+          `: moved with ${state.pending.selected?.length ?? 0} riders`,
+        ),
+      );
+      return;
+    }
     state.pending = {
       ...state.pending,
       step: "mount-place",
       movedPieceId: state.board[cell].id,
     };
-    state.legalCells = threePlayerOrthogonalCells(
-      state,
-      destination,
-    ).filter((target) => !state.board[target]);
+    state.legalCells = placements;
     return;
   }
   if (
@@ -2629,7 +2796,11 @@ const handleCell = (state: ThreePlayerState, cell: string) => {
         const piece = state.board[candidate];
         return alliedPiece(state, piece) && !selected.includes(piece.id);
       });
-      if (!remaining.length) {
+      const placements = threePlayerOrthogonalCells(
+        state,
+        state.pending.destination!,
+      ).filter((target) => !state.board[target]);
+      if (!remaining.length || !placements.length) {
         finishDivineTurn(
           state,
           abilityDescription(state, `: moved with ${selected.length} riders`),
@@ -2708,7 +2879,10 @@ const handleCell = (state: ThreePlayerState, cell: string) => {
     const victim = state.board[cell];
     const attacked = threePlayerPseudoTargets(state, attacker, {
       attacksOnly: true,
-    }).filter((target) => hostilePiece(state, state.board[target]));
+    }).filter((target) =>
+      hostilePiece(state, state.board[target]) &&
+      state.board[target].type !== "king"
+    );
     const lowest = Math.min(...attacked.map((target) =>
       threePlayerPieceValue(state.board[target].type)
     ));
@@ -2719,10 +2893,7 @@ const handleCell = (state: ThreePlayerState, cell: string) => {
   }
   if (state.selectedCell) {
     if (state.legalCells!.includes(cell)) {
-      const pathSensitive = ["flight"].includes(state.selectedAbility);
-      const paths = pathSensitive
-        ? threePlayerTravelPaths(state, state.selectedCell, cell)
-        : [];
+      const paths = exactMovementPaths(state, state.selectedCell, cell);
       if (paths.length > 1) {
         state.pending = {
           ...state.pending,
@@ -2904,14 +3075,20 @@ const handleChoice = (state: ThreePlayerState, value: boolean) => {
       const cell = findCellById(state, state.pending.movedPieceId);
       if (cell) {
         const piece = state.board[cell];
-        delete state.board[cell];
-        sendToGraveyard(state, piece);
-        addOrbs(state, state.activeSeat, 0, 5, cell);
+        if (piece.type !== "king") {
+          delete state.board[cell];
+          sendToGraveyard(state, piece);
+          addOrbs(state, state.activeSeat, 0, 5, cell);
+        }
       }
     }
     finishDivineTurn(state, abilityDescription(state));
   } else if (state.pending?.step === "resurrect-more") {
-    if (value && activePlayer(state).orbs.light >= 2) {
+    if (
+      value &&
+      activePlayer(state).orbs.light >= 2 &&
+      resurrectableGravePieces(state).length
+    ) {
       addOrbs(state, state.activeSeat, -2, 0);
       state.pending.step = "grave";
       state.pending.movedPieceId = undefined;
@@ -3079,7 +3256,7 @@ export const availableThreePlayerActions = (
     ];
   }
   if (state.pending?.step === "grave") {
-    return activePlayer(state).graveyard.map(({ piece }) => ({
+    return resurrectableGravePieces(state).map(({ piece }) => ({
       type: "grave",
       pieceId: piece.id,
     }));

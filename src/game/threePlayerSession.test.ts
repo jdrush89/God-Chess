@@ -63,6 +63,31 @@ describe("three-player session boundaries", () => {
       expect(normalizeThreePlayerAction({ ...action, extra: true }), action.type)
         .toBeUndefined();
     }
+    const knight = yalta.knightTraces(cell)[0];
+    const pawn = yalta.cells.flatMap((origin) => {
+      const advances = yalta.pawnRules("white", origin).advances;
+      return [...new Set(advances.map((advance) => advance.to))]
+        .flatMap((target) =>
+          advances
+            .filter((advance) => advance.to === target)
+            .map((advance, index) =>
+              `pawn:${origin}:${target}:${advance.group}:${index}`
+            )
+        );
+    })[0];
+    const stepTarget = yalta.kingNeighbors(cell)[0];
+    const castling = yalta.castling("white")[0];
+    for (const pathId of [
+      knight.id,
+      pawn,
+      `step:${cell}:${stepTarget}`,
+      `castle:${castling.id}`,
+    ]) {
+      expect(normalizeThreePlayerAction({ type: "path", pathId })).toEqual({
+        type: "path",
+        pathId,
+      });
+    }
     expect(normalizeThreePlayerAction({
       type: "move",
       from: yalta.cells[0],
@@ -179,5 +204,73 @@ describe("three-player session boundaries", () => {
     expect(isThreePlayerUndoUnanimous(proposal)).toBe(false);
     proposal = approveThreePlayerUndo(proposal, "two");
     expect(isThreePlayerUndoUnanimous(proposal)).toBe(true);
+  });
+
+  it("normalizes legal synthetic, unlimited, and generated-area pending states", () => {
+    const finished = GODS.slice(0, 9).reduce(
+      (state, god) =>
+        threePlayerReducer(state, { type: "draft", godId: god.id }),
+      createThreePlayerGame(),
+    );
+    const assignWhiteGod = (
+      state: typeof finished,
+      godId: (typeof GODS)[number]["id"],
+    ) => {
+      const remaining = GODS.map((god) => god.id).filter((id) => id !== godId);
+      state.players.white.gods = [godId, remaining[0], remaining[1]];
+      state.players.red.gods = remaining.slice(2, 5);
+      state.players.black.gods = remaining.slice(5, 8);
+      state.draft.unused = remaining.slice(8);
+      state.activeSeat = "white";
+    };
+    const cell = Object.keys(finished.board)[0];
+    const movedPieceId = finished.board[cell].id;
+    const topology = getThreePlayerTopology(finished.config.boardVariant);
+    const areaId = topology.cells.flatMap((origin) =>
+      (["1x2", "2x1", "2x2"] as const).flatMap((kind) =>
+        topology.areas(origin, kind)
+      )
+    )[0].id;
+
+    const snipe = structuredClone(finished);
+    assignWhiteGod(snipe, "artemis");
+    snipe.pending = {
+      godId: "artemis",
+      abilityId: "snipe-shot",
+      step: "snipe-source",
+    };
+
+    const slither = structuredClone(finished);
+    assignWhiteGod(slither, "medusa");
+    slither.selectedGod = "medusa";
+    slither.selectedAbility = "slither";
+    slither.pending = {
+      godId: "medusa",
+      abilityId: "slither",
+      step: "slither",
+      source: cell,
+      movedPieceId,
+      movesRemaining: -1,
+    };
+
+    const poison = structuredClone(finished);
+    assignWhiteGod(poison, "salem");
+    poison.selectedGod = "salem";
+    poison.selectedAbility = "poison-cloud";
+    poison.pending = {
+      godId: "salem",
+      abilityId: "poison-cloud",
+      step: "poison-area",
+      source: cell,
+      selectedPathIds: [areaId],
+    };
+
+    for (const [index, state] of [snipe, slither, poison].entries()) {
+      const envelope = createThreePlayerStateEnvelope(
+        state,
+        `pending-${index}`,
+      );
+      expect(normalizeThreePlayerStateEnvelope(envelope)).toEqual(envelope);
+    }
   });
 });

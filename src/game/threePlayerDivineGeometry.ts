@@ -1,6 +1,7 @@
 import { threePlayerPieceAffinity } from "./threePlayerConfig";
 import { getThreePlayerTopology } from "./threePlayerTopology";
 import type {
+  ThreePlayerBoardVariant,
   ThreePlayerCell,
   ThreePlayerOrbAffinity,
   ThreePlayerPiece,
@@ -10,6 +11,46 @@ import type {
 
 const topologyFor = (state: Pick<ThreePlayerState, "config">) =>
   getThreePlayerTopology(state.config.boardVariant);
+
+const topologyPathIds = new Map<ThreePlayerBoardVariant, ReadonlySet<string>>();
+
+export const threePlayerPathIdBelongsToVariant = (
+  variant: ThreePlayerBoardVariant,
+  pathId: string,
+) => {
+  let pathIds = topologyPathIds.get(variant);
+  if (!pathIds) {
+    const topology = getThreePlayerTopology(variant);
+    pathIds = new Set([
+      ...topology.cells.flatMap((cell) => [
+        ...topology.rookTraces(cell).map((trace) => trace.id),
+        ...topology.bishopTraces(cell).map((trace) => trace.id),
+        ...topology.knightTraces(cell).map((trace) => trace.id),
+        ...topology.kingNeighbors(cell).map((target) =>
+          `step:${cell}:${target}`
+        ),
+        ...(["white", "red", "black"] as const).flatMap((seat) => {
+          const advances = topology.pawnRules(seat, cell).advances;
+          return [...new Set(advances.map((advance) => advance.to))]
+            .flatMap((target) =>
+              advances
+                .filter((advance) => advance.to === target)
+                .map((advance, index) =>
+                  `pawn:${cell}:${target}:${advance.group}:${index}`
+                )
+            );
+        }),
+      ]),
+      ...(["white", "red", "black"] as const).flatMap((seat) =>
+        topology.castling(seat).map((candidate) =>
+          `castle:${candidate.id}`
+        )
+      ),
+    ]);
+    topologyPathIds.set(variant, pathIds);
+  }
+  return pathIds.has(pathId);
+};
 
 export const threePlayerCells = (
   state: Pick<ThreePlayerState, "config">,
@@ -108,10 +149,26 @@ export const threePlayerCrossedCells = (
   pathId?: string,
 ) => {
   const topology = topologyFor(state);
-  const path = pathId
-    ? topology.path(pathId, to) ??
-      threePlayerTravelPaths(state, from, to)
-        .find((candidate) => candidate.traceId === pathId)
+  const moving = state.board[from];
+  const castlingPath = pathId && moving?.type === "king"
+    ? topology.castling(moving.owner)
+      .find((candidate) =>
+        `castle:${candidate.id}` === pathId &&
+        candidate.kingFrom === from &&
+        candidate.kingTo === to
+      )
+    : undefined;
+  const path = castlingPath
+    ? {
+      traceId: `castle:${castlingPath.id}`,
+      origin: from,
+      destination: to,
+      cells: castlingPath.kingPath.filter((cell) => cell !== from),
+    }
+    : pathId
+      ? topology.path(pathId, to) ??
+        threePlayerTravelPaths(state, from, to)
+          .find((candidate) => candidate.traceId === pathId)
     : threePlayerTravelPaths(state, from, to)[0];
   if (!path) return [];
   return path.cells.at(-1) === to

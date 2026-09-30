@@ -1,4 +1,5 @@
 import { validateThreePlayerConfig } from "./threePlayerConfig";
+import { threePlayerPathIdBelongsToVariant } from "./threePlayerDivineGeometry";
 import { getThreePlayerTopology } from "./threePlayerTopology";
 import {
   THREE_PLAYER_BOARD_VARIANTS,
@@ -42,6 +43,127 @@ const PRESENTATION_KINDS = new Set<ThreePlayerPresentationEventKind>([
   "upgrade",
   "orb",
 ]);
+
+interface PendingStepRule {
+  abilities: "*" | readonly string[];
+  required?: readonly string[];
+  optional?: readonly string[];
+}
+
+const PENDING_STEP_RULES: Readonly<Record<string, PendingStepRule>> = {
+  source: { abilities: "*", optional: ["source", "selected"] },
+  target: { abilities: ["lure", "rage", "poison-cloud", "polymorph"] },
+  "snipe-source": { abilities: ["snipe-shot"] },
+  "snipe-target": { abilities: ["snipe-shot"] },
+  "harden-choice": { abilities: ["harden-choice"] },
+  "harden-decision": {
+    abilities: ["harden-choice"],
+    required: ["source"],
+  },
+  "confirm-stone-gaze": { abilities: ["stone-gaze"] },
+  grave: {
+    abilities: ["resurrect"],
+    optional: ["selected", "movedPieceId"],
+  },
+  "revive-place": {
+    abilities: ["resurrect"],
+    required: ["movedPieceId"],
+    optional: ["selected"],
+  },
+  "resurrect-more": {
+    abilities: ["resurrect"],
+    required: ["movedPieceId", "selected"],
+  },
+  "monument-sacrifice": {
+    abilities: ["monument"],
+    required: ["selected"],
+  },
+  "monument-base": {
+    abilities: ["monument"],
+    required: ["selected"],
+  },
+  "hex-target": { abilities: ["hex"], required: ["selected"] },
+  "march-companions": {
+    abilities: ["march-home"],
+    required: ["source", "selected"],
+  },
+  "confirm-march-home": {
+    abilities: ["march-home"],
+    required: ["source"],
+    optional: ["selected"],
+  },
+  "mount-rider": {
+    abilities: ["mount"],
+    required: ["source", "destination", "selected"],
+    optional: ["movedPieceId"],
+  },
+  "mount-place": {
+    abilities: ["mount"],
+    required: ["source", "destination", "selected", "movedPieceId"],
+  },
+  banana: { abilities: ["banana-peel"], required: ["movedPieceId"] },
+  "marked-choice": { abilities: ["marked"], required: ["movedPieceId"] },
+  "siphon-seat": { abilities: ["siphon"], required: ["destination"] },
+  "siphon-amount": {
+    abilities: ["siphon"],
+    required: ["destination", "targetSeat"],
+  },
+  "barter-seat": { abilities: ["barter"], required: ["destination"] },
+  "barter-orb": {
+    abilities: ["barter"],
+    required: ["destination", "targetSeat"],
+  },
+  hire: { abilities: ["leverage"], required: ["movedPieceId"] },
+  "cull-choice": {
+    abilities: ["cull-the-weak"],
+    required: ["movedPieceId"],
+  },
+  slither: {
+    abilities: ["slither"],
+    required: ["source", "movedPieceId", "movesRemaining"],
+  },
+  funding: { abilities: ["military-funding"], required: ["selected"] },
+  "poison-area": {
+    abilities: ["poison-cloud"],
+    required: ["source", "selectedPathIds"],
+  },
+  "rage-source": { abilities: ["rage"] },
+  "rage-destination": { abilities: ["rage"], required: ["source"] },
+  "rage-choice": {
+    abilities: ["rage"],
+    required: ["destination"],
+    optional: ["source"],
+  },
+  "air-strike-passenger": {
+    abilities: ["air-strike"],
+    required: ["source"],
+  },
+  "air-strike-destination": {
+    abilities: ["air-strike"],
+    required: ["source", "selected"],
+  },
+  "air-strike-path": {
+    abilities: ["air-strike"],
+    required: ["source", "destination", "selected"],
+  },
+  "air-strike-drop": {
+    abilities: ["air-strike"],
+    required: ["source", "destination", "selected"],
+  },
+  "escort-companions": {
+    abilities: ["escort"],
+    required: ["source", "selected"],
+  },
+  "escort-move": {
+    abilities: ["escort"],
+    required: ["source", "selected"],
+  },
+  "path-choice": {
+    abilities: "*",
+    required: ["source", "destination"],
+    optional: ["selected", "movedPieceId", "movesRemaining"],
+  },
+};
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -280,12 +402,24 @@ const isThreePlayerStateVersion = (value: unknown): boolean => {
     (value.lastAction !== undefined && typeof value.lastAction !== "string")
   ) return false;
 
-  const topology = getThreePlayerTopology(value.config.boardVariant);
+  const boardVariant = value.config.boardVariant;
+  const topology = getThreePlayerTopology(boardVariant);
   const validCells = new Set(topology.cells);
+  const areaIds = new Set(
+    topology.cells.flatMap((cell) =>
+      (["1x2", "2x1", "2x2"] as const).flatMap((kind) =>
+        topology.areas(cell, kind).map((area) => area.id)
+      )
+    ),
+  );
   const isCell = (candidate: unknown): candidate is string =>
     typeof candidate === "string" && validCells.has(candidate);
   const isPathId = (candidate: unknown): candidate is string =>
-    typeof candidate === "string" && Boolean(topology.trace(candidate));
+    typeof candidate === "string" &&
+    threePlayerPathIdBelongsToVariant(
+      boardVariant,
+      candidate,
+    );
   const isCellArray = (candidate: unknown): candidate is string[] =>
     Array.isArray(candidate) && candidate.every(isCell) && isUnique(candidate);
   const isStringArray = (candidate: unknown): candidate is string[] =>
@@ -487,52 +621,73 @@ const isThreePlayerStateVersion = (value: unknown): boolean => {
     if (value.upgradeQueue.some((seat) => players[seat].eliminated)) return false;
 
     if (value.pending !== undefined) {
+      const pending = value.pending;
+      const rule = isRecord(pending) && typeof pending.step === "string"
+        ? PENDING_STEP_RULES[pending.step]
+        : undefined;
+      const syntheticGod = isRecord(pending)
+        ? pending.abilityId === "snipe-shot"
+          ? "artemis"
+          : pending.abilityId === "harden-choice"
+            ? "anubis"
+            : undefined
+        : undefined;
+      const pendingGod = isRecord(pending) && typeof pending.abilityId === "string"
+        ? syntheticGod ?? ABILITY_GODS.get(pending.abilityId)
+        : undefined;
+      const requiredFields = rule?.required ?? [];
+      const optionalFields = rule?.optional ?? [];
       if (
-        !isRecord(value.pending) ||
+        !isRecord(pending) ||
+        !rule ||
         !hasExactKeys(
-          value.pending,
-          ["godId", "abilityId", "step"],
-          [
-            "source",
-            "destination",
-            "selected",
-            "selectedCellIds",
-            "selectedPieceIds",
-            "selectedPathIds",
-            "movedPieceId",
-            "movesRemaining",
-            "targetSeat",
-          ],
+          pending,
+          ["godId", "abilityId", "step", ...requiredFields],
+          [...optionalFields],
         ) ||
-        !isGodId(value.pending.godId) ||
-        !players[value.activeSeat].gods.includes(value.pending.godId) ||
-        typeof value.pending.abilityId !== "string" ||
-        ABILITY_GODS.get(value.pending.abilityId) !== value.pending.godId ||
-        typeof value.pending.step !== "string" ||
-        !value.pending.step ||
-        (value.pending.source !== undefined && !isCell(value.pending.source)) ||
-        (value.pending.destination !== undefined &&
-          !isCell(value.pending.destination)) ||
-        (value.pending.selected !== undefined &&
-          !isStringArray(value.pending.selected)) ||
-        (value.pending.selectedCellIds !== undefined &&
-          !isCellArray(value.pending.selectedCellIds)) ||
-        (value.pending.selectedPieceIds !== undefined &&
+        requiredFields.some((field) => pending[field] === undefined) ||
+        !isGodId(pending.godId) ||
+        !players[value.activeSeat].gods.includes(pending.godId) ||
+        typeof pending.abilityId !== "string" ||
+        pendingGod !== pending.godId ||
+        (
+          rule.abilities === "*"
+            ? !ABILITY_IDS.has(pending.abilityId)
+            : !rule.abilities.includes(pending.abilityId)
+        ) ||
+        (pending.source !== undefined && !isCell(pending.source)) ||
+        (pending.destination !== undefined && !isCell(pending.destination)) ||
+        (pending.selected !== undefined && !isStringArray(pending.selected)) ||
+        (
+          pending.selectedPathIds !== undefined &&
           (
-            !isStringArray(value.pending.selectedPieceIds) ||
-            value.pending.selectedPieceIds.some((pieceId) =>
-              !pieceIds.includes(pieceId)
-            )
-          )) ||
-        (value.pending.selectedPathIds !== undefined &&
-          !isPathArray(value.pending.selectedPathIds)) ||
-        (value.pending.movedPieceId !== undefined &&
-          (typeof value.pending.movedPieceId !== "string" ||
-            !pieceIds.includes(value.pending.movedPieceId))) ||
-        (value.pending.movesRemaining !== undefined &&
-          !isInteger(value.pending.movesRemaining)) ||
-        (value.pending.targetSeat !== undefined &&
-          !isSeat(value.pending.targetSeat))
+            !isStringArray(pending.selectedPathIds) ||
+            pending.selectedPathIds.some((areaId) => !areaIds.has(areaId))
+          )
+        ) ||
+        (
+          pending.movedPieceId !== undefined &&
+          (
+            typeof pending.movedPieceId !== "string" ||
+            !pieceIds.includes(pending.movedPieceId)
+          )
+        ) ||
+        (
+          pending.movesRemaining !== undefined &&
+          (
+            typeof pending.movesRemaining !== "number" ||
+            !Number.isInteger(pending.movesRemaining) ||
+            pending.movesRemaining < -1
+          )
+        ) ||
+        (pending.targetSeat !== undefined && !isSeat(pending.targetSeat))
+      ) return false;
+      if (
+        syntheticGod
+          ? value.selectedGod !== undefined ||
+            value.selectedAbility !== undefined
+          : value.selectedGod !== pending.godId ||
+            value.selectedAbility !== pending.abilityId
       ) return false;
     }
 
