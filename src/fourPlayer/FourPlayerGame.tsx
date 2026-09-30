@@ -265,12 +265,6 @@ function FourPlayerDraft({
   const activePlayer = state.players[state.activeSeat];
   const currentGod = GOD_BY_ID[inspected];
 
-  useEffect(() => {
-    if (!state.draft.available.includes(inspected) && state.draft.available[0]) {
-      setInspected(state.draft.available[0]);
-    }
-  }, [inspected, state.draft.available]);
-
   return (
     <main className={`draft-page four-draft-page ${inputDisabled ? "input-locked" : ""}`}>
       <header className="topbar draft-topbar">

@@ -65,6 +65,20 @@ describe("four-player app integration", () => {
     expect(document.querySelectorAll(".four-draft-progress .draft-pip")).toHaveLength(12);
   });
 
+  it("keeps drafted Gods inspectable while preventing them from being claimed again", () => {
+    openFourPlayerSetup();
+    fireEvent.click(screen.getByRole("button", { name: /begin four-player draft/i }));
+    fireEvent.click(screen.getByRole("button", { name: /ares conflict/i }));
+    fireEvent.click(screen.getByRole("button", { name: /claim ares/i }));
+
+    const claimedAres = screen.getByRole("button", { name: /ares conflict/i });
+    fireEvent.click(claimedAres);
+
+    expect(screen.getByRole("heading", { name: "Ares" })).toBeTruthy();
+    expect(screen.getByText("Threaten")).toBeTruthy();
+    expect((screen.getByRole("button", { name: /claim ares/i }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it("uses per-seat AI difficulty and advances chained AI draft seats", async () => {
     const { container } = render(<App />);
     fireEvent.click(screen.getByRole("button", { name: /^new game$/i }));
