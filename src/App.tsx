@@ -3639,10 +3639,6 @@ export default function App() {
     else applyUndo();
   };
   const fourOnlineCanonical = fourOnline.snapshot?.canonical;
-  const fourOnlinePausedParticipant = fourOnline.snapshot?.participants.find(
-    (participant) =>
-      participant.id === fourOnline.snapshot?.pausedParticipantId
-  );
   const threeOnlineCanonical = threeOnline.snapshot?.canonical;
 
   if (startView === "menu") {
@@ -3751,11 +3747,7 @@ export default function App() {
       <FourPlayerGame
         key={`online-${fourOnline.roomCode}`}
         initialState={fourOnlineCanonical.state}
-        undoPreferred={
-          fourOnline.participantId
-            ? fourOnline.snapshot.undoConsents[fourOnline.participantId] === true
-            : false
-        }
+        undoPreferred={fourOnline.snapshot.localUndoConsent}
         onUndoPreferenceChange={fourOnlineActions.setUndoConsent}
         onPersist={async () => false}
         onQuit={() => {
@@ -3779,12 +3771,10 @@ export default function App() {
               ? "finished"
               : "playing",
           awaitingSync: Boolean(fourOnline.awaitingActionId),
-          undoConsent: fourOnline.participantId
-            ? fourOnline.snapshot.undoConsents[fourOnline.participantId] === true
-            : false,
+          undoConsent: fourOnline.snapshot.localUndoConsent,
           undoAvailable: fourOnline.snapshot.undoAvailable,
           pausedSeat,
-          pausedParticipantName: fourOnlinePausedParticipant?.name,
+          pausedParticipantName: fourOnline.snapshot.pausedParticipantName,
           onAction: fourOnlineActions.sendAction,
           onUndo: fourOnlineActions.requestUndo,
           onUndoConsentChange: fourOnlineActions.setUndoConsent,

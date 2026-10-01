@@ -977,6 +977,12 @@ export function ThreePlayerGame({
   const genericActions = actions.filter((action) =>
     !["draft", "move", "cell", "select-god", "select-ability"].includes(action.type)
   );
+  const attachedGenericActions = state.selectedAbility && state.pending
+    ? genericActions
+    : [];
+  const detachedGenericActions = attachedGenericActions.length
+    ? []
+    : genericActions;
   const unusedGods = state.draft.unused.length
     ? state.draft.unused
     : GODS.map((god) => god.id).filter(
@@ -1120,29 +1126,56 @@ export function ThreePlayerGame({
                   (candidate) => actionValue<string>(candidate, "abilityId") === ability.id,
                 );
                 const level = state.players[state.activeSeat].upgrades[ability.id] ?? previewLevel;
+                const active = state.selectedAbility === ability.id;
                 return (
-                  <button
-                    className={state.selectedAbility === ability.id ? "active" : ""}
-                    disabled={inputDisabled || (selectedAbilityActions.length > 0 && !action)}
-                    onClick={() => action && dispatchAction(action)}
+                  <article
+                    className={`three-ability-card ${active ? "active" : ""}`}
                     key={ability.id}
                   >
-                    <span><strong>{ability.name}</strong><small>Level {level}</small></span>
-                    <p>{ability.details[level - 1]}</p>
-                    {ability.cost && (
-                      <em>
-                        {Object.entries(ability.cost).map(([orb, amount]) => `${amount} ${orb}`).join(" · ")}
-                      </em>
+                    <button
+                      className="three-ability-card-main"
+                      disabled={
+                        inputDisabled ||
+                        Boolean(state.pending && state.selectedAbility) ||
+                        (selectedAbilityActions.length > 0 && !action)
+                      }
+                      onClick={() => action && dispatchAction(action)}
+                    >
+                      <span><strong>{ability.name}</strong><small>Level {level}</small></span>
+                      <p>{ability.details[level - 1]}</p>
+                      {ability.cost && (
+                        <em>
+                          {Object.entries(ability.cost).map(([orb, amount]) => `${amount} ${orb}`).join(" · ")}
+                        </em>
+                      )}
+                    </button>
+                    {active && attachedGenericActions.length > 0 && (
+                      <div className="three-ability-pending" aria-label={`${ability.name} follow-up actions`}>
+                        <p role="status">{state.notice}</p>
+                        <div className="three-generic-actions">
+                          {attachedGenericActions.map((pendingAction, index) => (
+                            <button
+                              className={pendingAction.type === "cancel" ? "danger-button" : "secondary-button"}
+                              disabled={inputDisabled}
+                              onClick={() => dispatchAction(pendingAction)}
+                              key={`${pendingAction.type}-${index}-${actionLabel(pendingAction)}`}
+                            >
+                              {pendingAction.type === "confirm-ability" && <Check size={15} />}
+                              {actionLabel(pendingAction)}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     )}
-                  </button>
+                  </article>
                 );
               })}
             </div>
           )}
 
-          {genericActions.length > 0 && (
+          {detachedGenericActions.length > 0 && (
             <div className="three-generic-actions" aria-label="Available actions">
-              {genericActions.map((action, index) => (
+              {detachedGenericActions.map((action, index) => (
                 <button
                   className={action.type === "cancel" ? "danger-button" : "secondary-button"}
                   disabled={inputDisabled}

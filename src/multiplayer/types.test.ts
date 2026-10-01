@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createGame } from "../game/engine";
 import { createFourPlayerGame } from "../game/fourPlayerEngine";
 import { createFourPlayerStateEnvelope } from "../game/fourPlayerSession";
+import { createFourPlayerOnlineConfig } from "./fourPlayerRoom";
 import { createDefaultThreePlayerConfig } from "../game/threePlayerConfig";
 import { createThreePlayerGame } from "../game/threePlayerEngine";
 import { createThreePlayerStateEnvelope } from "../game/threePlayerSession";
@@ -15,32 +16,42 @@ import {
 } from "./types";
 
 const fourSnapshot = (): FourPlayerRoomSnapshot => {
-  const state = createFourPlayerGame();
+  const config = createFourPlayerOnlineConfig();
+  config.seats.north = {
+    ...config.seats.north,
+    name: "Same name",
+    control: { kind: "online", local: true },
+  };
+  config.seats.east = {
+    ...config.seats.east,
+    name: "Same name",
+    control: { kind: "online", local: false },
+  };
+  const state = createFourPlayerGame(config);
   return {
     roomCode: "ABCDE",
     status: "playing",
-    hostParticipantId: "host",
     participants: [
       {
-        id: "host",
         name: "Same name",
         host: true,
         connected: true,
         ready: true,
+        local: true,
         seat: "north",
       },
       {
-        id: "guest",
         name: "Same name",
         host: false,
         connected: true,
         ready: true,
+        local: false,
         seat: "east",
       },
     ],
-    config: state.config,
+    config,
     canonical: createFourPlayerStateEnvelope(state, 4, "action-4"),
-    undoConsents: { host: true, guest: false },
+    localUndoConsent: true,
     undoAvailable: false,
   };
 };
@@ -163,13 +174,23 @@ describe("versioned multiplayer protocol", () => {
     expect(normalizeFourPlayerRoomSnapshot({
       ...snapshot,
       participants: [
-        ...snapshot.participants,
-        snapshot.participants[0],
+        ...snapshot.participants.map((participant) => ({
+          ...participant,
+          local: false,
+        })),
       ],
     })).toBeUndefined();
     expect(normalizeFourPlayerRoomSnapshot({
       ...snapshot,
       reconnectToken: "must-never-broadcast",
+    })).toBeUndefined();
+    expect(normalizeFourPlayerRoomSnapshot({
+      ...snapshot,
+      participants: snapshot.participants.map((participant, index) =>
+        index === 0
+          ? { ...participant, participantId: "must-stay-private" }
+          : participant
+      ),
     })).toBeUndefined();
   });
 

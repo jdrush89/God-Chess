@@ -1282,11 +1282,23 @@ body::before {
   .draft-roster > small { display: none; }
   .draft-roster > div { grid-column: 1 / -1; justify-content: flex-start; }
   .game-layout { width: 100%; margin-top: 0; gap: 14px; }
+  .board-column > .player-bar, .board-shell {
+    width: 100vw; max-width: 100%; min-width: 0;
+  }
   .board-frame { padding: 5px; }
   .player-bar { border-left: 0; border-right: 0; }
   .player-orbs { gap: 8px; }
   .mini-pantheon { gap: 7px; }
   .mini-pantheon .god-sigil { width: 32px; height: 18px; }
+  .player-tools-toggle { display: grid; }
+  .player-tools-content {
+    position: absolute; z-index: 12; top: calc(100% + 8px); right: 0;
+    display: none; gap: 9px; padding: 9px;
+    border: 1px solid rgba(198,161,91,.35); background: #0f1117;
+    box-shadow: 0 16px 38px rgba(0,0,0,.45);
+  }
+  .player-tools.open .player-tools-content { display: flex; }
+  .player-bar:last-child .player-tools-content { top: auto; bottom: calc(100% + 8px); }
   .player-tools-content .mini-pantheon .god-sigil { width: 46px; height: 31px; }
   .turn-notice { padding: 8px 14px; justify-content: flex-start; }
   .turn-notice p { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1569,15 +1581,22 @@ body::before {
 .three-pantheon-list strong { overflow: hidden; font-size: 7px; text-overflow: ellipsis; }
 .three-pantheon-list small { font-size: 6px; text-transform: uppercase; }
 .three-ability-list { display: grid; gap: 6px; padding: 8px; }
-.three-ability-list button {
-  display: grid; gap: 6px; padding: 10px; color: #aaa69d; background: rgba(255,255,255,.018);
-  border: 1px solid var(--line); text-align: left;
+.three-ability-card {
+  overflow: hidden; background: rgba(255,255,255,.018); border: 1px solid var(--line);
 }
-.three-ability-list button.active { border-color: rgba(198,161,91,.7); }
-.three-ability-list button > span { display: flex; justify-content: space-between; gap: 8px; }
+.three-ability-card.active { border-color: rgba(198,161,91,.7); }
+.three-ability-card-main {
+  width: 100%;
+  display: grid; gap: 6px; padding: 10px; color: #aaa69d; background: rgba(255,255,255,.018);
+  border: 0; text-align: left;
+}
+.three-ability-card-main > span { display: flex; justify-content: space-between; gap: 8px; }
 .three-ability-list strong { color: #e4ded3; font: 600 10px "Cinzel"; }
 .three-ability-list small, .three-ability-list em { color: #7a7c83; font-size: 7px; font-style: normal; text-transform: uppercase; }
 .three-ability-list p { margin: 0; color: #7f8188; font-size: 8px; line-height: 1.45; }
+.three-ability-pending { padding: 0 10px 10px; border-top: 1px solid rgba(198,161,91,.24); }
+.three-ability-pending > p { padding: 9px 0 3px; color: #c6a15b; }
+.three-ability-pending .three-generic-actions { padding: 6px 0 0; border-top: 0; }
 .three-generic-actions { display: grid; gap: 6px; padding: 8px; border-top: 1px solid var(--line); }
 .three-generic-actions button { min-height: 40px; display: flex; align-items: center; justify-content: center; gap: 6px; }
 .three-pending-summary, .three-unused-gods {

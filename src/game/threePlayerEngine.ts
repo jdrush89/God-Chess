@@ -1162,6 +1162,103 @@ const safeTeleportTargets = (
   return !threePlayerIsInCheck(simulated, state.activeSeat);
 });
 
+interface ThreePlayerEscortLanding {
+  from: string;
+  to: string;
+  piece: ThreePlayerPiece;
+}
+
+interface ThreePlayerEscortPlan {
+  kingDestination: string;
+  landings: ThreePlayerEscortLanding[];
+  slippedOn?: string;
+}
+
+const escortPlan = (
+  state: ThreePlayerState,
+  kingCell: string,
+  requestedDestination: string,
+): ThreePlayerEscortPlan | undefined => {
+  const king = state.board[kingCell];
+  if (!king || king.type !== "king") return undefined;
+  const selected = new Set(state.pending?.selected ?? []);
+  const companions = threePlayerAdjacentCells(state, kingCell)
+    .map((from) => ({ from, piece: state.board[from] }))
+    .filter((entry): entry is { from: string; piece: ThreePlayerPiece } =>
+      Boolean(entry.piece && selected.has(entry.piece.id))
+    );
+  if (!companions.length) return undefined;
+
+  for (const path of threePlayerTravelPaths(
+    state,
+    kingCell,
+    requestedDestination,
+  )) {
+    const slippedOn = bananaOnPath(
+      state,
+      kingCell,
+      requestedDestination,
+      path.traceId,
+    );
+    const kingDestination = slippedOn ?? requestedDestination;
+    const moved = threePlayerDistance(state, kingCell, kingDestination);
+    if (
+      moved < 1 ||
+      moved > (currentLevel(state, "escort") >= 3 ? 2 : 1)
+    ) continue;
+
+    const landings: ThreePlayerEscortLanding[] = [
+      { from: kingCell, to: kingDestination, piece: king },
+    ];
+    for (const companion of companions) {
+      const to = threePlayerFormationDestination(
+        state,
+        kingCell,
+        kingDestination,
+        companion.from,
+        path.context,
+      );
+      if (!to) break;
+      landings.push({ ...companion, to });
+    }
+    if (
+      landings.length !== companions.length + 1 ||
+      new Set(landings.map((landing) => landing.to)).size !== landings.length
+    ) continue;
+
+    const simulated = clone(state);
+    for (const landing of landings) delete simulated.board[landing.from];
+    let legal = true;
+    for (const landing of landings) {
+      const occupying = simulated.board[landing.to];
+      if (
+        occupying?.status.hardened ||
+        occupying?.type === "king" ||
+        occupying?.controller === state.activeSeat
+      ) {
+        legal = false;
+        break;
+      }
+      delete simulated.board[landing.to];
+      simulated.board[landing.to] = {
+        ...landing.piece,
+        hasMoved: true,
+        status: { ...landing.piece.status, movedThisTurn: true },
+      };
+    }
+    if (!legal) continue;
+    if (slippedOn) {
+      simulated.bananas = simulated.bananas.filter(
+        (banana) => banana.cell !== slippedOn,
+      );
+    }
+    if (!threePlayerIsInCheck(simulated, state.activeSeat)) {
+      return { kingDestination, landings, slippedOn };
+    }
+  }
+  return undefined;
+};
+
 const sourceTargets = (state: ThreePlayerState, cell: string): string[] => {
   const abilityId = state.selectedAbility!;
   const level = currentLevel(state, abilityId);
@@ -1219,15 +1316,18 @@ const sourceTargets = (state: ThreePlayerState, cell: string): string[] => {
   }
   if (abilityId === "escort") {
     const maxDistance = level >= 3 ? 2 : 1;
+    const simulated = clone(state);
+    for (const selectedId of state.pending?.selected ?? []) {
+      const selectedCell = findCellById(simulated, selectedId);
+      if (selectedCell) delete simulated.board[selectedCell];
+    }
     return constrainLure(
       state,
       cell,
-      threePlayerPseudoTargets(state, cell, {
+      threePlayerPseudoTargets(simulated, cell, {
         forceType: level >= 3 ? "queen" : "king",
         maxDistance,
-      }).filter((target) =>
-        threePlayerDistance(state, cell, target) <= maxDistance
-      ),
+      }).filter((target) => Boolean(escortPlan(state, cell, target))),
     );
   }
   if (abilityId === "pick-a-fight") {
@@ -1937,41 +2037,10 @@ const executeEscort = (
   from: string,
   to: string,
 ) => {
-  const selected = new Set(state.pending?.selected ?? []);
-  const companions = threePlayerAdjacentCells(state, from)
-    .map((cell) => ({ cell, piece: state.board[cell] }))
-    .filter((entry): entry is { cell: string; piece: ThreePlayerPiece } =>
-      Boolean(entry.piece && selected.has(entry.piece.id))
-    );
-  if (!companions.length) return;
-  const landings = [
-    { from, to, piece: state.board[from] },
-    ...companions.flatMap(({ cell, piece }) => {
-      const destination = threePlayerFormationDestination(
-        state,
-        from,
-        to,
-        cell,
-      );
-      return destination ? [{ from: cell, to: destination, piece }] : [];
-    }),
-  ];
-  if (landings.length !== companions.length + 1) return;
-  const simulated = clone(state);
-  for (const landing of landings) delete simulated.board[landing.from];
-  for (const landing of landings) {
-    const occupying = simulated.board[landing.to];
-    if (
-      occupying?.status.hardened ||
-      occupying?.type === "king" ||
-      occupying?.controller === state.activeSeat
-    ) return;
-    delete simulated.board[landing.to];
-    simulated.board[landing.to] = landing.piece;
-  }
-  if (threePlayerIsInCheck(simulated, state.activeSeat)) return;
-  for (const landing of landings) delete state.board[landing.from];
-  for (const landing of landings) {
+  const plan = escortPlan(state, from, to);
+  if (!plan) return;
+  for (const landing of plan.landings) delete state.board[landing.from];
+  for (const landing of plan.landings) {
     if (state.board[landing.to] && !captureAt(state, landing.to)) return;
     state.board[landing.to] = {
       ...landing.piece,
@@ -1979,10 +2048,15 @@ const executeEscort = (
       status: { ...landing.piece.status, movedThisTurn: true },
     };
   }
+  if (plan.slippedOn) {
+    state.bananas = state.bananas.filter(
+      (banana) => banana.cell !== plan.slippedOn,
+    );
+  }
   mutatePosition(state);
   finishDivineTurn(
     state,
-    abilityDescription(state, `: escorted to ${to}`),
+    abilityDescription(state, `: escorted to ${plan.kingDestination}`),
   );
 };
 

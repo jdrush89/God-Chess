@@ -65,25 +65,35 @@ export type HostMessage =
 export type FourPlayerRoomStatus = "lobby" | "playing" | "paused" | "finished";
 
 export interface FourPlayerParticipant {
-  id: string;
   name: string;
   host: boolean;
   connected: boolean;
   ready: boolean;
+  local: boolean;
   seat?: Seat;
+}
+
+export interface FourPlayerHostParticipant extends FourPlayerParticipant {
+  participantId: string;
 }
 
 export interface FourPlayerRoomSnapshot {
   roomCode: string;
   status: FourPlayerRoomStatus;
-  hostParticipantId: string;
   participants: FourPlayerParticipant[];
   config: FourPlayerConfig;
   canonical?: FourPlayerStateEnvelope;
-  pausedParticipantId?: string;
   pausedSeat?: Seat;
-  undoConsents: Record<string, boolean>;
+  pausedParticipantName?: string;
+  localUndoConsent: boolean;
   undoAvailable: boolean;
+}
+
+export interface FourPlayerHostRoomSnapshot extends Omit<
+  FourPlayerRoomSnapshot,
+  "participants"
+> {
+  participants: FourPlayerHostParticipant[];
 }
 
 export type FourPlayerPeerMessage =
@@ -502,25 +512,39 @@ const normalizeFourPlayerParticipant = (
     !isRecord(value) ||
     !hasExactKeys(
       value,
-      ["id", "name", "host", "connected", "ready"],
+      ["name", "host", "connected", "ready", "local"],
       ["seat"],
     ) ||
-    !isBoundedString(value.id, 128) ||
     typeof value.name !== "string" ||
     value.name.length > 24 ||
     !isBoolean(value.host) ||
     !isBoolean(value.connected) ||
     !isBoolean(value.ready) ||
+    !isBoolean(value.local) ||
     (value.seat !== undefined && !isSeat(value.seat))
   ) return undefined;
   return {
-    id: value.id,
     name: value.name,
     host: value.host,
     connected: value.connected,
     ready: value.ready,
+    local: value.local,
     ...(value.seat ? { seat: value.seat } : {}),
   };
+};
+
+const isPublicFourPlayerConfig = (
+  value: unknown,
+): value is FourPlayerConfig => {
+  if (!isFourPlayerConfig(value)) return false;
+  return FOUR_PLAYER_SEATS.every((seat) => {
+    const control = value.seats[seat].control;
+    return control.kind === "ai" ||
+      (
+        control.kind === "online" &&
+        control.participantId === undefined
+      );
+  });
 };
 
 export const normalizeFourPlayerRoomSnapshot = (
@@ -533,51 +557,99 @@ export const normalizeFourPlayerRoomSnapshot = (
       [
         "roomCode",
         "status",
-        "hostParticipantId",
         "participants",
         "config",
-        "undoConsents",
+        "localUndoConsent",
         "undoAvailable",
       ],
-      ["canonical", "pausedParticipantId", "pausedSeat"],
+      ["canonical", "pausedSeat", "pausedParticipantName"],
     ) ||
     !isRoomCode(value.roomCode) ||
     !["lobby", "playing", "paused", "finished"].includes(String(value.status)) ||
-    !isBoundedString(value.hostParticipantId, 128) ||
     !Array.isArray(value.participants) ||
-    !isFourPlayerConfig(value.config) ||
-    !isRecord(value.undoConsents) ||
-    !Object.values(value.undoConsents).every(isBoolean) ||
+    value.participants.length < 1 ||
+    value.participants.length > 4 ||
+    !isPublicFourPlayerConfig(value.config) ||
+    !isBoolean(value.localUndoConsent) ||
     !isBoolean(value.undoAvailable) ||
-    (value.pausedParticipantId !== undefined &&
-      !isBoundedString(value.pausedParticipantId, 128)) ||
-    (value.pausedSeat !== undefined && !isSeat(value.pausedSeat))
-  ) return undefined;
-  const participants = value.participants.map(normalizeFourPlayerParticipant);
-  if (
-    participants.some((participant) => !participant) ||
-    new Set(participants.map((participant) => participant!.id)).size !==
-      participants.length ||
-    !participants.some((participant) =>
-      participant!.id === value.hostParticipantId && participant!.host
+    (value.pausedSeat !== undefined && !isSeat(value.pausedSeat)) ||
+    (
+      value.pausedParticipantName !== undefined &&
+      (
+        typeof value.pausedParticipantName !== "string" ||
+        value.pausedParticipantName.length > 24
+      )
     )
   ) return undefined;
+  const participants = value.participants.map(normalizeFourPlayerParticipant);
+  if (participants.some((participant) => !participant)) return undefined;
+  const normalizedParticipants = participants as FourPlayerParticipant[];
+  if (
+    normalizedParticipants.filter((participant) => participant.host).length !==
+      1 ||
+    normalizedParticipants.filter((participant) => participant.local).length !==
+      1
+  ) return undefined;
+  const assignedSeats = normalizedParticipants.flatMap((participant) =>
+    participant.seat ? [participant.seat] : []
+  );
+  if (new Set(assignedSeats).size !== assignedSeats.length) return undefined;
+  for (const seat of FOUR_PLAYER_SEATS) {
+    const participant = normalizedParticipants.find((candidate) =>
+      candidate.seat === seat
+    );
+    const seatConfig = value.config.seats[seat];
+    if (participant) {
+      if (
+        seatConfig.control.kind !== "online" ||
+        seatConfig.name !== participant.name ||
+        Boolean(seatConfig.control.local) !== participant.local
+      ) return undefined;
+    } else if (seatConfig.control.kind !== "ai") {
+      return undefined;
+    }
+  }
   const canonical = value.canonical === undefined
     ? undefined
     : normalizeFourPlayerStateEnvelope(value.canonical);
   if (value.canonical !== undefined && !canonical) return undefined;
+  if (
+    (value.status === "lobby") !== (canonical === undefined) ||
+    (
+      canonical &&
+      JSON.stringify(canonical.state.config) !== JSON.stringify(value.config)
+    ) ||
+    (value.status === "finished") !==
+      Boolean(canonical?.state.phase === "gameover")
+  ) return undefined;
+  const pausedParticipant = value.pausedSeat === undefined
+    ? undefined
+    : normalizedParticipants.find((participant) =>
+      participant.seat === value.pausedSeat &&
+      !participant.connected
+    );
+  if (
+    value.status === "paused"
+      ? (
+        !pausedParticipant ||
+        value.pausedParticipantName !== pausedParticipant.name
+      )
+      : (
+        value.pausedSeat !== undefined ||
+        value.pausedParticipantName !== undefined
+      )
+  ) return undefined;
   return {
     roomCode: value.roomCode,
     status: value.status as FourPlayerRoomStatus,
-    hostParticipantId: value.hostParticipantId,
-    participants: participants as FourPlayerParticipant[],
+    participants: normalizedParticipants,
     config: structuredClone(value.config),
     ...(canonical ? { canonical } : {}),
-    ...(value.pausedParticipantId
-      ? { pausedParticipantId: value.pausedParticipantId }
-      : {}),
     ...(value.pausedSeat ? { pausedSeat: value.pausedSeat } : {}),
-    undoConsents: { ...value.undoConsents } as Record<string, boolean>,
+    ...(value.pausedParticipantName
+      ? { pausedParticipantName: value.pausedParticipantName }
+      : {}),
+    localUndoConsent: value.localUndoConsent,
     undoAvailable: value.undoAvailable,
   };
 };

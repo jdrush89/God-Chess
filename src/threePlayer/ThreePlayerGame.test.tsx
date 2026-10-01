@@ -110,6 +110,30 @@ describe("ThreePlayerGame", () => {
     expect(container.querySelector(".three-board-cell.selected, .three-board-cell.legal")).toBeTruthy();
   });
 
+  it("attaches pending follow-up choices to the initiating ability", () => {
+    const state = completeDraft();
+    state.players.white.gods = ["death"];
+    state.selectedGod = "death";
+    state.selectedAbility = "resurrect";
+    state.pending = {
+      godId: "death",
+      abilityId: "resurrect",
+      step: "resurrect-more",
+    };
+    state.notice = "Revive another piece?";
+    renderGame(state);
+
+    const card = screen.getByText("Resurrect").closest(".three-ability-card");
+    expect(card).toBeTruthy();
+    expect(within(card as HTMLElement).getByRole("status").textContent)
+      .toContain("Revive another piece");
+    expect(within(card as HTMLElement).getByRole("button", { name: /yes, continue/i }))
+      .toBeTruthy();
+    expect(within(card as HTMLElement).getByRole("button", { name: /no, finish/i }))
+      .toBeTruthy();
+    expect(screen.queryByRole("group", { name: /available actions/i })).toBeNull();
+  });
+
   it("undoes a Human boundary together with the following AI chain", async () => {
     const config = createDefaultThreePlayerConfig();
     config.seats.red.control = { kind: "ai", difficulty: 1 };

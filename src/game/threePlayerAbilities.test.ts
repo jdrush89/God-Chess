@@ -136,6 +136,7 @@ describe("three-player God catalog", () => {
       type: "select-god",
       godId: "anubis",
     });
+
     state = threePlayerReducer(state, {
       type: "select-ability",
       abilityId: "monument",
@@ -170,6 +171,71 @@ describe("three-player God catalog", () => {
       controller: "white",
     });
   });
+
+  it.each([
+    "three-player",
+    "three-hexagonal",
+    "triad",
+    "three-half",
+  ] as const)(
+    "allows an Escort King onto a simultaneously vacated ally cell on %s",
+    (boardVariant) => {
+      let state = abilityState("leonidas", 1, boardVariant);
+      const topology = getThreePlayerTopology(boardVariant);
+      const enemyKings: ThreePlayerState["board"] = Object.fromEntries(
+        Object.entries(state.board).filter(([, candidate]) =>
+          candidate.type === "king" && candidate.owner !== "white"
+        ),
+      );
+      const formation = topology.cells.flatMap((from) =>
+        topology.kingTargets(from).map((to) => ({
+          from,
+          to,
+          escortTo: topology.formationTransform(from, to, to),
+        }))
+      ).find(({ from, to, escortTo }) => {
+        if (!escortTo || escortTo === from || escortTo === to) return false;
+        const board: ThreePlayerState["board"] = {
+          ...enemyKings,
+          [from]: piece("white-king", "king", "white"),
+          [to]: piece("white-escort", "rook", "white"),
+        };
+        return !board[escortTo] &&
+          !threePlayerIsInCheck({ ...state, board }, "white");
+      });
+      expect(formation).toBeDefined();
+      state.board = {
+        ...enemyKings,
+        [formation!.from]: piece("white-king", "king", "white"),
+        [formation!.to]: piece("white-escort", "rook", "white"),
+      };
+
+      state = threePlayerReducer(state, {
+        type: "select-god",
+        godId: "leonidas",
+      });
+      state = threePlayerReducer(state, {
+        type: "select-ability",
+        abilityId: "escort",
+      });
+      state = threePlayerReducer(state, {
+        type: "cell",
+        cell: formation!.from,
+      });
+      state = threePlayerReducer(state, {
+        type: "cell",
+        cell: formation!.to,
+      });
+
+      expect(state.legalCells).toContain(formation!.to);
+      state = threePlayerReducer(state, {
+        type: "cell",
+        cell: formation!.to,
+      });
+      expect(state.board[formation!.to]?.id).toBe("white-king");
+      expect(state.board[formation!.escortTo!]?.id).toBe("white-escort");
+    },
+  );
 
   it("only offers Air Strike branches that retain a legal passenger drop", () => {
     let state = createThreePlayerGame();

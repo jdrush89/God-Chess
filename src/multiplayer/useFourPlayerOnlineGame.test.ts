@@ -2,17 +2,26 @@
 
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createDefaultFourPlayerConfig } from "../game/fourPlayerConfig";
 import { createFourPlayerGame } from "../game/fourPlayerEngine";
 import { createFourPlayerStateEnvelope } from "../game/fourPlayerSession";
+import { FOUR_PLAYER_SEATS } from "../game/fourPlayerTypes";
 import type { FourPlayerRoomSnapshot } from "./types";
 
 const peerHarness = vi.hoisted(() => ({
   instances: [] as Array<{
     callbacks: {
+      onAccepted: (
+        participantId: string,
+        reconnectToken: string,
+        roomCode: string,
+      ) => void;
+      onSnapshot: (snapshot: FourPlayerRoomSnapshot) => void;
       onRejected: (reason: string) => void;
       onDisconnected: (roomEnded: boolean) => void;
     };
     connectArgs: unknown[][];
+    readyCalls: boolean[];
   }>,
 }));
 
@@ -22,8 +31,15 @@ vi.mock("./fourPlayerRoom", () => ({
   },
   FourPlayerRoomPeer: class {
     connectArgs: unknown[][] = [];
+    readyCalls: boolean[] = [];
 
     constructor(readonly callbacks: {
+      onAccepted: (
+        participantId: string,
+        reconnectToken: string,
+        roomCode: string,
+      ) => void;
+      onSnapshot: (snapshot: FourPlayerRoomSnapshot) => void;
       onRejected: (reason: string) => void;
       onDisconnected: (roomEnded: boolean) => void;
     }) {
@@ -35,7 +51,9 @@ vi.mock("./fourPlayerRoom", () => ({
     }
 
     disconnect() {}
-    setReady() {}
+    setReady(ready: boolean) {
+      this.readyCalls.push(ready);
+    }
     sendAction() {}
     setUndoConsent() {}
     requestUndo() {}
@@ -43,6 +61,7 @@ vi.mock("./fourPlayerRoom", () => ({
 }));
 
 import {
+  fourPlayerOnlineLocalSeat,
   reconcileFourPlayerSnapshot,
   useFourPlayerOnlineGame,
   type FourPlayerOnlineState,
@@ -55,36 +74,50 @@ const snapshot = (
   revision: number,
   lastActionId: string,
 ): FourPlayerRoomSnapshot => {
-  const state = createFourPlayerGame();
+  const config = createDefaultFourPlayerConfig();
+  for (const seat of FOUR_PLAYER_SEATS) {
+    config.seats[seat].name = `${seat} AI`;
+    config.seats[seat].control = { kind: "ai", difficulty: 5 };
+  }
+  config.seats.north = {
+    ...config.seats.north,
+    name: "Host",
+    control: { kind: "online", local: false },
+  };
+  config.seats.east = {
+    ...config.seats.east,
+    name: "Guest",
+    control: { kind: "online", local: true },
+  };
+  const state = createFourPlayerGame(config);
   return {
     roomCode: "ABCDE",
     status: "playing",
-    hostParticipantId: "host",
     participants: [
       {
-        id: "host",
         name: "Host",
         host: true,
         connected: true,
         ready: true,
+        local: false,
         seat: "north",
       },
       {
-        id: "guest",
         name: "Guest",
         host: false,
         connected: true,
         ready: true,
+        local: true,
         seat: "east",
       },
     ],
-    config: state.config,
+    config,
     canonical: createFourPlayerStateEnvelope(
       state,
       revision,
       lastActionId,
     ),
-    undoConsents: { host: false, guest: false },
+    localUndoConsent: false,
     undoAvailable: false,
   };
 };
@@ -104,6 +137,7 @@ describe("four-player online hook state", () => {
     await act(async () => {
       await result.current[1].joinGame("ABCDE", "Guest");
     });
+
     const first = peerHarness.instances[0];
     expect(first.connectArgs[0]).toEqual([
       "ABCDE",
@@ -133,6 +167,37 @@ describe("four-player online hook state", () => {
       result.current[1].disconnect();
     });
     expect(window.sessionStorage.getItem(reconnectStorageKey)).toBeNull();
+  });
+
+  it("uses recipient-local snapshot identity even when assignment arrives before acceptance", async () => {
+    const { result } = renderHook(() => useFourPlayerOnlineGame());
+    await act(async () => {
+      await result.current[1].joinGame("ABCDE", "Guest");
+    });
+    const peer = peerHarness.instances[0];
+    const { canonical: _canonical, ...lobby } = snapshot(0, "lobby");
+
+    act(() => {
+      peer.callbacks.onSnapshot({
+        ...lobby,
+        status: "lobby",
+      });
+    });
+    expect(result.current[0].participantId).toBeUndefined();
+    expect(fourPlayerOnlineLocalSeat(result.current[0])).toBe("east");
+
+    act(() => {
+      result.current[1].setReady(true);
+    });
+    expect(peer.readyCalls).toEqual([true]);
+
+    act(() => {
+      peer.callbacks.onAccepted("private-guest", "opaque-token", "ABCDE");
+    });
+    expect(result.current[0].participantId).toBe("private-guest");
+    expect(fourPlayerOnlineLocalSeat(result.current[0])).toBe("east");
+    expect(window.sessionStorage.getItem(reconnectStorageKey))
+      .toBe("opaque-token");
   });
 
   it("clears reconnect credentials only for invalid tokens or confirmed room end", async () => {

@@ -520,16 +520,17 @@ describe("four-player app integration", () => {
       within(screen.getByRole("gridcell", { name: /b11.*west.*pawn/i }))
         .getByLabelText(/hexed/i),
     ).toBeTruthy();
-    expect(screen.getByText(/choose a piece to move/i)).toBeTruthy();
+    expect(screen.getAllByText(/choose a piece to move/i).length).toBeGreaterThan(0);
     expect(screen.getByRole("gridcell", { name: /g8.*north.*rook.*legal target/i }))
       .toBeTruthy();
     fireEvent.keyDown(window, { key: "Escape" });
     expect(screen.getByRole("dialog", { name: /game paused locally/i })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /^resume$/i }));
-    expect(screen.getByText(/choose a piece to move/i)).toBeTruthy();
+    expect(screen.getAllByText(/choose a piece to move/i).length).toBeGreaterThan(0);
     expect(screen.getByRole("gridcell", { name: /g8.*north.*rook.*legal target/i }))
       .toBeTruthy();
     fireEvent.click(screen.getByRole("gridcell", { name: /g8.*north.*rook/i }));
-    expect(screen.getByText(/choose a destination for the rook/i)).toBeTruthy();
+    expect(screen.getAllByText(/choose a destination for the rook/i).length)
+      .toBeGreaterThan(0);
   });
 });
