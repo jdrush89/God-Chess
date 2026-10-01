@@ -55,6 +55,29 @@ describe("Divine AI", () => {
     expect(chooseAiPlan(state, () => 0)).toEqual([{ type: "confirm-ability" }]);
   });
 
+  it("enumerates the committed Enchant follow-up without another God or ability choice", () => {
+    let state = createGame(2, { mode: "ai", aiDifficulty: 10 });
+    state.phase = "play";
+    state.activeColor = "white";
+    state.players.white.gods = ["teles"];
+    state.players.black.gods = ["ares"];
+    state.players.white.orbs.black = 4;
+    state = gameReducer(state, { type: "select-god", godId: "teles" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "enchant" });
+    state = gameReducer(state, { type: "square", square: "b8" });
+    state = gameReducer(state, { type: "square", square: "c6" });
+
+    expect(state.pending?.step).toBe("enchant-followup-move");
+    const plan = chooseAiPlan(state, () => 0);
+    expect(plan.length).toBeGreaterThanOrEqual(2);
+    expect(plan.some((action) =>
+      action.type === "select-god" || action.type === "select-ability"
+    )).toBe(false);
+    for (const action of plan) state = gameReducer(state, action);
+    expect(state.activeColor).toBe("black");
+    expect(state.pending).toBeUndefined();
+  });
+
   it("strongly prefers a defended piece over the same piece left hanging", () => {
     const hanging = createGame(1);
     hanging.phase = "play";

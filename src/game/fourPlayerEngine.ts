@@ -110,6 +110,7 @@ const COMMITTED_PENDING_STEPS = new Set([
   "barter-orb",
   "barter-seat",
   "cull-choice",
+  "enchant-followup-move",
   "funding",
   "hire",
   "marked-choice",
@@ -865,6 +866,12 @@ const sourceIsAllowed = (state: FourPlayerState, square: Square) => {
     !state.pending.selected?.includes("__no-repeat");
   if (piece.status.movedThisTurn && !fundingRepeat) return false;
   const compelled = compelledLuredSources(state);
+  if (state.pending?.step === "enchant-followup-move") {
+    return (
+      piece.controller === state.activeSeat &&
+      (!compelled.length || compelled.includes(square))
+    );
+  }
   if (abilityId !== "enchant" && compelled.length && !compelled.includes(square)) return false;
   if (abilityId === "enchant") {
     return hostilePiece(state, piece) && allowedEnchantTypes(level).includes(piece.type);
@@ -885,11 +892,70 @@ const sourceIsAllowed = (state: FourPlayerState, square: Square) => {
   return piece.controller === state.activeSeat;
 };
 
+const ordinaryMoveTargets = (state: FourPlayerState, square: Square) => {
+  const piece = state.board[square];
+  if (!piece || piece.controller !== state.activeSeat) return [];
+  let targets = fourPlayerLegalTargets(state.board, square, state.config, {
+    enPassant: state.enPassant,
+    bananas: state.bananas,
+  });
+  if (piece.type === "knight" && piece.status.chargeUntil) {
+    targets = [...new Set([
+      ...targets,
+      ...fourPlayerLegalTargets(state.board, square, state.config, {
+        forceType: "rook",
+        bananas: state.bananas,
+      }),
+    ])];
+  }
+  return constrainLure(state, square, targets);
+};
+
+const enchantFollowupSources = (state: FourPlayerState) =>
+  Object.keys(state.board).filter((square) =>
+    sourceIsAllowed(
+      {
+        ...state,
+        pending: state.pending
+          ? { ...state.pending, step: "enchant-followup-move" }
+          : state.pending,
+      },
+      square,
+    ) && ordinaryMoveTargets(state, square).length > 0
+  );
+
+const enchantDestinationHasFollowup = (
+  state: FourPlayerState,
+  source: Square,
+  destination: Square,
+) => {
+  const simulated = clone(state);
+  const moving = simulated.board[source];
+  if (!moving) return false;
+  const originalController = moving.controller;
+  moving.controller = simulated.activeSeat;
+  const result = moveDirect(simulated, source, destination);
+  if (!result || !simulated.board[result.to]) return false;
+  simulated.board[result.to].controller = originalController;
+  simulated.selectedSquare = undefined;
+  simulated.pending = {
+    ...simulated.pending!,
+    step: "enchant-followup-move",
+    source: result.from,
+    destination: result.to,
+    movedPieceId: moving.id,
+  };
+  return enchantFollowupSources(simulated).length > 0;
+};
+
 const sourceTargets = (state: FourPlayerState, square: Square): Square[] => {
   const abilityId = state.selectedAbility!;
   const level = currentLevel(state, abilityId);
   const piece = state.board[square];
   if (!piece) return [];
+  if (state.pending?.step === "enchant-followup-move") {
+    return ordinaryMoveTargets(state, square);
+  }
   if (piece.status.hardened && levelFor(state, piece.controller!, "harden") >= 3) {
     const board = structuredClone(state.board);
     delete board[square].status.hardened;
@@ -1044,7 +1110,10 @@ const sourceTargets = (state: FourPlayerState, square: Square): Square[] => {
     return fourPlayerLegalTargets(board, square, state.config, {
       enPassant: state.enPassant,
       bananas: state.bananas,
-    }).filter((target) => state.board[target]?.type !== "king");
+    }).filter((target) =>
+      state.board[target]?.type !== "king" &&
+      enchantDestinationHasFollowup(state, square, target)
+    );
   }
   if (abilityId === "banana-peel") {
     return constrainLure(
@@ -1250,6 +1319,19 @@ const activateAbility = (state: FourPlayerState, abilityId: string) => {
   state.legalTargets = [];
   state.legalSeats = [];
   state.pending = { godId: god.id, abilityId, step: "source" };
+  if (abilityId === "enchant") {
+    state.pending.step = "enchant-enemy-move";
+    state.legalTargets = movableSourceSquares(state);
+    if (!state.legalTargets.length) {
+      refundCost(state);
+      state.selectedAbility = undefined;
+      state.pending = undefined;
+      state.notice = "Enchant has no hostile piece that can move and leave a legal follow-up move.";
+      return;
+    }
+    state.notice = "Enchant: choose a highlighted hostile piece to move.";
+    return;
+  }
   if (abilityId === "stone-gaze") {
     const { targets } = stoneGazeTargets(state);
     state.pending.step = "confirm-stone-gaze";
@@ -1300,7 +1382,8 @@ const activateAbility = (state: FourPlayerState, abilityId: string) => {
       state.legalTargets = Object.entries(state.board)
         .filter(([, piece]) =>
           hostilePiece(state, piece) &&
-          piece.type !== "king" &&
+          piece.controller !== null &&
+          !state.players[piece.controller].eliminated &&
           !piece.status.hexedBy
         )
         .map(([square]) => square);
@@ -1497,8 +1580,6 @@ const resolveMoveEffect = (
           (level >= 3 ? Math.floor(orthogonalCount / 2) : 0);
       addAffinityOrb(state, state.activeSeat, affinity, reward);
     }
-  } else if (abilityId === "enchant") {
-    state.bonusTurn = state.activeSeat;
   } else if (abilityId === "take-cover") {
     const coverSquares = [
       fourPlayerSquareAt(toFile + forwardFile, toRank + forwardRank),
@@ -1785,6 +1866,21 @@ const executeMovement = (
   const abilityId = state.selectedAbility!;
   const moving = state.board[from];
   if (!moving) return;
+  if (state.pending?.step === "enchant-followup-move") {
+    const result = moveDirect(state, from, to);
+    if (!result) return;
+    const movedPiece = state.board[result.to];
+    if (!movedPiece) return;
+    delete movedPiece.status.luredBy;
+    finishTurn(
+      state,
+      abilityDescription(
+        state,
+        `: enchanted a hostile piece, then moved ${pieceName(moving)} at ${from} -> ${result.to}`,
+      ),
+    );
+    return;
+  }
   if (abilityId === "escort") {
     executeEscort(state, from, to);
     return;
@@ -1810,14 +1906,39 @@ const executeMovement = (
     }
     addOrbs(state, state.activeSeat, -1, 0);
   }
+  const enchantingEnemy = state.pending?.step === "enchant-enemy-move";
   const originalController = moving.controller;
-  if (abilityId === "enchant") moving.controller = state.activeSeat;
+  if (enchantingEnemy) moving.controller = state.activeSeat;
   const boardBefore = structuredClone(state.board);
   const result = moveDirect(state, from, to, ["air-lift", "pick-a-fight"].includes(abilityId));
-  if (!result) return;
-  if (abilityId === "enchant") state.board[result.to].controller = originalController;
+  if (!result) {
+    if (enchantingEnemy) moving.controller = originalController;
+    return;
+  }
+  if (enchantingEnemy) state.board[result.to].controller = originalController;
   if (moving.status.hardened && !result.captured) delete state.board[result.to].status.hardened;
   delete state.board[result.to].status.luredBy;
+  if (enchantingEnemy) {
+    state.pending = {
+      godId: state.selectedGod!,
+      abilityId,
+      step: "enchant-followup-move",
+      source: result.from,
+      destination: result.to,
+      movedPieceId: moving.id,
+    };
+    state.selectedSquare = undefined;
+    state.legalTargets = enchantFollowupSources(state);
+    if (!state.legalTargets.length) {
+      finishTurn(
+        state,
+        abilityDescription(state, ": completed Enchant without an available follow-up move"),
+      );
+      return;
+    }
+    state.notice = "Enchant: choose one of your highlighted pieces, then make one ordinary legal move.";
+    return;
+  }
   if (abilityId === "slither") {
     const unlimited = currentLevel(state, abilityId) >= 3;
     const remaining = unlimited
@@ -2384,6 +2505,7 @@ const handleSquare = (state: FourPlayerState, square: Square) => {
 
 const selectGod = (state: FourPlayerState, godId: GodId) => {
   if (["snipe-shot", "harden-choice"].includes(state.pending?.abilityId ?? "")) return;
+  if (state.pending?.step === "enchant-followup-move") return;
   if (!activePlayer(state).gods.includes(godId) || state.rested.includes(godId)) return;
   if (state.selectedAbility) refundCost(state);
   state.selectedGod = godId;

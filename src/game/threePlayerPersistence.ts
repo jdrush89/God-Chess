@@ -52,6 +52,14 @@ interface PendingStepRule {
 
 const PENDING_STEP_RULES: Readonly<Record<string, PendingStepRule>> = {
   source: { abilities: "*", optional: ["source", "selected"] },
+  "enchant-enemy-move": {
+    abilities: ["enchant"],
+    optional: ["source"],
+  },
+  "enchant-followup-move": {
+    abilities: ["enchant"],
+    required: ["source", "destination", "movedPieceId"],
+  },
   target: { abilities: ["lure", "rage", "poison-cloud", "polymorph"] },
   "snipe-source": { abilities: ["snipe-shot"] },
   "snipe-target": { abilities: ["snipe-shot"] },

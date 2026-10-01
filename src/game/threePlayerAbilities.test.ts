@@ -116,6 +116,94 @@ describe("three-player God catalog", () => {
     }
   }
 
+  it("runs Enchant as hostile move then one ordinary controlled move", () => {
+    let state = abilityState("teles", 1);
+    state = threePlayerReducer(state, { type: "select-god", godId: "teles" });
+    state = threePlayerReducer(state, {
+      type: "select-ability",
+      abilityId: "enchant",
+    });
+
+    expect(state.pending?.step).toBe("enchant-enemy-move");
+    const sourceTypes = new Set(
+      state.legalCells.map((cell) => state.board[cell]?.type),
+    );
+    expect(sourceTypes).toEqual(new Set(["pawn", "knight", "bishop"]));
+    expect(state.legalCells.some((cell) => state.board[cell]?.type === "king")).toBe(false);
+
+    const enemySource = state.legalCells.find(
+      (cell) => state.board[cell]?.type === "knight",
+    )!;
+    const enchantedId = state.board[enemySource].id;
+    const originalController = state.board[enemySource].controller;
+    state = threePlayerReducer(state, { type: "cell", cell: enemySource });
+    const enemyDestination = state.legalCells[0];
+    state = threePlayerReducer(state, {
+      type: "cell",
+      cell: enemyDestination,
+    });
+    if (state.legalPaths.length) {
+      state = threePlayerReducer(state, {
+        type: "path",
+        pathId: state.legalPaths[0],
+      });
+    }
+
+    expect(state.pending?.step).toBe("enchant-followup-move");
+    expect(Object.values(state.board).find((candidate) => candidate.id === enchantedId)?.controller)
+      .toBe(originalController);
+    expect(availableThreePlayerActions(state).every((action) => action.type === "cell"))
+      .toBe(true);
+    const committed = state;
+    state = threePlayerReducer(state, {
+      type: "select-god",
+      godId: "teles",
+    });
+    state = threePlayerReducer(state, {
+      type: "select-ability",
+      abilityId: "lure",
+    });
+    expect(state).toEqual(committed);
+
+    const followupSource = state.legalCells[0];
+    state = threePlayerReducer(state, { type: "cell", cell: followupSource });
+    const followupDestination = state.legalCells[0];
+    state = threePlayerReducer(state, {
+      type: "cell",
+      cell: followupDestination,
+    });
+    if (state.legalPaths.length) {
+      state = threePlayerReducer(state, {
+        type: "path",
+        pathId: state.legalPaths[0],
+      });
+    }
+
+    expect(state.activeSeat).toBe("red");
+    expect(state.rested).toContain("teles");
+    expect(state.bonusTurn).toBeUndefined();
+  });
+
+  it("unlocks rook and queen Enchant sources only at levels 2 and 3", () => {
+    const activate = (level: 1 | 2 | 3) => {
+      let state = abilityState("teles", level);
+      state = threePlayerReducer(state, {
+        type: "select-god",
+        godId: "teles",
+      });
+      return threePlayerReducer(state, {
+        type: "select-ability",
+        abilityId: "enchant",
+      });
+    };
+    const types = (state: ThreePlayerState) =>
+      new Set(state.legalCells.map((cell) => state.board[cell]?.type));
+
+    expect(types(activate(1))).toEqual(new Set(["pawn", "knight", "bishop"]));
+    expect(types(activate(2))).toEqual(new Set(["pawn", "knight", "bishop", "rook"]));
+    expect(types(activate(3))).toEqual(new Set(["pawn", "knight", "bishop", "rook", "queen"]));
+  });
+
   it("creates a unique Monument rook without duplicating a sacrificed pawn", () => {
     let state = createThreePlayerGame();
     for (const godId of [
@@ -294,6 +382,90 @@ describe("three-player God catalog", () => {
         )).toBe(true);
       }
     }
+  });
+
+  it("lets Hex target hostile living Kings without allowing their capture", () => {
+    for (const level of [1, 2, 3] as const) {
+      let state = abilityState("salem", level);
+      const topology = getThreePlayerTopology(state.config.boardVariant);
+      const destination = topology.cells.find((cell) =>
+        topology.rookRays(cell).filter((ray) => ray.cells.length).length >= 2
+      )!;
+      const rays = topology.rookRays(destination)
+        .filter((ray) => ray.cells.length);
+      const source = rays[0].cells[0];
+      const targetKing = rays[1].cells[0];
+      state.board = {
+        [source]: piece("hex-mover", "rook", "white"),
+        [targetKing]: piece("red-king", "king", "red"),
+      };
+      const whiteKing = addSafeWhiteKing(
+        state,
+        new Set([source, destination, targetKing]),
+      );
+
+      state = threePlayerReducer(state, {
+        type: "select-god",
+        godId: "salem",
+      });
+      state = threePlayerReducer(state, {
+        type: "select-ability",
+        abilityId: "hex",
+      });
+      expect(state.legalCells).toContain(targetKing);
+      expect(state.legalCells).not.toContain(whiteKing);
+
+      state = threePlayerReducer(state, { type: "cell", cell: targetKing });
+      expect(state.board[targetKing].status.hexedBy).toBe("white");
+      if (level > 1) state = threePlayerReducer(state, { type: "pass" });
+
+      const orbsBeforeMove =
+        state.players.white.orbs.light + state.players.white.orbs.dark;
+      state = threePlayerReducer(state, { type: "cell", cell: source });
+      expect(state.legalCells).toContain(destination);
+      expect(state.legalCells).not.toContain(targetKing);
+      state = threePlayerReducer(state, { type: "cell", cell: destination });
+      if (state.legalPaths.length) {
+        state = threePlayerReducer(state, {
+          type: "path",
+          pathId: state.legalPaths[0],
+        });
+      }
+
+      expect(
+        state.players.white.orbs.light + state.players.white.orbs.dark,
+      ).toBe(orbsBeforeMove + 2);
+      expect(state.board[targetKing]).toMatchObject({
+        type: "king",
+        status: { hexedBy: "white" },
+      });
+    }
+
+    let filtered = abilityState("salem", 1);
+    const inert = Object.entries(filtered.board).find(([, candidate]) =>
+      candidate.controller === "red" && candidate.type === "pawn"
+    )!;
+    inert[1].controller = null;
+    const duplicate = Object.entries(filtered.board).find(([, candidate]) =>
+      candidate.controller === "black" && candidate.type === "pawn"
+    )!;
+    duplicate[1].status.hexedBy = "red";
+    filtered.players.red.eliminated = true;
+    filtered = threePlayerReducer(filtered, {
+      type: "select-god",
+      godId: "salem",
+    });
+    filtered = threePlayerReducer(filtered, {
+      type: "select-ability",
+      abilityId: "hex",
+    });
+    expect(filtered.legalCells).not.toContain(inert[0]);
+    expect(filtered.legalCells).not.toContain(duplicate[0]);
+    expect(filtered.legalCells).not.toEqual(expect.arrayContaining(
+      Object.entries(filtered.board)
+        .filter(([, candidate]) => candidate.controller === "red")
+        .map(([cell]) => cell),
+    ));
   });
 
   it("keeps Kings out of ranged Prepared Shot targets", () => {

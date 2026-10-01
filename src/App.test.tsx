@@ -412,6 +412,76 @@ describe("game startup", () => {
     expect(document.querySelector(".action-panel > .grave-picker")).toBeNull();
   });
 
+  it("highlights Position Six Enchant sources and attaches both stage prompts to Enchant", () => {
+    let state = PUZZLES.find((puzzle) => puzzle.id === "opened-file")!.createState();
+    state = gameReducer(state, { type: "select-god", godId: "teles" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "enchant" });
+    window.localStorage.setItem(LEGACY_SAVE_KEY, JSON.stringify({
+      version: 1,
+      savedAt: new Date().toISOString(),
+      state,
+    }));
+
+    const { container } = render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /load game/i }));
+    fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
+
+    const enchantCard = screen.getByText("Enchant").closest(".ability-card");
+    expect(enchantCard).toBeTruthy();
+    expect(within(enchantCard as HTMLElement).getByText(/choose a highlighted hostile piece/i))
+      .toBeTruthy();
+    expect(container.querySelector('[data-square="e6"].legal-source')).toBeTruthy();
+    expect(container.querySelectorAll(".board-square.legal-source")).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("gridcell", { name: /e6, black bishop/i }));
+    const destination = container.querySelector<HTMLButtonElement>(
+      ".board-square.legal-destination",
+    );
+    expect(destination).toBeTruthy();
+    fireEvent.click(destination!);
+
+    expect(within(enchantCard as HTMLElement).getByText(/make one ordinary legal move/i))
+      .toBeTruthy();
+    expect(container.querySelectorAll(".board-square.legal-source").length)
+      .toBeGreaterThan(0);
+    expect(screen.queryByText(/choose an available god/i)).toBeNull();
+  });
+
+  it("highlights and applies Salem Hex to a hostile King", () => {
+    let state = createGame(1);
+    for (const godId of [
+      "salem",
+      "chiron",
+      "midas",
+      "death",
+      "artemis",
+      "medusa",
+    ] as const) {
+      state = gameReducer(state, { type: "draft", godId });
+    }
+    state.players.white.orbs = { white: 50, black: 50 };
+    state = gameReducer(state, { type: "select-god", godId: "salem" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "hex" });
+    window.localStorage.setItem(SAVE_KEY, JSON.stringify([
+      createSavedGame("hex-king-classic", state, []),
+    ]));
+
+    const { container } = render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /load game/i }));
+    fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
+
+    const hostileKing = container.querySelector<HTMLElement>(
+      '[data-square="e8"].legal-destination',
+    );
+    expect(hostileKing).toBeTruthy();
+    expect(container.querySelector('[data-square="e1"].legal-destination')).toBeNull();
+    fireEvent.click(hostileKing!);
+    expect(
+      within(screen.getByRole("gridcell", { name: /e8.*black king/i }))
+        .getByLabelText(/hexed/i),
+    ).toBeTruthy();
+  });
+
   it("restores the saved position instead of the fresh initial game", () => {
     const savedState = gameReducer(createGame(1), {
       type: "draft",

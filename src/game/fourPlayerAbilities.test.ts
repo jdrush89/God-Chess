@@ -172,9 +172,60 @@ describe("four-player God abilities", () => {
 
     state = gameFor("teles");
     state.board.g8 = piece(state, "pawn", "south", "enchanted");
-    result = move(state, "teles", "enchant", "g8", "g9");
+    state.board.g12 = piece(state, "pawn", "north", "follow-up");
+    result = activate(state, "teles", "enchant");
+    expect(result.pending?.step).toBe("enchant-enemy-move");
+    expect(result.legalTargets).toContain("g8");
+    result = fourPlayerReducer(result, { type: "square", square: "g8" });
+    result = fourPlayerReducer(result, { type: "square", square: "g9" });
     expect(result.board.g9).toMatchObject({ id: "enchanted", controller: "south" });
-    expect(result.activeSeat).toBe("north");
+    expect(result.pending?.step).toBe("enchant-followup-move");
+    expect(result.legalTargets).toContain("g12");
+    expect(hasCommittedFourPlayerAction(result)).toBe(true);
+    expect(availableFourPlayerActions(result).every((action) => action.type === "square"))
+      .toBe(true);
+    result = fourPlayerReducer(result, { type: "square", square: "g12" });
+    const followupDestination = result.legalTargets[0];
+    expect(followupDestination).toBeTruthy();
+    result = fourPlayerReducer(result, {
+      type: "square",
+      square: followupDestination,
+    });
+    expect(result.activeSeat).toBe("east");
+    expect(result.rested).toContain("teles");
+    expect(result.bonusTurn).toBeUndefined();
+  });
+
+  it("limits Enchant to hostile teams and unlocks rook and queen sources by level", () => {
+    const setup = (level: 1 | 2 | 3) => {
+      const state = gameFor("teles", level);
+      state.config.mode = "teams";
+      state.config.teams = {
+        north: "team-a",
+        east: "team-b",
+        south: "team-a",
+        west: "team-b",
+      };
+      state.players.north.team = "team-a";
+      state.players.east.team = "team-b";
+      state.players.south.team = "team-a";
+      state.players.west.team = "team-b";
+      state.board.g12 = piece(state, "pawn", "north", "follow-up");
+      state.board.f8 = piece(state, "pawn", "east", "enemy-pawn");
+      state.board.g8 = piece(state, "knight", "west", "enemy-knight");
+      state.board.h8 = piece(state, "bishop", "east", "enemy-bishop");
+      state.board.f9 = piece(state, "rook", "west", "enemy-rook");
+      state.board.h9 = piece(state, "queen", "east", "enemy-queen");
+      state.board.g10 = piece(state, "pawn", "south", "teammate-pawn");
+      return activate(state, "teles", "enchant");
+    };
+
+    const levelOne = setup(1);
+    expect(levelOne.legalTargets).toEqual(expect.arrayContaining(["f8", "g8", "h8"]));
+    expect(levelOne.legalTargets).not.toEqual(expect.arrayContaining(["f9", "h9", "g10"]));
+    expect(setup(2).legalTargets).toContain("f9");
+    expect(setup(2).legalTargets).not.toContain("h9");
+    expect(setup(3).legalTargets).toContain("h9");
   });
 
   it("generalizes Artemis's Take Cover, Stealth, and Snipe", () => {
@@ -403,6 +454,44 @@ describe("four-player God abilities", () => {
       expect(leveled.pending?.step).toBe("source");
       expect(availableFourPlayerActions(leveled).length).toBeGreaterThan(0);
     }
+  });
+
+  it("lets Hex target hostile living Kings and preserves them through the reward move", () => {
+    for (const level of [1, 2, 3] as const) {
+      let state = activate(teamHexGame(level), "salem", "hex");
+      expect(state.legalTargets).toEqual(expect.arrayContaining(["a7", "n8"]));
+      expect(state.legalTargets).not.toEqual(expect.arrayContaining(["g14", "g1"]));
+
+      state = fourPlayerReducer(state, { type: "square", square: "a7" });
+      expect(state.board.a7.status.hexedBy).toBe("north");
+      if (level > 1) state = fourPlayerReducer(state, { type: "pass" });
+      expect(state.board.a7).toMatchObject({
+        type: "king",
+        controller: "west",
+        status: { hexedBy: "north" },
+      });
+    }
+
+    let rewarded = gameFor("salem");
+    delete rewarded.board.g1;
+    rewarded.board.g10 = piece(rewarded, "king", "south", "hexed-king");
+    rewarded.board.g8 = piece(rewarded, "rook", "north", "hex-mover");
+    rewarded = activate(rewarded, "salem", "hex");
+    rewarded = fourPlayerReducer(rewarded, { type: "square", square: "g10" });
+    const orbsBeforeMove =
+      rewarded.players.north.orbs.light + rewarded.players.north.orbs.dark;
+    rewarded = fourPlayerReducer(rewarded, { type: "square", square: "g8" });
+    expect(rewarded.legalTargets).toContain("g9");
+    rewarded = fourPlayerReducer(rewarded, { type: "square", square: "g9" });
+
+    expect(rewarded.board.g10).toMatchObject({
+      id: "hexed-king",
+      type: "king",
+      status: { hexedBy: "north" },
+    });
+    expect(
+      rewarded.players.north.orbs.light + rewarded.players.north.orbs.dark,
+    ).toBe(orbsBeforeMove + 2);
   });
 
   it("finishes Hex cleanly when no controlled piece has a legal movement", () => {

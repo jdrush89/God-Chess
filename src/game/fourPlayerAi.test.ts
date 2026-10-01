@@ -221,6 +221,7 @@ describe("four-player AI", () => {
       current = next;
     }
     expect(current.pending).toBeUndefined();
-    expect(current.board.b11.status.hexedBy).toBe("north");
+    expect(current.board.n8.status.hexedBy).toBe("north");
+    expect(current.board.n8.type).toBe("king");
   });
 });

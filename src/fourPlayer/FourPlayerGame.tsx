@@ -635,6 +635,10 @@ function FourPlayerBoard({
   }, []);
   const previewing = state.pending?.step === "confirm-stone-gaze" ||
     state.pending?.step === "confirm-march-home";
+  const enchantSourceChoice = (
+    state.pending?.step === "enchant-enemy-move" ||
+    state.pending?.step === "enchant-followup-move"
+  ) && !state.selectedSquare;
   return (
     <div className="four-board-shell">
       <div className="four-board-frame">
@@ -653,7 +657,7 @@ function FourPlayerBoard({
                 role="gridcell"
                 data-square={square}
                 aria-label={`${square}${piece ? `, ${state.players[piece.owner].name} ${piece.type}${piece.controller ? `, controlled by ${state.players[piece.controller].name}` : ", inert"}` : ""}${legal ? ", legal target" : ""}`}
-                className={`four-board-square ${(file + rank) % 2 ? "light" : "dark"} ${selected ? "selected" : ""} ${legal ? "legal" : ""} ${legal && piece ? "legal-occupied" : ""} ${effectPreview ? "effect-preview" : ""}`}
+                className={`four-board-square ${(file + rank) % 2 ? "light" : "dark"} ${selected ? "selected" : ""} ${legal ? "legal" : ""} ${legal && piece ? "legal-occupied" : ""} ${legal && enchantSourceChoice ? "legal-source" : ""} ${legal && !enchantSourceChoice ? "legal-destination" : ""} ${effectPreview ? "effect-preview" : ""}`}
                 onClick={() => {
                   onInspectSquare(square);
                   dispatch({ type: "square", square });

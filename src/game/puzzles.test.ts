@@ -164,6 +164,26 @@ describe("puzzle mode", () => {
     )).toBe(true);
   });
 
+  it("enumerates Position Six's exact movable level-1 Enchant sources", () => {
+    let state = PUZZLES.find((puzzle) => puzzle.id === "opened-file")!.createState();
+    state = gameReducer(state, { type: "select-god", godId: "teles" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "enchant" });
+
+    expect(state.pending?.step).toBe("enchant-enemy-move");
+    expect(state.legalTargets).toEqual(["e6"]);
+    expect(state.board.e6).toMatchObject({
+      type: "bishop",
+      controller: "black",
+      status: {},
+    });
+    for (const square of ["a7", "b7", "c7", "d7", "f7", "g7", "h7", "b8"]) {
+      expect(state.board[square]?.status.movedThisTurn).toBe(true);
+    }
+    expect(state.board.c8?.type).toBe("rook");
+    expect(state.board.d8?.type).toBe("queen");
+    expect(state.board.e8?.type).toBe("king");
+  });
+
   it("funds Position Twelve's Charge only by executing Marked", () => {
     const puzzle = PUZZLES.find((candidate) => candidate.id === "cleared-lane")!;
     let state = puzzle.createState();

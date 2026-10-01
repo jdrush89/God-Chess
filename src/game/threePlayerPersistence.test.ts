@@ -178,7 +178,32 @@ describe("three-player persistence", () => {
     }];
     badPresentation.nextPresentationEventId = 2;
     expect(isThreePlayerState(badPresentation)).toBe(false);
+  });
 
+  it("accepts canonical Enchant stages and rejects incomplete follow-up state", () => {
+    const enemyMove = pendingState("teles", "enchant", "enchant-enemy-move");
+    expect(isThreePlayerState(enemyMove)).toBe(true);
+
+    const [source, destination] = Object.keys(enemyMove.board);
+    const movedPieceId = enemyMove.board[source].id;
+    const followup = pendingState(
+      "teles",
+      "enchant",
+      "enchant-followup-move",
+      { source, destination, movedPieceId },
+    );
+    expect(isThreePlayerState(followup)).toBe(true);
+
+    const incomplete = structuredClone(followup);
+    delete incomplete.pending!.destination;
+    expect(isThreePlayerState(incomplete)).toBe(false);
+
+    const wrongAbility = structuredClone(followup);
+    wrongAbility.pending!.abilityId = "lure";
+    wrongAbility.selectedAbility = "lure";
+    expect(isThreePlayerState(wrongAbility)).toBe(false);
+
+    const state = createThreePlayerGame();
     const mislabeledLegacy = structuredClone(state) as unknown as Record<string, unknown>;
     mislabeledLegacy.schemaVersion = 1;
     expect(() => prepareThreePlayerState(mislabeledLegacy)).toThrow(/invalid/i);

@@ -506,7 +506,7 @@ describe("four-player app integration", () => {
     expect(screen.getByText(playable.notice)).toBeTruthy();
   });
 
-  it("shows the progressing source choice after 2v2 Salem Hex marks West b11", () => {
+  it("highlights a hostile King for 2v2 Salem Hex and advances after marking it", () => {
     const config = createDefaultFourPlayerConfig();
     config.mode = "teams";
     config.teams = {
@@ -548,9 +548,10 @@ describe("four-player app integration", () => {
     };
     state = fourPlayerReducer(state, { type: "select-god", godId: "salem" });
     state = fourPlayerReducer(state, { type: "select-ability", abilityId: "hex" });
-    state = fourPlayerReducer(state, { type: "square", square: "b11" });
+    expect(state.legalTargets).toContain("a7");
+    expect(state.legalTargets).not.toContain("g1");
 
-    render(
+    const { container } = render(
       <FourPlayerGame
         initialState={state}
         undoPreferred={false}
@@ -561,8 +562,11 @@ describe("four-player app integration", () => {
       />,
     );
 
+    expect(container.querySelector('[data-square="a7"].legal-destination')).toBeTruthy();
+    expect(container.querySelector('[data-square="g1"].legal-destination')).toBeNull();
+    fireEvent.click(screen.getByRole("gridcell", { name: /a7.*west.*king/i }));
     expect(
-      within(screen.getByRole("gridcell", { name: /b11.*west.*pawn/i }))
+      within(screen.getByRole("gridcell", { name: /a7.*west.*king/i }))
         .getByLabelText(/hexed/i),
     ).toBeTruthy();
     expect(screen.getAllByText(/choose a piece to move/i).length).toBeGreaterThan(0);
@@ -576,6 +580,67 @@ describe("four-player app integration", () => {
       .toBeTruthy();
     fireEvent.click(screen.getByRole("gridcell", { name: /g8.*north.*rook/i }));
     expect(screen.getAllByText(/choose a destination for the rook/i).length)
+      .toBeGreaterThan(0);
+  });
+
+  it("shows Enchant source and follow-up highlights beneath the selected ability", () => {
+    let state = createFourPlayerGame();
+    const orderedGods = [
+      GODS.find((god) => god.id === "teles")!,
+      ...GODS.filter((god) => god.id !== "teles"),
+    ];
+    for (const god of orderedGods) {
+      state = fourPlayerReducer(state, { type: "draft", godId: god.id });
+    }
+    state.players.north.orbs = { light: 50, dark: 50 };
+    const kings = Object.fromEntries(
+      Object.entries(state.board).filter(([, piece]) => piece.type === "king"),
+    );
+    const enemy = structuredClone(state.board.b10);
+    enemy.id = "enchanted-pawn";
+    enemy.type = "pawn";
+    enemy.owner = "west";
+    enemy.controller = "west";
+    enemy.status = {};
+    const followup = structuredClone(state.board.d13);
+    followup.id = "followup-pawn";
+    followup.type = "pawn";
+    followup.owner = "north";
+    followup.controller = "north";
+    followup.status = {};
+    state.board = { ...kings, g8: enemy, g12: followup };
+    state = fourPlayerReducer(state, { type: "select-god", godId: "teles" });
+    state = fourPlayerReducer(state, {
+      type: "select-ability",
+      abilityId: "enchant",
+    });
+
+    const { container } = render(
+      <FourPlayerGame
+        initialState={state}
+        undoPreferred={false}
+        onUndoPreferenceChange={vi.fn()}
+        onPersist={vi.fn(async () => false)}
+        onQuit={vi.fn()}
+        onNewGame={vi.fn()}
+      />,
+    );
+    const enchantCard = screen.getByText("Enchant").closest(".four-ability-card");
+    expect(enchantCard).toBeTruthy();
+    expect(within(enchantCard as HTMLElement).getByText(/choose a highlighted hostile piece/i))
+      .toBeTruthy();
+    expect(container.querySelector('[data-square="g8"].legal-source')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("gridcell", { name: /g8.*west.*pawn/i }));
+    const destination = container.querySelector<HTMLButtonElement>(
+      ".four-board-square.legal-destination",
+    );
+    expect(destination).toBeTruthy();
+    fireEvent.click(destination!);
+
+    expect(within(enchantCard as HTMLElement).getByText(/make one ordinary legal move/i))
+      .toBeTruthy();
+    expect(container.querySelectorAll(".four-board-square.legal-source").length)
       .toBeGreaterThan(0);
   });
 });

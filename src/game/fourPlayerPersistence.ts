@@ -207,7 +207,7 @@ const isPending = (value: unknown) => {
   if (!GOD_BY_ID[value.godId].abilities.some((ability) => ability.id === value.abilityId) &&
       value.abilityId !== "snipe-shot" &&
       value.abilityId !== "harden-choice") return false;
-  return (
+  const fieldsAreValid = (
     typeof value.step === "string" &&
     Boolean(value.step) &&
     (value.source === undefined || isSquare(value.source)) &&
@@ -217,6 +217,19 @@ const isPending = (value: unknown) => {
     (value.movesRemaining === undefined || Number.isInteger(value.movesRemaining)) &&
     (value.targetSeat === undefined || isSeat(value.targetSeat))
   );
+  if (!fieldsAreValid) return false;
+  if (value.step === "enchant-enemy-move") {
+    return value.abilityId === "enchant" &&
+      value.destination === undefined &&
+      value.movedPieceId === undefined;
+  }
+  if (value.step === "enchant-followup-move") {
+    return value.abilityId === "enchant" &&
+      isSquare(value.source) &&
+      isSquare(value.destination) &&
+      typeof value.movedPieceId === "string";
+  }
+  return value.abilityId !== "enchant";
 };
 
 export const isFourPlayerState = (value: unknown): value is FourPlayerState => {

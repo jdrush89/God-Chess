@@ -52,6 +52,31 @@ describe("ThreePlayerBoard", () => {
     expect(container.querySelector(`[data-cell="${target}"]`)?.classList.contains("path")).toBe(true);
   });
 
+  it("visually distinguishes Enchant source and destination highlights", () => {
+    const state = createThreePlayerGame();
+    const source = Object.keys(state.board)[0];
+    state.pending = {
+      godId: "teles",
+      abilityId: "enchant",
+      step: "enchant-enemy-move",
+    };
+    const { container, rerender } = render(
+      <ThreePlayerBoard state={state} legalCells={[source]} />,
+    );
+    expect(container.querySelector(`[data-cell="${source}"]`)?.classList.contains("legal-source"))
+      .toBe(true);
+
+    rerender(
+      <ThreePlayerBoard
+        state={state}
+        selectedCell={source}
+        legalCells={[source]}
+      />,
+    );
+    expect(container.querySelector(`[data-cell="${source}"]`)?.classList.contains("legal-destination"))
+      .toBe(true);
+  });
+
   it("renders banana locations with an accessible cell description", () => {
     const state = createThreePlayerGame();
     const cell = getThreePlayerTopology(state.config.boardVariant).cells.find(

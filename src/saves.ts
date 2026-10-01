@@ -300,7 +300,7 @@ const isPending = (value: unknown): value is PendingAction => {
     typeof value.step !== "string" ||
     !value.step
   ) return false;
-  return (
+  const fieldsAreValid = (
     (value.source === undefined || isSquare(value.source)) &&
     (value.destination === undefined || isSquare(value.destination)) &&
     (
@@ -314,6 +314,19 @@ const isPending = (value: unknown): value is PendingAction => {
     (value.movedPieceId === undefined || typeof value.movedPieceId === "string") &&
     (value.movesRemaining === undefined || isInteger(value.movesRemaining))
   );
+  if (!fieldsAreValid) return false;
+  if (value.step === "enchant-enemy-move") {
+    return value.abilityId === "enchant" &&
+      value.destination === undefined &&
+      value.movedPieceId === undefined;
+  }
+  if (value.step === "enchant-followup-move") {
+    return value.abilityId === "enchant" &&
+      isSquare(value.source) &&
+      isSquare(value.destination) &&
+      typeof value.movedPieceId === "string";
+  }
+  return value.abilityId !== "enchant";
 };
 
 const isBanana = (value: unknown): value is Banana =>

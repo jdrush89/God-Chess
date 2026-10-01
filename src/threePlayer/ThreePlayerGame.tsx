@@ -1307,22 +1307,24 @@ export function ThreePlayerGame({
                         </em>
                       )}
                     </button>
-                    {active && attachedGenericActions.length > 0 && (
+                    {active && state.pending && state.selectedAbility === ability.id && (
                       <div className="three-ability-pending" aria-label={`${ability.name} follow-up actions`}>
                         <p role="status">{state.notice}</p>
-                        <div className="three-generic-actions">
-                          {attachedGenericActions.map((pendingAction, index) => (
-                            <button
-                              className={pendingAction.type === "cancel" ? "danger-button" : "secondary-button"}
-                              disabled={inputDisabled}
-                              onClick={() => dispatchAction(pendingAction)}
-                              key={`${pendingAction.type}-${index}-${actionLabel(pendingAction)}`}
-                            >
-                              {pendingAction.type === "confirm-ability" && <Check size={15} />}
-                              {actionLabel(pendingAction)}
-                            </button>
-                          ))}
-                        </div>
+                        {attachedGenericActions.length > 0 && (
+                          <div className="three-generic-actions">
+                            {attachedGenericActions.map((pendingAction, index) => (
+                              <button
+                                className={pendingAction.type === "cancel" ? "danger-button" : "secondary-button"}
+                                disabled={inputDisabled}
+                                onClick={() => dispatchAction(pendingAction)}
+                                key={`${pendingAction.type}-${index}-${actionLabel(pendingAction)}`}
+                              >
+                                {pendingAction.type === "confirm-ability" && <Check size={15} />}
+                                {actionLabel(pendingAction)}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
                   </article>

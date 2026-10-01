@@ -679,4 +679,91 @@ describe("ThreePlayerGame", () => {
       (cell) => cell.getAttribute("aria-disabled") === "false",
     )).toBe(true);
   });
+
+  it("shows both Enchant stages beneath the ability with source highlights", async () => {
+    let enemyMove = completeDraft();
+    enemyMove.activeSeat = "white";
+    enemyMove.rested = [];
+    enemyMove.players.white.gods = ["teles"];
+    enemyMove.players.red.gods = ["ares"];
+    enemyMove.players.black.gods = ["midas"];
+    enemyMove.players.white.orbs = { light: 50, dark: 50 };
+    enemyMove = threePlayerReducer(enemyMove, {
+      type: "select-god",
+      godId: "teles",
+    });
+    enemyMove = threePlayerReducer(enemyMove, {
+      type: "select-ability",
+      abilityId: "enchant",
+    });
+    const firstRender = renderGame(enemyMove);
+    const { container } = firstRender;
+    const enchantCard = screen.getByText("Enchant").closest(".three-ability-card");
+    expect(enchantCard).toBeTruthy();
+    expect(within(enchantCard as HTMLElement).getByText(/choose a highlighted hostile piece/i))
+      .toBeTruthy();
+    expect(container.querySelectorAll(".three-board-cell.legal-source").length)
+      .toBeGreaterThan(0);
+
+    let followup = enemyMove;
+    const source = followup.legalCells[0];
+    followup = threePlayerReducer(followup, { type: "cell", cell: source });
+    followup = threePlayerReducer(followup, {
+      type: "cell",
+      cell: followup.legalCells[0],
+    });
+    if (followup.legalPaths.length) {
+      followup = threePlayerReducer(followup, {
+        type: "path",
+        pathId: followup.legalPaths[0],
+      });
+    }
+    expect(followup.pending?.step).toBe("enchant-followup-move");
+
+    firstRender.unmount();
+    const followupRender = renderGame(followup);
+    const followupCard = screen.getByText("Enchant").closest(".three-ability-card");
+    expect(followupCard).toBeTruthy();
+    expect(within(followupCard as HTMLElement).getByText(/make one ordinary legal move/i))
+      .toBeTruthy();
+    expect(followupRender.container.querySelectorAll(".three-board-cell.legal-source").length)
+      .toBeGreaterThan(0);
+  });
+
+  it("highlights and selects a hostile King for Salem Hex", () => {
+    let state = completeDraft();
+    state.activeSeat = "white";
+    state.rested = [];
+    state.players.white.gods = ["salem"];
+    state.players.red.gods = ["ares"];
+    state.players.black.gods = ["midas"];
+    state.players.white.orbs = { light: 50, dark: 50 };
+    const whiteKing = Object.entries(state.board).find(([, piece]) =>
+      piece.type === "king" && piece.controller === "white"
+    )![0];
+    const redKing = Object.entries(state.board).find(([, piece]) =>
+      piece.type === "king" && piece.controller === "red"
+    )![0];
+    state = threePlayerReducer(state, {
+      type: "select-god",
+      godId: "salem",
+    });
+    state = threePlayerReducer(state, {
+      type: "select-ability",
+      abilityId: "hex",
+    });
+
+    const { container } = renderGame(state);
+    expect(container.querySelector(
+      `[data-cell="${redKing}"].legal-destination`,
+    )).toBeTruthy();
+    expect(container.querySelector(
+      `[data-cell="${whiteKing}"].legal-destination`,
+    )).toBeNull();
+    fireEvent.click(screen.getByRole("gridcell", { name: new RegExp(redKing) }));
+    expect(screen.getAllByText(/choose a piece to move/i).length)
+      .toBeGreaterThan(0);
+    expect(screen.getByRole("gridcell", { name: new RegExp(redKing) }))
+      .toBeTruthy();
+  });
 });

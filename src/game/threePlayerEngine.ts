@@ -194,6 +194,7 @@ const COMMITTED_PENDING_STEPS = new Set([
   "barter-orb",
   "barter-seat",
   "cull-choice",
+  "enchant-followup-move",
   "funding",
   "hire",
   "marked-choice",
@@ -1107,6 +1108,10 @@ const sourceIsAllowed = (state: ThreePlayerState, cell: string) => {
     !state.pending.selected?.includes("__no-repeat");
   if (piece.status.movedThisTurn && !fundingRepeat) return false;
   const compelled = compelledLuredSources(state);
+  if (state.pending?.step === "enchant-followup-move") {
+    return piece.controller === state.activeSeat &&
+      (!compelled.length || compelled.includes(cell));
+  }
   if (
     abilityId !== "enchant" &&
     compelled.length &&
@@ -1140,6 +1145,61 @@ const sourceIsAllowed = (state: ThreePlayerState, cell: string) => {
   }
   if (abilityId === "marked" && piece.type === "king") return false;
   return piece.controller === state.activeSeat;
+};
+
+const ordinaryMoveTargets = (
+  state: ThreePlayerState,
+  cell: string,
+) => {
+  const piece = state.board[cell];
+  if (!piece || piece.controller !== state.activeSeat) return [];
+  let targets = threePlayerLegalTargets(state, cell);
+  if (piece.type === "knight" && piece.status.chargeUntil) {
+    targets = [...new Set([
+      ...targets,
+      ...threePlayerLegalTargets(state, cell, { forceType: "rook" }),
+    ])];
+  }
+  return constrainLure(state, cell, targets);
+};
+
+const enchantFollowupSources = (state: ThreePlayerState) =>
+  Object.keys(state.board).filter((cell) =>
+    sourceIsAllowed(
+      {
+        ...state,
+        pending: state.pending
+          ? { ...state.pending, step: "enchant-followup-move" }
+          : state.pending,
+      },
+      cell,
+    ) && ordinaryMoveTargets(state, cell).length > 0
+  );
+
+const enchantDestinationHasFollowup = (
+  state: ThreePlayerState,
+  source: string,
+  destination: string,
+  pathId?: string,
+) => {
+  const simulated = clone(state);
+  const moving = simulated.board[source];
+  if (!moving) return false;
+  const originalController = moving.controller;
+  moving.controller = simulated.activeSeat;
+  const result = moveDirect(simulated, source, destination, false, pathId);
+  if (!result || !simulated.board[result.to]) return false;
+  simulated.board[result.to].controller = originalController;
+  simulated.selectedCell = undefined;
+  simulated.selectedPath = undefined;
+  simulated.pending = {
+    ...simulated.pending!,
+    step: "enchant-followup-move",
+    source: result.from,
+    destination: result.to,
+    movedPieceId: moving.id,
+  };
+  return enchantFollowupSources(simulated).length > 0;
 };
 
 const safeTeleportTargets = (
@@ -1264,6 +1324,9 @@ const sourceTargets = (state: ThreePlayerState, cell: string): string[] => {
   const level = currentLevel(state, abilityId);
   const piece = state.board[cell];
   if (!piece) return [];
+  if (state.pending?.step === "enchant-followup-move") {
+    return ordinaryMoveTargets(state, cell);
+  }
   if (
     piece.status.hardened &&
     piece.controller &&
@@ -1367,7 +1430,12 @@ const sourceTargets = (state: ThreePlayerState, cell: string): string[] => {
     const simulated = clone(state);
     simulated.board[cell].controller = state.activeSeat;
     return threePlayerLegalTargets(simulated, cell)
-      .filter((target) => state.board[target]?.type !== "king");
+      .filter((target) =>
+        state.board[target]?.type !== "king" &&
+        threePlayerTravelPaths(simulated, cell, target).some((path) =>
+          enchantDestinationHasFollowup(state, cell, target, path.traceId)
+        )
+      );
   }
   const options = piece.type === "knight" && piece.status.chargeUntil
     ? [
@@ -1411,6 +1479,11 @@ const sourceTargets = (state: ThreePlayerState, cell: string): string[] => {
   }
   return constrainLure(state, cell, targets);
 };
+
+const enchantSourceCells = (state: ThreePlayerState) =>
+  Object.keys(state.board).filter((cell) =>
+    sourceIsAllowed(state, cell) && sourceTargets(state, cell).length > 0
+  );
 
 const getTopologyCells = (state: ThreePlayerState) =>
   getThreePlayerTopology(state.config.boardVariant).cells;
@@ -1538,6 +1611,19 @@ const activateAbility = (
     godId: god.id,
     abilityId,
   });
+  if (abilityId === "enchant") {
+    state.pending.step = "enchant-enemy-move";
+    state.legalCells = enchantSourceCells(state);
+    if (!state.legalCells.length) {
+      refundCost(state);
+      state.selectedAbility = undefined;
+      state.pending = undefined;
+      state.notice = "Enchant has no hostile piece that can move and leave a legal follow-up move.";
+      return;
+    }
+    state.notice = "Enchant: choose a highlighted hostile piece to move.";
+    return;
+  }
   if (abilityId === "stone-gaze") {
     state.pending.step = "confirm-stone-gaze";
     state.notice = `Stone Gaze will affect ${stoneGazeTargets(state).targets.length} pieces.`;
@@ -1599,7 +1685,10 @@ const activateAbility = (
       state.pending = { ...state.pending, step: "hex-target", selected: [] };
       state.legalCells = Object.entries(state.board)
         .filter(([, piece]) =>
-          hostilePiece(state, piece) && piece.type !== "king"
+          hostilePiece(state, piece) &&
+          piece.controller !== null &&
+          !state.players[piece.controller].eliminated &&
+          !piece.status.hexedBy
         )
         .map(([cell]) => cell);
       state.notice = "Choose a piece to Hex, or pass after the first.";
@@ -1634,6 +1723,7 @@ const selectGod = (state: ThreePlayerState, godId: GodId) => {
       state.pending?.abilityId ?? "",
     )
   ) return;
+  if (state.pending?.step === "enchant-followup-move") return;
   if (
     !activePlayer(state).gods.includes(godId) ||
     state.rested.includes(godId)
@@ -1807,8 +1897,6 @@ const resolveMoveEffect = (
         ).length + (level >= 3 ? Math.floor(orthogonalCount / 2) : 0);
       addAffinityOrb(state, state.activeSeat, affinity, reward, to);
     }
-  } else if (abilityId === "enchant") {
-    state.bonusTurn = state.activeSeat;
   } else if (abilityId === "take-cover") {
     const fronts = threePlayerFrontCells(state, moving.owner, to);
     const cover = fronts.filter((cell) =>
@@ -2127,6 +2215,23 @@ const executeMovement = (
   const abilityId = state.selectedAbility!;
   const moving = state.board[from];
   if (!moving) return;
+  const enchantFollowup = state.pending?.step === "enchant-followup-move" ||
+    state.pending?.selected?.includes("__enchant-followup-move");
+  if (enchantFollowup) {
+    const result = moveDirect(state, from, to, false, state.selectedPath);
+    if (!result) return;
+    const movedPiece = state.board[result.to];
+    if (!movedPiece) return;
+    delete movedPiece.status.luredBy;
+    finishDivineTurn(
+      state,
+      abilityDescription(
+        state,
+        `: enchanted a hostile piece, then moved ${pieceName(moving)} at ${from} -> ${result.to}`,
+      ),
+    );
+    return;
+  }
   if (abilityId === "escort") {
     executeEscort(state, from, to);
     return;
@@ -2154,8 +2259,10 @@ const executeMovement = (
     if (activePlayer(state).orbs.light < 1) return;
     addOrbs(state, state.activeSeat, -1, 0);
   }
+  const enchantingEnemy = state.pending?.step === "enchant-enemy-move" ||
+    state.pending?.selected?.includes("__enchant-enemy-move");
   const originalController = moving.controller;
-  if (abilityId === "enchant") moving.controller = state.activeSeat;
+  if (enchantingEnemy) moving.controller = state.activeSeat;
   const boardBefore = clone(state.board);
   const result = moveDirect(
     state,
@@ -2164,14 +2271,40 @@ const executeMovement = (
     ["air-lift", "pick-a-fight"].includes(abilityId),
     state.selectedPath,
   );
-  if (!result) return;
-  if (abilityId === "enchant") {
+  if (!result) {
+    if (enchantingEnemy) moving.controller = originalController;
+    return;
+  }
+  if (enchantingEnemy) {
     state.board[result.to].controller = originalController;
   }
   if (moving.status.hardened && !result.captured) {
     delete state.board[result.to].status.hardened;
   }
   delete state.board[result.to].status.luredBy;
+  if (enchantingEnemy) {
+    state.pending = {
+      godId: state.selectedGod!,
+      abilityId,
+      step: "enchant-followup-move",
+      source: result.from,
+      destination: result.to,
+      movedPieceId: moving.id,
+    };
+    state.selectedCell = undefined;
+    state.selectedPath = undefined;
+    state.legalPaths = [];
+    state.legalCells = enchantFollowupSources(state);
+    if (!state.legalCells.length) {
+      finishDivineTurn(
+        state,
+        abilityDescription(state, ": completed Enchant without an available follow-up move"),
+      );
+      return;
+    }
+    state.notice = "Enchant: choose one of your highlighted pieces, then make one ordinary legal move.";
+    return;
+  }
   if (abilityId === "slither") {
     const unlimited = currentLevel(state, abilityId) >= 3;
     const remaining = unlimited
@@ -2924,6 +3057,7 @@ const handleCell = (state: ThreePlayerState, cell: string) => {
     if (selected.length >= currentLevel(state, "hex")) {
       state.pending.step = "source";
       state.legalCells = [];
+      state.notice = "The hexes are set. Choose a piece to move.";
     } else {
       state.legalCells = state.legalCells!.filter(
         (candidate) => candidate !== cell,
@@ -2967,12 +3101,36 @@ const handleCell = (state: ThreePlayerState, cell: string) => {
   }
   if (state.selectedCell) {
     if (state.legalCells!.includes(cell)) {
-      const paths = exactMovementPaths(state, state.selectedCell, cell);
+      const paths = exactMovementPaths(state, state.selectedCell, cell)
+        .filter((path) =>
+          state.pending?.step !== "enchant-enemy-move" ||
+          enchantDestinationHasFollowup(
+            state,
+            state.selectedCell!,
+            cell,
+            path.traceId,
+          )
+        );
+      if (
+        !paths.length &&
+        (
+          state.pending?.step === "enchant-enemy-move" ||
+          state.pending?.step === "enchant-followup-move"
+        )
+      ) return;
       if (paths.length > 1) {
+        const enchantStage = state.pending.step === "enchant-enemy-move"
+          ? "__enchant-enemy-move"
+          : state.pending.step === "enchant-followup-move"
+            ? "__enchant-followup-move"
+            : undefined;
         state.pending = {
           ...state.pending,
           step: "path-choice",
           destination: cell,
+          selected: enchantStage
+            ? [...(state.pending.selected ?? []), enchantStage]
+            : state.pending.selected,
         };
         state.legalPaths = paths.map((path) => path.traceId);
         state.legalCells = [];
@@ -3446,10 +3604,15 @@ export const threePlayerReducer = (
   } else if (action.type === "upgrade" && next.phase === "upgrade") {
     upgradeAbility(next, action.abilityId);
   } else if (next.phase === "play") {
-    if (action.type === "select-god") selectGod(next, action.godId);
+    if (action.type === "select-god" && !hasCommittedThreePlayerAction(next)) {
+      selectGod(next, action.godId);
+    }
     else if (action.type === "clear-god" && !next.selectedAbility) {
       next.selectedGod = undefined;
-    } else if (action.type === "select-ability") {
+    } else if (
+      action.type === "select-ability" &&
+      !hasCommittedThreePlayerAction(next)
+    ) {
       activateAbility(next, action.abilityId);
     } else if (action.type === "confirm-ability") {
       if (next.pending?.step === "confirm-stone-gaze") {
