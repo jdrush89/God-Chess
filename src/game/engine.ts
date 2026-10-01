@@ -618,6 +618,9 @@ const sourceIsAllowed = (state: GameState, square: Square) => {
     !state.pending.selected?.includes("__no-repeat");
   if (piece.status.movedThisTurn && !fundingRepeat) return false;
   const compelled = compelledLuredSquares(state);
+  if (state.pending?.step === "enchant-followup-move") {
+    return piece.controller === color && (!compelled.length || compelled.includes(square));
+  }
   if (abilityId !== "enchant" && compelled.length && !compelled.includes(square)) return false;
   if (abilityId === "enchant") {
     return piece.controller !== color && allowedEnchantTypes(level).includes(piece.type);
@@ -649,6 +652,73 @@ interface EscortPlan {
   landings: EscortLanding[];
   slippedOn?: Square;
 }
+
+const ordinaryMoveTargets = (state: GameState, square: Square) => {
+  const piece = state.board[square];
+  if (!piece || piece.controller !== state.activeColor) return [];
+  let targets = legalTargets(state.board, square, {
+    enPassant: state.enPassant,
+    bananas: state.bananas,
+  });
+  if (piece.type === "knight" && piece.status.chargeUntil) {
+    targets = [...new Set([
+      ...targets,
+      ...legalTargets(state.board, square, {
+        forceType: "rook",
+        bananas: state.bananas,
+      }),
+    ])];
+  }
+  if (!piece.status.luredBy) return targets;
+  const queen = Object.entries(state.board).find(
+    ([, target]) => target.controller === piece.status.luredBy && target.type === "queen",
+  )?.[0];
+  if (!queen) return targets;
+  const closer = targets.filter((target) => distance(target, queen) < distance(square, queen));
+  return closer.length ? closer : targets;
+};
+
+const enchantFollowupSources = (state: GameState) =>
+  Object.keys(state.board).filter((square) =>
+    sourceIsAllowed(
+      {
+        ...state,
+        pending: state.pending
+          ? { ...state.pending, step: "enchant-followup-move" }
+          : state.pending,
+      },
+      square,
+    ) && ordinaryMoveTargets(state, square).length > 0
+  );
+
+const enchantDestinationHasFollowup = (
+  state: GameState,
+  source: Square,
+  destination: Square,
+) => {
+  const simulated = cloneState(state);
+  const moving = simulated.board[source];
+  if (!moving) return false;
+  const originalController = moving.controller;
+  moving.controller = simulated.activeColor;
+  const result = moveDirect(simulated, source, destination);
+  if (!result || !simulated.board[result.to]) return false;
+  simulated.board[result.to].controller = originalController;
+  simulated.selectedSquare = undefined;
+  simulated.pending = {
+    ...simulated.pending!,
+    step: "enchant-followup-move",
+    source: result.from,
+    destination: result.to,
+    movedPieceId: moving.id,
+  };
+  return enchantFollowupSources(simulated).length > 0;
+};
+
+const enchantSourceSquares = (state: GameState) =>
+  Object.keys(state.board).filter((square) =>
+    sourceIsAllowed(state, square) && sourceTargets(state, square).length > 0
+  );
 
 const escortPlan = (state: GameState, kingSquare: Square, requestedDestination: Square): EscortPlan | undefined => {
   const king = state.board[kingSquare];
@@ -728,6 +798,9 @@ const sourceTargets = (state: GameState, square: Square) => {
     const closer = targets.filter((target) => distance(target, queen) < distance(square, queen));
     return closer.length ? closer : targets;
   };
+  if (state.pending?.step === "enchant-followup-move") {
+    return ordinaryMoveTargets(state, square);
+  }
   if (piece.status.hardened && currentLevelForOwner(state, piece.controller, "harden") >= 3) {
     const board = structuredClone(state.board);
     delete board[square].status.hardened;
@@ -812,8 +885,15 @@ const sourceTargets = (state: GameState, square: Square) => {
     }));
   }
   if (abilityId === "enchant") {
-    return legalTargets(state.board, square, { enPassant: state.enPassant, bananas: state.bananas })
-      .filter((target) => state.board[target]?.type !== "king");
+    const board = structuredClone(state.board);
+    board[square].controller = state.activeColor;
+    return legalTargets(board, square, {
+      enPassant: state.enPassant,
+      bananas: state.bananas,
+    }).filter((target) =>
+      state.board[target]?.type !== "king" &&
+      enchantDestinationHasFollowup(state, square, target)
+    );
   }
   if (abilityId === "banana-peel") {
     const candidates = pseudoTargets(state.board, square, {
@@ -955,6 +1035,20 @@ const activateAbility = (state: GameState, abilityId: string) => {
   state.legalTargets = [];
   state.pending = { godId: god.id, abilityId, step: "source" };
 
+  if (abilityId === "enchant") {
+    state.pending.step = "enchant-enemy-move";
+    state.legalTargets = enchantSourceSquares(state);
+    if (!state.legalTargets.length) {
+      refundCost(state);
+      state.selectedAbility = undefined;
+      state.pending = undefined;
+      state.notice = "Enchant has no hostile piece that can move and leave a legal follow-up move.";
+      return;
+    }
+    state.notice = "Enchant: choose a highlighted hostile piece to move.";
+    return;
+  }
+
   if (abilityId === "stone-gaze") {
     const { targets } = stoneGazeTargets(state);
     state.pending.step = "confirm-stone-gaze";
@@ -1009,7 +1103,10 @@ const activateAbility = (state: GameState, abilityId: string) => {
       state.pending.step = "hex-target";
       state.pending.selected = [];
       state.legalTargets = Object.entries(state.board)
-        .filter(([, piece]) => piece.controller !== state.activeColor && piece.type !== "king" && !piece.status.hexedBy)
+        .filter(([, piece]) =>
+          piece.controller !== state.activeColor &&
+          !piece.status.hexedBy
+        )
         .map(([square]) => square);
       state.notice = `Choose up to ${capacity} enem${capacity === 1 ? "y piece" : "y pieces"} to hex before moving.`;
       return;
@@ -1172,8 +1269,6 @@ const resolveMoveEffect = (
       return adjacentCount + (level >= 3 ? Math.floor(orthogonalCount / 2) : 0);
     };
     addOrbs(state, color, reward("white"), reward("black"));
-  } else if (abilityId === "enchant") {
-    state.bonusTurn = color;
   } else if (abilityId === "take-cover") {
     const coverSquares = [
       squareAt(toFile, toRank + forward),
@@ -1348,6 +1443,28 @@ const executeMovement = (state: GameState, from: Square, to: Square) => {
   const moving = state.board[from];
   if (!moving) return;
 
+  if (state.pending?.step === "enchant-followup-move") {
+    const result = moveDirect(state, from, to);
+    if (!result) return;
+    const movedPiece = state.board[result.to];
+    if (!movedPiece) return;
+    delete movedPiece.status.luredBy;
+    recordMoveCapture(state, result.captured);
+    present(state, {
+      kind: "move",
+      godId: state.selectedGod!,
+      abilityId,
+      piece: moving,
+      from,
+      to: result.to,
+    });
+    finishTurn(
+      state,
+      abilityDescription(state, `: enchanted an enemy piece, then moved ${pieceName(moving)} at ${from} -> ${result.to}`),
+    );
+    return;
+  }
+
   if (abilityId === "escort") {
     executeEscort(state, from, to);
     return;
@@ -1380,12 +1497,19 @@ const executeMovement = (state: GameState, from: Square, to: Square) => {
     addOrbs(state, state.activeColor, -1, 0);
   }
 
+  const enchantingEnemy = state.pending?.step === "enchant-enemy-move";
+  const originalController = moving.controller;
+  if (enchantingEnemy) moving.controller = state.activeColor;
   const boardBefore = structuredClone(state.board);
   const teleports = ["air-lift", "pick-a-fight"];
   const result = moveDirect(state, from, to, teleports.includes(abilityId));
-  if (!result) return;
+  if (!result) {
+    if (enchantingEnemy) moving.controller = originalController;
+    return;
+  }
   const movedPiece = state.board[result.to];
   if (!movedPiece) throw new Error(`Moved piece is missing from ${result.to}.`);
+  if (enchantingEnemy) movedPiece.controller = originalController;
   if (moving.status.hardened && !result.captured) delete movedPiece.status.hardened;
   delete movedPiece.status.luredBy;
   recordMoveCapture(state, result.captured);
@@ -1397,6 +1521,25 @@ const executeMovement = (state: GameState, from: Square, to: Square) => {
     from,
     to: result.to,
   });
+
+  if (enchantingEnemy) {
+    state.pending = {
+      godId: state.selectedGod!,
+      abilityId,
+      step: "enchant-followup-move",
+      source: result.from,
+      destination: result.to,
+      movedPieceId: moving.id,
+    };
+    state.selectedSquare = undefined;
+    state.legalTargets = enchantFollowupSources(state);
+    if (!state.legalTargets.length) {
+      finishTurn(state, abilityDescription(state, ": completed Enchant without an available follow-up move"));
+      return;
+    }
+    state.notice = "Enchant: choose one of your highlighted pieces, then make one ordinary legal move.";
+    return;
+  }
 
   if (abilityId === "slither") {
     const unlimited = currentLevel(state, abilityId) >= 3;
@@ -1969,6 +2112,7 @@ const handleSquare = (state: GameState, square: Square) => {
 
 const selectGod = (state: GameState, godId: GodId) => {
   if (state.pending?.abilityId === "snipe-shot" || state.pending?.abilityId === "harden-choice") return;
+  if (state.pending?.step === "enchant-followup-move") return;
   if (!state.players[state.activeColor].gods.includes(godId) || state.rested.includes(godId)) return;
   if (state.selectedAbility) refundCost(state);
   state.selectedGod = godId;
@@ -2096,6 +2240,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
     }
   }
   else if (action.type === "clear-god" && next.phase === "play" && next.selectedGod) {
+    if (next.pending?.step === "enchant-followup-move") return state;
     if (next.selectedAbility) refundCost(next);
     next.selectedGod = undefined;
     next.selectedAbility = undefined;
@@ -2105,6 +2250,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
     next.notice = `${colorName(next.activeColor)} to act. Choose an available god.`;
   }
   else if (action.type === "select-ability" && next.phase === "play") {
+    if (next.pending?.step === "enchant-followup-move") return state;
     if (next.selectedAbility) refundCost(next);
     activateAbility(next, action.abilityId);
     if (next.selectedGod && next.selectedAbility === action.abilityId) {
@@ -2219,6 +2365,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
   }
   else if (action.type === "upgrade" && next.phase === "upgrade") upgradeAbility(next, action.abilityId);
   else if (action.type === "cancel" && next.phase === "play") {
+    if (next.pending?.step === "enchant-followup-move") return state;
     const progressed = next.pending && ["slither", "funding", "banana", "hire"].includes(next.pending.step);
     if (progressed) {
       finishTurn(next, abilityDescription(next, ": completed the action"));

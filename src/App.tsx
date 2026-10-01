@@ -751,6 +751,10 @@ function ChessBoard({
   const displaySquares = useMemo(() => [...allSquares].sort((a, b) => Number(b[1]) - Number(a[1]) || a.localeCompare(b)), []);
   const previewingEffect = state.pending?.step === "confirm-stone-gaze" ||
     state.pending?.step === "confirm-march-home";
+  const enchantSourceChoice = (
+    state.pending?.step === "enchant-enemy-move" ||
+    state.pending?.step === "enchant-followup-move"
+  ) && !state.selectedSquare;
   return (
     <div className="board-shell">
       <div className="board-frame">
@@ -767,7 +771,7 @@ function ChessBoard({
                 role="gridcell"
                 aria-label={`${square}${piece ? `, ${piece.color} ${piece.type}` : ""}${effectPreview ? ", affected by selected ability" : ""}`}
                 data-square={square}
-                className={`board-square ${(file.charCodeAt(0) + Number(rank)) % 2 ? "light" : "dark"} ${selected ? "selected" : ""} ${legal ? "legal" : ""} ${legal && piece ? "legal-occupied" : ""} ${effectPreview ? "effect-preview" : ""}`}
+                className={`board-square ${(file.charCodeAt(0) + Number(rank)) % 2 ? "light" : "dark"} ${selected ? "selected" : ""} ${legal ? "legal" : ""} ${legal && piece ? "legal-occupied" : ""} ${legal && enchantSourceChoice ? "legal-source" : ""} ${legal && !enchantSourceChoice ? "legal-destination" : ""} ${effectPreview ? "effect-preview" : ""}`}
                 key={square}
                 onClick={() => {
                   onInspectSquare(square);

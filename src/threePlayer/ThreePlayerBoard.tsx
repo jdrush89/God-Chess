@@ -48,7 +48,7 @@ const annularSectorPath = (
 export interface ThreePlayerBoardProps {
   state: Pick<
     ThreePlayerState,
-    "config" | "board" | "players" | "bananas"
+    "config" | "board" | "players" | "bananas" | "pending"
   >;
   selectedCell?: ThreePlayerCell;
   legalCells?: readonly ThreePlayerCell[];
@@ -75,6 +75,10 @@ export function ThreePlayerBoard({
   const legal = new Set(legalCells);
   const path = new Set(pathCells);
   const variant = state.config.boardVariant;
+  const enchantSourceChoice = (
+    state.pending?.step === "enchant-enemy-move" ||
+    state.pending?.step === "enchant-followup-move"
+  ) && !selectedCell;
 
   return (
     <svg
@@ -94,6 +98,8 @@ export function ThreePlayerBoard({
           descriptor.affinity,
           isLegal ? "legal" : "",
           piece && isLegal ? "legal-occupied" : "",
+          isLegal && enchantSourceChoice ? "legal-source" : "",
+          isLegal && !enchantSourceChoice ? "legal-destination" : "",
           isSelected ? "selected" : "",
           path.has(descriptor.id) ? "path" : "",
         ].filter(Boolean).join(" ");

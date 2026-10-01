@@ -116,6 +116,39 @@ describe("versioned multiplayer protocol", () => {
     })).toBeUndefined();
   });
 
+  it("round-trips online snapshots with hostile Kings carrying Hex status", () => {
+    const classicState = createGame(undefined, { mode: "online" });
+    Object.values(classicState.board).find((piece) =>
+      piece.type === "king" && piece.controller === "black"
+    )!.status.hexedBy = "white";
+    const classic = createProtocolMessage("classic", "host", {
+      type: "state_sync",
+      state: classicState,
+    });
+
+    const four = fourSnapshot();
+    Object.values(four.canonical!.state.board).find((piece) =>
+      piece.type === "king" && piece.controller === "east"
+    )!.status.hexedBy = "north";
+    const fourMessage = createProtocolMessage("four-player", "host", {
+      type: "room_state",
+      snapshot: four,
+    });
+
+    const three = threeSnapshot();
+    Object.values(three.canonical!.state.board).find((piece) =>
+      piece.type === "king" && piece.controller === "red"
+    )!.status.hexedBy = "white";
+    const threeMessage = createProtocolMessage("three-player", "host", {
+      type: "room_state",
+      snapshot: three,
+    });
+
+    expect(normalizeProtocolMessage(classic)).toEqual(classic);
+    expect(normalizeProtocolMessage(fourMessage)).toEqual(fourMessage);
+    expect(normalizeProtocolMessage(threeMessage)).toEqual(threeMessage);
+  });
+
   it("rejects unknown versions, directions, extra keys, and malformed actions", () => {
     const action = createProtocolMessage("four-player", "peer", {
       type: "action",

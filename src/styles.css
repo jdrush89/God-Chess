@@ -442,6 +442,14 @@ body::before {
   content: ""; position: absolute; z-index: 2; inset: 5px;
   border: 2px solid rgba(151,55,40,.72); box-shadow: inset 0 0 12px rgba(151,55,40,.22);
 }
+.board-square.legal-source::before {
+  content: ""; position: absolute; z-index: 2; inset: 4px;
+  border: 3px solid rgba(65,139,168,.92); box-shadow: inset 0 0 13px rgba(65,139,168,.28);
+}
+.board-square.legal-destination:not(.legal-occupied)::after {
+  content: ""; position: absolute; z-index: 2; width: 24%; aspect-ratio: 1;
+  border-radius: 50%; background: rgba(225,186,102,.88);
+}
 .board-square.effect-preview::before {
   content: ""; position: absolute; z-index: 2; inset: 4px;
   border: 2px solid rgba(118,181,204,.9);
@@ -1419,6 +1427,8 @@ body::before {
 .three-board-cell.selected { stroke: #f5d98e; stroke-width: .18; filter: brightness(1.14); }
 .three-board-cell.legal { stroke: #e1ba66; stroke-width: .15; filter: brightness(1.18); }
 .three-board-cell.legal-occupied { stroke: #a23f38; stroke-width: .2; }
+.three-board-cell.legal-source { stroke: #418ba8; stroke-width: .24; filter: brightness(1.22); }
+.three-board-cell.legal-destination:not(.legal-occupied) { stroke-dasharray: .18 .1; }
 .three-board-cell.path { fill: #85875d; }
 .three-cell-hit { cursor: pointer; outline: none; }
 .three-cell-hit:focus .three-board-cell { stroke: #fff0bd; stroke-width: .22; }
@@ -1885,6 +1895,15 @@ body::before {
 .four-board-square.legal-occupied::before {
   content: ""; position: absolute; z-index: 2; inset: 2px;
   border: 1px solid rgba(151,55,40,.8); box-shadow: inset 0 0 7px rgba(151,55,40,.35);
+}
+.four-board-square.legal-source::before {
+  content: ""; position: absolute; z-index: 2; inset: 2px;
+  border: max(1px, .55cqi) solid rgba(65,139,168,.92);
+  box-shadow: inset 0 0 9px rgba(65,139,168,.3);
+}
+.four-board-square.legal-destination:not(.legal-occupied)::after {
+  content: ""; position: absolute; z-index: 2; width: 24%; aspect-ratio: 1;
+  border-radius: 50%; background: rgba(225,186,102,.88);
 }
 .four-chess-piece {
   position: relative; z-index: 3; display: inline-grid; place-items: center;

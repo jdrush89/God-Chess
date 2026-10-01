@@ -859,7 +859,7 @@ describe("game flow", () => {
     expect(state.legalTargets).toEqual([]);
   });
 
-  it("grants the caster another turn after Enchant", () => {
+  it("requires one ordinary friendly move after Enchant instead of granting another divine turn", () => {
     let state = createGame(1);
     (["teles", "chiron", "midas", "death", "artemis", "medusa"] as const).forEach((godId) => {
       state = gameReducer(state, { type: "draft", godId });
@@ -867,11 +867,112 @@ describe("game flow", () => {
     state.players.white.orbs.black = 4;
     state = gameReducer(state, { type: "select-god", godId: "teles" });
     state = gameReducer(state, { type: "select-ability", abilityId: "enchant" });
+    expect(state.pending?.step).toBe("enchant-enemy-move");
+    expect(state.legalTargets).toEqual(expect.arrayContaining([
+      "a7", "b7", "c7", "d7", "e7", "f7", "g7", "h7",
+      "b8", "c8", "f8", "g8",
+    ]));
+    expect(state.legalTargets).not.toEqual(expect.arrayContaining(["a8", "d8", "e8", "h8"]));
+
     state = gameReducer(state, { type: "square", square: "b8" });
     state = gameReducer(state, { type: "square", square: "c6" });
+    expect(state.pending?.step).toBe("enchant-followup-move");
     expect(state.activeColor).toBe("white");
-    expect(state.board.c6?.color).toBe("black");
+    expect(state.board.c6).toMatchObject({ color: "black", controller: "black" });
+    expect(state.legalTargets).toContain("e2");
+
+    const committed = state;
+    state = gameReducer(state, { type: "select-god", godId: "chiron" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "charge" });
+    expect(state).toEqual(committed);
+
+    state = gameReducer(state, { type: "square", square: "e2" });
+    expect(state.legalTargets).toContain("e4");
+    state = gameReducer(state, { type: "square", square: "e4" });
+    expect(state.activeColor).toBe("black");
+    expect(state.board.e4).toMatchObject({ color: "white", controller: "white" });
     expect(state.rested).toContain("teles");
+    expect(state.bonusTurn).toBeUndefined();
+  });
+
+  it("adds rook and queen Enchant sources only at levels 2 and 3", () => {
+    const activate = (level: 1 | 2 | 3) => {
+      let state = createGame(1);
+      (["teles", "chiron", "midas", "death", "artemis", "medusa"] as const).forEach((godId) => {
+        state = gameReducer(state, { type: "draft", godId });
+      });
+      state.players.white.orbs.black = 4;
+      state.players.white.upgrades.enchant = level;
+      state = gameReducer(state, { type: "select-god", godId: "teles" });
+      return gameReducer(state, { type: "select-ability", abilityId: "enchant" });
+    };
+
+    const levelOne = activate(1);
+    expect(levelOne.legalTargets).not.toEqual(expect.arrayContaining(["a8", "d8", "h8"]));
+    expect(activate(2).legalTargets).toEqual(expect.arrayContaining(["a8", "h8"]));
+    expect(activate(2).legalTargets).not.toContain("d8");
+    expect(activate(3).legalTargets).toContain("d8");
+    expect(activate(3).legalTargets).not.toContain("e8");
+  });
+
+  it("rejects Enchant when every hostile move would leave no ordinary follow-up", () => {
+    let state = createGame(1);
+    (["teles", "chiron", "midas", "death", "artemis", "medusa"] as const).forEach((godId) => {
+      state = gameReducer(state, { type: "draft", godId });
+    });
+    state.board = {
+      a1: { ...testPiece("king", "white", "white-king"), status: { movedThisTurn: true } },
+      h8: testPiece("king", "black", "black-king"),
+      h7: testPiece("pawn", "black", "black-pawn"),
+    };
+    state.players.white.orbs.black = 4;
+    state = gameReducer(state, { type: "select-god", godId: "teles" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "enchant" });
+
+    expect(state.selectedAbility).toBeUndefined();
+    expect(state.pending).toBeUndefined();
+    expect(state.notice).toMatch(/no hostile piece/i);
+  });
+
+  it("lets Salem Hex hostile Kings at every level and preserves them through the reward move", () => {
+    for (const level of [1, 2, 3] as const) {
+      let state = createGame(1);
+      state.phase = "play";
+      state.activeColor = "white";
+      state.players.white.gods = ["salem"];
+      state.players.black.gods = ["ares"];
+      state.players.white.orbs = { white: 50, black: 50 };
+      state.players.white.upgrades.hex = level;
+      state.board = {
+        e1: testPiece("king", "white", "white-king"),
+        e2: testPiece("rook", "white", "hex-mover"),
+        e8: testPiece("king", "black", "black-king"),
+      };
+
+      state = gameReducer(state, { type: "select-god", godId: "salem" });
+      state = gameReducer(state, { type: "select-ability", abilityId: "hex" });
+      expect(state.legalTargets).toContain("e8");
+      expect(state.legalTargets).not.toContain("e1");
+
+      state = gameReducer(state, { type: "square", square: "e8" });
+      expect(state.board.e8.status.hexedBy).toBe("white");
+      if (level > 1) state = gameReducer(state, { type: "pass" });
+
+      const orbsBeforeMove =
+        state.players.white.orbs.white + state.players.white.orbs.black;
+      state = gameReducer(state, { type: "square", square: "e2" });
+      expect(state.legalTargets).toContain("e3");
+      state = gameReducer(state, { type: "square", square: "e3" });
+
+      expect(state.board.e8).toMatchObject({
+        id: "black-king",
+        type: "king",
+        status: { hexedBy: "white" },
+      });
+      expect(
+        state.players.white.orbs.white + state.players.white.orbs.black,
+      ).toBe(orbsBeforeMove + 2);
+    }
   });
 
   it("does not leave a persistent Charge buff at level 1", () => {

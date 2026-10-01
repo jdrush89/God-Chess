@@ -3,7 +3,7 @@
 import { describe, expect, it } from "vitest";
 import { createFourPlayerGame, fourPlayerReducer } from "./game/fourPlayerEngine";
 import { createThreePlayerGame, threePlayerReducer } from "./game/threePlayerEngine";
-import { createGame } from "./game/engine";
+import { createGame, gameReducer } from "./game/engine";
 import { GODS } from "./game/gods";
 import {
   createSavedGame,
@@ -94,6 +94,96 @@ describe("saved-game variants", () => {
       undoHistory: [state],
     });
     expect(normalized && !isFourPlayerSavedGame(normalized)).toBe(true);
+  });
+
+  it("round-trips Hex status on hostile Kings in every saved-game variant", () => {
+    const classic = createGame(1);
+    const classicKing = Object.values(classic.board).find((piece) =>
+      piece.type === "king" && piece.controller === "black"
+    )!;
+    classicKing.status.hexedBy = "white";
+    const normalizedClassic = normalizeSavedGame(
+      JSON.parse(JSON.stringify(createSavedGame("classic-hex-king", classic, []))),
+    );
+    expect(normalizedClassic?.state.board.e8?.status.hexedBy).toBe("white");
+
+    const four = createFourPlayerGame();
+    const fourKing = Object.values(four.board).find((piece) =>
+      piece.type === "king" && piece.controller === "east"
+    )!;
+    fourKing.status.hexedBy = "north";
+    const normalizedFour = normalizeSavedGame(
+      JSON.parse(JSON.stringify(createSavedGame("four-hex-king", four, []))),
+    );
+    expect(
+      normalizedFour && isFourPlayerSavedGame(normalizedFour) &&
+        Object.values(normalizedFour.state.board).some((piece) =>
+          piece.type === "king" && piece.status.hexedBy === "north"
+        ),
+    ).toBe(true);
+
+    const three = createThreePlayerGame();
+    const threeKing = Object.values(three.board).find((piece) =>
+      piece.type === "king" && piece.controller === "red"
+    )!;
+    threeKing.status.hexedBy = "white";
+    const normalizedThree = normalizeSavedGame(
+      JSON.parse(JSON.stringify(createSavedGame("three-hex-king", three, []))),
+    );
+    expect(
+      normalizedThree && isThreePlayerSavedGame(normalizedThree) &&
+        Object.values(normalizedThree.state.board).some((piece) =>
+          piece.type === "king" && piece.status.hexedBy === "white"
+        ),
+    ).toBe(true);
+  });
+
+  it("validates canonical Enchant pending stages for classic and four-player saves", () => {
+    let classic = createGame(1);
+    for (const godId of ["teles", "chiron", "midas", "death", "artemis", "medusa"] as const) {
+      classic = gameReducer(classic, { type: "draft", godId });
+    }
+    classic.selectedGod = "teles";
+    classic.selectedAbility = "enchant";
+    classic.pending = {
+      godId: "teles",
+      abilityId: "enchant",
+      step: "enchant-followup-move",
+      source: "b8",
+      destination: "c6",
+      movedPieceId: classic.board.b8.id,
+    };
+    expect(normalizeSavedGame(createSavedGame("classic-enchant", classic, [])))
+      .toBeTruthy();
+    const invalidClassic = structuredClone(classic);
+    delete invalidClassic.pending!.destination;
+    expect(normalizeSavedGame(createSavedGame("bad-classic-enchant", invalidClassic, [])))
+      .toBeUndefined();
+
+    const orderedGods = [
+      GODS.find((god) => god.id === "teles")!,
+      ...GODS.filter((god) => god.id !== "teles"),
+    ];
+    let four = createFourPlayerGame();
+    for (const god of orderedGods) {
+      four = fourPlayerReducer(four, { type: "draft", godId: god.id });
+    }
+    four.selectedGod = "teles";
+    four.selectedAbility = "enchant";
+    four.pending = {
+      godId: "teles",
+      abilityId: "enchant",
+      step: "enchant-followup-move",
+      source: "d13",
+      destination: "d12",
+      movedPieceId: four.board.d13.id,
+    };
+    expect(normalizeSavedGame(createSavedGame("four-enchant", four, [])))
+      .toBeTruthy();
+    const invalidFour = structuredClone(four);
+    delete invalidFour.pending!.movedPieceId;
+    expect(normalizeSavedGame(createSavedGame("bad-four-enchant", invalidFour, [])))
+      .toBeUndefined();
   });
 
   it("rejects primitive state values without throwing", () => {

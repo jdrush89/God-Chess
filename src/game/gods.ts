@@ -103,7 +103,7 @@ export const GODS: God[] = [
         "You may also target rooks.",
         "You may also target queens.",
       ], { white: 2 }),
-      ability("enchant", "Enchant", "Make your move with one of the opponent’s pawns, knights, or bishops, then take a turn.", "move", [
+      ability("enchant", "Enchant", "Make one legal move with one of the opponent’s pawns, knights, or bishops, then make one legal move with one of your pieces.", "move", [
         "Control pawns, knights, or bishops.",
         "You may also move an opponent’s rook.",
         "You may also move an opponent’s queen.",
