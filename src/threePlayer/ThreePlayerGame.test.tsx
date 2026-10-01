@@ -8,29 +8,40 @@ import {
   threePlayerReducer,
 } from "../game/threePlayerEngine";
 import { createDefaultThreePlayerConfig } from "../game/threePlayerConfig";
-import type { ThreePlayerState } from "../game/threePlayerTypes";
+import { enumerateCompleteThreePlayerPlans } from "../game/threePlayerPlans";
+import type {
+  ThreePlayerAction,
+  ThreePlayerState,
+} from "../game/threePlayerTypes";
 import {
   ThreePlayerGame,
   type ThreePlayerOnlineSession,
 } from "./ThreePlayerGame";
 
+const matchMedia = (reducedMotion = false) => (query: string) => ({
+  matches: reducedMotion && query === "(prefers-reduced-motion: reduce)",
+  media: query,
+  onchange: null,
+  addListener: () => undefined,
+  removeListener: () => undefined,
+  addEventListener: () => undefined,
+  removeEventListener: () => undefined,
+  dispatchEvent: () => false,
+});
+
 beforeAll(() => {
   Object.defineProperty(window, "matchMedia", {
+    configurable: true,
     writable: true,
-    value: (query: string) => ({
-      matches: false,
-      media: query,
-      onchange: null,
-      addListener: () => undefined,
-      removeListener: () => undefined,
-      addEventListener: () => undefined,
-      removeEventListener: () => undefined,
-      dispatchEvent: () => false,
-    }),
+    value: matchMedia(),
   });
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 const completeDraft = (state = createThreePlayerGame()) => {
   let next = state;
@@ -48,6 +59,41 @@ const renderGame = (state: ThreePlayerState) =>
       onNewGame={() => undefined}
     />,
   );
+
+const installDeterministicAiWorker = () => {
+  const terminate = vi.fn();
+  class DeterministicAiWorker {
+    onmessage:
+      | ((event: MessageEvent<{
+        revision: number;
+        plan: ThreePlayerAction[];
+      }>) => void)
+      | null = null;
+
+    postMessage(state: ThreePlayerState) {
+      const plan = enumerateCompleteThreePlayerPlans(state, {
+        maxDepth: 12,
+        maxStates: 2_000,
+        maxActionsPerState: 1,
+        maxPlans: 1,
+      })[0]?.actions ?? [];
+      queueMicrotask(() => {
+        this.onmessage?.({
+          data: { revision: state.revision, plan },
+        } as MessageEvent<{
+          revision: number;
+          plan: ThreePlayerAction[];
+        }>);
+      });
+    }
+
+    terminate() {
+      terminate();
+    }
+  }
+  vi.stubGlobal("Worker", DeterministicAiWorker);
+  return terminate;
+};
 
 describe("ThreePlayerGame", () => {
   it("keeps all twelve Gods inspectable while disabling claimed draft cards", () => {
@@ -135,11 +181,13 @@ describe("ThreePlayerGame", () => {
   });
 
   it("undoes a Human boundary together with the following AI chain", async () => {
+    const terminateWorker = installDeterministicAiWorker();
+    vi.spyOn(window, "matchMedia").mockImplementation(matchMedia(true));
     const config = createDefaultThreePlayerConfig();
     config.seats.red.control = { kind: "ai", difficulty: 1 };
     config.seats.black.control = { kind: "ai", difficulty: 1 };
     const state = completeDraft(createThreePlayerGame(config));
-    const { container } = renderGame(state);
+    const { container, unmount } = renderGame(state);
 
     const godButton = screen.getByRole("button", {
       name: new RegExp(state.players.white.gods[0], "i"),
@@ -158,10 +206,11 @@ describe("ThreePlayerGame", () => {
 
     await waitFor(
       () => expect(screen.getByText(/Round \d+ · Turn [4-9]\d*/i)).toBeTruthy(),
-      { timeout: 15_000 },
     );
     fireEvent.click(screen.getByRole("button", { name: /^Undo$/i }));
     expect(screen.getByText("Round 1 · Turn 1")).toBeTruthy();
+    unmount();
+    expect(terminateWorker).toHaveBeenCalledTimes(1);
   });
 
   it("does not quit when Save & quit persistence fails", async () => {
