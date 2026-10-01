@@ -1493,13 +1493,22 @@ body::before {
   color: #0b0d11; background: var(--seat-color); border-radius: 50%; font: 700 9px "Cinzel"; font-style: normal;
 }
 .three-god-inspector {
-  max-height: clamp(360px, calc(100vh - 360px), 680px);
-  overflow-y: auto; scrollbar-gutter: stable;
+  height: var(--three-draft-grid-height, auto); min-height: 0; max-height: none; display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  overflow: hidden;
 }
+.three-draft-layout { align-items: start; }
+.three-draft-abilities {
+  min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable;
+  padding-right: 8px;
+}
+.three-god-inspector .draft-ability > span { font-size: 11px; }
+.three-god-inspector .draft-ability strong { font-size: 15px; line-height: 1.3; }
+.three-god-inspector .draft-ability p { font-size: 12px; line-height: 1.58; }
 .three-god-inspector .level-rule { color: #aaa69d; }
 .three-god-inspector .level-rule b { color: var(--gold-bright); }
 .three-draft-claim {
-  position: sticky; z-index: 4; bottom: 0;
+  position: relative; z-index: 4; align-self: end;
   box-shadow: 0 -12px 24px #101219;
 }
 .three-draft-rosters {
@@ -1637,6 +1646,16 @@ body::before {
   .three-player-panels { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
+@media (max-width: 960px) {
+  .three-god-inspector {
+    height: auto; display: block; overflow: visible;
+  }
+  .three-draft-abilities {
+    min-height: auto; overflow: visible; overscroll-behavior: auto; scrollbar-gutter: auto;
+    padding-right: 0;
+  }
+}
+
 @media (max-width: 760px) {
   .game-result-actions { grid-template-columns: 1fr; }
   .finished-result-control {
@@ -1660,7 +1679,7 @@ body::before {
   .three-draft-page { padding-bottom: 0; }
   .three-game-topbar .brand { display: none; }
   .three-draft-layout .god-inspector {
-    order: -1; position: static; max-height: none; overflow: visible; scrollbar-gutter: auto;
+    order: -1; position: static; max-height: none; overflow: visible;
   }
   .three-draft-rosters {
     position: static; display: grid; grid-template-columns: 1fr; gap: 8px; padding: 12px;
@@ -1691,15 +1710,19 @@ body::before {
 }
 
 @media (max-width: 640px) {
-  .three-draft-page { padding-bottom: 68px; }
+  .three-draft-page { padding-bottom: calc(68px + env(safe-area-inset-bottom)); }
   .three-draft-hero { padding: 34px 12px 24px; }
   .three-draft-progress { justify-content: flex-start; }
   .three-draft-progress::before { width: 360px; }
   .three-draft-layout { width: calc(100% - 24px); }
   .three-draft-claim {
-    position: fixed; left: 12px; right: 12px; bottom: 10px; width: auto;
+    position: fixed; left: 12px; right: 12px;
+    bottom: max(10px, calc(env(safe-area-inset-bottom) + 10px)); width: auto;
     box-shadow: 0 0 0 1px rgba(7,8,11,.92), 0 -10px 30px rgba(7,8,11,.9);
   }
+  .three-god-inspector .draft-ability > span { font-size: 10px; }
+  .three-god-inspector .draft-ability strong { font-size: 14px; }
+  .three-god-inspector .draft-ability p { font-size: 11.5px; line-height: 1.55; }
   .three-draft-rosters .draft-roster { grid-template-columns: auto 1fr; }
   .three-draft-rosters .draft-roster > small { display: none; }
   .three-draft-rosters .draft-roster > div {
@@ -1862,10 +1885,25 @@ body::before {
 .four-player-panel.seat-west { grid-area: west; align-self: center; }
 .four-player-panel.seat-east { grid-area: east; align-self: center; }
 .four-player-panel.seat-south { grid-area: south; }
+.four-player-panel.seat-west,
+.four-player-panel.seat-east {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto auto;
+  align-content: center;
+}
+.four-player-panel.seat-west .four-seat-summary,
+.four-player-panel.seat-east .four-seat-summary,
+.four-player-panel.seat-west .four-panel-resources,
+.four-player-panel.seat-east .four-panel-resources,
+.four-player-panel.seat-west .four-panel-gods,
+.four-player-panel.seat-east .four-panel-gods {
+  grid-column: 1;
+}
 .four-seat-summary {
   min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px;
   padding: 0; color: inherit; background: transparent; border: 0; text-align: left;
 }
+.four-seat-identity { min-width: 0; }
 .four-seat-summary:disabled { opacity: 1; }
 .four-player-panel.seat-target .four-seat-summary { cursor: pointer; }
 .four-player-avatar {
@@ -1880,7 +1918,11 @@ body::before {
   letter-spacing: .07em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap;
 }
 .four-seat-summary > svg { color: var(--seat-color); }
-.four-panel-resources { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.four-panel-resources {
+  min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 7px 8px;
+}
+.four-player-panel.seat-west .four-panel-resources,
+.four-player-panel.seat-east .four-panel-resources { width: 100%; }
 .four-panel-resources .orb-count { font-size: 10px; }
 .four-panel-resources .orb { width: 11px; height: 11px; }
 .takeover-count {

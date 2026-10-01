@@ -43,8 +43,10 @@ const openFourPlayerSetup = () => {
   fireEvent.click(screen.getByRole("button", { name: /four-player local/i }));
 };
 
-const completeFourPlayerDraft = () => {
-  let state = createFourPlayerGame();
+const completeFourPlayerDraft = (
+  config = createDefaultFourPlayerConfig(),
+) => {
+  let state = createFourPlayerGame(config);
   for (const god of GODS) {
     state = fourPlayerReducer(state, { type: "draft", godId: god.id });
   }
@@ -178,6 +180,48 @@ describe("four-player app integration", () => {
     ).toBeTruthy();
   });
 
+  it("stacks side-seat identity above a complete resource row for long team names", () => {
+    const config = createDefaultFourPlayerConfig();
+    config.mode = "teams";
+    config.teams = {
+      north: "team-a",
+      east: "team-a",
+      south: "team-b",
+      west: "team-b",
+    };
+    config.seats.east.name = "Red Commander Longname";
+    config.seats.west.name = "Blue Strategist Longname";
+    const state = completeFourPlayerDraft(config);
+    state.activeSeat = "east";
+    state.players.east.orbs = { light: 123, dark: 456 };
+    state.players.west.orbs = { light: 789, dark: 987 };
+
+    const { container } = render(
+      <FourPlayerGame
+        initialState={state}
+        undoPreferred={false}
+        onUndoPreferenceChange={() => undefined}
+        onPersist={async () => true}
+        onQuit={() => undefined}
+        onNewGame={() => undefined}
+      />,
+    );
+
+    for (const seat of ["east", "west"]) {
+      const panel = container.querySelector(`.four-player-panel.seat-${seat}`) as HTMLElement;
+      const summary = panel.querySelector(".four-seat-summary") as HTMLElement;
+      const resources = panel.querySelector(".four-panel-resources") as HTMLElement;
+      expect(panel.children[0]).toBe(summary);
+      expect(panel.children[1]).toBe(resources);
+      expect(resources.querySelectorAll(".orb-count")).toHaveLength(2);
+      expect(resources.querySelector(".graveyard-button")).toBeTruthy();
+      expect(resources.querySelector(".four-panel-menu")).toBeTruthy();
+    }
+    expect(container.querySelector(".four-player-panel.seat-east.active")).toBeTruthy();
+    expect(screen.getByText(/East · Human · Team A/i)).toBeTruthy();
+    expect(screen.getByText(/West · Human · Team B/i)).toBeTruthy();
+  });
+
   it("labels inert and takeover-controlled pieces accessibly", () => {
     let state = createFourPlayerGame();
     for (const god of GODS) state = fourPlayerReducer(state, { type: "draft", godId: god.id });
@@ -193,10 +237,11 @@ describe("four-player app integration", () => {
       createSavedGame("four-control", state, []),
     ]));
 
-    render(<App />);
+    const { container } = render(<App />);
     fireEvent.click(screen.getByRole("button", { name: /load game/i }));
     fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
 
+    expect(container.querySelector(".four-player-panel.seat-east.eliminated")).toBeTruthy();
     expect(screen.getByRole("gridcell", { name: /m7.*inert/i })).toBeTruthy();
     expect(screen.getByRole("img", { name: /m8.*controlled by north/i })).toBeTruthy();
   });
