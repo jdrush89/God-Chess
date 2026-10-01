@@ -67,6 +67,7 @@ import {
   FOUR_PLAYER_PALETTES,
   FOUR_PLAYER_SEAT_LABELS,
 } from "./setupConfig";
+import { AbilityRules, LevelSelector } from "../UpgradePreview";
 
 type FourPlayerDispatch = (action: FourPlayerAction) => void;
 
@@ -278,47 +279,6 @@ function PieceView({
         </span>
       )}
     </span>
-  );
-}
-
-function LevelSelector({
-  level,
-  onChange,
-  label = "Preview",
-  className = "",
-}: {
-  level: number;
-  onChange: (level: number) => void;
-  label?: string;
-  className?: string;
-}) {
-  const selectLevel = (event: React.MouseEvent<HTMLButtonElement>, nextLevel: number) => {
-    event.stopPropagation();
-    onChange(nextLevel);
-  };
-
-  return (
-    <div className={`level-selector ${className}`} aria-label={`${label} levels`}>
-      <span>{label}</span>
-      <button
-        type="button"
-        aria-pressed={level >= 2}
-        className={level >= 2 ? "active" : ""}
-        onClick={(event) => selectLevel(event, level >= 2 ? 1 : 2)}
-        onKeyDown={(event) => event.stopPropagation()}
-      >
-        <i /> Lv 2
-      </button>
-      <button
-        type="button"
-        aria-pressed={level >= 3}
-        className={level >= 3 ? "active" : ""}
-        onClick={(event) => selectLevel(event, level >= 3 ? 2 : 3)}
-        onKeyDown={(event) => event.stopPropagation()}
-      >
-        <i /> Lv 3
-      </button>
-    </div>
   );
 }
 
@@ -735,6 +695,63 @@ function AbilityCard({
   );
 }
 
+function UpgradeAbilityCard({
+  ability,
+  level,
+  previewLevel,
+  active,
+  disabled,
+  onClick,
+}: {
+  ability: Ability;
+  level: number;
+  previewLevel?: number;
+  active: boolean;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <div className={`ability-card ${active ? "active" : ""} ${disabled ? "disabled" : ""}`}>
+      <div
+        className="ability-card-main"
+        role="button"
+        tabIndex={disabled ? undefined : 0}
+        aria-disabled={disabled || undefined}
+        onClick={() => {
+          if (!disabled) onClick();
+        }}
+        onKeyDown={(event) => {
+          if (!disabled && (event.key === "Enter" || event.key === " ")) {
+            event.preventDefault();
+            onClick();
+          }
+        }}
+      >
+        <div className="ability-topline">
+          <strong>{ability.name}</strong>
+          <span className="level-pips">
+            {[1, 2, 3].map((item) => <i className={item <= level ? "filled" : ""} key={item} />)}
+          </span>
+        </div>
+        <AbilityRules ability={ability} level={level} previewLevelOverride={previewLevel} />
+        <div className="ability-footer">
+          <span>CURRENT LVL {level}</span>
+          <div className="ability-footer-meta">
+            <div className="ability-cost">
+              {ability.cost?.white ? <Orb affinity="light" count={ability.cost.white} /> : null}
+              {ability.cost?.black ? <Orb affinity="dark" count={ability.cost.black} /> : null}
+              {!ability.cost && <span className="free-tag">GENERATES</span>}
+            </div>
+            <b className="upgrade-tag">
+              {level >= 3 ? "MAX LEVEL" : `SELECT LVL ${level + 1}`}
+            </b>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PendingChoices({
   state,
   dispatch,
@@ -902,12 +919,14 @@ function PendingChoices({
 function FourActionPanel({
   state,
   dispatch,
+  inputDisabled,
   inspectedGod,
   onInspectGod,
   onCloseInspection,
 }: {
   state: FourPlayerState;
   dispatch: FourPlayerDispatch;
+  inputDisabled: boolean;
   inspectedGod?: { godId: GodId; seat: Seat };
   onInspectGod: (godId: GodId, seat: Seat) => void;
   onCloseInspection: () => void;
@@ -919,7 +938,12 @@ function FourActionPanel({
   const owner = state.players[ownerSeat];
   const readOnly = Boolean(inspectedGod);
   const committed = hasCommittedFourPlayerAction(state);
+  const activeSeatName = seatName(state.activeSeat);
+  const upgradeTurnLabel = active.name.trim().toLowerCase() === activeSeatName.toLowerCase()
+    ? `${activeSeatName} seat`
+    : `${activeSeatName} · ${active.name}`;
   const [godPreviewLevel, setGodPreviewLevel] = useState<number>();
+  const [selectedUpgradeAbilityId, setSelectedUpgradeAbilityId] = useState<string>();
   const defaultGodPreviewLevel = god
     ? Math.min(...god.abilities.map((ability) => abilityLevel(owner.upgrades, ability.id)))
     : 1;
@@ -933,14 +957,32 @@ function FourActionPanel({
 
   useEffect(() => {
     setGodPreviewLevel(undefined);
-  }, [presentedGodId]);
+    setSelectedUpgradeAbilityId(undefined);
+  }, [presentedGodId, state.activeSeat]);
 
   if (state.phase === "upgrade") {
+    const selectedUpgradeGod = active.gods
+      .map((godId) => GOD_BY_ID[godId])
+      .find((candidate) =>
+        candidate.abilities.some((ability) => ability.id === selectedUpgradeAbilityId)
+      );
+    const selectedUpgradeAbility = selectedUpgradeGod?.abilities.find(
+      (ability) => ability.id === selectedUpgradeAbilityId,
+    );
+    const selectedUpgradeLevel = selectedUpgradeAbility
+      ? abilityLevel(active.upgrades, selectedUpgradeAbility.id)
+      : undefined;
+
     return (
-      <aside className="four-action-panel">
+      <aside className="four-action-panel upgrade-panel">
         <div className="panel-heading">
           <span>DIVINE UPGRADE</span>
-          <small>{active.name}</small>
+          <small>ROUND {state.round} · {upgradeTurnLabel}</small>
+        </div>
+        <div className="panel-empty">
+          <Zap size={25} />
+          <h3>Choose an ability to strengthen</h3>
+          <p>Compare every ability in your pantheon, preview its higher levels, then confirm one upgrade.</p>
         </div>
         <LevelSelector
           level={godPreviewLevel ?? defaultUpgradePreviewLevel}
@@ -961,13 +1003,13 @@ function FourActionPanel({
                 {upgradeGod.abilities.map((ability) => {
                   const level = abilityLevel(active.upgrades, ability.id);
                   return (
-                    <AbilityCard
+                    <UpgradeAbilityCard
                       ability={ability}
                       level={level}
                       previewLevel={godPreviewLevel}
-                      active={false}
-                      disabled={level >= 3}
-                      onClick={() => dispatch({ type: "upgrade", abilityId: ability.id })}
+                      active={selectedUpgradeAbilityId === ability.id}
+                      disabled={inputDisabled || level >= 3}
+                      onClick={() => setSelectedUpgradeAbilityId(ability.id)}
                       key={ability.id}
                     />
                   );
@@ -975,6 +1017,26 @@ function FourActionPanel({
               </section>
             );
           })}
+        </div>
+        <div className="upgrade-confirmation">
+          <button
+            className="primary-button"
+            disabled={
+              inputDisabled ||
+              !selectedUpgradeAbility ||
+              selectedUpgradeLevel === undefined ||
+              selectedUpgradeLevel >= 3
+            }
+            onClick={() => {
+              if (selectedUpgradeAbility) {
+                dispatch({ type: "upgrade", abilityId: selectedUpgradeAbility.id });
+              }
+            }}
+          >
+            {selectedUpgradeAbility && selectedUpgradeLevel !== undefined
+              ? `Confirm ${selectedUpgradeAbility.name} · Lv ${selectedUpgradeLevel + 1}`
+              : "Select an ability to upgrade"}
+          </button>
         </div>
       </aside>
     );
@@ -1860,6 +1922,14 @@ export function FourPlayerGame({
   }
 
   const activePlayer = state.players[state.activeSeat];
+  const actionInputDisabled =
+    animating ||
+    aiWorking ||
+    (onlineSession
+      ? onlineSession.status !== "playing" ||
+        onlineSession.awaitingSync ||
+        onlineSession.participantSeat !== state.activeSeat
+      : activePlayer.control.kind !== "human");
   const winnerName = state.winner?.team
     ? teamName(state.winner.team)
     : state.winner?.seat
@@ -1974,6 +2044,7 @@ export function FourPlayerGame({
         <FourActionPanel
           state={state}
           dispatch={humanDispatch}
+          inputDisabled={actionInputDisabled}
           inspectedGod={inspectedGod}
           onInspectGod={(godId, seat) => setInspectedGod({ godId, seat })}
           onCloseInspection={() => setInspectedGod(undefined)}

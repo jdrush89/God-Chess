@@ -174,7 +174,8 @@ body::before {
 }
 .god-level-selector > span { margin-right: auto; color: #8d8f96; font-size: 8px; }
 .god-inspector > .god-level-selector { padding-inline: 2px; }
-.action-panel > .god-level-selector { padding-inline: 14px; background: rgba(255,255,255,.012); }
+.action-panel > .god-level-selector,
+.four-action-panel > .god-level-selector { padding-inline: 14px; background: rgba(255,255,255,.012); }
 .mini-cost { display: flex; gap: 5px; }
 .primary-button {
   width: 100%; height: 46px; display: flex; align-items: center; justify-content: center; gap: 9px;
@@ -2032,6 +2033,11 @@ body::before {
 .four-action-panel .god-list { display: grid; gap: 8px; padding: 10px; }
 .four-action-panel .god-row { height: 132px; min-height: 132px; margin: 0; aspect-ratio: auto; }
 .four-ability-list, .four-upgrade-list { display: grid; gap: 8px; padding: 10px; }
+.four-upgrade-list > section { min-width: 0; }
+.four-upgrade-list .ability-card { min-width: 0; }
+.four-upgrade-list .ability-footer { gap: 8px; flex-wrap: wrap; }
+.four-upgrade-list .ability-footer-meta { min-width: 0; flex-wrap: wrap; justify-content: flex-end; }
+.four-upgrade-list .level-selector { flex-wrap: wrap; }
 .four-ability-card {
   width: 100%; min-width: 0; display: block; padding: 0; color: #bbb7ae; background: rgba(255,255,255,.018);
   border: 1px solid var(--line); text-align: left;

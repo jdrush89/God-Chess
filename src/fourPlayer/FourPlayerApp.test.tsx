@@ -277,12 +277,12 @@ describe("four-player app integration", () => {
     expect(screen.getAllByText(/skipped the prepared shot/i).length).toBeGreaterThan(0);
   });
 
-  it("previews higher levels while listing every four-player upgrade", () => {
+  it("matches the classic upgrade hierarchy, previews, selection, and legal dispatch", () => {
     let state = createFourPlayerGame();
     for (const god of GODS) state = fourPlayerReducer(state, { type: "draft", godId: god.id });
     state.phase = "upgrade";
     state.activeSeat = "north";
-    state.upgradeQueue = ["north"];
+    state.upgradeQueue = ["north", "east"];
 
     render(
       <FourPlayerGame
@@ -295,10 +295,179 @@ describe("four-player app integration", () => {
       />,
     );
 
-    expect(document.querySelectorAll(".four-upgrade-list .four-ability-card")).toHaveLength(9);
+    const panel = screen.getByText("DIVINE UPGRADE").closest(".upgrade-panel") as HTMLElement;
+    expect(panel).toBeTruthy();
+    expect(within(panel).getByText(/round 1.*north seat/i)).toBeTruthy();
+    expect(within(panel).getByRole("heading", { name: /choose an ability to strengthen/i })).toBeTruthy();
+    expect(within(panel).getByText(/compare every ability in your pantheon/i)).toBeTruthy();
+    expect(panel.querySelectorAll(".four-upgrade-list .ability-card")).toHaveLength(9);
     expect(screen.queryByText(/enemy piece you fly over/i)).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /lv 2/i }));
+
+    const allAbilities = within(panel).getByLabelText(/all abilities levels/i);
+    const levelTwo = within(allAbilities).getByRole("button", { name: /lv 2/i });
+    const levelThree = within(allAbilities).getByRole("button", { name: /lv 3/i });
+    expect(levelTwo.getAttribute("aria-pressed")).toBe("false");
+    expect(levelThree.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(levelTwo);
+    expect(levelTwo.classList.contains("active")).toBe(true);
+    expect(levelTwo.getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByText(/enemy piece you fly over/i)).toBeTruthy();
+    fireEvent.click(levelThree);
+    expect(levelThree.classList.contains("active")).toBe(true);
+    expect(levelThree.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByText(/friendly piece you fly over/i)).toBeTruthy();
+    fireEvent.click(levelThree);
+    expect(levelThree.classList.contains("active")).toBe(false);
+    expect(levelThree.getAttribute("aria-pressed")).toBe("false");
+    expect(screen.queryByText(/friendly piece you fly over/i)).toBeNull();
+
+    const flightCard = within(panel).getByText("Flight").closest(".ability-card") as HTMLElement;
+    fireEvent.click(within(flightCard).getByRole("button", { name: /^flight/i }));
+    expect(flightCard.classList.contains("active")).toBe(true);
+    const confirm = within(panel).getByRole("button", { name: /confirm flight.*lv 2/i });
+    expect((confirm as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(confirm);
+    expect(screen.getByText(/east upgrades one ability/i)).toBeTruthy();
+    expect(within(panel).getByText(/round 1.*east seat/i)).toBeTruthy();
+  });
+
+  it("disables maxed and unavailable four-player upgrades", () => {
+    let state = createFourPlayerGame();
+    for (const god of GODS) state = fourPlayerReducer(state, { type: "draft", godId: god.id });
+    state.phase = "upgrade";
+    state.activeSeat = "north";
+    state.upgradeQueue = ["north"];
+    state.players.north.upgrades.flight = 3;
+
+    render(
+      <FourPlayerGame
+        initialState={state}
+        undoPreferred={false}
+        onUndoPreferenceChange={vi.fn()}
+        onPersist={vi.fn(async () => false)}
+        onQuit={vi.fn()}
+        onNewGame={vi.fn()}
+      />,
+    );
+
+    const flightCard = screen.getByText("Flight").closest(".ability-card") as HTMLElement;
+    const flightControl = within(flightCard).getByRole("button", { name: /^flight/i });
+    expect(flightCard.classList.contains("disabled")).toBe(true);
+    expect(flightControl.getAttribute("aria-disabled")).toBe("true");
+    expect(within(flightCard).getByText("MAX LEVEL")).toBeTruthy();
+    fireEvent.click(flightControl);
+    expect(flightCard.classList.contains("active")).toBe(false);
+    expect(
+      (screen.getByRole("button", { name: /select an ability to upgrade/i }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+  });
+
+  it("routes authorized online upgrades and gates remote-seat and AI input", () => {
+    const createUpgradeState = (
+      config = createDefaultFourPlayerConfig(),
+    ) => {
+      let state = createFourPlayerGame(config);
+      for (const god of GODS) state = fourPlayerReducer(state, { type: "draft", godId: god.id });
+      state.phase = "upgrade";
+      state.activeSeat = "north";
+      state.upgradeQueue = ["north"];
+      return state;
+    };
+    const createOnlineUpgradeState = () => {
+      const config = createFourPlayerOnlineConfig();
+      config.seats.north.name = "Host";
+      config.seats.north.control = {
+        kind: "online",
+        participantId: "host",
+        local: true,
+      };
+      config.seats.east.name = "Guest";
+      config.seats.east.control = {
+        kind: "online",
+        participantId: "guest",
+        local: false,
+      };
+      return createUpgradeState(config);
+    };
+    const onAction = vi.fn();
+    const authorized = render(
+      <FourPlayerGame
+        initialState={createOnlineUpgradeState()}
+        undoPreferred={false}
+        onUndoPreferenceChange={vi.fn()}
+        onPersist={vi.fn(async () => false)}
+        onQuit={vi.fn()}
+        onNewGame={vi.fn()}
+        onlineSession={{
+          roomCode: "ABCDE",
+          role: "peer",
+          participantSeat: "north",
+          status: "playing",
+          awaitingSync: false,
+          undoConsent: false,
+          undoAvailable: false,
+          onAction,
+          onUndo: vi.fn(),
+          onUndoConsentChange: vi.fn(),
+        }}
+      />,
+    );
+    const authorizedFlight = screen.getByText("Flight").closest(".ability-card") as HTMLElement;
+    fireEvent.click(within(authorizedFlight).getByRole("button", { name: /^flight/i }));
+    fireEvent.click(screen.getByRole("button", { name: /confirm flight.*lv 2/i }));
+    expect(onAction).toHaveBeenCalledWith({ type: "upgrade", abilityId: "flight" });
+    authorized.unmount();
+
+    const remoteAction = vi.fn();
+    const remote = render(
+      <FourPlayerGame
+        initialState={createOnlineUpgradeState()}
+        undoPreferred={false}
+        onUndoPreferenceChange={vi.fn()}
+        onPersist={vi.fn(async () => false)}
+        onQuit={vi.fn()}
+        onNewGame={vi.fn()}
+        onlineSession={{
+          roomCode: "ABCDE",
+          role: "host",
+          participantSeat: "east",
+          status: "playing",
+          awaitingSync: false,
+          undoConsent: false,
+          undoAvailable: false,
+          onAction: remoteAction,
+          onUndo: vi.fn(),
+          onUndoConsentChange: vi.fn(),
+        }}
+      />,
+    );
+    const remoteFlight = screen.getByText("Flight").closest(".ability-card") as HTMLElement;
+    expect(within(remoteFlight).getByRole("button", { name: /^flight/i }).getAttribute("aria-disabled"))
+      .toBe("true");
+    expect(
+      (screen.getByRole("button", { name: /select an ability to upgrade/i }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    expect(remoteAction).not.toHaveBeenCalled();
+    remote.unmount();
+
+    const aiState = createUpgradeState();
+    aiState.players.north.control = { kind: "ai", difficulty: 3 };
+    aiState.config.seats.north.control = { kind: "ai", difficulty: 3 };
+    render(
+      <FourPlayerGame
+        initialState={aiState}
+        undoPreferred={false}
+        onUndoPreferenceChange={vi.fn()}
+        onPersist={vi.fn(async () => false)}
+        onQuit={vi.fn()}
+        onNewGame={vi.fn()}
+      />,
+    );
+    const aiFlight = screen.getByText("Flight").closest(".ability-card") as HTMLElement;
+    expect(within(aiFlight).getByRole("button", { name: /^flight/i }).getAttribute("aria-disabled"))
+      .toBe("true");
   });
 
   it("disables back, cancellation, and ability switching after committed progress", () => {

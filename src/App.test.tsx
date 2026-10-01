@@ -486,10 +486,24 @@ describe("game startup", () => {
     expect(airLiftCard).toBeTruthy();
     expect(within(airLiftCard as HTMLElement).getByLabelText("3 white orbs")).toBeTruthy();
     expect(document.querySelectorAll(".upgrade-panel .ability-card")).toHaveLength(9);
+    expect(screen.getByText("DIVINE UPGRADE").closest(".panel-heading")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /choose an ability to strengthen/i })).toBeTruthy();
     expect(screen.queryByText(/King may teleport within 4 spaces/i)).toBeNull();
     const allAbilities = screen.getByLabelText(/all abilities levels/i);
-    fireEvent.click(within(allAbilities).getByRole("button", { name: /lv 2/i }));
+    const levelTwo = within(allAbilities).getByRole("button", { name: /lv 2/i });
+    const levelThree = within(allAbilities).getByRole("button", { name: /lv 3/i });
+    expect(levelTwo.getAttribute("aria-pressed")).toBe("false");
+    expect(levelThree.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(levelTwo);
+    expect(levelTwo.classList.contains("active")).toBe(true);
+    expect(levelTwo.getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByText(/King may teleport within 4 spaces/i)).toBeTruthy();
+    fireEvent.click(levelThree);
+    expect(levelThree.classList.contains("active")).toBe(true);
+    expect(levelThree.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(levelThree);
+    expect(levelThree.classList.contains("active")).toBe(false);
+    expect(levelThree.getAttribute("aria-pressed")).toBe("false");
   });
 
   it("renders distinct artwork for each active piece marker", () => {
