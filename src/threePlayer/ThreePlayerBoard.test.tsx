@@ -162,6 +162,41 @@ describe("ThreePlayerBoard", () => {
     },
   );
 
+  it("keeps Yalta pieces uniformly readable after moving into innermost cells", () => {
+    const config = createDefaultThreePlayerConfig();
+    config.boardVariant = "three-player";
+    const state = createThreePlayerGame(config);
+    const topology = getThreePlayerTopology("three-player");
+    const movedCells: string[] = [];
+
+    (["white", "red", "black"] as const).forEach((seat, seatIndex) => {
+      const source = topology.initialPlacements.find(
+        (placement) => placement.seat === seat && placement.type === "rook",
+      )!.cell;
+      const target = topology.cellFromSourceIndex(seatIndex * 32 + 3)!;
+      state.board[target] = state.board[source];
+      delete state.board[source];
+      movedCells.push(target);
+    });
+
+    const { container } = render(<ThreePlayerBoard state={state} />);
+    const pieces = [...container.querySelectorAll<SVGTextElement>(".three-board-piece")];
+    expect(pieces).toHaveLength(48);
+    expect(new Set(pieces.map((piece) => piece.style.fontSize))).toEqual(
+      new Set(["0.64px"]),
+    );
+
+    for (const target of movedCells) {
+      const group = container.querySelector(`[data-cell="${target}"]`)!.parentElement!;
+      const piece = group.querySelector<SVGTextElement>(".three-board-piece")!;
+      const descriptor = topology.cellById.get(target)!;
+      expect(Number(piece.getAttribute("x"))).toBeCloseTo(descriptor.render.x, 8);
+      expect(Number(piece.getAttribute("y"))).toBeCloseTo(descriptor.render.y, 8);
+      expect(Number.parseFloat(piece.style.fontSize)).toBeGreaterThanOrEqual(0.6);
+      expect(Number.parseFloat(piece.style.fontSize)).toBeLessThanOrEqual(0.7);
+    }
+  });
+
   it("keeps Circular cells away from the collapsed center point", () => {
     const topology = getThreePlayerTopology("three-circular");
     const sectors = topology.cellDescriptors.map((cell) => cell.render.shape)

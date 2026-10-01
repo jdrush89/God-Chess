@@ -39,47 +39,200 @@ const nextSeat = (seat: ThreePlayerSeat, offset: -1 | 1) => {
   return SEATS[(index + offset + SEATS.length) % SEATS.length];
 };
 
-const YALTA_RENDER_ANGLE: Readonly<Record<ThreePlayerSeat, number>> = {
-  white: 0,
-  red: -Math.PI * 2 / 3,
-  black: Math.PI * 2 / 3,
-};
+type YaltaVertex = string;
+type YaltaPoint = [number, number];
 
-const yaltaRender = (
+const yaltaVertex = (
   half: ThreePlayerSeat,
   file: number,
   rank: number,
-) => {
-  const angle = YALTA_RENDER_ANGLE[half];
-  const radial = (radius: number, lateral: number): [number, number] => [
-    radius * Math.sin(angle) + lateral * Math.cos(angle),
-    radius * Math.cos(angle) - lateral * Math.sin(angle),
+) => `${half}:${file}:${rank}`;
+
+const createYaltaRenderCoordinates = () => {
+  const parent = new Map<YaltaVertex, YaltaVertex>();
+  const find = (vertex: YaltaVertex): YaltaVertex => {
+    const current = parent.get(vertex);
+    if (!current) {
+      parent.set(vertex, vertex);
+      return vertex;
+    }
+    if (current === vertex) return vertex;
+    const root = find(current);
+    parent.set(vertex, root);
+    return root;
+  };
+  const union = (left: YaltaVertex, right: YaltaVertex) => {
+    const leftRoot = find(left);
+    const rightRoot = find(right);
+    if (leftRoot !== rightRoot) parent.set(leftRoot, rightRoot);
+  };
+
+  for (const half of SEATS) {
+    for (let rank = 0; rank <= 4; rank += 1) {
+      for (let file = 0; file <= 8; file += 1) {
+        find(yaltaVertex(half, file, rank));
+      }
+    }
+  }
+
+  for (const half of SEATS) {
+    for (let file = 0; file < 8; file += 1) {
+      // Rendering folds the three grids with Red left and Black right.
+      const adjacent = nextSeat(half, file < 4 ? 1 : -1);
+      const adjacentFile = 7 - file;
+      union(
+        yaltaVertex(half, file, 0),
+        yaltaVertex(adjacent, adjacentFile + 1, 0),
+      );
+      union(
+        yaltaVertex(half, file + 1, 0),
+        yaltaVertex(adjacent, adjacentFile, 0),
+      );
+    }
+  }
+
+  const adjacency = new Map<YaltaVertex, Set<YaltaVertex>>();
+  const edgeCounts = new Map<string, number>();
+  const addEdge = (left: YaltaVertex, right: YaltaVertex) => {
+    const leftRoot = find(left);
+    const rightRoot = find(right);
+    const edge = [leftRoot, rightRoot].sort().join("|");
+    edgeCounts.set(edge, (edgeCounts.get(edge) ?? 0) + 1);
+    if (!adjacency.has(leftRoot)) adjacency.set(leftRoot, new Set());
+    if (!adjacency.has(rightRoot)) adjacency.set(rightRoot, new Set());
+    adjacency.get(leftRoot)!.add(rightRoot);
+    adjacency.get(rightRoot)!.add(leftRoot);
+  };
+
+  for (const half of SEATS) {
+    for (let rank = 0; rank < 4; rank += 1) {
+      for (let file = 0; file < 8; file += 1) {
+        const vertices = [
+          yaltaVertex(half, file, rank),
+          yaltaVertex(half, file + 1, rank),
+          yaltaVertex(half, file + 1, rank + 1),
+          yaltaVertex(half, file, rank + 1),
+        ];
+        vertices.forEach((vertex, index) => {
+          addEdge(vertex, vertices[(index + 1) % vertices.length]);
+        });
+      }
+    }
+  }
+
+  const boundaryAdjacency = new Map<YaltaVertex, YaltaVertex[]>();
+  for (const [edge, count] of edgeCounts) {
+    if (count !== 1) continue;
+    const [left, right] = edge.split("|");
+    if (!boundaryAdjacency.has(left)) boundaryAdjacency.set(left, []);
+    if (!boundaryAdjacency.has(right)) boundaryAdjacency.set(right, []);
+    boundaryAdjacency.get(left)!.push(right);
+    boundaryAdjacency.get(right)!.push(left);
+  }
+
+  const boundary: YaltaVertex[] = [];
+  const start = find(yaltaVertex("white", 0, 4));
+  let current = start;
+  let next = find(yaltaVertex("white", 1, 4));
+  do {
+    boundary.push(current);
+    const following = boundaryAdjacency.get(next)!.find(
+      (vertex) => vertex !== current,
+    )!;
+    current = next;
+    next = following;
+  } while (current !== start);
+
+  // Pin the 48 exposed edges to a regular hexagon, then relax the interior mesh.
+  const rootThree = Math.sqrt(3);
+  const corners: readonly YaltaPoint[] = [
+    [-4, 4 * rootThree],
+    [4, 4 * rootThree],
+    [8, 0],
+    [4, -4 * rootThree],
+    [-4, -4 * rootThree],
+    [-8, 0],
   ];
-  const innerRadius = 0.12 + rank;
-  const outerRadius = innerRadius + 1;
-  const halfWidthAt = (radius: number) => radius * Math.sqrt(3);
-  const point = (radius: number, boundaryFile: number) => {
-    const width = halfWidthAt(radius);
-    const lateral = -width + width * 2 * boundaryFile / 8;
-    return radial(radius, lateral);
-  };
-  const points = [
-    point(innerRadius, file),
-    point(innerRadius, file + 1),
-    point(outerRadius, file + 1),
-    point(outerRadius, file),
-  ] as const;
-  const innerCenter = point(innerRadius, file + 0.5);
-  const outerCenter = point(outerRadius, file + 0.5);
-  return {
-    x: (innerCenter[0] + outerCenter[0]) / 2,
-    y: (innerCenter[1] + outerCenter[1]) / 2,
-    size: 1,
-    shape: {
-      kind: "polygon" as const,
-      points,
-    },
-  };
+  const positions = new Map<YaltaVertex, YaltaPoint>();
+  boundary.forEach((vertex, index) => {
+    const side = Math.floor(index / 8);
+    const offset = index % 8;
+    const from = corners[side];
+    const to = corners[(side + 1) % corners.length];
+    positions.set(vertex, [
+      from[0] + (to[0] - from[0]) * offset / 8,
+      from[1] + (to[1] - from[1]) * offset / 8,
+    ]);
+  });
+
+  const interior = [...adjacency.keys()].filter((vertex) => !positions.has(vertex));
+  interior.forEach((vertex) => positions.set(vertex, [0, 0]));
+  for (let iteration = 0; iteration < 2000; iteration += 1) {
+    let maximumShift = 0;
+    for (const vertex of interior) {
+      const neighbors = [...adjacency.get(vertex)!];
+      const point = neighbors.reduce<YaltaPoint>(
+        ([x, y], neighbor) => {
+          const [nextX, nextY] = positions.get(neighbor)!;
+          return [x + nextX / neighbors.length, y + nextY / neighbors.length];
+        },
+        [0, 0],
+      );
+      const previousPoint = positions.get(vertex)!;
+      maximumShift = Math.max(
+        maximumShift,
+        Math.hypot(point[0] - previousPoint[0], point[1] - previousPoint[1]),
+      );
+      positions.set(vertex, point);
+    }
+    if (maximumShift < 1e-12) break;
+  }
+  // Traditional Yalta keeps the two occupied ranks straight.
+  for (const half of SEATS) {
+    for (const rank of [2, 3] as const) {
+      const first = positions.get(find(yaltaVertex(half, 0, rank)))!;
+      const last = positions.get(find(yaltaVertex(half, 8, rank)))!;
+      for (let file = 1; file < 8; file += 1) {
+        positions.set(find(yaltaVertex(half, file, rank)), [
+          first[0] + (last[0] - first[0]) * file / 8,
+          first[1] + (last[1] - first[1]) * file / 8,
+        ]);
+      }
+    }
+  }
+
+  const coordinates = new Map<string, {
+    x: number;
+    y: number;
+    size: number;
+    shape: { kind: "polygon"; points: readonly YaltaPoint[] };
+  }>();
+  for (const half of SEATS) {
+    for (let rank = 0; rank < 4; rank += 1) {
+      for (let file = 0; file < 8; file += 1) {
+        const points: YaltaPoint[] = [
+          positions.get(find(yaltaVertex(half, file, rank)))!,
+          positions.get(find(yaltaVertex(half, file + 1, rank)))!,
+          positions.get(find(yaltaVertex(half, file + 1, rank + 1)))!,
+          positions.get(find(yaltaVertex(half, file, rank + 1)))!,
+        ];
+        const [x, y] = points.reduce<YaltaPoint>(
+          ([centerX, centerY], point) => [
+            centerX + point[0] / points.length,
+            centerY + point[1] / points.length,
+          ],
+          [0, 0],
+        );
+        coordinates.set(cellId(half, file, rank), {
+          x,
+          y,
+          size: 1,
+          shape: { kind: "polygon", points },
+        });
+      }
+    }
+  }
+  return coordinates;
 };
 
 const inwardRookTarget = (
@@ -133,6 +286,7 @@ const createCastling = (): Readonly<
 
 export const createYaltaTopology = (): ThreePlayerTopology => {
   const cellDescriptors: ThreePlayerTopologyCell[] = [];
+  const renderCoordinates = createYaltaRenderCoordinates();
   for (let halfIndex = 0; halfIndex < SEATS.length; halfIndex += 1) {
     const half = SEATS[halfIndex];
     for (let rank = 0; rank < 4; rank += 1) {
@@ -145,7 +299,7 @@ export const createYaltaTopology = (): ThreePlayerTopology => {
           sourceIndex,
           half,
           local: { file, rank },
-          render: yaltaRender(half, file, rank),
+          render: renderCoordinates.get(cellId(half, file, rank))!,
           geometricClass,
           affinity: geometricClass === 0 ? "light" : "dark",
         });
