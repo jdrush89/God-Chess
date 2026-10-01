@@ -14,7 +14,6 @@ import {
   buildCellLookups,
   placementsFromSource,
   SEATS,
-  squareRender,
   standardArmySource,
   topologyAdjacent,
   topologyContracts,
@@ -38,6 +37,49 @@ const cellId = (half: ThreePlayerSeat, file: number, rank: number) =>
 const nextSeat = (seat: ThreePlayerSeat, offset: -1 | 1) => {
   const index = SEATS.indexOf(seat);
   return SEATS[(index + offset + SEATS.length) % SEATS.length];
+};
+
+const YALTA_RENDER_ANGLE: Readonly<Record<ThreePlayerSeat, number>> = {
+  white: 0,
+  red: -Math.PI * 2 / 3,
+  black: Math.PI * 2 / 3,
+};
+
+const yaltaRender = (
+  half: ThreePlayerSeat,
+  file: number,
+  rank: number,
+) => {
+  const angle = YALTA_RENDER_ANGLE[half];
+  const radial = (radius: number, lateral: number): [number, number] => [
+    radius * Math.sin(angle) + lateral * Math.cos(angle),
+    radius * Math.cos(angle) - lateral * Math.sin(angle),
+  ];
+  const innerRadius = 0.12 + rank;
+  const outerRadius = innerRadius + 1;
+  const halfWidthAt = (radius: number) => radius * Math.sqrt(3);
+  const point = (radius: number, boundaryFile: number) => {
+    const width = halfWidthAt(radius);
+    const lateral = -width + width * 2 * boundaryFile / 8;
+    return radial(radius, lateral);
+  };
+  const points = [
+    point(innerRadius, file),
+    point(innerRadius, file + 1),
+    point(outerRadius, file + 1),
+    point(outerRadius, file),
+  ] as const;
+  const innerCenter = point(innerRadius, file + 0.5);
+  const outerCenter = point(outerRadius, file + 0.5);
+  return {
+    x: (innerCenter[0] + outerCenter[0]) / 2,
+    y: (innerCenter[1] + outerCenter[1]) / 2,
+    size: 1,
+    shape: {
+      kind: "polygon" as const,
+      points,
+    },
+  };
 };
 
 const inwardRookTarget = (
@@ -96,9 +138,6 @@ export const createYaltaTopology = (): ThreePlayerTopology => {
     for (let rank = 0; rank < 4; rank += 1) {
       for (let file = 0; file < 8; file += 1) {
         const sourceIndex = sourceIndexFor(half, file, rank);
-        const angle = halfIndex * Math.PI * 2 / 3;
-        const lateral = file - 3.5;
-        const radial = rank + 1;
         const geometricClass = ((file + rank) % 2) as 0 | 1;
         cellDescriptors.push({
           id: cellId(half, file, rank),
@@ -106,10 +145,7 @@ export const createYaltaTopology = (): ThreePlayerTopology => {
           sourceIndex,
           half,
           local: { file, rank },
-          render: squareRender(
-            lateral * Math.cos(angle) - radial * Math.sin(angle),
-            lateral * Math.sin(angle) + radial * Math.cos(angle),
-          ),
+          render: yaltaRender(half, file, rank),
           geometricClass,
           affinity: geometricClass === 0 ? "light" : "dark",
         });

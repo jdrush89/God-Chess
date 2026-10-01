@@ -30,7 +30,7 @@ export const THREE_PLAYER_VARIANTS: ReadonlyArray<{
   {
     id: "three-player",
     name: "Yalta",
-    description: "Three square armies converge through a shared triangular center.",
+    description: "Three classic armies converge across one continuous tapered board.",
   },
   {
     id: "three-hexagonal",

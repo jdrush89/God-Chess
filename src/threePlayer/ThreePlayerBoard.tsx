@@ -1,6 +1,9 @@
 import { useMemo } from "react";
 import { threePlayerHasAlternatingNeutralCells } from "../game/threePlayerDivineGeometry";
-import { getThreePlayerTopology } from "../game/threePlayerTopology";
+import {
+  getThreePlayerTopology,
+  type ThreePlayerTopology,
+} from "../game/threePlayerTopology";
 import type {
   ThreePlayerBoardVariant,
   ThreePlayerCell,
@@ -18,6 +21,25 @@ const PIECES: Record<ThreePlayerPiece["type"], string> = {
 };
 
 const RENDER_PADDING = 0.6;
+
+const distance = (
+  [ax, ay]: readonly [number, number],
+  [bx, by]: readonly [number, number],
+) => Math.hypot(ax - bx, ay - by);
+
+const pieceFontSize = (descriptor: ThreePlayerTopology["cellDescriptors"][number]) => {
+  const shape = descriptor.render.shape;
+  if (shape.kind === "annular-sector") {
+    const radial = shape.outerRadius - shape.innerRadius;
+    const angular = 2 * ((shape.innerRadius + shape.outerRadius) / 2) *
+      Math.sin((shape.endAngle - shape.startAngle) / 2);
+    return Math.min(0.76, radial * 0.72, angular * 0.72);
+  }
+  const edges = shape.points.map((point, index) =>
+    distance(point, shape.points[(index + 1) % shape.points.length])
+  );
+  return Math.min(0.76, Math.min(...edges) * 0.68);
+};
 
 const pieceName = (piece: ThreePlayerPiece) =>
   `${piece.owner} ${piece.type}${piece.controller && piece.controller !== piece.owner
@@ -179,6 +201,7 @@ export function ThreePlayerBoard({
                 style={{
                   "--piece-color":
                     state.players[piece.controller ?? piece.owner].displayColor,
+                  fontSize: pieceFontSize(descriptor),
                 } as React.CSSProperties}
                 aria-hidden="true"
               >

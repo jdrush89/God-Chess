@@ -187,7 +187,7 @@ describe("three-player topology fixtures", () => {
       ["triad", 297, "white", "king"],
       ["triad", 34, "red", "king"],
       ["triad", 163, "black", "king"],
-      ["three-circular", 95, "white", "queen"],
+      ["three-circular", 23, "white", "queen"],
       ["three-half", 92, "black", "king"],
     ];
     for (const [variant, sourceIndex, seat, type] of checks) {
@@ -416,14 +416,16 @@ describe("branched and wrapped topologies", () => {
       expect(new Set(trace.cells).size).toBe(23);
     }
 
-    const initial = topology.pawnMetadata("white", topology.cellFromSourceIndex(1)!);
+    const initial = topology.pawnMetadata("white", topology.cellFromSourceIndex(44)!);
     expect(initial.initialDouble).toBe(true);
     expect(initial.advances).toHaveLength(2);
     expect(new Set(initial.advances.map((move) => move.group)))
-      .toEqual(new Set(["clockwise"]));
+      .toEqual(new Set(["toward-center"]));
+    expect(initial.advances.map((move) => topology.sourceIndex(move.to)))
+      .toEqual([68, 92]);
     const beforeBoundary = topology.pawnMetadata(
       "white",
-      topology.cellFromSourceIndex(5)!,
+      topology.cellFromSourceIndex(68)!,
     );
     expect(beforeBoundary.advances[0]).toMatchObject({ promotes: true });
     expect(topology.castling("white")).toEqual([]);
@@ -433,6 +435,84 @@ describe("branched and wrapped topologies", () => {
       topology.cellFromSourceIndex(12)!,
       topology.cellFromSourceIndex(1)!,
     )).toBeUndefined();
+  });
+
+  it("uses exact classic two-rank armies on Yalta and Circular", () => {
+    const classic = [
+      "rook",
+      "knight",
+      "bishop",
+      "queen",
+      "king",
+      "bishop",
+      "knight",
+      "rook",
+    ];
+    const yalta = getThreePlayerTopology("three-player");
+    const yaltaStarts = { white: 16, red: 48, black: 80 } as const;
+    for (const seat of seats) {
+      const placements = yalta.initialPlacements.filter((piece) => piece.seat === seat);
+      expect(
+        placements.filter((piece) => piece.type === "pawn")
+          .sort((a, b) => a.sourceIndex - b.sourceIndex)
+          .map((piece) => piece.sourceIndex),
+      ).toEqual(Array.from({ length: 8 }, (_, file) => yaltaStarts[seat] + file));
+      expect(
+        placements.filter((piece) => piece.type !== "pawn")
+          .sort((a, b) => a.sourceIndex - b.sourceIndex)
+          .map((piece) => piece.type),
+      ).toEqual(classic);
+    }
+
+    const circular = getThreePlayerTopology("three-circular");
+    const sectors = {
+      white: [20, 21, 22, 23, 0, 1, 2, 3],
+      red: [4, 5, 6, 7, 8, 9, 10, 11],
+      black: [12, 13, 14, 15, 16, 17, 18, 19],
+    } as const;
+    for (const seat of seats) {
+      const placements = circular.initialPlacements.filter((piece) => piece.seat === seat);
+      expect(sectors[seat].map((sector) =>
+        placements.find((piece) => piece.sourceIndex === sector)?.type
+      )).toEqual(classic);
+      expect(sectors[seat].map((sector) =>
+        placements.find((piece) => piece.sourceIndex === 24 + sector)?.type
+      )).toEqual(Array(8).fill("pawn"));
+    }
+  });
+
+  it("renders Yalta as joined tapered arms with Red left and Black right", () => {
+    const topology = getThreePlayerTopology("three-player");
+    const pointKey = ([x, y]: readonly [number, number]) =>
+      `${x.toFixed(8)},${y.toFixed(8)}`;
+    for (const seat of seats) {
+      for (let rank = 0; rank < 4; rank += 1) {
+        for (let file = 0; file < 7; file += 1) {
+          const left = topology.cellById.get(
+            topology.cellFromSourceIndex(seats.indexOf(seat) * 32 + rank * 8 + file)!,
+          )!.render.shape;
+          const right = topology.cellById.get(
+            topology.cellFromSourceIndex(seats.indexOf(seat) * 32 + rank * 8 + file + 1)!,
+          )!.render.shape;
+          expect(left.kind).toBe("polygon");
+          expect(right.kind).toBe("polygon");
+          if (left.kind === "polygon" && right.kind === "polygon") {
+            expect(pointKey(left.points[1])).toBe(pointKey(right.points[0]));
+            expect(pointKey(left.points[2])).toBe(pointKey(right.points[3]));
+          }
+        }
+      }
+    }
+    const centerX = (seat: ThreePlayerSeat) => {
+      const pieces = topology.initialPlacements.filter((piece) => piece.seat === seat);
+      return pieces.reduce(
+        (sum, piece) => sum + topology.cellById.get(piece.cell)!.render.x,
+        0,
+      ) / pieces.length;
+    };
+    expect(centerX("red")).toBeLessThan(0);
+    expect(centerX("black")).toBeGreaterThan(0);
+    expect(Math.abs(centerX("white"))).toBeLessThan(0.000001);
   });
 
   it("never mixes pair mappings on Three Half traces", () => {

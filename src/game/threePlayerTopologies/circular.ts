@@ -15,6 +15,7 @@ import {
   buildCellLookups,
   mod,
   placementsFromSource,
+  SEATS,
   topologyAdjacent,
   topologyContracts,
   topologyDistance,
@@ -28,48 +29,49 @@ const cellId = (ring: number, sector: number) => `three-circular:${ring * SECTOR
 
 interface CircularPawnGroup {
   id: string;
-  direction: -1 | 1;
   sectors: ReadonlySet<number>;
-  promotionSector: number;
 }
 
 const PAWN_GROUPS: Readonly<Record<ThreePlayerSeat, readonly CircularPawnGroup[]>> = {
   white: [
-    { id: "clockwise", direction: 1, sectors: new Set([1, 2, 3, 4, 5, 6]), promotionSector: 6 },
-    { id: "counterclockwise", direction: -1, sectors: new Set([17, 18, 19, 20, 21, 22]), promotionSector: 17 },
+    { id: "toward-center", sectors: new Set([20, 21, 22, 23, 0, 1, 2, 3]) },
   ],
   red: [
-    { id: "counterclockwise", direction: -1, sectors: new Set([1, 2, 3, 4, 5, 6]), promotionSector: 1 },
-    { id: "clockwise", direction: 1, sectors: new Set([9, 10, 11, 12, 13, 14]), promotionSector: 14 },
+    { id: "toward-center", sectors: new Set([4, 5, 6, 7, 8, 9, 10, 11]) },
   ],
   black: [
-    { id: "counterclockwise", direction: -1, sectors: new Set([9, 10, 11, 12, 13, 14]), promotionSector: 9 },
-    { id: "clockwise", direction: 1, sectors: new Set([17, 18, 19, 20, 21, 22]), promotionSector: 22 },
+    { id: "toward-center", sectors: new Set([12, 13, 14, 15, 16, 17, 18, 19]) },
   ],
+};
+
+const BACK_RANK: readonly ThreePlayerStandardPieceType[] = [
+  "rook",
+  "knight",
+  "bishop",
+  "queen",
+  "king",
+  "bishop",
+  "knight",
+  "rook",
+];
+
+const HOME_SECTORS: Readonly<Record<ThreePlayerSeat, readonly number[]>> = {
+  white: [20, 21, 22, 23, 0, 1, 2, 3],
+  red: [4, 5, 6, 7, 8, 9, 10, 11],
+  black: [12, 13, 14, 15, 16, 17, 18, 19],
 };
 
 const CIRCULAR_PIECES: Record<
   number,
   readonly [ThreePlayerSeat, ThreePlayerStandardPieceType]
-> = {
-  0: ["white", "rook"], 1: ["white", "pawn"], 22: ["white", "pawn"],
-  23: ["white", "rook"], 24: ["white", "knight"], 25: ["white", "pawn"],
-  46: ["white", "pawn"], 47: ["white", "knight"], 48: ["white", "bishop"],
-  49: ["white", "pawn"], 70: ["white", "pawn"], 71: ["white", "bishop"],
-  72: ["white", "king"], 73: ["white", "pawn"], 94: ["white", "pawn"],
-  95: ["white", "queen"],
-  6: ["red", "pawn"], 7: ["red", "rook"], 8: ["red", "rook"], 9: ["red", "pawn"],
-  30: ["red", "pawn"], 31: ["red", "knight"], 32: ["red", "knight"],
-  33: ["red", "pawn"], 54: ["red", "pawn"], 55: ["red", "bishop"],
-  56: ["red", "bishop"], 57: ["red", "pawn"], 78: ["red", "pawn"],
-  79: ["red", "queen"], 80: ["red", "king"], 81: ["red", "pawn"],
-  14: ["black", "pawn"], 15: ["black", "rook"], 16: ["black", "rook"],
-  17: ["black", "pawn"], 38: ["black", "pawn"], 39: ["black", "knight"],
-  40: ["black", "knight"], 41: ["black", "pawn"], 62: ["black", "pawn"],
-  63: ["black", "bishop"], 64: ["black", "bishop"], 65: ["black", "pawn"],
-  86: ["black", "pawn"], 87: ["black", "queen"], 88: ["black", "king"],
-  89: ["black", "pawn"],
-};
+> = {};
+
+for (const seat of SEATS) {
+  HOME_SECTORS[seat].forEach((sector, file) => {
+    CIRCULAR_PIECES[sector] = [seat, BACK_RANK[file]];
+    CIRCULAR_PIECES[SECTORS + sector] = [seat, "pawn"];
+  });
+}
 
 const groupForSource = (seat: ThreePlayerSeat, sourceIndex: number) => {
   const sector = sourceIndex % SECTORS;
@@ -77,6 +79,7 @@ const groupForSource = (seat: ThreePlayerSeat, sourceIndex: number) => {
 };
 
 export const createCircularTopology = (): ThreePlayerTopology => {
+  const centerRadius = 1.5;
   const cellDescriptors: ThreePlayerTopologyCell[] = [];
   for (let ring = 0; ring < RINGS; ring += 1) {
     for (let sector = 0; sector < SECTORS; sector += 1) {
@@ -85,7 +88,9 @@ export const createCircularTopology = (): ThreePlayerTopology => {
       const geometricClass = mod(ring + sector, 2) as 0 | 1;
       const startAngle = (sector - 0.5) / SECTORS * Math.PI * 2;
       const endAngle = (sector + 0.5) / SECTORS * Math.PI * 2;
-      const contentRadius = RINGS - ring - 0.5;
+      const innerRadius = centerRadius + RINGS - ring - 1;
+      const outerRadius = innerRadius + 1;
+      const contentRadius = (innerRadius + outerRadius) / 2;
       cellDescriptors.push({
         id: cellId(ring, sector),
         ordinal: sourceIndex,
@@ -99,8 +104,8 @@ export const createCircularTopology = (): ThreePlayerTopology => {
             kind: "annular-sector",
             cx: 0,
             cy: 0,
-            innerRadius: RINGS - ring - 1,
-            outerRadius: RINGS - ring,
+            innerRadius,
+            outerRadius,
             startAngle,
             endAngle,
           },
@@ -189,11 +194,14 @@ export const createCircularTopology = (): ThreePlayerTopology => {
     if (!origin || sourceIndex === undefined) {
       return { advances: [], captures: [], promotion: false, initialDouble: false };
     }
-    const groups = PAWN_GROUPS[seat].filter((group) => group.sectors.has(origin.sector));
+    const groups = PAWN_GROUPS[seat].filter((group) =>
+      group.sectors.has(origin.sector)
+    );
     const initialDouble = initialPawnSources.has(sourceIndex) &&
       CIRCULAR_PIECES[sourceIndex]?.[0] === seat;
     const advances = groups.flatMap((group) => {
-      const one = at(origin.ring, origin.sector + group.direction)!;
+      const one = at(origin.ring + 1, origin.sector);
+      if (!one) return [];
       const result = [{
         group: group.id,
         to: one,
@@ -201,30 +209,32 @@ export const createCircularTopology = (): ThreePlayerTopology => {
         double: false,
         initialOnly: false,
         initialDouble: false,
-        promotes: mod(origin.sector + group.direction, SECTORS) === group.promotionSector,
+        promotes: origin.ring + 1 === RINGS - 1,
       }];
       if (initialDouble) {
-        const two = at(origin.ring, origin.sector + group.direction * 2)!;
-        result.push({
-          group: group.id,
-          to: two,
-          path: [one, two],
-          double: true,
-          initialOnly: true,
-          initialDouble: true,
-          promotes: mod(origin.sector + group.direction * 2, SECTORS) === group.promotionSector,
-        });
+        const two = at(origin.ring + 2, origin.sector);
+        if (two) {
+          result.push({
+            group: group.id,
+            to: two,
+            path: [one, two],
+            double: true,
+            initialOnly: true,
+            initialDouble: true,
+            promotes: origin.ring + 2 === RINGS - 1,
+          });
+        }
       }
       return result;
     });
     const captures = groups.flatMap((group) =>
-      [-1, 1].flatMap((ringDelta) => {
-        const to = at(origin.ring + ringDelta, origin.sector + group.direction);
+      [-1, 1].flatMap((sectorDelta) => {
+        const to = at(origin.ring + 1, origin.sector + sectorDelta);
         return to
           ? [{
             group: group.id,
             to,
-            promotes: mod(origin.sector + group.direction, SECTORS) === group.promotionSector,
+            promotes: origin.ring + 1 === RINGS - 1,
           }]
           : [];
       })
@@ -232,7 +242,7 @@ export const createCircularTopology = (): ThreePlayerTopology => {
     return {
       advances,
       captures,
-      promotion: groups.some((group) => origin.sector === group.promotionSector),
+      promotion: groups.length > 0 && origin.ring === RINGS - 1,
       initialDouble,
     };
   };
