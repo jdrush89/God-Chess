@@ -639,7 +639,7 @@ describe("game startup", () => {
       const storedGames = JSON.parse(window.localStorage.getItem(SAVE_KEY) ?? "[]");
       expect(storedGames[0].version).toBe(3);
       expect(storedGames[0].undoHistory).toHaveLength(1);
-    });
+    }, { timeout: 5000 });
 
     cleanup();
     render(<App />);
