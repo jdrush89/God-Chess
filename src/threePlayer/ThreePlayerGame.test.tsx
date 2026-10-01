@@ -8,6 +8,7 @@ import {
   threePlayerReducer,
 } from "../game/threePlayerEngine";
 import { createDefaultThreePlayerConfig } from "../game/threePlayerConfig";
+import { GOD_BY_ID, GODS } from "../game/gods";
 import { enumerateCompleteThreePlayerPlans } from "../game/threePlayerPlans";
 import type {
   ThreePlayerAction,
@@ -96,22 +97,124 @@ const installDeterministicAiWorker = () => {
 };
 
 describe("ThreePlayerGame", () => {
-  it("keeps all twelve Gods inspectable while disabling claimed draft cards", () => {
+  it("inspects an unclaimed God and advances exactly one draft pick", () => {
+    const { container } = renderGame(createThreePlayerGame());
+
+    fireEvent.click(screen.getByRole("button", { name: /^Inspect Ares$/i }));
+    const claim = screen.getByRole("button", { name: /^Claim Ares$/i });
+    expect((claim as HTMLButtonElement).disabled).toBe(false);
+    expect(container.querySelectorAll(".three-draft-progress .draft-pip.done")).toHaveLength(0);
+
+    fireEvent.click(claim);
+
+    expect(screen.getByText(/Red · Red picks/i)).toBeTruthy();
+    expect(container.querySelectorAll(".three-draft-progress .draft-pip.done")).toHaveLength(1);
+    expect(container.querySelector(".three-draft-progress .draft-pip.current")?.textContent)
+      .toContain("2R");
+    expect((screen.getByRole("button", { name: /^Claimed by White$/i }) as HTMLButtonElement).disabled)
+      .toBe(true);
+  });
+
+  it("keeps all twelve Gods inspectable and labels a claimed God with its owner", () => {
     const state = threePlayerReducer(createThreePlayerGame(), {
       type: "draft",
       godId: "quetzacoatl",
     });
     const { container } = renderGame(state);
 
-    expect(container.querySelectorAll(".three-god-card")).toHaveLength(12);
-    expect((screen.getByRole("button", { name: /Claimed by White/i }) as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByText("Quetzacoatl")).toBeTruthy();
-    expect(screen.getByText("Ares")).toBeTruthy();
-    expect(container.querySelectorAll(".three-draft-progress > span")).toHaveLength(9);
+    expect(container.querySelectorAll(".pantheon-grid .draft-card")).toHaveLength(12);
+    fireEvent.click(screen.getByRole("button", {
+      name: /Inspect Quetzacoatl, claimed by White/i,
+    }));
+    expect((screen.getByRole("button", { name: /^Claimed by White$/i }) as HTMLButtonElement).disabled)
+      .toBe(true);
+    expect(screen.getByRole("button", { name: /^Inspect Ares$/i })).toBeTruthy();
+    expect(container.querySelectorAll(".three-draft-progress .draft-pip")).toHaveLength(9);
     fireEvent.keyDown(window, { key: "Escape" });
     expect(screen.getByRole("dialog", { name: /game paused locally/i })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /^resume$/i }));
-    expect((screen.getByRole("button", { name: /Claimed by White/i }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: /^Claimed by White$/i }) as HTMLButtonElement).disabled)
+      .toBe(true);
+  });
+
+  it("previews Level 2 and Level 3 ability rules in the God inspector", () => {
+    renderGame(createThreePlayerGame());
+    const god = GOD_BY_ID.quetzacoatl;
+
+    expect(screen.queryByText(god.abilities[0].details[1])).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Lv 2/i }));
+    expect(screen.getByText(god.abilities[0].details[1])).toBeTruthy();
+    expect(screen.queryByText(god.abilities[0].details[2])).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /Lv 3/i }));
+    expect(screen.getByText(god.abilities[0].details[2])).toBeTruthy();
+  });
+
+  it("uses the compact draft layout without nested controls and exposes all roster slots", () => {
+    const { container } = renderGame(createThreePlayerGame());
+
+    expect(container.querySelector(".three-draft-layout > .pantheon-grid")).toBeTruthy();
+    expect(container.querySelector(".three-draft-layout > .god-inspector")).toBeTruthy();
+    expect(container.querySelectorAll(".pantheon-grid > .draft-card")).toHaveLength(12);
+    expect(container.querySelectorAll(".three-draft-claim")).toHaveLength(1);
+    expect(container.querySelectorAll(".three-draft-rosters .draft-roster")).toHaveLength(3);
+    expect(container.querySelectorAll(".three-draft-rosters .empty-sigil")).toHaveLength(9);
+    expect(container.querySelectorAll(".escape-menu-trigger[data-placement='top-right']")).toHaveLength(1);
+    expect(container.querySelector("button button")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /open match menu/i }));
+    expect(screen.queryByRole("button", { name: /^restart$/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^new setup$/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^new online room$/i })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /^resume$/i }));
+  });
+
+  it("preserves the nine-pick order, three Gods per seat, and three unused Gods", () => {
+    const order = [
+      "white",
+      "red",
+      "black",
+      "black",
+      "red",
+      "white",
+      "white",
+      "red",
+      "black",
+    ] as const;
+    const picks = GODS.slice(0, 9).map((god) => god.id);
+    let state = createThreePlayerGame();
+
+    order.forEach((seat, index) => {
+      expect(state.activeSeat).toBe(seat);
+      state = threePlayerReducer(state, { type: "draft", godId: picks[index] });
+      expect(state.draft.pickIndex).toBe(index + 1);
+    });
+
+    expect(state.phase).toBe("play");
+    expect(state.players.white.gods).toEqual([picks[0], picks[5], picks[6]]);
+    expect(state.players.red.gods).toEqual([picks[1], picks[4], picks[7]]);
+    expect(state.players.black.gods).toEqual([picks[2], picks[3], picks[8]]);
+    expect(state.draft.unused).toEqual(GODS.slice(9).map((god) => god.id));
+  });
+
+  it("auto-drafts consecutive AI seats one pick at a time until the next Human turn", async () => {
+    const terminateWorker = installDeterministicAiWorker();
+    vi.spyOn(window, "matchMedia").mockImplementation(matchMedia(true));
+    const config = createDefaultThreePlayerConfig();
+    config.seats.red.control = { kind: "ai", difficulty: 1 };
+    config.seats.black.control = { kind: "ai", difficulty: 1 };
+    const { container, unmount } = renderGame(createThreePlayerGame(config));
+
+    fireEvent.click(screen.getByRole("button", { name: /^Claim Quetzacoatl$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/White · White picks/i)).toBeTruthy();
+      expect(container.querySelectorAll(".three-draft-progress .draft-pip.done")).toHaveLength(5);
+    });
+    expect(container.querySelector(".three-draft-progress .draft-pip.current")?.textContent)
+      .toContain("6W");
+    unmount();
+    expect(terminateWorker).toHaveBeenCalledTimes(1);
   });
 
   it("shows Red's dynamic affinity and gates interaction during AI turns", () => {
@@ -124,7 +227,66 @@ describe("ThreePlayerGame", () => {
     expect(screen.getByText(/Red · dark affinity/i)).toBeTruthy();
     expect(screen.getByText(/AI is choosing a divine action/i)).toBeTruthy();
     expect(document.querySelector(".three-game-page")?.classList.contains("input-gated")).toBe(true);
+    expect(screen.getAllByRole("button", { name: /open match menu/i })).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: /game menu/i })).toBeNull();
     expect(screen.getAllByRole("gridcell")[0].getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("offers local Restart and New setup from the single top-right menu", () => {
+    const onNewGame = vi.fn();
+    const { container } = render(
+      <ThreePlayerGame
+        initialState={completeDraft()}
+        onQuit={() => undefined}
+        onNewGame={onNewGame}
+      />,
+    );
+
+    expect(container.querySelectorAll(".escape-menu-trigger")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: /open match menu/i }));
+    expect(screen.getByRole("button", { name: /^restart$/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^new setup$/i }));
+    expect(onNewGame).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: /open match menu/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^restart$/i }));
+
+    expect(screen.getByRole("button", { name: /^Claim Quetzacoatl$/i })).toBeTruthy();
+    expect(container.querySelectorAll(".three-draft-progress .draft-pip.done")).toHaveLength(0);
+    expect(container.querySelectorAll(".three-draft-rosters .god-sigil")).toHaveLength(0);
+  });
+
+  it("offers New online room but never canonical Restart to online players", () => {
+    const config = createDefaultThreePlayerConfig();
+    config.seats.white.control = { kind: "online", local: true };
+    config.seats.red.control = { kind: "online", local: false };
+    config.seats.black.control = { kind: "ai", difficulty: 5 };
+    const onNewGame = vi.fn();
+    const { container } = render(
+      <ThreePlayerGame
+        initialState={completeDraft(createThreePlayerGame(config))}
+        onQuit={() => undefined}
+        onNewGame={onNewGame}
+        onlineSession={{
+          roomCode: "ABCDE",
+          role: "peer",
+          participantSeat: "white",
+          status: "playing",
+          awaitingSync: false,
+          undoAvailable: false,
+          onAction: vi.fn(),
+          onUndoRequest: vi.fn(),
+          onUndoVote: vi.fn(),
+        }}
+      />,
+    );
+
+    expect(container.querySelectorAll(".escape-menu-trigger")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: /open match menu/i }));
+    expect(screen.queryByRole("button", { name: /^restart$/i })).toBeNull();
+    expect(screen.getByRole("button", { name: /^leave room$/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^new online room$/i }));
+    expect(onNewGame).toHaveBeenCalledTimes(1);
   });
 
   it("opens the Escape menu without changing an in-progress match", () => {
@@ -228,7 +390,7 @@ describe("ThreePlayerGame", () => {
     await waitFor(() => expect(onQuit).not.toHaveBeenCalled());
   });
 
-  it("routes online actions to the host and waits for canonical acknowledgement", () => {
+  it("routes authorized online host draft actions and waits for canonical acknowledgement", () => {
     const config = createDefaultThreePlayerConfig();
     config.seats.white.control = { kind: "online", local: true };
     config.seats.red.control = { kind: "online", local: false };
@@ -237,7 +399,7 @@ describe("ThreePlayerGame", () => {
     const onAction = vi.fn();
     const onlineSession: ThreePlayerOnlineSession = {
       roomCode: "ABCDE",
-      role: "peer",
+      role: "host",
       participantSeat: "white",
       status: "playing",
       awaitingSync: false,
@@ -279,6 +441,40 @@ describe("ThreePlayerGame", () => {
     expect(screen.getByText(/Red picks/i)).toBeTruthy();
     expect(screen.queryByText(/Save & quit/i)).toBeNull();
     expect(screen.getByText(/Leave room/i)).toBeTruthy();
+  });
+
+  it("gates an inactive online guest from confirming a draft pick", () => {
+    const config = createDefaultThreePlayerConfig();
+    config.seats.white.control = { kind: "online", local: false };
+    config.seats.red.control = { kind: "online", local: true };
+    config.seats.black.control = { kind: "ai", difficulty: 5 };
+    const onAction = vi.fn();
+    const state = createThreePlayerGame(config);
+
+    render(
+      <ThreePlayerGame
+        initialState={state}
+        onQuit={() => undefined}
+        onNewGame={() => undefined}
+        onlineSession={{
+          roomCode: "ABCDE",
+          role: "peer",
+          participantSeat: "red",
+          status: "playing",
+          awaitingSync: false,
+          undoAvailable: false,
+          onAction,
+          onUndoRequest: vi.fn(),
+          onUndoVote: vi.fn(),
+        }}
+      />,
+    );
+
+    const claim = screen.getByRole("button", { name: /^Claim Quetzacoatl$/i });
+    expect((claim as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(claim);
+    expect(onAction).not.toHaveBeenCalled();
+    expect(screen.getByText(/White · White picks/i)).toBeTruthy();
   });
 
   it("locks online input during pause and unanimous undo voting", () => {

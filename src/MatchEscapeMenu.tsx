@@ -1,15 +1,24 @@
 import { Bug, Copy, LogOut, Menu, Settings, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import {
   buildDebugReport,
   diagnosticsStatus,
   recordDiagnostic,
 } from "./diagnostics";
 
+export interface MatchEscapeMenuAction {
+  label: string;
+  onSelect: () => void;
+  icon?: ReactNode;
+  className?: "secondary-button" | "danger-button";
+}
+
 interface MatchEscapeMenuProps {
   onOpenSettings?: () => void;
   onLeave?: () => void;
   leaveLabel?: string;
+  additionalActions?: readonly MatchEscapeMenuAction[];
 }
 
 const focusableSelector = [
@@ -24,6 +33,7 @@ export function MatchEscapeMenu({
   onOpenSettings,
   onLeave,
   leaveLabel = "Leave match",
+  additionalActions = [],
 }: MatchEscapeMenuProps) {
   const [open, setOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
@@ -143,6 +153,7 @@ export function MatchEscapeMenu({
     <>
       <button
         className="escape-menu-trigger"
+        data-placement="top-right"
         onClick={openMenu}
         aria-label="Open match menu"
         ref={triggerRef}
@@ -191,6 +202,18 @@ export function MatchEscapeMenu({
                       <Settings size={16} /> Settings
                     </button>
                   )}
+                  {additionalActions.map((action) => (
+                    <button
+                      className={action.className ?? "secondary-button"}
+                      onClick={() => {
+                        close();
+                        action.onSelect();
+                      }}
+                      key={action.label}
+                    >
+                      {action.icon}{action.label}
+                    </button>
+                  ))}
                   {onLeave && (
                     <button
                       className="danger-button"
