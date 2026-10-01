@@ -285,6 +285,7 @@ function FourPlayerDraft({
   state,
   dispatch,
   inputDisabled,
+  onQuickDraft,
   canUndo,
   onUndo,
   onSaveAndQuit,
@@ -293,6 +294,7 @@ function FourPlayerDraft({
   state: FourPlayerState;
   dispatch: FourPlayerDispatch;
   inputDisabled: boolean;
+  onQuickDraft?: () => void;
   canUndo: boolean;
   onUndo: () => void;
   onSaveAndQuit?: () => void;
@@ -334,18 +336,29 @@ function FourPlayerDraft({
         <p className="eyebrow">THE FOUR PANTHEONS AWAIT</p>
         <h1>Choose your gods.</h1>
         <p>Every God is unique: 1–2–3–4, 4–3–2–1, then 1–2–3–4.</p>
-        {activePlayer.control.kind !== "ai" && (
-          <button
-            className="auto-draft-button"
-            disabled={inputDisabled || !state.draft.available.length}
-            onClick={() => {
-              const index = Math.floor(Math.random() * state.draft.available.length);
-              dispatch({ type: "draft", godId: state.draft.available[index] });
-            }}
-          >
-            Auto-pick a God
-          </button>
-        )}
+        <div className="draft-auto-actions">
+          {activePlayer.control.kind !== "ai" && (
+            <button
+              className="auto-draft-button"
+              disabled={inputDisabled || !state.draft.available.length}
+              onClick={() => {
+                const index = Math.floor(Math.random() * state.draft.available.length);
+                dispatch({ type: "draft", godId: state.draft.available[index] });
+              }}
+            >
+              Auto-pick a God
+            </button>
+          )}
+          {onQuickDraft && (
+            <button
+              className="auto-draft-button"
+              disabled={!state.draft.available.length}
+              onClick={onQuickDraft}
+            >
+              Quick Draft
+            </button>
+          )}
+        </div>
         <div className="draft-progress four-draft-progress">
           {state.draft.order.map((seat, index) => (
             <div
@@ -1446,6 +1459,7 @@ export function FourPlayerGame({
   const [orbFlights, setOrbFlights] = useState<FourPlayerOrbFlight[]>([]);
   const [arrivingOrbs, setArrivingOrbs] = useState<Set<string>>(() => new Set());
   const aiPlan = useRef<FourPlayerAction[]>([]);
+  const quickDraftPending = useRef(false);
   const aiActionsThisTurn = useRef(0);
   const aiNoPlanKey = useRef<string | undefined>(undefined);
   const animationTimer = useRef<number | undefined>(undefined);
@@ -1582,6 +1596,27 @@ export function FourPlayerGame({
       current.players[current.activeSeat].control.kind !== "human"
     ) return;
     applyAction(action);
+  };
+
+  const quickDraft = () => {
+    if (
+      onlineSession ||
+      quickDraftPending.current ||
+      stateRef.current.phase !== "draft"
+    ) return;
+    quickDraftPending.current = true;
+    aiPlan.current = [];
+    aiActionsThisTurn.current = 0;
+    setAiWorking(false);
+    try {
+      while (stateRef.current.phase === "draft") {
+        const godId = stateRef.current.draft.available[0];
+        if (!godId) break;
+        if (!applyAction({ type: "draft", godId })) break;
+      }
+    } finally {
+      quickDraftPending.current = false;
+    }
   };
 
   const undoStable =
@@ -1889,6 +1924,7 @@ export function FourPlayerGame({
           state={state}
           dispatch={humanDispatch}
           inputDisabled={draftInputDisabled}
+          onQuickDraft={onlineSession ? undefined : quickDraft}
           canUndo={canUndo}
           onUndo={applyUndo}
           onSaveAndQuit={onlineSession ? undefined : () => void saveAndQuit()}

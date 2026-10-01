@@ -16,6 +16,7 @@ import {
   Undo2,
   UserRound,
   X,
+  Zap,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { GameResultPresentation } from "../GameResultPresentation";
@@ -278,6 +279,7 @@ function ThreePlayerDraft({
   inputDisabled,
   onAction,
   onAutoDraft,
+  onQuickDraft,
   onExit,
   exitLabel,
   canUndo,
@@ -289,6 +291,7 @@ function ThreePlayerDraft({
   inputDisabled: boolean;
   onAction: (action: UiAction) => void;
   onAutoDraft: () => void;
+  onQuickDraft?: () => void;
   onExit: () => void;
   exitLabel: string;
   canUndo: boolean;
@@ -378,15 +381,28 @@ function ThreePlayerDraft({
         <p className="eyebrow">THE THREE PANTHEONS AWAIT</p>
         <h1>Choose your gods.</h1>
         <p>White, Red, and Black each claim three divine allies. Three Gods remain unused.</p>
-        <button
-          type="button"
-          className="auto-draft-button"
-          disabled={inputDisabled || !actions.some((action) => action.type === "draft")}
-          onClick={onAutoDraft}
-        >
-          <Sparkles size={15} />
-          Auto-pick random god
-        </button>
+        <div className="draft-auto-actions">
+          <button
+            type="button"
+            className="auto-draft-button"
+            disabled={inputDisabled || !actions.some((action) => action.type === "draft")}
+            onClick={onAutoDraft}
+          >
+            <Sparkles size={15} />
+            Auto-pick random god
+          </button>
+          {onQuickDraft && (
+            <button
+              type="button"
+              className="auto-draft-button"
+              disabled={!actions.some((action) => action.type === "draft")}
+              onClick={onQuickDraft}
+            >
+              <Zap size={15} />
+              Quick Draft
+            </button>
+          )}
+        </div>
         <div className="draft-progress three-draft-progress" aria-label="Nine draft picks">
           {state.draft.order.map((seat, index) => (
             <div
@@ -769,11 +785,13 @@ export function ThreePlayerGame({
   const [inspectedGod, setInspectedGod] = useState<GodId>();
   const [selectedUpgradeAbility, setSelectedUpgradeAbility] = useState<string>();
   const [helpOpen, setHelpOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [resultOpen, setResultOpen] = useState(initialState.phase === "gameover");
   const [undoEnabled, setUndoEnabled] = useState(undoPreferred);
   const [autoDraftPending, setAutoDraftPending] = useState(false);
   const autoDraftPendingRef = useRef(false);
+  const quickDraftPendingRef = useRef(false);
   const undoStack = useRef<UiState[]>(
     initialUndoHistory.map((snapshot) => clone(snapshot) as UiState),
   );
@@ -827,9 +845,13 @@ export function ThreePlayerGame({
         .filter((cell): cell is string => Boolean(cell))
       : [];
 
-  const dispatchAction = (action: UiAction, source: "human" | "ai" = "human") => {
+  const dispatchAction = (
+    action: UiAction,
+    source: "human" | "ai" = "human",
+    bypassInputLock = false,
+  ) => {
     const current = stateRef.current;
-    if (source === "human" && inputDisabled) return;
+    if (source === "human" && inputDisabled && !bypassInputLock) return;
     if (onlineSession) {
       if (source === "human") {
         recordDiagnostic({
@@ -889,6 +911,36 @@ export function ThreePlayerGame({
     autoDraftPendingRef.current = true;
     setAutoDraftPending(true);
     dispatchAction(action);
+  };
+
+  const quickDraft = () => {
+    if (
+      onlineSession ||
+      autoDraftPendingRef.current ||
+      quickDraftPendingRef.current ||
+      stateRef.current.phase !== "draft"
+    ) return;
+    quickDraftPendingRef.current = true;
+    autoDraftPendingRef.current = true;
+    setAutoDraftPending(true);
+    aiPlan.current = [];
+    aiRequestRevision.current = undefined;
+    try {
+      while (stateRef.current.phase === "draft") {
+        const action = availableThreePlayerActions(
+          stateRef.current as ThreePlayerState,
+        ).find(
+          (candidate): candidate is Extract<ThreePlayerAction, { type: "draft" }> =>
+            candidate.type === "draft",
+        );
+        if (!action) break;
+        dispatchAction(action, "human", true);
+      }
+    } finally {
+      quickDraftPendingRef.current = false;
+      autoDraftPendingRef.current = false;
+      setAutoDraftPending(false);
+    }
   };
 
   useEffect(() => {
@@ -1151,6 +1203,7 @@ export function ThreePlayerGame({
           inputDisabled={inputDisabled}
           onAction={dispatchAction}
           onAutoDraft={autoDraft}
+          onQuickDraft={onlineSession ? undefined : quickDraft}
           onExit={() => void saveAndQuit()}
           exitLabel={onlineSession ? "Leave room" : "Save & quit"}
           canUndo={canUndo}
@@ -1229,11 +1282,6 @@ export function ThreePlayerGame({
   const detachedGenericActions = attachedGenericActions.length
     ? []
     : genericActions;
-  const unusedGods = state.draft.unused.length
-    ? state.draft.unused
-    : GODS.map((god) => god.id).filter(
-      (godId) => !THREE_PLAYER_SEATS.some((seat) => state.players[seat].gods.includes(godId)),
-    );
   const variant = THREE_PLAYER_VARIANTS.find(
     (item) => item.id === state.config.boardVariant,
   );
@@ -1259,6 +1307,7 @@ export function ThreePlayerGame({
         </div>
         <div className="three-game-actions">
           <button onClick={() => setHelpOpen(true)} aria-label="Help"><BookOpen size={17} /></button>
+          <button onClick={() => setHistoryOpen(true)} aria-label="History"><History size={17} /></button>
           {!onlineSession && (
             <button onClick={() => setSettingsOpen(true)} aria-label="Settings"><Settings size={17} /></button>
           )}
@@ -1569,29 +1618,26 @@ export function ThreePlayerGame({
             </>
           )}
 
-          <section className="three-unused-gods">
-            <strong>Unused Gods</strong>
-            <div>
-              {unusedGods.map((godId) => (
-                <button
-                  onClick={() => {
-                    if (!state.selectedGod && !committedAbility) setInspectedGod(godId);
-                  }}
-                  title={GOD_BY_ID[godId].name}
-                  key={godId}
-                >
-                  <img src={GOD_PORTRAITS[godId]} alt={GOD_BY_ID[godId].name} />
-                </button>
-              ))}
-            </div>
-          </section>
-
-          <details className="three-history">
-            <summary>Full history</summary>
-            <ol>{state.history.map((entry, index) => <li key={`${entry}-${index}`}>{entry}</li>)}</ol>
-          </details>
         </aside>
       </section>
+
+      {historyOpen && (
+        <aside className="history-drawer" aria-label="Full history">
+          <div className="history-drawer-header">
+            <h3><History size={18} /> Chronicle</h3>
+            <button onClick={() => setHistoryOpen(false)} aria-label="Close history"><X size={18} /></button>
+          </div>
+          <div
+            className="history-drawer-body"
+            aria-label="Chronicle entries"
+            tabIndex={0}
+          >
+            {state.history.map((entry, index) => (
+              <p key={`${entry}-${index}`}><span>{index + 1}</span>{entry}</p>
+            ))}
+          </div>
+        </aside>
+      )}
 
       {state.phase === "gameover" && (
         <GameResultPresentation

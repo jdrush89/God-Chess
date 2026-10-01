@@ -14,6 +14,7 @@ import type {
   ThreePlayerAction,
   ThreePlayerState,
 } from "../game/threePlayerTypes";
+import { THREE_PLAYER_SEATS } from "../game/threePlayerTypes";
 import {
   ThreePlayerGame,
   type ThreePlayerOnlineSession,
@@ -131,6 +132,94 @@ describe("ThreePlayerGame", () => {
     expect(screen.getByRole("button", {
       name: /Inspect Quetzacoatl, claimed by White/i,
     })).toBeTruthy();
+  });
+
+  it("quick-drafts every remaining local pick without changing prior ownership", async () => {
+    const config = createDefaultThreePlayerConfig();
+    config.seats.red.control = { kind: "ai", difficulty: 5 };
+    config.seats.black.control = { kind: "ai", difficulty: 5 };
+    const initial = createThreePlayerGame(config);
+    const onPersist = vi.fn((_: ThreePlayerState) => true);
+    const { container } = render(
+      <ThreePlayerGame
+        initialState={initial}
+        onPersist={onPersist}
+        onQuit={() => undefined}
+        onNewGame={() => undefined}
+      />,
+    );
+
+    const draftActions = container.querySelector(".draft-auto-actions") as HTMLElement;
+    expect(within(draftActions).getAllByRole("button").map((button) =>
+      button.textContent?.replace(/\s+/g, " ").trim()
+    )).toEqual(["Auto-pick random god", "Quick Draft"]);
+
+    fireEvent.click(screen.getByRole("button", { name: /^Inspect Ares$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Claim Ares$/i }));
+    let expected = threePlayerReducer(initial, { type: "draft", godId: "ares" });
+    while (expected.phase === "draft") {
+      expected = threePlayerReducer(expected, availableThreePlayerActions(expected)[0]);
+    }
+
+    const quickDraft = screen.getByRole("button", { name: /^quick draft$/i });
+    fireEvent.click(quickDraft);
+    fireEvent.click(quickDraft);
+
+    await waitFor(() => {
+      const persisted = onPersist.mock.calls.at(-1)?.[0];
+      expect(persisted?.phase).toBe("play");
+    });
+    const completed = onPersist.mock.calls.at(-1)![0];
+    const drafted = Object.values(completed.players).flatMap((player) => player.gods);
+    expect(completed.draft.pickIndex).toBe(completed.draft.order.length);
+    expect(completed.players.white.gods[0]).toBe("ares");
+    expect(THREE_PLAYER_SEATS.map((seat) => completed.players[seat].gods))
+      .toEqual(THREE_PLAYER_SEATS.map((seat) => expected.players[seat].gods));
+    expect(new Set(drafted).size).toBe(9);
+  });
+
+  it("moves full history to the keyboard-focusable top bar control", () => {
+    const state = completeDraft();
+    state.history = ["White moved.", "Red captured.", "Black upgraded."];
+    renderGame(state);
+
+    expect(screen.queryByText("Unused Gods")).toBeNull();
+    expect(screen.queryByText("Full history")).toBeNull();
+    const history = screen.getByRole("button", { name: /^history$/i });
+    history.focus();
+    expect(document.activeElement).toBe(history);
+    fireEvent.click(history);
+
+    const drawer = screen.getByLabelText("Full history");
+    expect(within(drawer).getByText("Chronicle")).toBeTruthy();
+    expect(Array.from(drawer.querySelectorAll("p")).map(
+      (entry) => entry.lastChild?.textContent,
+    )).toEqual(["White moved.", "Red captured.", "Black upgraded."]);
+    expect(screen.getByRole("button", { name: /^help$/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^settings$/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^undo$/i })).toBeTruthy();
+    fireEvent.click(within(drawer).getByRole("button", { name: /close history/i }));
+    expect(screen.queryByLabelText("Full history")).toBeNull();
+  });
+
+  it("keeps long history entries in a dedicated keyboard-scrollable body", () => {
+    const state = completeDraft();
+    state.history = Array.from(
+      { length: 80 },
+      (_, index) => `Chronicle entry ${index + 1}`,
+    );
+    renderGame(state);
+
+    fireEvent.click(screen.getByRole("button", { name: /^history$/i }));
+
+    const drawer = screen.getByLabelText("Full history");
+    const body = screen.getByLabelText("Chronicle entries");
+    const close = screen.getByRole("button", { name: /close history/i });
+    expect(body.className).toBe("history-drawer-body");
+    expect((body as HTMLElement).tabIndex).toBe(0);
+    expect(body.contains(screen.getByText("Chronicle entry 80"))).toBe(true);
+    expect(body.contains(close)).toBe(false);
+    expect(drawer.firstElementChild?.className).toBe("history-drawer-header");
   });
 
   it("inspects an unclaimed God and advances exactly one draft pick", () => {
@@ -761,6 +850,7 @@ describe("ThreePlayerGame", () => {
       type: "draft",
       godId: GODS[Math.floor(GODS.length * 0.25)].id,
     });
+    expect(screen.queryByRole("button", { name: /^quick draft$/i })).toBeNull();
     expect((screen.getByRole("button", {
       name: /^Auto-pick random god$/i,
     }) as HTMLButtonElement).disabled).toBe(true);

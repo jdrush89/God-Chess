@@ -9,6 +9,7 @@ import { FOUR_PLAYER_SEATS } from "../game/fourPlayerTypes";
 import type { FourPlayerRoomSnapshot } from "./types";
 
 const peerHarness = vi.hoisted(() => ({
+  autoResolvePeer: true,
   instances: [] as Array<{
     callbacks: {
       onAccepted: (
@@ -22,6 +23,8 @@ const peerHarness = vi.hoisted(() => ({
     };
     connectArgs: unknown[][];
     readyCalls: boolean[];
+    resolveConnect: () => void;
+    disconnected: boolean;
   }>,
 }));
 
@@ -32,6 +35,11 @@ vi.mock("./fourPlayerRoom", () => ({
   FourPlayerRoomPeer: class {
     connectArgs: unknown[][] = [];
     readyCalls: boolean[] = [];
+    disconnected = false;
+    private resolveConnectPromise!: () => void;
+    private connectPromise = new Promise<void>((resolve) => {
+      this.resolveConnectPromise = resolve;
+    });
 
     constructor(readonly callbacks: {
       onAccepted: (
@@ -43,14 +51,27 @@ vi.mock("./fourPlayerRoom", () => ({
       onRejected: (reason: string) => void;
       onDisconnected: (roomEnded: boolean) => void;
     }) {
-      peerHarness.instances.push(this);
+      peerHarness.instances.push({
+        callbacks: this.callbacks,
+        connectArgs: this.connectArgs,
+        readyCalls: this.readyCalls,
+        resolveConnect: () => this.resolveConnectPromise(),
+        get disconnected() {
+          return thisPeer.disconnected;
+        },
+      });
+      const thisPeer = this;
+      if (peerHarness.autoResolvePeer) this.resolveConnectPromise();
     }
 
     async connect(...args: unknown[]) {
       this.connectArgs.push(args);
+      await this.connectPromise;
     }
 
-    disconnect() {}
+    disconnect() {
+      this.disconnected = true;
+    }
     setReady(ready: boolean) {
       this.readyCalls.push(ready);
     }
@@ -124,6 +145,7 @@ const snapshot = (
 
 describe("four-player online hook state", () => {
   beforeEach(() => {
+    peerHarness.autoResolvePeer = true;
     peerHarness.instances.length = 0;
     window.sessionStorage.clear();
   });
@@ -167,6 +189,38 @@ describe("four-player online hook state", () => {
       result.current[1].disconnect();
     });
     expect(window.sessionStorage.getItem(reconnectStorageKey)).toBeNull();
+  });
+
+  it("does not restore a room after a pending join is disconnected", async () => {
+    peerHarness.autoResolvePeer = false;
+    const { result } = renderHook(() => useFourPlayerOnlineGame());
+    let pending!: Promise<void>;
+
+    act(() => {
+      pending = result.current[1].joinGame("ABCDE", "Guest");
+    });
+    const peer = peerHarness.instances[0];
+    expect(result.current[0].connecting).toBe(true);
+
+    act(() => {
+      result.current[1].disconnect();
+    });
+    expect(result.current[0]).toMatchObject({
+      role: "none",
+      connecting: false,
+    });
+    expect(result.current[0].roomCode).toBeUndefined();
+
+    await act(async () => {
+      peer.resolveConnect();
+      await pending;
+    });
+    expect(peer.disconnected).toBe(true);
+    expect(result.current[0]).toMatchObject({
+      role: "none",
+      connecting: false,
+    });
+    expect(result.current[0].roomCode).toBeUndefined();
   });
 
   it("uses recipient-local snapshot identity even when assignment arrives before acceptance", async () => {

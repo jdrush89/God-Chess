@@ -94,7 +94,7 @@ describe("three-player online lobby", () => {
   it("lets the host configure variants, seats, AI, and start gating", () => {
     const assign = vi.fn();
     const updateConfig = vi.fn();
-    render(
+    const { container } = render(
       <ThreePlayerOnlineLobby
         online={onlineState("host")}
         onReady={vi.fn()}
@@ -113,6 +113,17 @@ describe("three-player online lobby", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /^Circular$/i }));
     expect(updateConfig).toHaveBeenCalled();
+    const victoryButtons = Array.from(
+      container.querySelectorAll(".three-setup-option .segmented-control button"),
+    );
+    expect(victoryButtons.map((button) => button.textContent?.trim())).toEqual([
+      "Last surviving",
+      "First King captured",
+    ]);
+    fireEvent.click(screen.getByRole("button", { name: /First King captured/i }));
+    expect(updateConfig.mock.calls.at(-1)?.[0].victoryMode).toBe("first-checkmate");
+    fireEvent.click(screen.getByRole("button", { name: /Last surviving/i }));
+    expect(updateConfig.mock.calls.at(-1)?.[0].victoryMode).toBe("last-survivor");
 
     const black = document.querySelector(
       ".three-online-seat.seat-black",
@@ -125,7 +136,7 @@ describe("three-player online lobby", () => {
     fireEvent.change(screen.getByLabelText(/black ai difficulty/i), {
       target: { value: "8" },
     });
-    expect(updateConfig).toHaveBeenCalledTimes(2);
+    expect(updateConfig).toHaveBeenCalledTimes(4);
   });
 
   it("keeps host-only controls read-only for guests and exposes readiness", () => {

@@ -126,39 +126,65 @@ export const useFourPlayerOnlineGame = () => {
   stateRef.current = state;
   const hostRef = useRef<FourPlayerRoomHost | undefined>(undefined);
   const peerRef = useRef<FourPlayerRoomPeer | undefined>(undefined);
+  const attemptGeneration = useRef(0);
 
   useEffect(() => () => {
-    hostRef.current?.stop();
-    peerRef.current?.disconnect();
+    attemptGeneration.current += 1;
+    const host = hostRef.current;
+    const peer = peerRef.current;
+    hostRef.current = undefined;
+    peerRef.current = undefined;
+    host?.stop();
+    peer?.disconnect();
   }, []);
 
   const hostGame = useCallback(async (hostName: string) => {
-    hostRef.current?.stop();
-    peerRef.current?.disconnect();
+    const generation = attemptGeneration.current + 1;
+    attemptGeneration.current = generation;
+    const previousHost = hostRef.current;
+    const previousPeer = peerRef.current;
+    hostRef.current = undefined;
+    peerRef.current = undefined;
+    previousHost?.stop();
+    previousPeer?.disconnect();
     setState({
       ...initialState,
       connecting: true,
       playerName: hostName,
     });
-    const host = new FourPlayerRoomHost(hostName, {
-      onSnapshot: (snapshot) => setState((current) => ({
-        ...current,
-        role: "host",
-        connecting: false,
-        roomCode: snapshot.roomCode,
-        participantId: host.hostParticipantId,
-        snapshot,
-        awaitingActionId: undefined,
-      })),
-      onError: (error) => setState((current) => ({
-        ...current,
-        connecting: false,
-        error,
-      })),
+    let host: FourPlayerRoomHost;
+    const isCurrent = () =>
+      attemptGeneration.current === generation &&
+      hostRef.current === host;
+    host = new FourPlayerRoomHost(hostName, {
+      onSnapshot: (snapshot) => {
+        if (!isCurrent()) return;
+        setState((current) => ({
+          ...current,
+          role: "host",
+          connecting: false,
+          roomCode: snapshot.roomCode,
+          participantId: host.hostParticipantId,
+          snapshot,
+          awaitingActionId: undefined,
+        }));
+      },
+      onError: (error) => {
+        if (!isCurrent()) return;
+        setState((current) => ({
+          ...current,
+          connecting: false,
+          error,
+        }));
+      },
     });
+    hostRef.current = host;
     try {
       const roomCode = await host.start();
-      hostRef.current = host;
+      if (!isCurrent()) {
+        host.stop();
+        return;
+      }
       setState((current) => ({
         ...current,
         role: "host",
@@ -168,6 +194,8 @@ export const useFourPlayerOnlineGame = () => {
         snapshot: host.snapshot,
       }));
     } catch (error) {
+      if (!isCurrent()) return;
+      hostRef.current = undefined;
       host.stop();
       setState({
         ...initialState,
@@ -182,8 +210,14 @@ export const useFourPlayerOnlineGame = () => {
     roomCode: string,
     playerName: string,
   ) => {
-    hostRef.current?.stop();
-    peerRef.current?.disconnect();
+    const generation = attemptGeneration.current + 1;
+    attemptGeneration.current = generation;
+    const previousHost = hostRef.current;
+    const previousPeer = peerRef.current;
+    hostRef.current = undefined;
+    peerRef.current = undefined;
+    previousHost?.stop();
+    previousPeer?.disconnect();
     const normalizedCode = roomCode.trim().toUpperCase();
     const normalizedName = playerName.trim().slice(0, 24) || "Guest";
     const token = readReconnectToken(normalizedCode);
@@ -194,8 +228,12 @@ export const useFourPlayerOnlineGame = () => {
       playerName: normalizedName,
     });
     let peer: FourPlayerRoomPeer;
+    const isCurrent = () =>
+      attemptGeneration.current === generation &&
+      peerRef.current === peer;
     peer = new FourPlayerRoomPeer({
       onAccepted: (participantId, acceptedToken, acceptedCode) => {
+        if (!isCurrent()) return;
         storeReconnectToken(acceptedCode, acceptedToken);
         setState((current) => ({
           ...current,
@@ -206,10 +244,15 @@ export const useFourPlayerOnlineGame = () => {
           error: undefined,
         }));
       },
-      onSnapshot: (snapshot) => setState((current) =>
-        reconcileFourPlayerSnapshot(current, snapshot)
-      ),
+      onSnapshot: (snapshot) => {
+        if (!isCurrent()) return;
+        setState((current) =>
+          reconcileFourPlayerSnapshot(current, snapshot)
+        );
+      },
       onRejected: (reason) => {
+        if (!isCurrent()) return;
+        peerRef.current = undefined;
         peer.disconnect();
         if (token && reason === INVALID_RECONNECT_TOKEN) {
           clearReconnectToken(normalizedCode);
@@ -222,6 +265,8 @@ export const useFourPlayerOnlineGame = () => {
         });
       },
       onDisconnected: (roomEnded) => {
+        if (!isCurrent()) return;
+        peerRef.current = undefined;
         if (roomEnded) clearReconnectToken(normalizedCode);
         setState((current) => ({
           ...initialState,
@@ -234,17 +279,23 @@ export const useFourPlayerOnlineGame = () => {
             : "The connection was interrupted. Rejoin the room to resume.",
         }));
       },
-      onError: (error) => setState((current) => ({
-        ...current,
-        connecting: false,
-        awaitingActionId: undefined,
-        error,
-      })),
+      onError: (error) => {
+        if (!isCurrent()) return;
+        setState((current) => ({
+          ...current,
+          connecting: false,
+          awaitingActionId: undefined,
+          error,
+        }));
+      },
     });
+    peerRef.current = peer;
     try {
       await peer.connect(normalizedCode, normalizedName, token);
-      peerRef.current = peer;
+      if (!isCurrent()) peer.disconnect();
     } catch (error) {
+      if (!isCurrent()) return;
+      peerRef.current = undefined;
       peer.disconnect();
       setState({
         ...initialState,
@@ -324,10 +375,13 @@ export const useFourPlayerOnlineGame = () => {
 
   const disconnect = useCallback((forgetToken = true) => {
     const roomCode = stateRef.current.roomCode;
-    hostRef.current?.stop();
-    peerRef.current?.disconnect();
+    attemptGeneration.current += 1;
+    const host = hostRef.current;
+    const peer = peerRef.current;
     hostRef.current = undefined;
     peerRef.current = undefined;
+    host?.stop();
+    peer?.disconnect();
     if (forgetToken) clearReconnectToken(roomCode);
     setState(initialState);
   }, []);
