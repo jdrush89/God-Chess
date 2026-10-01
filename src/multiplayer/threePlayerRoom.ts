@@ -531,7 +531,9 @@ export class ThreePlayerRoomHost {
     }
     participant.connected = false;
     participant.ready = false;
-    if (this.status === "playing") this.status = "paused";
+    if (this.status === "playing" || this.status === "finished") {
+      this.status = "paused";
+    }
     this.publish();
   }
 
@@ -644,9 +646,10 @@ export class ThreePlayerRoomHost {
   }
 
   private completeBoundary(next: ThreePlayerState) {
-    const nextHuman =
+    const completedHumanBoundary =
+      next.phase === "gameover" ||
       next.players[next.activeSeat].control.kind !== "ai";
-    if (stableState(next) && nextHuman && this.chainStart) {
+    if (stableState(next) && completedHumanBoundary && this.chainStart) {
       this.undoStack.push(prepareThreePlayerState(this.chainStart));
       this.chainStart = undefined;
     }
@@ -855,11 +858,14 @@ export class ThreePlayerRoomHost {
 
   private undoAvailable() {
     return Boolean(
-      this.status === "playing" &&
+      (this.status === "playing" || this.status === "finished") &&
       this.canonical &&
       stableState(this.canonical.state) &&
-      this.canonical.state.players[this.canonical.state.activeSeat].control
-          .kind !== "ai" &&
+      (
+        this.canonical.state.phase === "gameover" ||
+        this.canonical.state.players[this.canonical.state.activeSeat].control
+            .kind !== "ai"
+      ) &&
       this.undoStack.length &&
       !this.chainStart &&
       !this.undoProposal &&

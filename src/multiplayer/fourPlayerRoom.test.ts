@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createFourPlayerGame } from "../game/fourPlayerEngine";
+import {
+  availableFourPlayerActions,
+  createFourPlayerGame,
+  fourPlayerReducer,
+} from "../game/fourPlayerEngine";
 import { createFourPlayerStateEnvelope } from "../game/fourPlayerSession";
 import { GODS } from "../game/gods";
 import type {
@@ -322,6 +326,43 @@ describe("four-player authoritative room", () => {
     transport.receive("peer-1", { type: "undo_request" });
     expect(host.snapshot.canonical?.revision).toBe(3);
     expect(host.snapshot.canonical?.state.draft.pickIndex).toBe(1);
+  });
+
+  it("keeps authoritative undo available after the room reaches game over", () => {
+    const { host, transport } = readyTwoHumanRoom();
+    expect(host.startGame()).toBe(true);
+    const canonical = host.snapshot.canonical!;
+    let playable = canonical.state;
+    while (playable.phase === "draft") {
+      playable = fourPlayerReducer(
+        playable,
+        availableFourPlayerActions(playable)[0],
+      );
+    }
+    const finished = structuredClone(playable);
+    finished.phase = "gameover";
+    finished.winner = {
+      seat: "north",
+      reason: "last-player",
+    };
+    Reflect.set(
+      host,
+      "canonical",
+      createFourPlayerStateEnvelope(
+        finished,
+        canonical.revision + 1,
+        "finish",
+      ),
+    );
+    Reflect.set(host, "status", "finished");
+    Reflect.set(host, "undoStack", [playable]);
+
+    host.setHostUndoConsent(true);
+    transport.receive("peer-1", { type: "undo_consent", enabled: true });
+    expect(host.snapshot.undoAvailable).toBe(true);
+    host.requestHostUndo();
+    expect(host.snapshot.status).toBe("playing");
+    expect(host.snapshot.canonical?.state.phase).not.toBe("gameover");
   });
 
   it("ignores canonical room states delivered out of revision order", () => {

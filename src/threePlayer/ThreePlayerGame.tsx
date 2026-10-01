@@ -15,6 +15,12 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { GameResultPresentation } from "../GameResultPresentation";
+import { MatchEscapeMenu } from "../MatchEscapeMenu";
+import {
+  recordActionTransition,
+  recordDiagnostic,
+} from "../diagnostics";
 import {
   chooseThreePlayerAiPlan,
   isThreePlayerAiTurn,
@@ -595,6 +601,7 @@ export function ThreePlayerGame({
   const [helpOpen, setHelpOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [resultOpen, setResultOpen] = useState(initialState.phase === "gameover");
   const [undoEnabled, setUndoEnabled] = useState(undoPreferred);
   const undoStack = useRef<UiState[]>(
     initialUndoHistory.map((snapshot) => clone(snapshot) as UiState),
@@ -616,6 +623,7 @@ export function ThreePlayerGame({
     : undefined;
   const inputDisabled = onlineSession
     ? (
+      state.phase === "gameover" ||
       onlineSession.status !== "playing" ||
       onlineSession.awaitingSync ||
       Boolean(onlineSession.undoProposal) ||
@@ -627,7 +635,8 @@ export function ThreePlayerGame({
       settingsOpen ||
       menuOpen
     )
-    : isThreePlayerAiTurn(state as ThreePlayerState);
+    : state.phase === "gameover" ||
+      isThreePlayerAiTurn(state as ThreePlayerState);
   const selectedCell = state.selectedCell ?? localSelectedCell;
   const moveActions = actions.filter((action) => action.type === "move");
   const legalCells = state.legalCells?.length
@@ -652,6 +661,12 @@ export function ThreePlayerGame({
     if (source === "human" && inputDisabled) return;
     if (onlineSession) {
       if (source === "human") {
+        recordDiagnostic({
+          category: "online",
+          event: "three-player-action-sent",
+          context: { variant: "three-player", role: onlineSession.role },
+          data: { action, phase: current.phase, revision: current.revision },
+        });
         onlineSession.onAction(action as ThreePlayerAction);
       }
       return;
@@ -663,12 +678,22 @@ export function ThreePlayerGame({
       current as ThreePlayerState,
       action as ThreePlayerAction,
     ) as UiState;
+    recordActionTransition({
+      variant: "three-player",
+      mode: "local",
+      source,
+      action,
+      before: current as unknown as Record<string, unknown>,
+      after: next as unknown as Record<string, unknown>,
+    });
     if (next === current) return;
     setLocalSelectedCell(undefined);
     stateRef.current = next;
     setState(next);
-    const nextHuman = next.players[next.activeSeat].control.kind !== "ai";
-    if (isStableState(next) && nextHuman && chainStart.current) {
+    const completedHumanBoundary =
+      next.phase === "gameover" ||
+      next.players[next.activeSeat].control.kind !== "ai";
+    if (isStableState(next) && completedHumanBoundary && chainStart.current) {
       undoStack.current.push(chainStart.current);
       chainStart.current = undefined;
       setUndoDepth(undoStack.current.length);
@@ -689,6 +714,14 @@ export function ThreePlayerGame({
   }, [initialState, onlineSession?.roomCode]);
 
   useEffect(() => {
+    setResultOpen(state.phase === "gameover");
+  }, [state]);
+
+  useEffect(() => {
+    if (onlineSession?.undoProposal) setResultOpen(false);
+  }, [onlineSession?.undoProposal]);
+
+  useEffect(() => {
     if (onlineSession || typeof Worker === "undefined") return;
     const worker = new Worker(
       new URL("../game/threePlayerAi.worker.ts", import.meta.url),
@@ -703,7 +736,31 @@ export function ThreePlayerGame({
       if (stateRef.current.revision !== event.data.revision) return;
       aiRequestRevision.current = undefined;
       aiPlan.current = event.data.plan;
+      recordDiagnostic({
+        category: "ai",
+        event: "three-player-worker-result",
+        context: { variant: "three-player" },
+        data: {
+          revision: event.data.revision,
+          generation: aiPlanReady + 1,
+          actions: event.data.plan,
+        },
+      });
       setAiPlanReady((value) => value + 1);
+    };
+    worker.onerror = (event) => {
+      aiRequestRevision.current = undefined;
+      recordDiagnostic({
+        category: "error",
+        event: "three-player-worker-error",
+        context: { variant: "three-player" },
+        data: {
+          message: event.message,
+          filename: event.filename,
+          line: event.lineno,
+          column: event.colno,
+        },
+      });
     };
     aiWorker.current = worker;
     return () => {
@@ -727,6 +784,12 @@ export function ThreePlayerGame({
       if (aiWorker.current) {
         if (aiRequestRevision.current !== state.revision) {
           aiRequestRevision.current = state.revision;
+          recordDiagnostic({
+            category: "ai",
+            event: "three-player-worker-start",
+            context: { variant: "three-player" },
+            data: { revision: state.revision },
+          });
           aiWorker.current.postMessage(state as ThreePlayerState);
         }
         return;
@@ -734,9 +797,21 @@ export function ThreePlayerGame({
       const revision = state.revision;
       const planningTimer = window.setTimeout(() => {
         if (stateRef.current.revision !== revision) return;
+        recordDiagnostic({
+          category: "ai",
+          event: "three-player-plan-start",
+          context: { variant: "three-player" },
+          data: { revision },
+        });
         aiPlan.current = chooseThreePlayerAiPlan(
           stateRef.current as ThreePlayerState,
         );
+        recordDiagnostic({
+          category: "ai",
+          event: "three-player-plan-result",
+          context: { variant: "three-player" },
+          data: { revision, actions: aiPlan.current },
+        });
         setAiPlanReady((value) => value + 1);
       }, 0);
       return () => window.clearTimeout(planningTimer);
@@ -802,13 +877,23 @@ export function ThreePlayerGame({
       return;
     }
     if (!undoEnabled || !isStableState(stateRef.current)) return;
+    const current = stateRef.current;
     const snapshot = undoStack.current.pop();
     if (!snapshot) return;
     chainStart.current = undefined;
     aiPlan.current = [];
     setLocalSelectedCell(undefined);
     stateRef.current = clone(snapshot);
-    setState(clone(snapshot));
+    const restored = clone(snapshot);
+    setState(restored);
+    recordActionTransition({
+      variant: "three-player",
+      mode: "local",
+      source: "undo",
+      action: { type: "undo" },
+      before: current as unknown as Record<string, unknown>,
+      after: restored as unknown as Record<string, unknown>,
+    });
     setUndoDepth(undoStack.current.length);
   };
 
@@ -832,7 +917,7 @@ export function ThreePlayerGame({
   const canUndo = onlineSession
     ? (
       onlineSession.undoAvailable &&
-      onlineSession.status === "playing" &&
+      onlineSession.status !== "paused" &&
       !onlineSession.awaitingSync &&
       !onlineSession.undoProposal
     )
@@ -852,6 +937,21 @@ export function ThreePlayerGame({
           onUndo={undo}
           roomCode={onlineSession?.roomCode}
         />
+        <MatchEscapeMenu
+          onOpenSettings={onlineSession ? undefined : () => setSettingsOpen(true)}
+          onLeave={() => void saveAndQuit()}
+          leaveLabel={onlineSession ? "Leave room" : "Save & quit"}
+        />
+        {settingsOpen && !onlineSession && (
+          <SettingsModal
+            undoEnabled={undoEnabled}
+            onUndoEnabled={(enabled) => {
+              setUndoEnabled(enabled);
+              onUndoPreferenceChange?.(enabled);
+            }}
+            onClose={() => setSettingsOpen(false)}
+          />
+        )}
         {onlineSession?.status === "paused" && (
           <ThreePlayerPauseOverlay
             seat={onlineSession.pausedSeat}
@@ -887,7 +987,7 @@ export function ThreePlayerGame({
   );
 
   return (
-    <main className={`three-game-page ${inputDisabled ? "input-gated" : ""}`}>
+    <main className={`three-game-page ${state.phase === "gameover" ? "finished-view" : ""} ${inputDisabled ? "input-gated" : ""}`}>
       <header className="three-game-topbar">
         <div>
           <p className="eyebrow">{variant?.name ?? "THREE-PLAYER"}</p>
@@ -1082,6 +1182,34 @@ export function ThreePlayerGame({
         </aside>
       </section>
 
+      {state.phase === "gameover" && (
+        <GameResultPresentation
+          open={resultOpen}
+          eyebrow="MATCH COMPLETE"
+          title={state.result?.kind === "winner"
+            ? `${state.players[state.result.seat].name} wins`
+            : "Draw"}
+          description={state.result?.reason.replaceAll("-", " ") ?? "The match is complete."}
+          newGameLabel="New three-player game"
+          undoEnabled={onlineSession ? true : undoEnabled}
+          canUndo={canUndo}
+          onOpenChange={setResultOpen}
+          onUndo={undo}
+          onOpenUndoSettings={onlineSession ? undefined : () => setSettingsOpen(true)}
+          onNewGame={onNewGame}
+        />
+      )}
+      {helpOpen && <HelpModal onClose={() => setHelpOpen(false)} />}
+      {settingsOpen && (
+        <SettingsModal
+          undoEnabled={undoEnabled}
+          onUndoEnabled={(enabled) => {
+            setUndoEnabled(enabled);
+            onUndoPreferenceChange?.(enabled);
+          }}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
       {onlineSession?.status === "paused" && (
         <ThreePlayerPauseOverlay
           seat={onlineSession.pausedSeat}
@@ -1096,27 +1224,11 @@ export function ThreePlayerGame({
           onVote={onlineSession.onUndoVote}
         />
       )}
-      {state.phase === "gameover" && (
-        <div className="modal-backdrop">
-          <section className="gameover-modal">
-            <p className="eyebrow">MATCH COMPLETE</p>
-            <h2>{state.result?.kind === "winner" ? `${state.players[state.result.seat].name} wins` : "Draw"}</h2>
-            <p>{state.result?.reason.replaceAll("-", " ")}</p>
-            <button className="primary-button" onClick={onNewGame}>New three-player game</button>
-          </section>
-        </div>
-      )}
-      {helpOpen && <HelpModal onClose={() => setHelpOpen(false)} />}
-      {settingsOpen && (
-        <SettingsModal
-          undoEnabled={undoEnabled}
-          onUndoEnabled={(enabled) => {
-            setUndoEnabled(enabled);
-            onUndoPreferenceChange?.(enabled);
-          }}
-          onClose={() => setSettingsOpen(false)}
-        />
-      )}
+      <MatchEscapeMenu
+        onOpenSettings={onlineSession ? undefined : () => setSettingsOpen(true)}
+        onLeave={() => void saveAndQuit()}
+        leaveLabel={onlineSession ? "Leave room" : "Save & quit"}
+      />
     </main>
   );
 }

@@ -812,6 +812,65 @@ body::before {
 .victory-crown svg, .save-game-icon svg, .graveyard-icon svg, .settings-icon svg { transform: rotate(-45deg); }
 .rules-modal h2, .gameover-modal h2, .save-game-modal h2, .graveyard-modal h2, .settings-modal h2 { margin: 9px 0; font: 600 27px "Cinzel"; }
 .gameover-modal > p:not(.eyebrow), .save-game-modal > p:not(.eyebrow), .graveyard-modal > p:not(.eyebrow) { color: #85868d; font-size: 12px; }
+.game-result-actions {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 28px;
+}
+.game-result-actions button {
+  min-width: 0; display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+}
+.finished-result-control {
+  position: fixed; z-index: 35; left: 50%; bottom: 18px; width: min(680px, calc(100vw - 24px));
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center;
+  padding: 11px 12px; color: #e9e2d3; background: rgba(15,17,23,.96);
+  border: 1px solid rgba(198,161,91,.55); box-shadow: 0 18px 50px rgba(0,0,0,.48);
+  transform: translateX(-50%);
+}
+.finished-result-control > span { min-width: 0; display: grid; gap: 2px; text-align: left; }
+.finished-result-control strong { font: 600 11px "Cinzel"; }
+.finished-result-control small { overflow: hidden; color: #8f9096; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.finished-result-control button {
+  min-height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+}
+.finished-view .turn-notice p { color: #a6a096; }
+.escape-menu-trigger {
+  position: fixed; z-index: 34; right: 14px; bottom: 14px; min-height: 40px;
+  display: inline-flex; align-items: center; gap: 7px; padding: 9px 12px;
+  color: #e6ddca; background: rgba(15,17,23,.94); border: 1px solid rgba(198,161,91,.45);
+  box-shadow: 0 12px 32px rgba(0,0,0,.42); cursor: pointer;
+}
+.finished-result-control + .escape-menu-trigger { bottom: 88px; }
+.escape-menu-backdrop {
+  position: fixed; z-index: 70; inset: 0; display: grid; place-items: center; padding: 24px;
+  background: rgba(5,6,9,.88); backdrop-filter: blur(8px);
+}
+.escape-menu-dialog {
+  position: relative; width: min(720px, 100%); max-height: calc(100vh - 48px); overflow: auto;
+  padding: 36px; text-align: center; background: linear-gradient(145deg, #1b1d25, #101218);
+  border: 1px solid rgba(198,161,91,.4); box-shadow: 0 40px 100px rgba(0,0,0,.58);
+}
+.escape-menu-dialog h2 { margin: 9px 0; font: 600 27px "Cinzel"; }
+.escape-menu-dialog > p:not(.eyebrow) { color: #85868d; font-size: 11px; }
+.escape-menu-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 26px; }
+.escape-menu-actions button, .copy-report-button {
+  min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+}
+.bug-description { display: grid; gap: 7px; margin-top: 22px; text-align: left; }
+.bug-description span { color: #c7c1b6; font: 600 10px "Cinzel"; }
+.bug-description small { color: #74767d; font: 8px system-ui; text-transform: uppercase; }
+.bug-description textarea, .debug-report-fallback {
+  width: 100%; min-height: 82px; resize: vertical; padding: 11px; color: #d6d3cc;
+  background: #0b0d12; border: 1px solid #30323a; font: 11px/1.5 system-ui;
+}
+.debug-report-preview {
+  max-height: 280px; margin: 12px 0; overflow: auto; text-align: left;
+  background: #090b0f; border: 1px solid var(--line);
+}
+.debug-report-preview pre {
+  min-width: 0; margin: 0; padding: 12px; color: #aaa69d; font: 9px/1.5 ui-monospace, monospace;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.debug-report-feedback { color: #d7c18a !important; }
+.debug-report-fallback { min-height: 150px; margin-top: 10px; font-family: ui-monospace, monospace; }
 .save-game-modal { width: min(460px, 100%); }
 .save-game-actions { display: grid; gap: 10px; margin-top: 28px; }
 .save-game-actions .secondary-button { width: 100%; }
@@ -1184,6 +1243,11 @@ body::before {
   .draft-card .god-card-portrait { object-position: center 42%; }
 }
 
+@media (max-width: 820px) {
+  .game-meta, .header-actions span { display: none; }
+  .header-actions button { padding: 8px; }
+}
+
 @media (max-width: 640px) {
   .main-menu-art { object-position: center top; }
   .main-menu-actions { margin-bottom: 18px; padding: 16px; }
@@ -1195,8 +1259,7 @@ body::before {
   .saved-pantheon { grid-template-columns: 28px 1fr; }
   .saved-gods { grid-column: 2; justify-content: flex-start; }
   .topbar { height: 64px; padding: 0 16px; }
-  .brand-subtitle, .game-meta, .header-actions span { display: none; }
-  .header-actions button { padding: 8px; }
+  .brand-subtitle { display: none; }
   .draft-hero { padding-top: 40px; }
   .draft-layout { width: calc(100% - 24px); }
   .pantheon-grid { grid-template-columns: 1fr; }
@@ -1529,6 +1592,16 @@ body::before {
 }
 
 @media (max-width: 760px) {
+  .game-result-actions { grid-template-columns: 1fr; }
+  .finished-result-control {
+    bottom: 8px; grid-template-columns: 1fr 1fr;
+  }
+  .finished-result-control > span { grid-column: 1 / -1; }
+  .escape-menu-trigger { right: 8px; bottom: 8px; }
+  .finished-result-control + .escape-menu-trigger { bottom: 126px; }
+  .escape-menu-backdrop { padding: 10px; }
+  .escape-menu-dialog { max-height: calc(100vh - 20px); padding: 30px 16px 18px; }
+  .escape-menu-actions { grid-template-columns: 1fr; }
   .three-setup-page { padding: 28px 12px; }
   .three-setup-header { padding-right: 42px; }
   .three-variant-grid { grid-template-columns: 1fr 1fr; }

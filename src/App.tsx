@@ -79,6 +79,13 @@ import {
   useThreePlayerOnlineGame,
   type ThreePlayerOnlineState,
 } from "./multiplayer/useThreePlayerOnlineGame";
+import { GameResultPresentation } from "./GameResultPresentation";
+import { MatchEscapeMenu } from "./MatchEscapeMenu";
+import {
+  installGlobalDiagnostics,
+  recordActionTransition,
+  recordDiagnostic,
+} from "./diagnostics";
 import {
   createSavedGame,
   loadLocalSavedGames,
@@ -2200,6 +2207,8 @@ function GameScreen({
   const [inspectedGodId, setInspectedGodId] = useState<GodId>();
   const [inspectedSquare, setInspectedSquare] = useState<Square>();
   const [graveyardColor, setGraveyardColor] = useState<Color>();
+  const gameFinished = !state.puzzleId && state.phase === "gameover";
+  const [resultOpen, setResultOpen] = useState(gameFinished);
   const kingInCheck = state.phase === "play" && isInCheck(state.board, state.activeColor, state.bananas);
   const puzzle = state.puzzleId ? PUZZLE_BY_ID[state.puzzleId] : undefined;
   const difficultyPuzzles = puzzle
@@ -2272,6 +2281,10 @@ function GameScreen({
   useEffect(() => {
     setPuzzleHintOpen(false);
   }, [state.puzzleId]);
+
+  useEffect(() => {
+    setResultOpen(gameFinished);
+  }, [gameFinished, state]);
 
   useEffect(() => {
     setPuzzleVictoryReady(false);
@@ -2504,6 +2517,10 @@ function GameScreen({
   ]);
 
   const handleGodClick = (godId: GodId, color: Color) => {
+    if (gameFinished) {
+      setInspectedGodId(godId);
+      return;
+    }
     if (state.phase === "upgrade") {
       setInspectedGodId(godId);
       return;
@@ -2515,8 +2532,12 @@ function GameScreen({
     }
     setInspectedGodId(godId);
   };
+  const gameDispatch: GameDispatch = (action) => {
+    if (gameFinished) return;
+    dispatch(action);
+  };
   return (
-    <main className={`game-page ${puzzle ? "puzzle-mode" : ""} ${state.lastAction ? "has-last-action" : ""} ${inputDisabled || opponentPresentation ? "input-locked" : ""}`}>
+    <main className={`game-page ${puzzle ? "puzzle-mode" : ""} ${state.lastAction ? "has-last-action" : ""} ${gameFinished ? "finished-view" : ""} ${inputDisabled || opponentPresentation ? "input-locked" : ""}`}>
       <header className="topbar">
         <Brand />
         <div className="game-meta">
@@ -2621,7 +2642,7 @@ function GameScreen({
           />
           <ChessBoard
             state={state}
-            dispatch={dispatch}
+            dispatch={gameDispatch}
             onInspectSquare={setInspectedSquare}
           />
           <PlayerBar
@@ -2639,18 +2660,18 @@ function GameScreen({
           {state.phase === "upgrade" ? (
             <UpgradePanel
               state={state}
-              dispatch={dispatch}
+              dispatch={gameDispatch}
               selectedGodId={inspectedGodId}
               presentation={opponentPresentation}
               onCloseGod={() => {
                 setInspectedGodId(undefined);
-                dispatch({ type: "preview-upgrade" });
+                gameDispatch({ type: "preview-upgrade" });
               }}
             />
           ) : (
             <ActionPanel
               state={state}
-              dispatch={dispatch}
+              dispatch={gameDispatch}
               inspectedGodId={inspectedGodId}
               presentation={opponentPresentation}
               onInspectGod={setInspectedGodId}
@@ -2748,16 +2769,22 @@ function GameScreen({
           </section>
         </div>
       )}
-      {!puzzle && state.phase === "gameover" && (
-        <div className="modal-backdrop">
-          <section className="gameover-modal">
-            <div className="victory-crown"><Crown size={38} /></div>
-            <p className="eyebrow">THE DIVINE GAME ENDS</p>
-            <h2>{state.winner ? `${colorLabel(state.winner)} is victorious` : "Stalemate"}</h2>
-            <p>{state.winner ? `${state.players[state.winner].name} has conquered the opposing pantheon.` : "Neither pantheon can make a legal move."}</p>
-            <button className="primary-button" onClick={onRestart}>Begin a new game</button>
-          </section>
-        </div>
+      {gameFinished && (
+        <GameResultPresentation
+          open={resultOpen}
+          eyebrow="THE DIVINE GAME ENDS"
+          title={state.winner ? `${colorLabel(state.winner)} is victorious` : "Stalemate"}
+          description={state.winner
+            ? `${state.players[state.winner].name} has conquered the opposing pantheon.`
+            : "Neither pantheon can make a legal move."}
+          newGameLabel="Begin a new game"
+          undoEnabled={undoEnabled}
+          canUndo={canUndo}
+          onOpenChange={setResultOpen}
+          onUndo={onUndo}
+          onOpenUndoSettings={onOpenSettings}
+          onNewGame={onRestart}
+        />
       )}
     </main>
   );
@@ -2765,6 +2792,7 @@ function GameScreen({
 
 export default function App() {
   const accountService = useAccount();
+  useEffect(() => installGlobalDiagnostics(), []);
   const [localSavedGames, setLocalSavedGames] = useState(loadLocalSavedGames);
   const [cloudSavedGames, setCloudSavedGames] = useState<SavedGame[]>([]);
   const [savesLoading, setSavesLoading] = useState(false);
@@ -2965,6 +2993,14 @@ export default function App() {
       updateUndoDepth();
       turnStart.current = next.phase === "play" ? prepareSavedState(next) : undefined;
     }
+    recordActionTransition({
+      variant: "classic",
+      mode: current.gameMode,
+      source: current.gameMode === "online" ? "online" : isAiTurn(current) ? "ai" : "human",
+      action,
+      before: current as unknown as Record<string, unknown>,
+      after: next as unknown as Record<string, unknown>,
+    });
     return next;
   };
   const canApplyUndo = () => {
@@ -2991,6 +3027,14 @@ export default function App() {
     turnStart.current = next.phase === "play" ? prepareSavedState(next) : undefined;
     aiPlan.current = [];
     receiveState(next);
+    recordActionTransition({
+      variant: "classic",
+      mode: current.gameMode,
+      source: "undo",
+      action: { type: "undo" },
+      before: current as unknown as Record<string, unknown>,
+      after: next as unknown as Record<string, unknown>,
+    });
     return next;
   };
   const applyRemoteAction = (action: GameAction) => {
@@ -3024,6 +3068,12 @@ export default function App() {
       const localColor = onlinePlayerColor(online, current.onlineHostColor);
       if (!localColor || current.activeColor !== localColor) return;
       if (online.role === "peer") {
+        recordDiagnostic({
+          category: "online",
+          event: "classic-action-sent",
+          context: { variant: "classic", role: "peer" },
+          data: { action },
+        });
         onlineActions.sendAction(action);
         return;
       }
@@ -3152,7 +3202,21 @@ export default function App() {
       aiPlan.current = [];
       return;
     }
-    if (!aiPlan.current.length) aiPlan.current = chooseAiPlan(state);
+    if (!aiPlan.current.length) {
+      recordDiagnostic({
+        category: "ai",
+        event: "classic-plan-start",
+        context: { variant: "classic", mode: state.gameMode },
+        data: { phase: state.phase, activeColor: state.activeColor, turn: state.turn },
+      });
+      aiPlan.current = chooseAiPlan(state);
+      recordDiagnostic({
+        category: "ai",
+        event: "classic-plan-result",
+        context: { variant: "classic", mode: state.gameMode },
+        data: { actions: aiPlan.current },
+      });
+    }
     const action = aiPlan.current[0];
     if (!action) return;
     const timer = window.setTimeout(() => {
@@ -3165,6 +3229,86 @@ export default function App() {
   useEffect(() => {
     if (online.started) setStartView("none");
   }, [online.started]);
+
+  useEffect(() => {
+    recordDiagnostic({
+      category: "online",
+      event: "classic-lifecycle",
+      context: { variant: "classic" },
+      data: {
+        role: online.role,
+        connecting: online.connecting,
+        started: online.started,
+        awaitingSync: online.awaitingSync,
+        undoAvailable: online.undoAvailable,
+        error: online.error,
+      },
+    });
+  }, [
+    online.awaitingSync,
+    online.connecting,
+    online.error,
+    online.role,
+    online.started,
+    online.undoAvailable,
+  ]);
+
+  useEffect(() => {
+    recordDiagnostic({
+      category: "online",
+      event: "four-player-lifecycle",
+      context: { variant: "four-player" },
+      data: {
+        role: fourOnline.role,
+        connecting: fourOnline.connecting,
+        status: fourOnline.snapshot?.status,
+        revision: fourOnline.snapshot?.canonical?.revision,
+        awaitingAction: Boolean(fourOnline.awaitingActionId),
+        undoAvailable: fourOnline.snapshot?.undoAvailable,
+        error: fourOnline.error,
+      },
+    });
+  }, [
+    fourOnline.awaitingActionId,
+    fourOnline.connecting,
+    fourOnline.error,
+    fourOnline.role,
+    fourOnline.snapshot?.canonical?.revision,
+    fourOnline.snapshot?.status,
+    fourOnline.snapshot?.undoAvailable,
+  ]);
+
+  useEffect(() => {
+    recordDiagnostic({
+      category: "online",
+      event: "three-player-lifecycle",
+      context: { variant: "three-player" },
+      data: {
+        role: threeOnline.role,
+        connecting: threeOnline.connecting,
+        status: threeOnline.snapshot?.status,
+        revision: threeOnline.snapshot?.canonical?.revision,
+        awaitingAction: Boolean(threeOnline.awaitingActionId),
+        undoAvailable: threeOnline.snapshot?.undoAvailable,
+        undoVote: threeOnline.snapshot?.undoProposal
+          ? {
+            eligibleCount: threeOnline.snapshot.undoProposal.eligibleCount,
+            approvedCount: threeOnline.snapshot.undoProposal.approvedCount,
+          }
+          : undefined,
+        error: threeOnline.error,
+      },
+    });
+  }, [
+    threeOnline.awaitingActionId,
+    threeOnline.connecting,
+    threeOnline.error,
+    threeOnline.role,
+    threeOnline.snapshot?.canonical?.revision,
+    threeOnline.snapshot?.status,
+    threeOnline.snapshot?.undoAvailable,
+    threeOnline.snapshot?.undoProposal?.approvedCount,
+  ]);
 
   useEffect(() => {
     if (fourOnline.snapshot?.canonical) {
@@ -3707,6 +3851,21 @@ export default function App() {
           remoteConsent={onlineSession ? remoteUndoConsent : false}
           onUndoPreferenceChange={changeUndoPreference}
           onClose={() => setSettingsOpen(false)}
+        />
+      )}
+      {startView === "none" && (
+        <MatchEscapeMenu
+          onOpenSettings={state.gameMode === "puzzle"
+            ? undefined
+            : () => setSettingsOpen(true)}
+          onLeave={state.gameMode === "online" || state.gameMode === "puzzle"
+            ? openNewGame
+            : () => void saveAndQuit()}
+          leaveLabel={state.gameMode === "online"
+            ? "Leave room"
+            : state.gameMode === "puzzle"
+              ? "Leave puzzle"
+              : "Save & quit"}
         />
       )}
       {startView === "setup" && (

@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { createFourPlayerGame, fourPlayerReducer } from "./game/fourPlayerEngine";
 import { createThreePlayerGame, threePlayerReducer } from "./game/threePlayerEngine";
 import { createGame } from "./game/engine";
+import { GODS } from "./game/gods";
 import {
   createSavedGame,
   isFourPlayerSavedGame,
@@ -27,6 +28,22 @@ describe("saved-game variants", () => {
     expect(normalized.state.variant).toBe("four-player");
     expect(normalized.state.players.north.gods).toEqual(["ares"]);
     expect(normalized.undoHistory).toHaveLength(1);
+  });
+
+  it("rejects coercible nested numeric strings in four-player saves", () => {
+    const base = createFourPlayerGame();
+    const pieceId = Object.keys(base.board)[0];
+    const prepared = structuredClone(base) as unknown as {
+      board: Record<string, { status: { prepared?: { owner: string; level: string } } }>;
+    };
+    prepared.board[pieceId].status.prepared = { owner: "north", level: "2" };
+    expect(normalizeSavedGame(createSavedGame("four", prepared as never, []))).toBeUndefined();
+
+    const upgrades = structuredClone(base) as unknown as {
+      players: { north: { upgrades: Record<string, string> } };
+    };
+    upgrades.players.north.upgrades[GODS[0].abilities[0].id] = "2";
+    expect(normalizeSavedGame(createSavedGame("four", upgrades as never, []))).toBeUndefined();
   });
   it("rejects mixed-variant undo histories", () => {
     const state = createFourPlayerGame();

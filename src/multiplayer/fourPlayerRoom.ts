@@ -698,7 +698,7 @@ export class FourPlayerRoomHost {
 
   private undoAvailable() {
     if (
-      this.status !== "playing" ||
+      (this.status !== "playing" && this.status !== "finished") ||
       !this.canonical ||
       !stableState(this.canonical.state) ||
       !this.undoStack.length

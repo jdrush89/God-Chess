@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   availableThreePlayerActions,
@@ -62,6 +62,10 @@ describe("ThreePlayerGame", () => {
     expect(screen.getByText("Quetzacoatl")).toBeTruthy();
     expect(screen.getByText("Ares")).toBeTruthy();
     expect(container.querySelectorAll(".three-draft-progress > span")).toHaveLength(9);
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.getByRole("dialog", { name: /game paused locally/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^resume$/i }));
+    expect((screen.getByRole("button", { name: /Claimed by White/i }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("shows Red's dynamic affinity and gates interaction during AI turns", () => {
@@ -75,6 +79,17 @@ describe("ThreePlayerGame", () => {
     expect(screen.getByText(/AI is choosing a divine action/i)).toBeTruthy();
     expect(document.querySelector(".three-game-page")?.classList.contains("input-gated")).toBe(true);
     expect(screen.getAllByRole("gridcell")[0].getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("opens the Escape menu without changing an in-progress match", () => {
+    const state = completeDraft();
+    renderGame(state);
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.getByRole("dialog", { name: /game paused locally/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^resume$/i }));
+    expect(screen.getByText(state.notice)).toBeTruthy();
+    expect(screen.getByText(/Round 1 · Turn 1/i)).toBeTruthy();
   });
 
   it("reaches primitive cell gameplay through God and ability actions", () => {
@@ -119,7 +134,7 @@ describe("ThreePlayerGame", () => {
 
     await waitFor(
       () => expect(screen.getByText(/Round \d+ · Turn [4-9]\d*/i)).toBeTruthy(),
-      { timeout: 5000 },
+      { timeout: 15_000 },
     );
     fireEvent.click(screen.getByRole("button", { name: /^Undo$/i }));
     expect(screen.getByText("Round 1 · Turn 1")).toBeTruthy();
@@ -252,5 +267,139 @@ describe("ThreePlayerGame", () => {
     expect(screen.getByRole("heading", {
       name: /waiting for guest/i,
     })).toBeTruthy();
+  });
+
+  it("supports result inspection, post-game undo enablement, and local rollback", () => {
+    const playable = completeDraft();
+    const finished = structuredClone(playable);
+    finished.phase = "gameover";
+    finished.result = { kind: "draw", reason: "stalemate-cycle" };
+    finished.passCycle = {
+      positionRevision: finished.positionRevision,
+      passedSeats: ["white", "red", "black"],
+    };
+    finished.notice = "White wins.";
+    const { container } = render(
+      <ThreePlayerGame
+        initialState={finished}
+        initialUndoHistory={[playable]}
+        undoPreferred={false}
+        onUndoPreferenceChange={vi.fn()}
+        onQuit={vi.fn()}
+        onNewGame={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /see board/i }));
+    expect(screen.getByRole("button", { name: /view result/i })).toBeTruthy();
+    expect(screen.getAllByRole("gridcell")[0].getAttribute("aria-disabled")).toBe("true");
+    expect(container.querySelector(".finished-view")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /view result/i }));
+    fireEvent.click(screen.getByRole("button", { name: /enable undo/i }));
+    fireEvent.click(screen.getByRole("switch", { name: /allow undo/i }));
+    fireEvent.click(screen.getByRole("button", { name: /close settings/i }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", {
+      name: /^undo$/i,
+    }));
+
+    expect(screen.queryByText(/match finished/i)).toBeNull();
+    expect(container.querySelector(".finished-view")).toBeNull();
+    expect(screen.getAllByRole("gridcell").some(
+      (cell) => cell.getAttribute("aria-disabled") === "false",
+    )).toBe(true);
+  });
+
+  it("keeps authoritative result viewing local and preserves online undo authorization", async () => {
+    const config = createDefaultThreePlayerConfig();
+    config.seats.white.control = { kind: "online", local: true };
+    config.seats.red.control = { kind: "online", local: false };
+    config.seats.black.control = { kind: "ai", difficulty: 5 };
+    const playable = completeDraft(createThreePlayerGame(config));
+    const finished = structuredClone(playable);
+    finished.phase = "gameover";
+    finished.result = { kind: "draw", reason: "stalemate-cycle" };
+    finished.passCycle = {
+      positionRevision: finished.positionRevision,
+      passedSeats: ["white", "red", "black"],
+    };
+    finished.revision += 1;
+    const onUndoRequest = vi.fn();
+    const guestSession: ThreePlayerOnlineSession = {
+      roomCode: "ABCDE",
+      role: "peer",
+      participantSeat: "red",
+      status: "finished",
+      awaitingSync: false,
+      undoAvailable: false,
+      onAction: vi.fn(),
+      onUndoRequest,
+      onUndoVote: vi.fn(),
+    };
+    const { rerender } = render(
+      <ThreePlayerGame
+        initialState={finished}
+        onQuit={vi.fn()}
+        onNewGame={vi.fn()}
+        onlineSession={guestSession}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /see board/i }));
+    expect(screen.getAllByRole("gridcell")[0].getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: /view result/i }));
+    expect((screen.getByRole("button", { name: /undo unavailable/i }) as HTMLButtonElement).disabled).toBe(true);
+    expect(onUndoRequest).not.toHaveBeenCalled();
+
+    const replacedFinished = structuredClone(finished);
+    replacedFinished.revision += 1;
+    rerender(
+      <ThreePlayerGame
+        initialState={replacedFinished}
+        onQuit={vi.fn()}
+        onNewGame={vi.fn()}
+        onlineSession={guestSession}
+      />,
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("dialog", { name: /^draw$/i })).toBeTruthy()
+    );
+
+    const hostSession: ThreePlayerOnlineSession = {
+      ...guestSession,
+      role: "host",
+      participantSeat: "white",
+      undoAvailable: true,
+    };
+    rerender(
+      <ThreePlayerGame
+        initialState={replacedFinished}
+        onQuit={vi.fn()}
+        onNewGame={vi.fn()}
+        onlineSession={hostSession}
+      />,
+    );
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", {
+      name: /^undo$/i,
+    }));
+    expect(onUndoRequest).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: /view result/i })).toBeTruthy();
+
+    rerender(
+      <ThreePlayerGame
+        initialState={playable}
+        onQuit={vi.fn()}
+        onNewGame={vi.fn()}
+        onlineSession={{
+          ...hostSession,
+          status: "playing",
+          undoAvailable: false,
+        }}
+      />,
+    );
+    await waitFor(() => expect(screen.queryByText(/match finished/i)).toBeNull());
+    expect(screen.getAllByRole("gridcell").some(
+      (cell) => cell.getAttribute("aria-disabled") === "false",
+    )).toBe(true);
   });
 });

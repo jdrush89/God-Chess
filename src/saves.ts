@@ -182,7 +182,9 @@ const isPieceStatus = (value: unknown): value is PieceStatus => {
       isRecord(value.prepared) &&
       hasOnlyKeys(value.prepared, ["owner", "level"]) &&
       isColor(value.prepared.owner) &&
-      [1, 2, 3].includes(Number(value.prepared.level))
+      typeof value.prepared.level === "number" &&
+      Number.isInteger(value.prepared.level) &&
+      [1, 2, 3].includes(value.prepared.level)
     )
   ) return false;
   if (
@@ -234,7 +236,10 @@ const isPiece = (value: unknown): value is Piece =>
 const isUpgrades = (value: unknown) =>
   isRecord(value) &&
   Object.entries(value).every(([abilityId, level]) =>
-    ABILITY_IDS.has(abilityId) && [1, 2, 3].includes(Number(level))
+    ABILITY_IDS.has(abilityId) &&
+    typeof level === "number" &&
+    Number.isInteger(level) &&
+    [1, 2, 3].includes(level)
   );
 
 const isPlayerState = (
@@ -455,7 +460,9 @@ export const isTwoPlayerGameState = (state: unknown): state is GameState => {
     !isPlayerState(state.players.white, "white") ||
     !isPlayerState(state.players.black, "black") ||
     !isColor(state.activeColor) ||
-    ![1, 2].includes(Number(state.whitePlayer)) ||
+    typeof state.whitePlayer !== "number" ||
+    !Number.isInteger(state.whitePlayer) ||
+    ![1, 2].includes(state.whitePlayer) ||
     !isRecord(state.draft) ||
     !hasOnlyKeys(state.draft, ["order", "pickIndex", "available"]) ||
     !isColorArray(state.draft.order) ||

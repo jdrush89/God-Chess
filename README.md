@@ -107,6 +107,15 @@ bananas, takeover controllers, and stalemate-cycle metadata. Undo operates at
 stable draft, completed-turn, and upgrade boundaries; in mixed games it rewinds
 the following AI chain together with the preceding Human action.
 
+During any match, press **Escape** or use **Menu** to pause the interface locally
+without changing the canonical game or cancelling a committed action. The menu
+provides mode-appropriate Settings and leave/save controls plus **Report bug**,
+which previews and copies a bounded diagnostic report with room credentials,
+participant identifiers, and player display names redacted. When a match ends,
+**See board** dismisses the result overlay for final-position inspection; use
+**View result** to reopen it. The finished board remains read-only, while Undo
+continues to follow the match type's existing local or unanimous-online rules.
+
 ## Three-player online
 
 Choose **Online versus**, then **Three-player**, to host or join an

@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { availableThreePlayerActions } from "../game/threePlayerEngine";
+import {
+  availableThreePlayerActions,
+  threePlayerReducer,
+} from "../game/threePlayerEngine";
+import { createThreePlayerStateEnvelope } from "../game/threePlayerSession";
 import { THREE_PLAYER_BOARD_VARIANTS } from "../game/threePlayerTypes";
 import { GODS } from "../game/gods";
 import type {
@@ -368,6 +372,90 @@ describe("three-player authoritative room", () => {
     expect(host.snapshot.canonical?.state.draft.pickIndex).toBe(0);
     expect(host.snapshot.canonical?.revision).toBe(2);
     expect(host.snapshot.canonical?.lastActionId).toBe(approved.requestId);
+  });
+
+  it("coordinates authoritative unanimous undo from a finished room", () => {
+    const { host, transport } = readyTwoHumanRoom();
+    expect(host.startGame()).toBe(true);
+    const canonical = host.snapshot.canonical!;
+    let playable = canonical.state;
+    while (playable.phase === "draft") {
+      playable = threePlayerReducer(
+        playable,
+        availableThreePlayerActions(playable)[0],
+      );
+    }
+    const finished = structuredClone(playable);
+    finished.phase = "gameover";
+    finished.result = { kind: "draw", reason: "stalemate-cycle" };
+    finished.passCycle = {
+      positionRevision: finished.positionRevision,
+      passedSeats: ["white", "red", "black"],
+    };
+    finished.revision = canonical.revision + 1;
+    Reflect.set(
+      host,
+      "canonical",
+      createThreePlayerStateEnvelope(
+        finished,
+        "finish",
+      ),
+    );
+    Reflect.set(host, "status", "finished");
+    Reflect.set(host, "undoStack", [playable]);
+
+    expect(host.snapshot.undoAvailable).toBe(true);
+    expect(host.requestHostUndo()).toBe(true);
+    const proposal = host.snapshot.undoProposal!;
+    transport.receive("peer-1", {
+      type: "undo_vote",
+      requestId: proposal.requestId,
+      targetRevision: proposal.targetRevision,
+      approved: true,
+    });
+    expect(host.snapshot.status).toBe("playing");
+    expect(host.snapshot.canonical?.state.phase).not.toBe("gameover");
+  });
+
+  it("pauses finished rooms until a disconnected Human reconnects or is replaced", () => {
+    const { host, transport, accepted } = readyTwoHumanRoom();
+    expect(host.startGame()).toBe(true);
+    const canonical = host.snapshot.canonical!;
+    let playable = canonical.state;
+    while (playable.phase === "draft") {
+      playable = threePlayerReducer(
+        playable,
+        availableThreePlayerActions(playable)[0],
+      );
+    }
+    const finished = structuredClone(playable);
+    finished.phase = "gameover";
+    finished.result = { kind: "draw", reason: "stalemate-cycle" };
+    finished.passCycle = {
+      positionRevision: finished.positionRevision,
+      passedSeats: ["white", "red", "black"],
+    };
+    Reflect.set(
+      host,
+      "canonical",
+      createThreePlayerStateEnvelope(finished, "finish"),
+    );
+    Reflect.set(host, "status", "finished");
+    Reflect.set(host, "undoStack", [playable]);
+
+    transport.disconnectPeer("peer-1");
+    expect(host.snapshot.status).toBe("paused");
+    expect(host.snapshot.undoAvailable).toBe(false);
+    expect(host.requestHostUndo()).toBe(false);
+
+    expect(join(
+      transport,
+      "peer-reconnected",
+      "Guest",
+      accepted.reconnectToken,
+    )?.participantId).toBe(accepted.participantId);
+    expect(host.snapshot.status).toBe("finished");
+    expect(host.snapshot.undoAvailable).toBe(true);
   });
 
   it("ignores canonical room states delivered out of revision order", () => {

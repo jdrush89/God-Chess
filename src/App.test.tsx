@@ -68,9 +68,25 @@ import { createDefaultThreePlayerConfig } from "./game/threePlayerConfig";
 import { createThreePlayerGame } from "./game/threePlayerEngine";
 import { createThreePlayerStateEnvelope } from "./game/threePlayerSession";
 import { PUZZLES } from "./game/puzzles";
+import { createSavedGame } from "./saves";
 
 const SAVE_KEY = "god-chess-saves-v2";
 const LEGACY_SAVE_KEY = "god-chess-save-v1";
+
+const completeClassicDraft = () => {
+  let state = createGame(1);
+  for (const godId of [
+    "quetzacoatl",
+    "chiron",
+    "midas",
+    "death",
+    "artemis",
+    "medusa",
+  ] as const) {
+    state = gameReducer(state, { type: "draft", godId });
+  }
+  return state;
+};
 
 const activeThreeOnlineState = (
   status: "playing" | "paused" = "playing",
@@ -182,6 +198,43 @@ describe("game startup", () => {
     expect(screen.getByRole("button", { name: /^two-player$/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /^four-player$/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /^three-player$/i })).toBeTruthy();
+  });
+
+  describe("finished classic matches", () => {
+    it("reveals the final board, reopens the result, enables undo, and resumes play", () => {
+      const playable = completeClassicDraft();
+      const finished = structuredClone(playable);
+      finished.phase = "gameover";
+      finished.winner = "white";
+      finished.lastAction = "White captured the Black King.";
+      finished.notice = "White wins.";
+      window.localStorage.setItem(SAVE_KEY, JSON.stringify([
+        createSavedGame("finished-classic", finished, [playable], playable),
+      ]));
+
+      const { container } = render(<App />);
+      fireEvent.click(screen.getByRole("button", { name: /load game/i }));
+      fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
+
+      expect(screen.getByRole("dialog", { name: /white is victorious/i })).toBeTruthy();
+      fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+      expect(screen.queryByRole("dialog", { name: /white is victorious/i })).toBeNull();
+      expect(screen.getByRole("button", { name: /view result/i })).toBeTruthy();
+      expect(container.querySelector(".finished-view")).toBeTruthy();
+      expect(screen.getByText("White captured the Black King.")).toBeTruthy();
+
+      fireEvent.click(screen.getByRole("button", { name: /view result/i }));
+      fireEvent.click(screen.getByRole("button", { name: /enable undo/i }));
+      fireEvent.click(screen.getByRole("switch", { name: /allow undo/i }));
+      fireEvent.click(screen.getByRole("button", { name: /close settings/i }));
+      fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", {
+        name: /^undo$/i,
+      }));
+
+      expect(screen.queryByText(/match finished/i)).toBeNull();
+      expect(container.querySelector(".finished-view")).toBeNull();
+      expect(screen.getByText(playable.notice)).toBeTruthy();
+    });
   });
 
   it("opens the local three-player setup without exposing an online room mode", () => {
@@ -382,6 +435,10 @@ describe("game startup", () => {
     fireEvent.click(screen.getByRole("button", { name: /auto-pick random god/i }));
 
     expect(screen.getByText(/black picks/i)).toBeTruthy();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.getByRole("dialog", { name: /game paused locally/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^resume$/i }));
+    expect(screen.getByText(/black picks/i)).toBeTruthy();
     expect(screen.getByRole("button", { name: /auto-pick random god/i })).toBeTruthy();
   });
 
@@ -465,6 +522,11 @@ describe("game startup", () => {
     fireEvent.click(screen.getByRole("gridcell", { name: "e2, white pawn" }));
     fireEvent.click(screen.getByRole("gridcell", { name: "e4" }));
 
+    await waitFor(() =>
+      expect(
+        (screen.getByRole("button", { name: /^undo$/i }) as HTMLButtonElement).disabled,
+      ).toBe(false)
+    );
     fireEvent.click(screen.getByRole("button", { name: /save & quit/i }));
     await waitFor(() => expect(screen.getByRole("img", { name: /god chess/i })).toBeTruthy());
     const storedGames = JSON.parse(window.localStorage.getItem(SAVE_KEY) ?? "[]");

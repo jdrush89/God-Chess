@@ -34,6 +34,12 @@ import {
   useRef,
   useState,
 } from "react";
+import { GameResultPresentation } from "../GameResultPresentation";
+import { MatchEscapeMenu } from "../MatchEscapeMenu";
+import {
+  recordActionTransition,
+  recordDiagnostic,
+} from "../diagnostics";
 import {
   chooseFourPlayerAiPlan,
   isFourPlayerAiTurn,
@@ -1361,6 +1367,7 @@ export function FourPlayerGame({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [resultOpen, setResultOpen] = useState(initialState.phase === "gameover");
   const [aiWorking, setAiWorking] = useState(false);
   const [displayedOrbs, setDisplayedOrbs] = useState<FourPlayerOrbTotals>(
     () => fourPlayerOrbTotals(state),
@@ -1390,6 +1397,9 @@ export function FourPlayerGame({
   useEffect(() => {
     if (onlineSession) receiveState(prepareFourPlayerState(initialState));
   }, [initialState, onlineSession?.roomCode]);
+  useEffect(() => {
+    setResultOpen(state.phase === "gameover");
+  }, [state]);
   const scheduleAnimationUnlock = (duration = 480) => {
     if (animationTimer.current) window.clearTimeout(animationTimer.current);
     if (reducedMotion()) {
@@ -1444,9 +1454,20 @@ export function FourPlayerGame({
       updateUndoDepth();
     }
   };
-  const applyAction = (action: FourPlayerAction) => {
+  const applyAction = (
+    action: FourPlayerAction,
+    source: "human" | "ai" = "human",
+  ) => {
     const current = stateRef.current;
     const next = fourPlayerReducer(current, action);
+    recordActionTransition({
+      variant: "four-player",
+      mode: current.config.mode,
+      source,
+      action,
+      before: current as unknown as Record<string, unknown>,
+      after: next as unknown as Record<string, unknown>,
+    });
     if (stateSignature(next) === stateSignature(current)) return false;
     recordBoundary(current, action, next);
     const removedSquares = Object.entries(current.board)
@@ -1465,6 +1486,7 @@ export function FourPlayerGame({
 
   const humanDispatch: FourPlayerDispatch = (action) => {
     const current = stateRef.current;
+    if (current.phase === "gameover") return;
     if (onlineSession) {
       if (
         animating ||
@@ -1473,6 +1495,12 @@ export function FourPlayerGame({
         !onlineSession.participantSeat ||
         current.activeSeat !== onlineSession.participantSeat
       ) return;
+      recordDiagnostic({
+        category: "online",
+        event: "four-player-action-sent",
+        context: { variant: "four-player", role: onlineSession.role },
+        data: { action, phase: current.phase, turn: current.turn },
+      });
       onlineSession.onAction(action);
       return;
     }
@@ -1492,7 +1520,7 @@ export function FourPlayerGame({
   const canUndo = onlineSession
     ? onlineSession.undoAvailable &&
       !onlineSession.awaitingSync &&
-      onlineSession.status === "playing"
+      onlineSession.status !== "paused"
     : undoPreferred && undoDepth > 0 && undoStable;
   const applyUndo = () => {
     if (onlineSession) {
@@ -1500,6 +1528,7 @@ export function FourPlayerGame({
       return;
     }
     if (!canUndo) return;
+    const current = stateRef.current;
     let restored = undoStack.current.pop();
     if (!restored) return;
     while (
@@ -1518,6 +1547,14 @@ export function FourPlayerGame({
       ? prepareFourPlayerState(next)
       : undefined;
     receiveState(next);
+    recordActionTransition({
+      variant: "four-player",
+      mode: current.config.mode,
+      source: "undo",
+      action: { type: "undo" },
+      before: current as unknown as Record<string, unknown>,
+      after: next as unknown as Record<string, unknown>,
+    });
     updateUndoDepth();
   };
 
@@ -1676,7 +1713,19 @@ export function FourPlayerGame({
     }
     setAiWorking(true);
     if (!aiPlan.current.length) {
+      recordDiagnostic({
+        category: "ai",
+        event: "four-player-plan-start",
+        context: { variant: "four-player" },
+        data: { phase: state.phase, activeSeat: state.activeSeat, turn: state.turn },
+      });
       aiPlan.current = chooseFourPlayerAiPlan(state);
+      recordDiagnostic({
+        category: "ai",
+        event: "four-player-plan-result",
+        context: { variant: "four-player" },
+        data: { actions: aiPlan.current },
+      });
     }
     let action = aiPlan.current[0];
     if (!action) {
@@ -1702,7 +1751,7 @@ export function FourPlayerGame({
     const timer = window.setTimeout(() => {
       aiPlan.current = aiPlan.current.slice(1);
       aiActionsThisTurn.current += 1;
-      const progressed = applyAction(action!);
+      const progressed = applyAction(action!, "ai");
       if (!progressed) aiPlan.current = [];
     }, delay);
     return () => window.clearTimeout(timer);
@@ -1778,6 +1827,11 @@ export function FourPlayerGame({
           onSaveAndQuit={onlineSession ? undefined : () => void saveAndQuit()}
           onOpenSettings={() => setSettingsOpen(true)}
         />
+        <MatchEscapeMenu
+          onOpenSettings={() => setSettingsOpen(true)}
+          onLeave={() => void saveAndQuit()}
+          leaveLabel={onlineSession ? "Leave room" : "Save & quit"}
+        />
         {settingsOpen && (
           <FourSettingsModal
             undoPreferred={onlineSession?.undoConsent ?? undoPreferred}
@@ -1807,7 +1861,7 @@ export function FourPlayerGame({
       : "A pantheon";
 
   return (
-    <main className={`four-game-page ${
+    <main className={`four-game-page ${state.phase === "gameover" ? "finished-view" : ""} ${
       animating ||
       aiWorking ||
       onlineSession?.awaitingSync ||
@@ -1958,6 +2012,27 @@ export function FourPlayerGame({
           onClose={() => setGraveyardSeat(undefined)}
         />
       )}
+      {state.phase === "gameover" && (
+        <GameResultPresentation
+          open={resultOpen}
+          eyebrow="THE FOUR-PANTHEON WAR ENDS"
+          title={state.winner ? `${winnerName} is victorious` : "The war ends in a draw"}
+          description={state.winner?.reason === "first-king-captured"
+            ? "The first King has fallen."
+            : state.winner?.reason === "last-team"
+              ? "The last surviving team controls the cross-board."
+              : state.winner
+                ? "The last surviving player controls the cross-board."
+                : "No pantheon can continue the war."}
+          newGameLabel="Begin a new game"
+          undoEnabled={onlineSession?.undoConsent ?? undoPreferred}
+          canUndo={canUndo}
+          onOpenChange={setResultOpen}
+          onUndo={applyUndo}
+          onOpenUndoSettings={() => setSettingsOpen(true)}
+          onNewGame={onNewGame}
+        />
+      )}
       {rulesOpen && <FourRulesModal onClose={() => setRulesOpen(false)} />}
       {settingsOpen && (
         <FourSettingsModal
@@ -1976,23 +2051,11 @@ export function FourPlayerGame({
           onReplace={onlineSession.onReplaceWithAi}
         />
       )}
-      {state.phase === "gameover" && state.winner && (
-        <div className="modal-backdrop">
-          <section className="gameover-modal">
-            <div className="victory-crown"><Crown size={38} /></div>
-            <p className="eyebrow">THE FOUR-PANTHEON WAR ENDS</p>
-            <h2>{winnerName} is victorious</h2>
-            <p>
-              {state.winner.reason === "first-king-captured"
-                ? "The first King has fallen."
-                : state.winner.reason === "last-team"
-                  ? "The last surviving team controls the cross-board."
-                  : "The last surviving player controls the cross-board."}
-            </p>
-            <button className="primary-button" onClick={onNewGame}>Begin a new game</button>
-          </section>
-        </div>
-      )}
+      <MatchEscapeMenu
+        onOpenSettings={() => setSettingsOpen(true)}
+        onLeave={() => void saveAndQuit()}
+        leaveLabel={onlineSession ? "Leave room" : "Save & quit"}
+      />
     </main>
   );
 }
