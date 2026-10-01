@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import readme from "../../README.md?raw";
 import { chooseAiPlan, enumerateTurnPlans, isAiTurn } from "./ai";
-import { isSquareAttacked, kingSquare, legalTargets } from "./chess";
+import { kingSquare, legalTargets } from "./chess";
 import { gameReducer } from "./engine";
 import { GOD_BY_ID, GODS } from "./gods";
 import {
@@ -172,20 +172,21 @@ describe("puzzle mode", () => {
     expect(state.players.white.orbs.black).toBeGreaterThanOrEqual(4);
   });
 
-  it("blocks Position Thirteen's retreat without making the Air Lift landing illegal", () => {
-    const state = PUZZLES.find((puzzle) => puzzle.id === "royal-landing")!.createState();
-    expect(state.board.g8).toMatchObject({ type: "rook", controller: "black" });
+  it("blocks Position Thirteen's retreat before and after the best defensive reply", () => {
+    const puzzle = PUZZLES.find((candidate) => candidate.id === "royal-landing")!;
+    let state = puzzle.createState();
+    expect(state.board.g8).toMatchObject({ type: "knight", controller: "black" });
     expect(state.board.h8).toMatchObject({ type: "rook", controller: "black" });
 
-    const knightVariant = structuredClone(state.board);
-    knightVariant.g8 = {
-      ...knightVariant.g8,
-      id: "suggested-black-knight",
-      type: "knight",
-      status: {},
-    };
-    expect(isSquareAttacked(knightVariant, "f6", "black")).toBe(true);
-    expect(isSquareAttacked(state.board, "f6", "black")).toBe(false);
+    for (const action of puzzle.solutionTurns[0]) state = gameReducer(state, action);
+    expect(kingSquare(state.board, "black")).toBe("g7");
+    expect(legalTargets(state.board, "g7")).toEqual([]);
+
+    const response = chooseAiPlan(state, () => 0);
+    expect(response.length).toBeGreaterThan(0);
+    for (const action of response) state = gameReducer(state, action);
+    expect(kingSquare(state.board, "black")).toBe("g7");
+    expect(legalTargets(state.board, "g7")).toEqual([]);
   });
 
   it("uses a new Flight setup concept in Position Fourteen", () => {
