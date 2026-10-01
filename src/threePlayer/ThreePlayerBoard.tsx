@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { threePlayerHasAlternatingNeutralCells } from "../game/threePlayerDivineGeometry";
 import { getThreePlayerTopology } from "../game/threePlayerTopology";
 import type {
   ThreePlayerBoardVariant,
@@ -15,6 +16,8 @@ const PIECES: Record<ThreePlayerPiece["type"], string> = {
   knight: "♞",
   pawn: "♟",
 };
+
+const RENDER_PADDING = 0.6;
 
 const pieceName = (piece: ThreePlayerPiece) =>
   `${piece.owner} ${piece.type}${piece.controller && piece.controller !== piece.owner
@@ -48,7 +51,7 @@ const annularSectorPath = (
 export interface ThreePlayerBoardProps {
   state: Pick<
     ThreePlayerState,
-    "config" | "board" | "players" | "bananas" | "pending"
+    "config" | "board" | "players" | "bananas" | "pending" | "turn"
   >;
   selectedCell?: ThreePlayerCell;
   legalCells?: readonly ThreePlayerCell[];
@@ -72,6 +75,12 @@ export function ThreePlayerBoard({
     [state.config.boardVariant],
   );
   const bounds = topology.renderBounds;
+  const viewBox = {
+    minX: bounds.minX - RENDER_PADDING,
+    minY: bounds.minY - RENDER_PADDING,
+    width: bounds.width + RENDER_PADDING * 2,
+    height: bounds.height + RENDER_PADDING * 2,
+  };
   const legal = new Set(legalCells);
   const path = new Set(pathCells);
   const variant = state.config.boardVariant;
@@ -83,7 +92,7 @@ export function ThreePlayerBoard({
   return (
     <svg
       className={`three-board three-board-${variant} ${preview ? "preview" : ""}`}
-      viewBox={`${bounds.minX} ${bounds.minY} ${bounds.width} ${bounds.height}`}
+      viewBox={`${viewBox.minX} ${viewBox.minY} ${viewBox.width} ${viewBox.height}`}
       role={preview ? "img" : "grid"}
       aria-label={`${variant} three-player board`}
       preserveAspectRatio="xMidYMid meet"
@@ -93,9 +102,17 @@ export function ThreePlayerBoard({
         const banana = state.bananas.find(({ cell }) => cell === descriptor.id);
         const isLegal = legal.has(descriptor.id);
         const isSelected = descriptor.id === selectedCell;
+        const visualClass = descriptor.geometricClass === 2 &&
+          threePlayerHasAlternatingNeutralCells(variant)
+          ? "neutral"
+          : descriptor.geometricClass === 0
+            ? "light"
+            : descriptor.geometricClass === 1
+              ? "dark"
+              : descriptor.affinity;
         const cellClass = [
           "three-board-cell",
-          descriptor.affinity,
+          visualClass,
           isLegal ? "legal" : "",
           piece && isLegal ? "legal-occupied" : "",
           isLegal && enchantSourceChoice ? "legal-source" : "",

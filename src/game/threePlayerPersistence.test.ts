@@ -8,6 +8,7 @@ import {
   isThreePlayerState,
   prepareThreePlayerState,
 } from "./threePlayerPersistence";
+import { threePlayerCellAffinity } from "./threePlayerDivineGeometry";
 import { GODS } from "./gods";
 import { getThreePlayerTopology } from "./threePlayerTopology";
 import type {
@@ -89,6 +90,21 @@ describe("three-player persistence", () => {
       expect(isThreePlayerState(state)).toBe(true);
       expect(prepareThreePlayerState(structuredClone(state))).toEqual(state);
     }
+  });
+
+  it("derives neutral affinity from the persisted global turn", () => {
+    const config = createDefaultThreePlayerConfig();
+    config.boardVariant = "triad";
+    const state = createThreePlayerGame(config);
+    const neutralCell = getThreePlayerTopology("triad").cellDescriptors.find(
+      (cell) => cell.geometricClass === 2,
+    )!.id;
+    state.turn = 2;
+
+    const prepared = prepareThreePlayerState(structuredClone(state));
+
+    expect(threePlayerCellAffinity(prepared, neutralCell)).toBe("dark");
+    expect(JSON.stringify(prepared)).not.toContain("neutralAffinity");
   });
 
   it("migrates valid schema-version-1 states with deterministic defaults", () => {

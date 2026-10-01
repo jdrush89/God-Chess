@@ -468,6 +468,34 @@ describe("three-player God catalog", () => {
     ));
   });
 
+  it("awards neutral-cell affinity rewards from the current global turn", () => {
+    const neutralCell = getThreePlayerTopology("triad").cellDescriptors.find(
+      (cell) => cell.geometricClass === 2,
+    )!.id;
+
+    for (const [turn, expected] of [[1, "light"], [2, "dark"]] as const) {
+      const state = abilityState("midas", 2, "triad");
+      state.turn = turn;
+      state.selectedGod = "midas";
+      state.selectedAbility = "barter";
+      state.pending = {
+        godId: "midas",
+        abilityId: "barter",
+        step: "barter-orb",
+        destination: neutralCell,
+        targetSeat: "red",
+      };
+      state.players.red.orbs.dark = 5;
+
+      const next = threePlayerReducer(state, { type: "orb", orb: "light" });
+
+      expect(next.orbEvents.at(-1)).toMatchObject({
+        orb: expected,
+        source: neutralCell,
+      });
+    }
+  });
+
   it("keeps Kings out of ranged Prepared Shot targets", () => {
     const state = abilityState("artemis", 2);
     const topology = getThreePlayerTopology(state.config.boardVariant);

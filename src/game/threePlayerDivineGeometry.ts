@@ -56,11 +56,27 @@ export const threePlayerCells = (
   state: Pick<ThreePlayerState, "config">,
 ) => topologyFor(state).cells;
 
+export const threePlayerHasAlternatingNeutralCells = (
+  variant: ThreePlayerBoardVariant,
+) => variant === "three-hexagonal" || variant === "triad";
+
+export const threePlayerNeutralCellAffinity = (
+  state: Pick<ThreePlayerState, "turn">,
+): ThreePlayerOrbAffinity => state.turn % 2 === 1 ? "light" : "dark";
+
 export const threePlayerCellAffinity = (
-  state: Pick<ThreePlayerState, "config">,
+  state: Pick<ThreePlayerState, "config" | "turn">,
   cell: ThreePlayerCell,
-): ThreePlayerOrbAffinity =>
-  topologyFor(state).cellById.get(cell)?.affinity ?? "light";
+): ThreePlayerOrbAffinity => {
+  const descriptor = topologyFor(state).cellById.get(cell);
+  if (
+    descriptor?.geometricClass === 2 &&
+    threePlayerHasAlternatingNeutralCells(state.config.boardVariant)
+  ) {
+    return threePlayerNeutralCellAffinity(state);
+  }
+  return descriptor?.affinity ?? "light";
+};
 
 export const threePlayerDivinePieceAffinity = (
   state: Pick<ThreePlayerState, "completedTurns">,
