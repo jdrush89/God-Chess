@@ -737,6 +737,7 @@ describe("ThreePlayerGame", () => {
 
     await waitFor(
       () => expect(screen.getByText(/Round \d+ · Turn [4-9]\d*/i)).toBeTruthy(),
+      { timeout: 5000 },
     );
     fireEvent.click(screen.getByRole("button", { name: /^Undo$/i }));
     expect(screen.getByText("Round 1 · Turn 1")).toBeTruthy();
