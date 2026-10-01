@@ -28,20 +28,27 @@ export function MatchEscapeMenu({
   const [open, setOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [description, setDescription] = useState("");
-  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "fallback" | "failed">("idle");
+  const [copyStatus, setCopyStatus] = useState<
+    "idle" | "copying" | "copied" | "fallback" | "failed"
+  >("idle");
   const triggerRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLElement>(null);
   const reportButtonRef = useRef<HTMLButtonElement>(null);
   const fallbackRef = useRef<HTMLTextAreaElement>(null);
+  const copyOperationRef = useRef(0);
   const report = useMemo(
     () => reportOpen ? buildDebugReport(description) : "",
-    [description, reportOpen, copyStatus],
+    [description, reportOpen],
   );
 
+  const resetCopyStatus = () => {
+    copyOperationRef.current += 1;
+    setCopyStatus("idle");
+  };
   const close = () => {
     setOpen(false);
     setReportOpen(false);
-    setCopyStatus("idle");
+    resetCopyStatus();
     window.setTimeout(() => triggerRef.current?.focus(), 0);
   };
   const openMenu = () => {
@@ -55,7 +62,7 @@ export function MatchEscapeMenu({
       if (reportOpen) {
         event.preventDefault();
         setReportOpen(false);
-        setCopyStatus("idle");
+        resetCopyStatus();
         window.setTimeout(() => reportButtonRef.current?.focus(), 0);
         return;
       }
@@ -83,6 +90,12 @@ export function MatchEscapeMenu({
     focusable?.focus();
   }, [open, reportOpen]);
 
+  useEffect(() => {
+    if (copyStatus !== "fallback" && copyStatus !== "failed") return;
+    fallbackRef.current?.focus();
+    fallbackRef.current?.select();
+  }, [copyStatus]);
+
   const trapFocus = (event: React.KeyboardEvent) => {
     if (event.key !== "Tab") return;
     const focusable = [...(dialogRef.current?.querySelectorAll<HTMLElement>(
@@ -101,30 +114,28 @@ export function MatchEscapeMenu({
   };
 
   const copyReport = async () => {
-    const text = buildDebugReport(description);
+    const operation = copyOperationRef.current + 1;
+    copyOperationRef.current = operation;
+    setCopyStatus("copying");
     try {
-      if (!navigator.clipboard?.writeText) {
+      const clipboard = navigator.clipboard;
+      if (typeof clipboard?.writeText !== "function") {
+        if (copyOperationRef.current !== operation) return;
         setCopyStatus("fallback");
-        window.setTimeout(() => {
-          fallbackRef.current?.focus();
-          fallbackRef.current?.select();
-        }, 0);
         return;
       }
-      await navigator.clipboard.writeText(text);
+      await clipboard.writeText(report);
+      if (copyOperationRef.current !== operation) return;
       setCopyStatus("copied");
       recordDiagnostic({ category: "ui", event: "debug-report-copied" });
     } catch (error) {
+      if (copyOperationRef.current !== operation) return;
       setCopyStatus("failed");
       recordDiagnostic({
         category: "error",
         event: "debug-report-copy-failed",
         data: { message: error instanceof Error ? error.message : String(error) },
       });
-      window.setTimeout(() => {
-        fallbackRef.current?.focus();
-        fallbackRef.current?.select();
-      }, 0);
     }
   };
 
@@ -163,7 +174,7 @@ export function MatchEscapeMenu({
                     className="secondary-button"
                     onClick={() => {
                       setReportOpen(true);
-                      setCopyStatus("idle");
+                      resetCopyStatus();
                     }}
                     ref={reportButtonRef}
                   >
@@ -199,7 +210,7 @@ export function MatchEscapeMenu({
                   className="close-button"
                   onClick={() => {
                     setReportOpen(false);
-                    setCopyStatus("idle");
+                    resetCopyStatus();
                   }}
                   aria-label="Back to match menu"
                 >
@@ -227,6 +238,9 @@ export function MatchEscapeMenu({
                 <button className="primary-button copy-report-button" onClick={() => void copyReport()}>
                   <Copy size={16} /> Copy debug report
                 </button>
+                {copyStatus === "copying" && (
+                  <p className="debug-report-feedback" role="status">Copying debug report...</p>
+                )}
                 {copyStatus === "copied" && (
                   <p className="debug-report-feedback" role="status">Debug report copied.</p>
                 )}
@@ -239,7 +253,7 @@ export function MatchEscapeMenu({
                     </p>
                     <textarea
                       className="debug-report-fallback"
-                      value={buildDebugReport(description)}
+                      value={report}
                       readOnly
                       aria-label="Selectable debug report"
                       ref={fallbackRef}
