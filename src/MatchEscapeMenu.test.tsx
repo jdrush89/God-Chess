@@ -43,6 +43,29 @@ describe("MatchEscapeMenu", () => {
     expect(trigger.getAttribute("data-placement")).toBe("top-right");
   });
 
+  it("runs opt-in additional actions after closing the menu", async () => {
+    const onRestart = vi.fn();
+    render(
+      <MatchEscapeMenu
+        additionalActions={[{
+          label: "Restart",
+          onSelect: onRestart,
+        }]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /open match menu/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^restart$/i }));
+
+    expect(onRestart).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole("button", { name: /open match menu/i }),
+      )
+    );
+  });
+
   it("opens with Escape, traps/restores focus, and never invokes gameplay controls", async () => {
     const onLeave = vi.fn();
     render(<MatchEscapeMenu onLeave={onLeave} />);

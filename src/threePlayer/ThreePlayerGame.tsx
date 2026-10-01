@@ -6,6 +6,7 @@ import {
   Crown,
   History,
   LoaderCircle,
+  RotateCcw,
   Save,
   Settings,
   Shield,
@@ -1381,6 +1382,18 @@ export function ThreePlayerGame({
         onOpenSettings={onlineSession ? undefined : () => setSettingsOpen(true)}
         onLeave={() => void saveAndQuit()}
         leaveLabel={onlineSession ? "Leave room" : "Save & quit"}
+        additionalActions={[
+          ...(!onlineSession ? [{
+            label: "Restart",
+            icon: <RotateCcw size={16} />,
+            onSelect: () => dispatchAction({ type: "restart" }),
+          }] : []),
+          {
+            label: onlineSession ? "New online room" : "New setup",
+            icon: <Crown size={16} />,
+            onSelect: onNewGame,
+          },
+        ]}
       />
     </main>
   );

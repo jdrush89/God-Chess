@@ -161,6 +161,12 @@ describe("ThreePlayerGame", () => {
     expect(container.querySelectorAll(".three-draft-rosters .empty-sigil")).toHaveLength(9);
     expect(container.querySelectorAll(".escape-menu-trigger[data-placement='top-right']")).toHaveLength(1);
     expect(container.querySelector("button button")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /open match menu/i }));
+    expect(screen.queryByRole("button", { name: /^restart$/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^new setup$/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^new online room$/i })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /^resume$/i }));
   });
 
   it("preserves the nine-pick order, three Gods per seat, and three unused Gods", () => {
@@ -224,6 +230,63 @@ describe("ThreePlayerGame", () => {
     expect(screen.getAllByRole("button", { name: /open match menu/i })).toHaveLength(1);
     expect(screen.queryByRole("button", { name: /game menu/i })).toBeNull();
     expect(screen.getAllByRole("gridcell")[0].getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("offers local Restart and New setup from the single top-right menu", () => {
+    const onNewGame = vi.fn();
+    const { container } = render(
+      <ThreePlayerGame
+        initialState={completeDraft()}
+        onQuit={() => undefined}
+        onNewGame={onNewGame}
+      />,
+    );
+
+    expect(container.querySelectorAll(".escape-menu-trigger")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: /open match menu/i }));
+    expect(screen.getByRole("button", { name: /^restart$/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^new setup$/i }));
+    expect(onNewGame).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: /open match menu/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^restart$/i }));
+
+    expect(screen.getByRole("button", { name: /^Claim Quetzacoatl$/i })).toBeTruthy();
+    expect(container.querySelectorAll(".three-draft-progress .draft-pip.done")).toHaveLength(0);
+    expect(container.querySelectorAll(".three-draft-rosters .god-sigil")).toHaveLength(0);
+  });
+
+  it("offers New online room but never canonical Restart to online players", () => {
+    const config = createDefaultThreePlayerConfig();
+    config.seats.white.control = { kind: "online", local: true };
+    config.seats.red.control = { kind: "online", local: false };
+    config.seats.black.control = { kind: "ai", difficulty: 5 };
+    const onNewGame = vi.fn();
+    const { container } = render(
+      <ThreePlayerGame
+        initialState={completeDraft(createThreePlayerGame(config))}
+        onQuit={() => undefined}
+        onNewGame={onNewGame}
+        onlineSession={{
+          roomCode: "ABCDE",
+          role: "peer",
+          participantSeat: "white",
+          status: "playing",
+          awaitingSync: false,
+          undoAvailable: false,
+          onAction: vi.fn(),
+          onUndoRequest: vi.fn(),
+          onUndoVote: vi.fn(),
+        }}
+      />,
+    );
+
+    expect(container.querySelectorAll(".escape-menu-trigger")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: /open match menu/i }));
+    expect(screen.queryByRole("button", { name: /^restart$/i })).toBeNull();
+    expect(screen.getByRole("button", { name: /^leave room$/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^new online room$/i }));
+    expect(onNewGame).toHaveBeenCalledTimes(1);
   });
 
   it("opens the Escape menu without changing an in-progress match", () => {
