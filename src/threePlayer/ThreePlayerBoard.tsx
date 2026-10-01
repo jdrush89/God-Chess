@@ -27,7 +27,11 @@ const distance = (
   [bx, by]: readonly [number, number],
 ) => Math.hypot(ax - bx, ay - by);
 
-const pieceFontSize = (descriptor: ThreePlayerTopology["cellDescriptors"][number]) => {
+const pieceFontSize = (
+  descriptor: ThreePlayerTopology["cellDescriptors"][number],
+  variant: ThreePlayerBoardVariant,
+) => {
+  if (variant === "three-player") return 0.64;
   const shape = descriptor.render.shape;
   if (shape.kind === "annular-sector") {
     const radial = shape.outerRadius - shape.innerRadius;
@@ -201,7 +205,7 @@ export function ThreePlayerBoard({
                 style={{
                   "--piece-color":
                     state.players[piece.controller ?? piece.owner].displayColor,
-                  fontSize: pieceFontSize(descriptor),
+                  fontSize: pieceFontSize(descriptor, variant),
                 } as React.CSSProperties}
                 aria-hidden="true"
               >

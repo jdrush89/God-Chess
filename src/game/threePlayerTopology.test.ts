@@ -11,6 +11,98 @@ import type {
 } from "./threePlayerTypes";
 
 const seats: readonly ThreePlayerSeat[] = ["white", "red", "black"];
+type Point = readonly [number, number];
+
+const pointKey = ([x, y]: Point) => `${x.toFixed(8)},${y.toFixed(8)}`;
+
+const polygonArea = (points: readonly Point[]) => Math.abs(
+  points.reduce((area, [x, y], index) => {
+    const [nextX, nextY] = points[(index + 1) % points.length];
+    return area + x * nextY - nextX * y;
+  }, 0) / 2,
+);
+
+const cross = (origin: Point, left: Point, right: Point) =>
+  (left[0] - origin[0]) * (right[1] - origin[1]) -
+  (left[1] - origin[1]) * (right[0] - origin[0]);
+
+const convexHull = (points: readonly Point[]) => {
+  const sorted = [...new Map(points.map((point) => [pointKey(point), point])).values()]
+    .sort(([leftX, leftY], [rightX, rightY]) =>
+      leftX - rightX || leftY - rightY
+    );
+  const half = (values: readonly Point[]) => {
+    const hull: Point[] = [];
+    for (const point of values) {
+      while (
+        hull.length >= 2 &&
+        cross(hull[hull.length - 2], hull[hull.length - 1], point) <= 1e-8
+      ) {
+        hull.pop();
+      }
+      hull.push(point);
+    }
+    return hull;
+  };
+  return [
+    ...half(sorted).slice(0, -1),
+    ...half([...sorted].reverse()).slice(0, -1),
+  ];
+};
+
+const pointInsideConvexPolygon = (point: Point, polygon: readonly Point[]) => {
+  const signs = polygon.map((vertex, index) =>
+    cross(vertex, polygon[(index + 1) % polygon.length], point)
+  );
+  return signs.every((value) => value >= -1e-8) ||
+    signs.every((value) => value <= 1e-8);
+};
+
+const distanceToSegment = (point: Point, start: Point, end: Point) => {
+  const dx = end[0] - start[0];
+  const dy = end[1] - start[1];
+  const lengthSquared = dx * dx + dy * dy;
+  const parameter = lengthSquared === 0
+    ? 0
+    : Math.max(
+      0,
+      Math.min(
+        1,
+        ((point[0] - start[0]) * dx + (point[1] - start[1]) * dy) /
+          lengthSquared,
+      ),
+    );
+  return Math.hypot(
+    point[0] - (start[0] + parameter * dx),
+    point[1] - (start[1] + parameter * dy),
+  );
+};
+
+const polygonsOverlapInside = (
+  left: readonly Point[],
+  right: readonly Point[],
+) => {
+  for (const polygon of [left, right]) {
+    for (let index = 0; index < polygon.length; index += 1) {
+      const start = polygon[index];
+      const end = polygon[(index + 1) % polygon.length];
+      const axis: Point = [-(end[1] - start[1]), end[0] - start[0]];
+      const project = (points: readonly Point[]) =>
+        points.map(([x, y]) => x * axis[0] + y * axis[1]);
+      const leftProjection = project(left);
+      const rightProjection = project(right);
+      const overlap = Math.min(
+        Math.max(...leftProjection),
+        Math.max(...rightProjection),
+      ) - Math.max(
+        Math.min(...leftProjection),
+        Math.min(...rightProjection),
+      );
+      if (overlap <= 1e-8) return false;
+    }
+  }
+  return true;
+};
 
 const inventory = (topology: ThreePlayerTopology, seat: ThreePlayerSeat) =>
   topology.initialPlacements
@@ -481,38 +573,114 @@ describe("branched and wrapped topologies", () => {
     }
   });
 
-  it("renders Yalta as joined tapered arms with Red left and Black right", () => {
+  it("renders Yalta as one contiguous six-sided 96-cell board", () => {
     const topology = getThreePlayerTopology("three-player");
-    const pointKey = ([x, y]: readonly [number, number]) =>
-      `${x.toFixed(8)},${y.toFixed(8)}`;
-    for (const seat of seats) {
-      for (let rank = 0; rank < 4; rank += 1) {
-        for (let file = 0; file < 7; file += 1) {
-          const left = topology.cellById.get(
-            topology.cellFromSourceIndex(seats.indexOf(seat) * 32 + rank * 8 + file)!,
-          )!.render.shape;
-          const right = topology.cellById.get(
-            topology.cellFromSourceIndex(seats.indexOf(seat) * 32 + rank * 8 + file + 1)!,
-          )!.render.shape;
-          expect(left.kind).toBe("polygon");
-          expect(right.kind).toBe("polygon");
-          if (left.kind === "polygon" && right.kind === "polygon") {
-            expect(pointKey(left.points[1])).toBe(pointKey(right.points[0]));
-            expect(pointKey(left.points[2])).toBe(pointKey(right.points[3]));
-          }
-        }
+    const descriptors = topology.cellDescriptors;
+    const polygons = descriptors.map((descriptor) => {
+      expect(descriptor.render.shape.kind).toBe("polygon");
+      return descriptor.render.shape.kind === "polygon"
+        ? descriptor.render.shape.points
+        : [];
+    });
+    expect(polygons).toHaveLength(96);
+
+    const edges = new Map<string, { count: number; points: readonly [Point, Point] }>();
+    for (const polygon of polygons) {
+      polygon.forEach((point, index) => {
+        const next = polygon[(index + 1) % polygon.length];
+        const key = [pointKey(point), pointKey(next)].sort().join("|");
+        const existing = edges.get(key);
+        edges.set(key, {
+          count: (existing?.count ?? 0) + 1,
+          points: existing?.points ?? [point, next],
+        });
+      });
+    }
+    expect([...edges.values()].every(({ count }) => count === 1 || count === 2))
+      .toBe(true);
+    const boundary = [...edges.values()].filter(({ count }) => count === 1);
+    expect(boundary).toHaveLength(48);
+
+    const hull = convexHull(boundary.flatMap(({ points }) => points));
+    expect(hull).toHaveLength(6);
+    expect(hull.every((point, index) =>
+      cross(point, hull[(index + 1) % hull.length], hull[(index + 2) % hull.length]) >
+        0
+    )).toBe(true);
+
+    const sideCounts = hull.map((start, index) => {
+      const end = hull[(index + 1) % hull.length];
+      return boundary.filter(({ points: [left, right] }) =>
+        Math.abs(cross(start, end, left)) < 1e-8 &&
+        Math.abs(cross(start, end, right)) < 1e-8
+      ).length;
+    });
+    expect(sideCounts).toEqual([8, 8, 8, 8, 8, 8]);
+
+    const areas = polygons.map(polygonArea);
+    expect(Math.min(...areas)).toBeGreaterThan(0.8);
+    expect(
+      areas.reduce((sum, area) => sum + area, 0),
+    ).toBeCloseTo(polygonArea(hull), 7);
+
+    descriptors.forEach((descriptor, index) => {
+      const center: Point = [descriptor.render.x, descriptor.render.y];
+      expect(pointInsideConvexPolygon(center, polygons[index]), descriptor.id)
+        .toBe(true);
+      const inradius = Math.min(...polygons[index].map((point, pointIndex) =>
+        distanceToSegment(
+          center,
+          point,
+          polygons[index][(pointIndex + 1) % polygons[index].length],
+        )
+      ));
+      expect(inradius, descriptor.id).toBeGreaterThan(0.2);
+    });
+
+    for (let left = 0; left < polygons.length; left += 1) {
+      for (let right = left + 1; right < polygons.length; right += 1) {
+        expect(
+          polygonsOverlapInside(polygons[left], polygons[right]),
+          `${descriptors[left].id} overlaps ${descriptors[right].id}`,
+        ).toBe(false);
       }
     }
-    const centerX = (seat: ThreePlayerSeat) => {
-      const pieces = topology.initialPlacements.filter((piece) => piece.seat === seat);
-      return pieces.reduce(
-        (sum, piece) => sum + topology.cellById.get(piece.cell)!.render.x,
-        0,
-      ) / pieces.length;
+  });
+
+  it("orients straight Yalta armies White bottom, Red left, and Black right", () => {
+    const topology = getThreePlayerTopology("three-player");
+    const centers = (seat: ThreePlayerSeat, rank: number) =>
+      Array.from({ length: 8 }, (_, file) => {
+        const descriptor = topology.cellById.get(
+          topology.cellFromSourceIndex(seats.indexOf(seat) * 32 + rank * 8 + file)!,
+        )!;
+        return [descriptor.render.x, descriptor.render.y] as Point;
+      });
+    const average = (points: readonly Point[]) => points.reduce(
+      ([x, y], point) => [x + point[0] / points.length, y + point[1] / points.length],
+      [0, 0] as [number, number],
+    );
+    const maximumLineDeviation = (points: readonly Point[]) => {
+      const start = points[0];
+      const end = points.at(-1)!;
+      return Math.max(...points.map((point) => {
+        const numerator = Math.abs(cross(start, end, point));
+        return numerator / Math.hypot(end[0] - start[0], end[1] - start[1]);
+      }));
     };
-    expect(centerX("red")).toBeLessThan(0);
-    expect(centerX("black")).toBeGreaterThan(0);
-    expect(Math.abs(centerX("white"))).toBeLessThan(0.000001);
+
+    expect(average(centers("white", 3))[1]).toBeGreaterThan(6);
+    expect(average(centers("red", 3))[0]).toBeLessThan(-5);
+    expect(average(centers("black", 3))[0]).toBeGreaterThan(5);
+    expect(centers("white", 3).map(([x]) => x)).toEqual(
+      [...centers("white", 3).map(([x]) => x)].sort((left, right) => left - right),
+    );
+    for (const seat of seats) {
+      expect(maximumLineDeviation(centers(seat, 3)), `${seat} back rank`)
+        .toBeLessThan(0.25);
+      expect(maximumLineDeviation(centers(seat, 2)), `${seat} pawn rank`)
+        .toBeLessThan(0.25);
+    }
   });
 
   it("never mixes pair mappings on Three Half traces", () => {
