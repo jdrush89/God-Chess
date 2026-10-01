@@ -504,7 +504,11 @@ const preparedShotTargets = (state: FourPlayerState, source: Square) =>
     bananas: state.bananas,
   }).filter((target) => {
     const piece = state.board[target];
-    if (!piece?.controller || !seatsAreHostile(state.config, state.activeSeat, piece.controller)) return false;
+    if (
+      !piece?.controller ||
+      piece.type === "king" ||
+      !seatsAreHostile(state.config, state.activeSeat, piece.controller)
+    ) return false;
     const simulated = { ...state.board };
     delete simulated[target];
     return !fourPlayerIsInCheck(simulated, state.activeSeat, state.config, state.bananas);
@@ -2291,7 +2295,7 @@ const handleSquare = (state: FourPlayerState, square: Square) => {
       state.legalTargets.includes(square)
     ) {
       const prepared = state.board[state.selectedSquare];
-      captureAt(state, square);
+      if (!captureAt(state, square)) return;
       if (prepared) delete prepared.status.prepared;
       state.pending = undefined;
       state.selectedSquare = undefined;

@@ -371,7 +371,11 @@ const preparedDetails = (piece: Piece) => {
 
 const preparedShotTargets = (state: GameState, square: Square) =>
   pseudoTargets(state.board, square, { attacksOnly: true, bananas: state.bananas })
-    .filter((target) => state.board[target]?.controller === opposite(state.activeColor))
+    .filter((target) => {
+      const piece = state.board[target];
+      return piece?.controller === opposite(state.activeColor) &&
+        piece.type !== "king";
+    })
     .filter((target) => {
       const simulated = { ...state.board };
       delete simulated[target];
@@ -1870,7 +1874,7 @@ const handleSquare = (state: GameState, square: Square) => {
       state.legalTargets.includes(square)
     ) {
       const preparedPiece = state.board[state.selectedSquare];
-      captureAt(state, square, state.activeColor);
+      if (!captureAt(state, square, state.activeColor)) return;
       if (preparedPiece) delete preparedPiece.status.prepared;
       state.pending = undefined;
       state.selectedSquare = undefined;

@@ -107,6 +107,29 @@ describe("three-player persistence", () => {
     expect(JSON.stringify(prepared)).not.toContain("neutralAffinity");
   });
 
+  it("loads a legacy first-checkmate stalemate result", () => {
+    const config = createDefaultThreePlayerConfig();
+    config.victoryMode = "first-checkmate";
+    let state = createThreePlayerGame(config);
+    for (const god of GODS.slice(0, 9)) {
+      state = threePlayerReducer(state, { type: "draft", godId: god.id });
+    }
+    state.phase = "gameover";
+    state.result = { kind: "draw", reason: "stalemate" };
+    state.notice = "Red was stalemated.";
+    state.history.unshift(state.notice);
+
+    expect(isThreePlayerState(state)).toBe(true);
+    expect(prepareThreePlayerState(structuredClone(state)).result).toEqual({
+      kind: "draw",
+      reason: "stalemate",
+    });
+    expect(threePlayerReducer(state, { type: "load", state }).result).toEqual({
+      kind: "draw",
+      reason: "stalemate",
+    });
+  });
+
   it("migrates valid schema-version-1 states with deterministic defaults", () => {
     const legacy = structuredClone(createThreePlayerGame()) as unknown as Record<string, unknown>;
     legacy.schemaVersion = 1;

@@ -722,6 +722,26 @@ describe("game flow", () => {
     expect(state.players.black.graveyard.at(-1)?.piece.type).toBe("pawn");
   });
 
+  it("does not offer or consume a prepared shot against a King", () => {
+    let state = createPreparedShotTurn();
+    const blackKing = state.board.e8;
+    delete state.board.e8;
+    state.board.d5 = blackKing;
+
+    state = gameReducer(state, { type: "square", square: "e4" });
+    expect(state.pending?.step).toBe("snipe-target");
+    expect(state.legalTargets).not.toContain("d5");
+
+    const manualAttempt = structuredClone(state);
+    manualAttempt.legalTargets.push("d5");
+    state = gameReducer(manualAttempt, { type: "square", square: "d5" });
+
+    expect(state.board.d5).toMatchObject({ type: "king", color: "black" });
+    expect(state.board.e4?.status.prepared).toBeTruthy();
+    expect(state.pending?.step).toBe("snipe-target");
+    expect(state.selectedSquare).toBe("e4");
+  });
+
   it("applies the prepared-shot expiration rules for each Snipe level", () => {
     let levelOne = createPreparedShotTurn(1);
     levelOne = gameReducer(levelOne, { type: "pass" });
