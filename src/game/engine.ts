@@ -2473,7 +2473,9 @@ const resolveClassicTurnStart = (state: GameState) => {
     completeTurnSearchDepth > 0 ||
     state.phase !== "play" ||
     state.gameMode === "puzzle" ||
-    state.result
+    state.result ||
+    state.selectedGod ||
+    state.selectedAbility
   ) return;
   const color = state.activeColor;
   if (hasCompleteClassicTurn(state)) return;

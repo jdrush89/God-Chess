@@ -155,6 +155,8 @@ describe("saved-game variants", () => {
     };
     expect(normalizeSavedGame(createSavedGame("classic-enchant", classic, [])))
       .toBeTruthy();
+    expect(gameReducer(classic, { type: "load-game", state: classic }).pending?.step)
+      .toBe("enchant-followup-move");
     const invalidClassic = structuredClone(classic);
     delete invalidClassic.pending!.destination;
     expect(normalizeSavedGame(createSavedGame("bad-classic-enchant", invalidClassic, [])))
@@ -180,6 +182,8 @@ describe("saved-game variants", () => {
     };
     expect(normalizeSavedGame(createSavedGame("four-enchant", four, [])))
       .toBeTruthy();
+    expect(fourPlayerReducer(four, { type: "load", state: four }).pending?.step)
+      .toBe("enchant-followup-move");
     const invalidFour = structuredClone(four);
     delete invalidFour.pending!.movedPieceId;
     expect(normalizeSavedGame(createSavedGame("bad-four-enchant", invalidFour, [])))

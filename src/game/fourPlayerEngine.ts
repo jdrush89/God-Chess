@@ -2860,6 +2860,7 @@ const mostRecentCheckingSeat = (state: FourPlayerState, defender: Seat) => {
 };
 
 const resolveTurnStartAdjudication = (state: FourPlayerState) => {
+  if (state.selectedGod || state.selectedAbility) return;
   let guard = 0;
   while (
     state.phase === "play" &&

@@ -9,7 +9,11 @@ import {
   lineOfSightSquares,
   pathSquares,
 } from "./chess";
-import { createGame, gameReducer } from "./engine";
+import {
+  createGame,
+  gameReducer,
+  hasCompleteClassicTurn,
+} from "./engine";
 import { GOD_BY_ID } from "./gods";
 import type { Color, Piece, PieceType } from "./types";
 
@@ -165,7 +169,10 @@ describe("game flow", () => {
     state.phase = "play";
     state.activeColor = "white";
     state.board = {
-      e1: testPiece("king", "white", "white-king"),
+      e1: {
+        ...testPiece("king", "white", "white-king"),
+        status: { hexedBy: "black" },
+      },
       e8: testPiece("rook", "black", "black-rook"),
       a8: testPiece("king", "black", "black-king"),
     };
@@ -180,8 +187,10 @@ describe("game flow", () => {
       reason: "checkmate",
     });
     expect(result.board.e1).toBeUndefined();
-    expect(result.players.white.graveyard.at(-1)?.piece.id)
-      .toBe("white-king");
+    expect(result.players.white.graveyard.at(-1)?.piece).toMatchObject({
+      id: "white-king",
+      status: { hexedBy: "black" },
+    });
     expect(result.history[0]).toBe("White was checkmated by Black.");
   });
 
@@ -975,6 +984,7 @@ describe("game flow", () => {
     state = gameReducer(state, { type: "square", square: "b8" });
     state = gameReducer(state, { type: "square", square: "c6" });
     expect(state.pending?.step).toBe("enchant-followup-move");
+    expect(hasCompleteClassicTurn(state)).toBe(true);
     expect(state.activeColor).toBe("white");
     expect(state.board.c6).toMatchObject({ color: "black", controller: "black" });
     expect(state.legalTargets).toContain("e2");

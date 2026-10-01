@@ -209,6 +209,9 @@ describe("three-player persistence", () => {
       { source, destination, movedPieceId },
     );
     expect(isThreePlayerState(followup)).toBe(true);
+    expect(
+      threePlayerReducer(followup, { type: "load", state: followup }).pending?.step,
+    ).toBe("enchant-followup-move");
 
     const incomplete = structuredClone(followup);
     delete incomplete.pending!.destination;

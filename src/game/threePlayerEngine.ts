@@ -633,7 +633,11 @@ export const hasCompleteThreePlayerTurn = (state: ThreePlayerState) => {
 };
 
 export const resolveThreePlayerTurnStart = (state: ThreePlayerState) => {
-  if (completeTurnSearchDepth > 0) return;
+  if (
+    completeTurnSearchDepth > 0 ||
+    state.selectedGod ||
+    state.selectedAbility
+  ) return;
   let guard = 0;
   while (state.phase === "play" && !state.result && guard < 12) {
     guard += 1;

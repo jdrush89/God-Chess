@@ -5,6 +5,7 @@ import {
   createFourPlayerGame,
   fourPlayerReducer,
   hasCommittedFourPlayerAction,
+  hasCompleteFourPlayerTurn,
 } from "./fourPlayerEngine";
 import type { FourPlayerPiece, FourPlayerState, Seat } from "./fourPlayerTypes";
 import type { GodId, PieceType, Square } from "./types";
@@ -181,6 +182,7 @@ describe("four-player God abilities", () => {
     result = fourPlayerReducer(result, { type: "square", square: "g9" });
     expect(result.board.g9).toMatchObject({ id: "enchanted", controller: "south" });
     expect(result.pending?.step).toBe("enchant-followup-move");
+    expect(hasCompleteFourPlayerTurn(result)).toBe(true);
     expect(result.legalTargets).toContain("g12");
     expect(hasCommittedFourPlayerAction(result)).toBe(true);
     expect(availableFourPlayerActions(result).every((action) => action.type === "square"))
