@@ -49,6 +49,7 @@ import {
   type ThreePlayerState,
 } from "./threePlayerTypes";
 import { abilityLevel, GOD_BY_ID, GODS } from "./gods";
+import { hasCompleteTurn } from "./completeTurnSearch";
 import type { GodId, PieceType } from "./types";
 
 const clone = <T>(value: T): T => structuredClone(value);
@@ -218,6 +219,53 @@ export const hasCommittedThreePlayerAction = (state: ThreePlayerState) => {
     Boolean(state.pending.selected?.length);
 };
 
+export const threePlayerPlanStateSignature = (
+  state: ThreePlayerState,
+) => JSON.stringify({
+  phase: state.phase,
+  activeSeat: state.activeSeat,
+  turn: state.turn,
+  round: state.round,
+  completedTurns: state.completedTurns,
+  draftPick: state.draft.pickIndex,
+  available: state.draft.available,
+  upgradeQueue: state.upgradeQueue,
+  selectedGod: state.selectedGod,
+  selectedAbility: state.selectedAbility,
+  selectedCell: state.selectedCell,
+  selectedPath: state.selectedPath,
+  legalCells: state.legalCells,
+  legalSeats: state.legalSeats,
+  legalPaths: state.legalPaths,
+  pending: state.pending,
+  board: state.board,
+  players: state.players,
+  rested: state.rested,
+  bananas: state.bananas,
+  stealth: state.stealth,
+  bonusTurn: state.bonusTurn,
+  result: state.result,
+});
+
+export const isCompleteThreePlayerPlan = (
+  initial: ThreePlayerState,
+  next: ThreePlayerState,
+) => {
+  if (next.phase === "gameover") return true;
+  if (initial.phase === "draft") {
+    return next.draft.pickIndex !== initial.draft.pickIndex;
+  }
+  if (initial.phase === "upgrade") {
+    return next.phase !== "upgrade" ||
+      next.activeSeat !== initial.activeSeat ||
+      next.upgradeQueue.length !== initial.upgradeQueue.length;
+  }
+  return next.phase !== initial.phase ||
+    next.activeSeat !== initial.activeSeat ||
+    next.completedTurns[initial.activeSeat] !==
+      initial.completedTurns[initial.activeSeat];
+};
+
 const emptyRecency = (): ThreePlayerState["kingAttackRecency"] => ({
   white: {},
   red: {},
@@ -266,9 +314,7 @@ const setResult = (
   state.result = result;
   state.phase = "gameover";
   state.notice = result?.kind === "draw"
-    ? result.reason === "stalemate"
-      ? "The match is a draw by stalemate."
-      : "The match is a draw: every surviving seat is stalemated."
+    ? "The match is a draw: every surviving seat is stalemated."
     : `${name(state, result!.seat)} wins.`;
 };
 
@@ -420,9 +466,14 @@ const captureAt = (
   state: ThreePlayerState,
   cell: string,
   explicitFriendly = false,
+  allowKing = false,
 ) => {
   const piece = state.board[cell];
-  if (!piece || piece.type === "king" || piece.status.hardened) return undefined;
+  if (
+    !piece ||
+    (!allowKing && piece.type === "king") ||
+    piece.status.hardened
+  ) return undefined;
   if (
     !explicitFriendly &&
     piece.controller === state.activeSeat
@@ -538,11 +589,6 @@ const recordStalematePass = (
   state: ThreePlayerState,
   seat: ThreePlayerSeat,
 ) => {
-  if (state.config.victoryMode === "first-checkmate") {
-    appendHistory(state, `${name(state, seat)} was stalemated.`);
-    setResult(state, { kind: "draw", reason: "stalemate" });
-    return;
-  }
   if (state.passCycle.positionRevision !== state.positionRevision) {
     clearPassCycle(state);
   }
@@ -558,80 +604,60 @@ const recordStalematePass = (
   }
 };
 
-let mateEscapeSearchDepth = 0;
+let completeTurnSearchDepth = 0;
 
-const hasDivineCheckEscape = (state: ThreePlayerState) => {
-  if (mateEscapeSearchDepth > 0) return false;
-  const king = threePlayerKingCell(state, state.activeSeat);
-  if (
-    !king ||
-    !getThreePlayerTopology(state.config.boardVariant).cellSet.has(king)
-  ) return false;
-  mateEscapeSearchDepth += 1;
+export const hasCompleteThreePlayerTurn = (state: ThreePlayerState) => {
+  if (completeTurnSearchDepth > 0) return true;
+  const seat = state.activeSeat;
+  completeTurnSearchDepth += 1;
   try {
-    const seat = state.activeSeat;
-    const initialTurns = state.completedTurns[seat];
-    const seen = new Set<string>();
-    let frontier = [clone(state)];
-    for (let depth = 0; depth < 12 && frontier.length; depth += 1) {
-      const expanded: ThreePlayerState[] = [];
-      for (const node of frontier) {
-        const signature = JSON.stringify({
-          activeSeat: node.activeSeat,
-          completedTurns: node.completedTurns,
-          selectedGod: node.selectedGod,
-          selectedAbility: node.selectedAbility,
-          selectedCell: node.selectedCell,
-          selectedPath: node.selectedPath,
-          pending: node.pending,
-          board: node.board,
-          players: node.players,
-          rested: node.rested,
-        });
-        if (seen.has(signature)) continue;
-        seen.add(signature);
-        for (const action of availableThreePlayerActions(node).slice(0, 256)) {
-          const next = threePlayerReducer(node, action);
-          if (next === node) continue;
-          if (
-            next.completedTurns[seat] > initialTurns &&
-            !next.players[seat].eliminated &&
-            !threePlayerIsInCheck(next, seat)
-          ) return true;
-          if (
-            next.activeSeat === seat &&
-            next.completedTurns[seat] === initialTurns
-          ) expanded.push(next);
-        }
-      }
-      frontier = expanded.slice(0, 2_000);
-    }
-    return false;
+    return hasCompleteTurn({
+      state,
+      availableActions: availableThreePlayerActions,
+      reduce: threePlayerReducer,
+      signature: threePlayerPlanStateSignature,
+      isComplete: isCompleteThreePlayerPlan,
+      acceptComplete: (_initial, next) =>
+        !next.players[seat].eliminated &&
+        Boolean(threePlayerKingCell(next, seat)) &&
+        !threePlayerIsInCheck(next, seat),
+      limits: {
+        maxDepth: 16,
+        maxStates: 20_000,
+        maxActionsPerState: 256,
+      },
+    });
   } finally {
-    mateEscapeSearchDepth -= 1;
+    completeTurnSearchDepth -= 1;
   }
 };
 
-const resolveTurnStart = (state: ThreePlayerState) => {
+export const resolveThreePlayerTurnStart = (state: ThreePlayerState) => {
+  if (
+    completeTurnSearchDepth > 0 ||
+    state.selectedGod ||
+    state.selectedAbility
+  ) return;
   let guard = 0;
   while (state.phase === "play" && !state.result && guard < 12) {
     guard += 1;
     const seat = state.activeSeat;
-    const legalMoves = threePlayerLegalMoves(state, seat);
-    if (legalMoves.length) {
-      state.notice = `${name(state, seat)} to move.`;
+    if (hasCompleteThreePlayerTurn(state)) {
+      state.notice = threePlayerIsInCheck(state, seat)
+        ? `${name(state, seat)} is in check and must use a legal escape.`
+        : `${name(state, seat)} to move.`;
       return;
     }
     if (threePlayerIsInCheck(state, seat)) {
-      if (hasDivineCheckEscape(state)) {
-        state.notice = `${name(state, seat)} is in check and must use a legal escape.`;
-        return;
-      }
-      if (!resolveCheckmate(state, seat) || state.result) return;
+      if (!resolveCheckmate(state, seat)) return;
     } else {
       recordStalematePass(state, seat);
-      if (state.result) return;
     }
+    state.turn += 1;
+    if (state.enPassant && state.enPassant.expiresOnTurn < state.turn) {
+      state.enPassant = undefined;
+    }
+    if (state.result) return;
     const survivors = livingSeats(state);
     if (!survivors.length) {
       setResult(state, { kind: "draw", reason: "stalemate-cycle" });
@@ -736,8 +762,8 @@ const reduceDraft = (
     state.phase = "play";
     state.activeSeat = "white";
     recordKingAttackChanges(undefined, state);
-    resolveTurnStart(state);
-    if (!state.result) resolveStartOfDivineTurn(state);
+    resolveStartOfDivineTurn(state);
+    resolveThreePlayerTurnStart(state);
   } else {
     state.activeSeat = state.draft.order[state.draft.pickIndex];
     state.notice = `${name(state, state.activeSeat)} drafts next.`;
@@ -783,7 +809,8 @@ const reduceMove = (
   recordKingAttackChanges(previous, state);
   if (state.result) return true;
   state.activeSeat = nextThreePlayerSeat(actor, livingSeats(state));
-  resolveTurnStart(state);
+  resolveStartOfDivineTurn(state);
+  resolveThreePlayerTurnStart(state);
   return true;
 };
 
@@ -940,7 +967,7 @@ const resolveStartOfDivineTurn = (state: ThreePlayerState) => {
   for (const returning of returns) {
     const occupant = state.board[returning.destination];
     if (occupant && !occupant.status.hardened) {
-      captureAt(state, returning.destination, true);
+      captureAt(state, returning.destination, true, true);
     }
     if (!state.board[returning.destination]) {
       state.board[returning.destination] = {
@@ -980,7 +1007,7 @@ const startNextRound = (state: ThreePlayerState) => {
   state.activeSeat = survivors[0];
   state.turn += 1;
   resolveStartOfDivineTurn(state);
-  resolveTurnStart(state);
+  resolveThreePlayerTurnStart(state);
   if (!state.result && !state.pending) {
     state.notice = `Round ${state.round}. ${name(state, state.activeSeat)} to act.`;
   }
@@ -1035,7 +1062,7 @@ const finishDivineTurn = (
     state.enPassant = undefined;
   }
   resolveStartOfDivineTurn(state);
-  resolveTurnStart(state);
+  resolveThreePlayerTurnStart(state);
   if (!state.result && !state.pending) {
     state.notice = `${name(state, state.activeSeat)} to act. Choose a God.`;
   }
@@ -3542,7 +3569,10 @@ export const availableThreePlayerActions = (
   if (!state.selectedGod) {
     return activePlayer(state).gods
       .filter((godId) => !state.rested.includes(godId))
-      .map((godId) => ({ type: "select-god", godId }));
+      .map((godId) => ({
+        type: "select-god",
+        godId,
+      } as ThreePlayerAction));
   }
   if (!state.selectedAbility) {
     const orbs = activePlayer(state).orbs;
@@ -3582,8 +3612,8 @@ export const threePlayerReducer = (
 ): ThreePlayerState => {
   if (action.type === "load") {
     const loaded = ensureLayer2(prepareThreePlayerState(action.state));
-    resolveTurnStart(loaded);
     if (!loaded.result && !loaded.pending) resolveStartOfDivineTurn(loaded);
+    resolveThreePlayerTurnStart(loaded);
     return loaded;
   }
   if (action.type === "restart") {

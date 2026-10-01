@@ -47,7 +47,6 @@ import {
 import { fourPlayerSquareAt } from "../game/fourPlayerChess";
 import { seatsAreAllies } from "../game/fourPlayerConfig";
 import {
-  availableFourPlayerActions,
   fourPlayerReducer,
   hasCommittedFourPlayerAction,
 } from "../game/fourPlayerEngine";
@@ -1448,6 +1447,7 @@ export function FourPlayerGame({
   const [arrivingOrbs, setArrivingOrbs] = useState<Set<string>>(() => new Set());
   const aiPlan = useRef<FourPlayerAction[]>([]);
   const aiActionsThisTurn = useRef(0);
+  const aiNoPlanKey = useRef<string | undefined>(undefined);
   const animationTimer = useRef<number | undefined>(undefined);
   const orbAnimationTimers = useRef<number[]>([]);
   const processedOrbAnimations = useRef(
@@ -1783,6 +1783,8 @@ export function FourPlayerGame({
       }
       return;
     }
+    const turnKey = `${state.phase}:${state.turn}:${state.activeSeat}`;
+    if (aiNoPlanKey.current === turnKey) return;
     setAiWorking(true);
     if (!aiPlan.current.length) {
       recordDiagnostic({
@@ -1799,25 +1801,18 @@ export function FourPlayerGame({
         data: { actions: aiPlan.current },
       });
     }
-    let action = aiPlan.current[0];
+    const action = aiPlan.current[0];
     if (!action) {
-      action = availableFourPlayerActions(state)[0];
-      if (!action) {
-        setAiWorking(false);
-        return;
-      }
+      aiNoPlanKey.current = turnKey;
+      setAiWorking(false);
+      return;
     }
     if (aiActionsThisTurn.current >= 40) {
-      const emergency = availableFourPlayerActions(state);
-      action = emergency.find((candidate) =>
-        candidate.type === "pass" || candidate.type === "cancel"
-      ) ?? emergency[0];
       aiPlan.current = [];
       aiActionsThisTurn.current = 0;
-      if (!action) {
-        setAiWorking(false);
-        return;
-      }
+      aiNoPlanKey.current = turnKey;
+      setAiWorking(false);
+      return;
     }
     const delay = reducedMotion() ? 0 : state.phase === "draft" ? 340 : 280;
     const timer = window.setTimeout(() => {
@@ -2104,7 +2099,7 @@ export function FourPlayerGame({
               ? "The last surviving team controls the cross-board."
               : state.winner
                 ? "The last surviving player controls the cross-board."
-                : "No pantheon can continue the war."}
+                : "Every living seat was stalemated in the same unchanged position."}
           newGameLabel="Begin a new game"
           undoEnabled={onlineSession?.undoConsent ?? undoPreferred}
           canUndo={canUndo}

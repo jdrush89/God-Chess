@@ -235,6 +235,39 @@ describe("game startup", () => {
       expect(container.querySelector(".finished-view")).toBeNull();
       expect(screen.getByText(playable.notice)).toBeTruthy();
     });
+
+    it("shows an explicit stalemate draw, reveals the board, and undoes it", () => {
+      const playable = completeClassicDraft();
+      const finished = structuredClone(playable);
+      finished.phase = "gameover";
+      finished.winner = undefined;
+      finished.result = { kind: "draw", reason: "stalemate" };
+      finished.lastAction = "Black was stalemated. The match is a draw.";
+      finished.notice = finished.lastAction;
+      window.localStorage.setItem(SAVE_KEY, JSON.stringify([
+        createSavedGame("stalemate-classic", finished, [playable], playable),
+      ]));
+
+      const { container } = render(<App />);
+      fireEvent.click(screen.getByRole("button", { name: /load game/i }));
+      fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
+
+      expect(screen.getByRole("dialog", { name: /draw by stalemate/i }))
+        .toBeTruthy();
+      expect(screen.getByText(/no complete legal turn while its King is safe/i))
+        .toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: /see board/i }));
+      expect(container.querySelector(".finished-view")).toBeTruthy();
+      expect(screen.getAllByText(finished.lastAction).length).toBeGreaterThan(0);
+
+      fireEvent.click(screen.getByRole("button", { name: /enable undo/i }));
+      fireEvent.click(screen.getByRole("switch", { name: /allow undo/i }));
+      fireEvent.click(screen.getByRole("button", { name: /close settings/i }));
+      fireEvent.click(screen.getByTitle(/undo the latest completed turn/i));
+
+      expect(container.querySelector(".finished-view")).toBeNull();
+      expect(screen.getByText(playable.notice)).toBeTruthy();
+    });
   });
 
   it("opens the local three-player setup without exposing an online room mode", () => {

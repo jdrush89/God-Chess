@@ -207,9 +207,15 @@ describe("four-player AI", () => {
       g14: testPiece(state, "king", "north", "north-king"),
       n8: testPiece(state, "king", "east", "east-king"),
       g1: testPiece(state, "king", "south", "south-king"),
-      a7: testPiece(state, "king", "west", "west-king"),
+      a7: {
+        ...testPiece(state, "king", "west", "west-king"),
+        status: { hexedBy: "east" },
+      },
       g8: testPiece(state, "rook", "north", "hex-mover"),
-      b11: testPiece(state, "pawn", "west", "west-enemy"),
+      b11: {
+        ...testPiece(state, "pawn", "west", "west-enemy"),
+        status: { hexedBy: "west" },
+      },
     };
 
     const plan = chooseFourPlayerAiPlan(state, () => 0);

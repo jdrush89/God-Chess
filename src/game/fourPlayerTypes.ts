@@ -132,6 +132,11 @@ export interface FourPlayerWinner {
   reason: "first-king-captured" | "last-player" | "last-team";
 }
 
+export interface FourPlayerPassCycle {
+  positionSignature: string;
+  passedSeats: Seat[];
+}
+
 export interface FourPlayerState {
   variant: "four-player";
   phase: FourPlayerPhase;
@@ -162,7 +167,9 @@ export interface FourPlayerState {
   nextOrbAnimationId?: number;
   attackSequence?: number;
   kingAttackRecency?: Record<Seat, Partial<Record<Seat, number>>>;
+  passCycle?: FourPlayerPassCycle;
   winner?: FourPlayerWinner;
+  drawReason?: "stalemate-cycle";
   history: string[];
   lastAction?: string;
   notice: string;

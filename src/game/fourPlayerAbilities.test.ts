@@ -5,6 +5,7 @@ import {
   createFourPlayerGame,
   fourPlayerReducer,
   hasCommittedFourPlayerAction,
+  hasCompleteFourPlayerTurn,
 } from "./fourPlayerEngine";
 import type { FourPlayerPiece, FourPlayerState, Seat } from "./fourPlayerTypes";
 import type { GodId, PieceType, Square } from "./types";
@@ -171,6 +172,7 @@ describe("four-player God abilities", () => {
     expect(result.board.g10?.status.luredBy).toBe("north");
 
     state = gameFor("teles");
+    state.players.north.gods.push("chiron");
     state.board.g8 = piece(state, "pawn", "south", "enchanted");
     state.board.g12 = piece(state, "pawn", "north", "follow-up");
     result = activate(state, "teles", "enchant");
@@ -180,6 +182,7 @@ describe("four-player God abilities", () => {
     result = fourPlayerReducer(result, { type: "square", square: "g9" });
     expect(result.board.g9).toMatchObject({ id: "enchanted", controller: "south" });
     expect(result.pending?.step).toBe("enchant-followup-move");
+    expect(hasCompleteFourPlayerTurn(result)).toBe(true);
     expect(result.legalTargets).toContain("g12");
     expect(hasCommittedFourPlayerAction(result)).toBe(true);
     expect(availableFourPlayerActions(result).every((action) => action.type === "square"))
@@ -245,6 +248,41 @@ describe("four-player God abilities", () => {
     state.board.g8 = piece(state, "rook", "north", "sniper");
     result = move(state, "artemis", "snipe", "g8", "g9");
     expect(result.board.g9?.status.prepared).toMatchObject({ owner: "north", level: 1 });
+  });
+
+  it("does not offer or consume a prepared shot against a King", () => {
+    let state = gameFor("artemis");
+    state.board = {
+      g14: piece(state, "king", "north", "north-king"),
+      n8: piece(state, "king", "east", "east-king"),
+      g1: piece(state, "king", "south", "south-king"),
+      a7: piece(state, "king", "west", "west-king"),
+      g8: {
+        ...piece(state, "rook", "north", "prepared-rook"),
+        status: { prepared: { owner: "north", level: 1 } },
+      },
+    };
+    state.selectedGod = undefined;
+    state.selectedAbility = undefined;
+    state.pending = {
+      godId: "artemis",
+      abilityId: "snipe-shot",
+      step: "snipe-source",
+    };
+    state.legalTargets = ["g8"];
+
+    state = fourPlayerReducer(state, { type: "square", square: "g8" });
+    expect(state.pending?.step).toBe("snipe-target");
+    expect(state.legalTargets).not.toContain("n8");
+
+    const manualAttempt = structuredClone(state);
+    manualAttempt.legalTargets.push("n8");
+    state = fourPlayerReducer(manualAttempt, { type: "square", square: "n8" });
+
+    expect(state.board.n8).toMatchObject({ type: "king", owner: "east" });
+    expect(state.board.g8?.status.prepared).toBeTruthy();
+    expect(state.pending?.step).toBe("snipe-target");
+    expect(state.selectedSquare).toBe("g8");
   });
 
   it("generalizes Kangus Kong's Ritual, Banana Peel, and Rage", () => {

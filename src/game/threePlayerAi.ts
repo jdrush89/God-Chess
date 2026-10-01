@@ -163,7 +163,7 @@ export const chooseThreePlayerAiPlan = (
       evaluateThreePlayerState(first.state, state.activeSeat) ||
     stablePlanKey(first).localeCompare(stablePlanKey(second))
   );
-  if (!plans.length) return availableThreePlayerActions(state).slice(0, 1);
+  if (!plans.length) return [];
   if (difficulty >= 10 || plans.length === 1) return plans[0].actions;
   const random = typeof randomOrSeed === "number"
     ? randomFromSeed(randomOrSeed)

@@ -125,7 +125,9 @@ const canCapture = (
   actor: Seat,
   target: FourPlayerPiece,
   includeAlliedTargets = false,
+  attacksOnly = false,
 ) => {
+  if (target.type === "king") return attacksOnly;
   if (target.status.hardened) return false;
   if (target.controller === null) return true;
   return seatsAreHostile(config, actor, target.controller) || includeAlliedTargets;
@@ -164,7 +166,13 @@ const rayTargets = (
       }
       if (
         !options.noCapture &&
-        canCapture(config, actor, occupying, options.includeAlliedTargets)
+        canCapture(
+          config,
+          actor,
+          occupying,
+          options.includeAlliedTargets,
+          options.attacksOnly,
+        )
       ) {
         targets.push(target);
       }
@@ -199,8 +207,20 @@ const pawnTargets = (
       : undefined;
     if (
       options.attacksOnly ||
-      (occupying && canCapture(config, actor, occupying, options.includeAlliedTargets)) ||
-      (enPassantPiece && canCapture(config, actor, enPassantPiece, options.includeAlliedTargets))
+      (occupying && canCapture(
+        config,
+        actor,
+        occupying,
+        options.includeAlliedTargets,
+        options.attacksOnly,
+      )) ||
+      (enPassantPiece && canCapture(
+        config,
+        actor,
+        enPassantPiece,
+        options.includeAlliedTargets,
+        options.attacksOnly,
+      ))
     ) {
       targets.push(target);
     }
@@ -258,7 +278,13 @@ export const fourPlayerPseudoTargets = (
       .filter((square): square is Square => Boolean(square))
       .filter((square) => {
         const occupying = board[square];
-        return !occupying || canCapture(config, actor, occupying, options.includeAlliedTargets);
+        return !occupying || canCapture(
+          config,
+          actor,
+          occupying,
+          options.includeAlliedTargets,
+          options.attacksOnly,
+        );
       });
   } else if (type === "bishop") {
     targets = rayTargets(board, from, actor, config, diagonal, options);
@@ -285,7 +311,13 @@ export const fourPlayerPseudoTargets = (
   }
   return targets.filter((target) => {
     const occupying = board[target];
-    return !occupying || canCapture(config, actor, occupying, options.includeAlliedTargets);
+    return !occupying || canCapture(
+      config,
+      actor,
+      occupying,
+      options.includeAlliedTargets,
+      options.attacksOnly,
+    );
   });
 };
 
@@ -404,6 +436,9 @@ export const fourPlayerApplyMove = (
   enPassant?: Omit<FourPlayerEnPassant, "expiresOnTurn">;
 } => {
   const moving = board[move.from];
+  if (board[move.to]?.type === "king") {
+    throw new Error("Ordinary moves cannot capture a King.");
+  }
   let captured = board[move.to];
   let capturedSquare = captured ? move.to : undefined;
   const next = { ...board };

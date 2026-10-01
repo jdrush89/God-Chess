@@ -93,10 +93,33 @@ const doubleQueenMate = () => {
 };
 
 const captureSouthKing = (state: FourPlayerState) => {
-  let next = fourPlayerReducer(state, { type: "select-god", godId: "chiron" });
-  next = fourPlayerReducer(next, { type: "select-ability", abilityId: "gallop" });
+  state.activeSeat = "north";
+  state.turnOrder = ["north", "south", "east", "west"];
+  if (!state.players.north.gods.includes("kangus")) {
+    state.players.north.gods.push("kangus");
+  }
+  state.rested = [...new Set([
+    ...state.rested,
+    ...state.players.south.gods,
+  ])];
+  state.attackSequence = (state.attackSequence ?? 0) + 1;
+  state.kingAttackRecency ??= {
+    north: {},
+    east: {},
+    south: {},
+    west: {},
+  };
+  state.kingAttackRecency.south.north = state.attackSequence;
+  let next = fourPlayerReducer(state, {
+    type: "select-god",
+    godId: "chiron",
+  });
+  next = fourPlayerReducer(next, {
+    type: "select-ability",
+    abilityId: "gallop",
+  });
   next = fourPlayerReducer(next, { type: "square", square: "g10" });
-  return fourPlayerReducer(next, { type: "square", square: "g1" });
+  return fourPlayerReducer(next, { type: "square", square: "g11" });
 };
 
 describe("four-player configuration and flow", () => {
@@ -177,12 +200,26 @@ describe("four-player configuration and flow", () => {
     const invalidOrbs = JSON.parse(JSON.stringify(state)) as FourPlayerState;
     invalidOrbs.players.north.orbs.light = -1;
     expect(isFourPlayerState(invalidOrbs)).toBe(false);
+
+    const invalidPassCycle = JSON.parse(JSON.stringify(state)) as FourPlayerState;
+    invalidPassCycle.passCycle = {
+      positionSignature: "tampered",
+      passedSeats: ["north"],
+    };
+    invalidPassCycle.players.north.eliminated = true;
+    expect(isFourPlayerState(invalidPassCycle)).toBe(false);
+
+    const invalidRecency = JSON.parse(JSON.stringify(state)) as FourPlayerState;
+    invalidRecency.attackSequence = 1;
+    invalidRecency.kingAttackRecency!.north.north = 1;
+    expect(isFourPlayerState(invalidRecency)).toBe(false);
   });
 
   it("adds attack tracking metadata when preparing older four-player saves", () => {
     const legacy = JSON.parse(JSON.stringify(validPlayState())) as FourPlayerState;
     delete legacy.attackSequence;
     delete legacy.kingAttackRecency;
+    delete legacy.passCycle;
     expect(isFourPlayerState(legacy)).toBe(true);
     expect(prepareFourPlayerState(legacy)).toMatchObject({
       attackSequence: 0,
@@ -192,21 +229,38 @@ describe("four-player configuration and flow", () => {
         south: {},
         west: {},
       },
+      passCycle: {
+        positionSignature: "",
+        passedSeats: [],
+      },
     });
   });
 
-  it("records orb rewards with their source and receiving seat for animation", () => {
-    const result = captureSouthKing(readyGame());
+  it("does not expose an ordinary move that captures a King", () => {
+    const state = readyGame();
+    expect(fourPlayerLegalTargets(
+      state.board,
+      "g10",
+      state.config,
+    )).not.toContain("g1");
+  });
 
-    expect(result.orbAnimations).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        player: "north",
-        orb: "dark",
-        amount: 2,
-        total: 22,
-        source: "g1",
-      }),
-    ]));
+  it("does not let Marked select a King for execution", () => {
+    let state = readyGame();
+    state.players.north.gods = ["death"];
+    state.players.north.upgrades.marked = 3;
+    state.players.north.orbs.dark = 10;
+
+    state = fourPlayerReducer(state, {
+      type: "select-god",
+      godId: "death",
+    });
+    state = fourPlayerReducer(state, {
+      type: "select-ability",
+      abilityId: "marked",
+    });
+
+    expect(state.legalTargets).not.toContain("g14");
   });
 
   it("eliminates a checkmated player when their turn begins and credits the latest attacker", () => {
@@ -279,6 +333,73 @@ describe("four-player configuration and flow", () => {
     expect(fourPlayerLegalTargets(state.board, "d14", state.config)).toEqual([]);
     expect(result.players.north.eliminated).toBe(false);
     expect(result.activeSeat).toBe("north");
+  });
+
+  it("skips a stalemated FFA seat and re-evaluates it after the position changes", () => {
+    const state = validPlayState();
+    state.rested = [...state.players.north.gods];
+    state.enPassant = {
+      target: "g9",
+      capturedSquare: "g10",
+      pawnId: "expired-pawn",
+      expiresOnTurn: state.turn,
+    };
+    const skipped = fourPlayerReducer(state, { type: "load", state });
+
+    expect(skipped.activeSeat).toBe("east");
+    expect(skipped.enPassant).toBeUndefined();
+    expect(skipped.players.north.eliminated).toBe(false);
+    expect(skipped.history).toContain("North was stalemated and skipped.");
+
+    skipped.activeSeat = "north";
+    skipped.rested = [];
+    const recovered = fourPlayerReducer(skipped, {
+      type: "load",
+      state: skipped,
+    });
+    expect(recovered.activeSeat).toBe("north");
+    expect(recovered.phase).toBe("play");
+    expect(recovered.passCycle?.passedSeats).toEqual([]);
+  });
+
+  it("draws after every FFA seat is skipped in one unchanged cycle", () => {
+    const state = validPlayState();
+    delete state.board.g10;
+    state.rested = Object.values(state.players)
+      .flatMap((player) => player.gods);
+
+    const result = fourPlayerReducer(state, { type: "load", state });
+
+    expect(result.phase).toBe("gameover");
+    expect(result.drawReason).toBe("stalemate-cycle");
+    expect(result.passCycle?.passedSeats).toEqual([
+      "north",
+      "east",
+      "south",
+      "west",
+    ]);
+  });
+
+  it("keeps a stalemated teammate alive and preserves team victory rules", () => {
+    const state = validPlayState();
+    state.config.mode = "teams";
+    state.config.teams = {
+      north: "team-a",
+      east: "team-a",
+      south: "team-b",
+      west: "team-b",
+    };
+    for (const seat of ["north", "east", "south", "west"] as const) {
+      state.players[seat].team = state.config.teams[seat];
+    }
+    state.rested = [...state.players.north.gods];
+
+    const result = fourPlayerReducer(state, { type: "load", state });
+
+    expect(result.activeSeat).toBe("east");
+    expect(result.players.north.eliminated).toBe(false);
+    expect(result.winner).toBeUndefined();
+    expect(result.drawReason).toBeUndefined();
   });
 
   it("applies first-King victory and takeover through start-of-turn checkmate", () => {
@@ -401,7 +522,7 @@ describe("four-player configuration and flow", () => {
     });
   });
 
-  it("ends immediately on the first captured King when configured", () => {
+  it("ends immediately on the first checkmate when configured", () => {
     const state = readyGame();
     state.config.victoryMode = "first-king-captured";
     const result = captureSouthKing(state);
@@ -409,7 +530,7 @@ describe("four-player configuration and flow", () => {
     expect(result.winner).toEqual({ seat: "north", team: undefined, reason: "first-king-captured" });
   });
 
-  it("does not award first-King victory when Rage destroys the acting King's own King", () => {
+  it("does not let Rage destroy the acting King's own King", () => {
     let state = readyGame();
     state.config.victoryMode = "first-king-captured";
     state.players.north.gods = ["kangus"];
@@ -424,13 +545,14 @@ describe("four-player configuration and flow", () => {
     state = fourPlayerReducer(state, { type: "select-god", godId: "kangus" });
     state = fourPlayerReducer(state, { type: "select-ability", abilityId: "rage" });
     state = fourPlayerReducer(state, { type: "square", square: "g8" });
-    expect(state.players.north.eliminated).toBe(true);
+    expect(state.players.north.eliminated).toBe(false);
     expect(state.winner).toBeUndefined();
     expect(state.phase).toBe("play");
     expect(state.activeSeat).toBe("east");
+    expect(state.board.g9?.type).toBe("king");
   });
 
-  it("stops friendly fire after self-elimination and does not leave takeover ghost controllers", () => {
+  it("does not let Rage capture adjacent Kings", () => {
     let state = readyGame();
     state.config.victoryMode = "first-king-captured";
     state.config.takeover = true;
@@ -446,13 +568,14 @@ describe("four-player configuration and flow", () => {
     state = fourPlayerReducer(state, { type: "select-god", godId: "kangus" });
     state = fourPlayerReducer(state, { type: "select-ability", abilityId: "rage" });
     state = fourPlayerReducer(state, { type: "square", square: "g8" });
-    expect(state.players.north.eliminated).toBe(true);
+    expect(state.players.north.eliminated).toBe(false);
     expect(state.players.east.eliminated).toBe(false);
     expect(state.winner).toBeUndefined();
-    expect(Object.values(state.board).every((candidate) => candidate.controller !== "north")).toBe(true);
+    expect(state.board.g9?.type).toBe("king");
+    expect(state.board.h9?.type).toBe("king");
   });
 
-  it("does not award first-King victory for destroying a teammate King", () => {
+  it("does not let Rage destroy teammate or hostile Kings", () => {
     const config = createDefaultFourPlayerConfig();
     config.mode = "teams";
     config.teams = {
@@ -480,11 +603,11 @@ describe("four-player configuration and flow", () => {
     state = fourPlayerReducer(state, { type: "select-god", godId: "kangus" });
     state = fourPlayerReducer(state, { type: "select-ability", abilityId: "rage" });
     state = fourPlayerReducer(state, { type: "square", square: "m8" });
-    expect(state.players.east.eliminated).toBe(true);
-    expect(state.players.south.eliminated).toBe(true);
+    expect(state.players.east.eliminated).toBe(false);
+    expect(state.players.south.eliminated).toBe(false);
     expect(state.winner).toBeUndefined();
     expect(state.phase).toBe("play");
-    expect(state.activeSeat).toBe("west");
+    expect(state.activeSeat).toBe("east");
   });
 
   it("wins FFA only when one player remains", () => {

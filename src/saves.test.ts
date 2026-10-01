@@ -155,6 +155,8 @@ describe("saved-game variants", () => {
     };
     expect(normalizeSavedGame(createSavedGame("classic-enchant", classic, [])))
       .toBeTruthy();
+    expect(gameReducer(classic, { type: "load-game", state: classic }).pending?.step)
+      .toBe("enchant-followup-move");
     const invalidClassic = structuredClone(classic);
     delete invalidClassic.pending!.destination;
     expect(normalizeSavedGame(createSavedGame("bad-classic-enchant", invalidClassic, [])))
@@ -180,10 +182,42 @@ describe("saved-game variants", () => {
     };
     expect(normalizeSavedGame(createSavedGame("four-enchant", four, [])))
       .toBeTruthy();
+    expect(fourPlayerReducer(four, { type: "load", state: four }).pending?.step)
+      .toBe("enchant-followup-move");
     const invalidFour = structuredClone(four);
     delete invalidFour.pending!.movedPieceId;
     expect(normalizeSavedGame(createSavedGame("bad-four-enchant", invalidFour, [])))
       .toBeUndefined();
+  });
+
+  it("round-trips a classic stalemate result and its post-game undo state", () => {
+    let state = createGame(1);
+    for (const god of GODS.slice(0, 6)) {
+      state = gameReducer(state, { type: "draft", godId: god.id });
+    }
+    const undo = structuredClone(state);
+    state.phase = "gameover";
+    state.winner = undefined;
+    state.result = { kind: "draw", reason: "stalemate" };
+    state.notice = "White was stalemated. The match is a draw.";
+
+    const normalized = normalizeSavedGame(JSON.parse(JSON.stringify(
+      createSavedGame("classic-stalemate", state, [undo], undo),
+    )));
+
+    expect(normalized && !isFourPlayerSavedGame(normalized) &&
+      !isThreePlayerSavedGame(normalized)).toBe(true);
+    if (
+      !normalized ||
+      isFourPlayerSavedGame(normalized) ||
+      isThreePlayerSavedGame(normalized)
+    ) return;
+    expect(normalized.state.result).toEqual({
+      kind: "draw",
+      reason: "stalemate",
+    });
+    expect(normalized.undoHistory[0].phase).toBe("play");
+    expect(normalized.turnStart?.phase).toBe("play");
   });
 
   it("rejects primitive state values without throwing", () => {

@@ -7,7 +7,6 @@ import {
   validateFourPlayerConfig,
 } from "../game/fourPlayerConfig";
 import {
-  availableFourPlayerActions,
   createFourPlayerGame,
   fourPlayerReducer,
 } from "../game/fourPlayerEngine";
@@ -132,6 +131,7 @@ export class FourPlayerRoomHost {
   private processedActionIds = new Set<string>();
   private aiTimer?: number;
   private aiActionsThisTurn = 0;
+  private aiNoPlanRevision?: number;
   private stopped = false;
 
   constructor(
@@ -627,7 +627,8 @@ export class FourPlayerRoomHost {
       this.status !== "playing" ||
       !this.canonical ||
       !isFourPlayerAiTurn(this.canonical.state) ||
-      this.aiTimer !== undefined
+      this.aiTimer !== undefined ||
+      this.aiNoPlanRevision === this.canonical.revision
     ) return;
     this.aiTimer = globalThis.setTimeout(() => {
       this.aiTimer = undefined;
@@ -638,10 +639,7 @@ export class FourPlayerRoomHost {
       ) return;
       let action = chooseFourPlayerAiPlan(this.canonical.state)[0];
       if (this.aiActionsThisTurn >= 40 || !action) {
-        const available = availableFourPlayerActions(this.canonical.state);
-        action = available.find((candidate) =>
-          candidate.type === "pass" || candidate.type === "cancel"
-        ) ?? available[0];
+        this.aiNoPlanRevision = this.canonical.revision;
         this.aiActionsThisTurn = 0;
       }
       if (!action) return;

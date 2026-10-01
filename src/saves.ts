@@ -424,6 +424,22 @@ const isUpgradePreview = (value: unknown): value is UpgradePreview =>
     )
   );
 
+const isClassicResult = (
+  value: unknown,
+): value is NonNullable<GameState["result"]> => {
+  if (!isRecord(value) || typeof value.kind !== "string") return false;
+  if (value.kind === "winner") {
+    return (
+      hasOnlyKeys(value, ["kind", "winner", "reason"]) &&
+      isColor(value.winner) &&
+      ["checkmate", "king-death"].includes(String(value.reason))
+    );
+  }
+  return value.kind === "draw" &&
+    hasOnlyKeys(value, ["kind", "reason"]) &&
+    value.reason === "stalemate";
+};
+
 export const prepareTwoPlayerState = (state: GameState) => {
   const savedState = structuredClone(state);
   savedState.orbAnimations = [];
@@ -435,6 +451,17 @@ export const prepareTwoPlayerState = (state: GameState) => {
   savedState.nextPresentationId ??= 1;
   savedState.gameMode ??= "local";
   savedState.aiDifficulty ??= 5;
+  if (
+    savedState.phase === "gameover" &&
+    savedState.winner &&
+    !savedState.result
+  ) {
+    savedState.result = {
+      kind: "winner",
+      winner: savedState.winner,
+      reason: "king-death",
+    };
+  }
   return savedState;
 };
 
@@ -527,7 +554,8 @@ export const isTwoPlayerGameState = (state: unknown): state is GameState => {
     (state.selectedSquare !== undefined && !isSquare(state.selectedSquare)) ||
     (state.pending !== undefined && !isPending(state.pending)) ||
     (state.bonusTurn !== undefined && !isColor(state.bonusTurn)) ||
-    (state.winner !== undefined && !isColor(state.winner))
+    (state.winner !== undefined && !isColor(state.winner)) ||
+    (state.result !== undefined && !isClassicResult(state.result))
   ) return false;
 
   const boardPieceIds: string[] = [];
@@ -576,7 +604,18 @@ const hasConsistentTwoPlayerState = (state: GameState) => {
     state.draft.pickIndex === draftedGods.length &&
     (state.phase === "draft" || draftedGods.length === 6) &&
     state.rested.every((godId) => draftedGods.includes(godId)) &&
-    (state.phase === "gameover") === Boolean(state.winner) &&
+    (
+      state.phase === "gameover"
+        ? Boolean(state.result || state.winner)
+        : !state.result && !state.winner
+    ) &&
+    (
+      state.result?.kind === "winner"
+        ? state.winner === state.result.winner
+        : state.result?.kind === "draw"
+          ? state.winner === undefined
+          : true
+    ) &&
     (
       state.phase === "upgrade"
         ? (

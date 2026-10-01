@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   availableThreePlayerActions,
   createThreePlayerGame,
+  hasCompleteThreePlayerTurn,
   threePlayerReducer,
   unsupportedThreePlayerAbilities,
 } from "./threePlayerEngine";
@@ -150,6 +151,7 @@ describe("three-player God catalog", () => {
     }
 
     expect(state.pending?.step).toBe("enchant-followup-move");
+    expect(hasCompleteThreePlayerTurn(state)).toBe(true);
     expect(Object.values(state.board).find((candidate) => candidate.id === enchantedId)?.controller)
       .toBe(originalController);
     expect(availableThreePlayerActions(state).every((action) => action.type === "cell"))

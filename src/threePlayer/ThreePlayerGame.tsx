@@ -802,6 +802,7 @@ export function ThreePlayerGame({
   );
   const [undoDepth, setUndoDepth] = useState(undoStack.current.length);
   const aiPlan = useRef<ThreePlayerAction[]>([]);
+  const aiNoPlanRevision = useRef<number | undefined>(undefined);
   const aiWorker = useRef<Worker | undefined>(undefined);
   const aiRequestRevision = useRef<number | undefined>(undefined);
   const [aiPlanReady, setAiPlanReady] = useState(0);
@@ -961,6 +962,9 @@ export function ThreePlayerGame({
       if (stateRef.current.revision !== event.data.revision) return;
       aiRequestRevision.current = undefined;
       aiPlan.current = event.data.plan;
+      aiNoPlanRevision.current = event.data.plan.length
+        ? undefined
+        : event.data.revision;
       recordDiagnostic({
         category: "ai",
         event: "three-player-worker-result",
@@ -1005,6 +1009,7 @@ export function ThreePlayerGame({
       aiRequestRevision.current = undefined;
       return;
     }
+    if (aiNoPlanRevision.current === state.revision) return;
     if (!aiPlan.current.length) {
       if (aiWorker.current) {
         if (aiRequestRevision.current !== state.revision) {
@@ -1031,6 +1036,9 @@ export function ThreePlayerGame({
         aiPlan.current = chooseThreePlayerAiPlan(
           stateRef.current as ThreePlayerState,
         );
+        aiNoPlanRevision.current = aiPlan.current.length
+          ? undefined
+          : revision;
         recordDiagnostic({
           category: "ai",
           event: "three-player-plan-result",

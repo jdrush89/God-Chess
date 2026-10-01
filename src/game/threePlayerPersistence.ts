@@ -1005,14 +1005,11 @@ const isThreePlayerStateVersion = (value: unknown): boolean => {
           living[0] !== result.seat
         )
       ) return false;
-    } else if (
-      result.reason === "stalemate" &&
-      value.config.victoryMode !== "first-checkmate"
-    ) return false;
-    else if (
-      result.reason === "stalemate-cycle" &&
-      !living.every((seat) => passCycle.passedSeats.includes(seat))
-    ) return false;
+    } else if (result.reason === "stalemate") {
+      if (value.config.victoryMode !== "first-checkmate") return false;
+    } else if (!living.every((seat) =>
+      passCycle.passedSeats.includes(seat)
+    )) return false;
   }
   if ((value.phase === "gameover") !== Boolean(value.result)) return false;
   if (value.phase !== "gameover" && players[value.activeSeat].eliminated) return false;
