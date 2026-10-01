@@ -135,9 +135,11 @@ describe("three-player turn-start resolution", () => {
   it("skips a stalemated Red seat without toggling affinity and retries later", () => {
     mockedChess.mode = "red-skip-once";
     let state = finishDraft();
+    const turnBeforeSkip = state.turn;
 
     state = playLegacyMove(state);
     expect(state.activeSeat).toBe("black");
+    expect(state.turn).toBe(turnBeforeSkip + 2);
     expect(state.completedTurns.red).toBe(0);
     const redPiece = Object.values(state.board).find(
       (candidate) => candidate.owner === "red",

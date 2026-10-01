@@ -649,11 +649,15 @@ export const resolveThreePlayerTurnStart = (state: ThreePlayerState) => {
       return;
     }
     if (threePlayerIsInCheck(state, seat)) {
-      if (!resolveCheckmate(state, seat) || state.result) return;
+      if (!resolveCheckmate(state, seat)) return;
     } else {
       recordStalematePass(state, seat);
-      if (state.result) return;
     }
+    state.turn += 1;
+    if (state.enPassant && state.enPassant.expiresOnTurn < state.turn) {
+      state.enPassant = undefined;
+    }
+    if (state.result) return;
     const survivors = livingSeats(state);
     if (!survivors.length) {
       setResult(state, { kind: "draw", reason: "stalemate-cycle" });
