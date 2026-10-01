@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThreePlayerSetup } from "./ThreePlayerSetup";
 
 afterEach(cleanup);
@@ -28,14 +28,26 @@ describe("ThreePlayerSetup", () => {
   });
 
   it("offers per-AI difficulty and match rules", () => {
-    render(<ThreePlayerSetup onStart={() => undefined} onBack={() => undefined} />);
+    const onStart = vi.fn();
+    const { container } = render(
+      <ThreePlayerSetup onStart={onStart} onBack={() => undefined} />,
+    );
     fireEvent.click(screen.getAllByRole("button", { name: /^AI$/i })[1]);
     const difficulty = screen.getByRole("slider", { name: /Red AI difficulty/i });
     fireEvent.change(difficulty, { target: { value: "9" } });
     expect((difficulty as HTMLInputElement).value).toBe("9");
 
-    fireEvent.click(screen.getByRole("button", { name: /First checkmate/i }));
-    expect(screen.getByRole("button", { name: /First checkmate/i }).className).toContain("active");
+    const victoryButtons = Array.from(
+      container.querySelectorAll(".three-setup-option .segmented-control button"),
+    );
+    expect(victoryButtons.map((button) => button.textContent?.trim())).toEqual([
+      "Last surviving",
+      "First King captured",
+    ]);
+    expect(screen.getByRole("button", { name: /Last surviving/i }).className).toContain("active");
+    fireEvent.click(screen.getByRole("button", { name: /First King captured/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Begin three-player draft/i }));
+    expect(onStart.mock.calls[0][0].victoryMode).toBe("first-checkmate");
     fireEvent.click(screen.getByRole("checkbox", { name: /Piece takeover/i }));
     expect((screen.getByRole("checkbox", { name: /Piece takeover/i }) as HTMLInputElement).checked).toBe(true);
   });

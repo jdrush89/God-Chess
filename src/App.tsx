@@ -12,7 +12,6 @@ import {
   Eye,
   Flame,
   FlaskConical,
-  Globe2,
   Hexagon,
   History,
   Info,
@@ -120,7 +119,8 @@ import { ThreePlayerSetup } from "./threePlayer/ThreePlayerSetup";
 import { AbilityRules, LevelSelector } from "./UpgradePreview";
 
 type GameDispatch = (action: GameAction) => void;
-type StartMode = GameMode | "four-player" | "three-player";
+type StartCategory = "local" | "online";
+type PlayerCount = 2 | 3 | 4;
 
 interface FourPlayerSession {
   key: string;
@@ -382,12 +382,14 @@ function GodSigil({ godId, size = "normal" }: { godId: GodId; size?: "small" | "
 function DraftScreen({
   state,
   dispatch,
+  onQuickDraft,
   onSaveAndQuit,
   onOpenSettings,
   inputDisabled = false,
 }: {
   state: GameState;
   dispatch: GameDispatch;
+  onQuickDraft?: () => void;
   onSaveAndQuit?: () => void;
   onOpenSettings: () => void;
   inputDisabled?: boolean;
@@ -427,17 +429,29 @@ function DraftScreen({
         <p className="eyebrow">THE PANTHEON AWAITS</p>
         <h1>Choose your gods.</h1>
         <p>Each player claims three divine allies in a 1–2–2–1 snake draft.</p>
-        <button
-          className="auto-draft-button"
-          disabled={inputDisabled || state.draft.pickIndex >= state.draft.order.length}
-          onClick={() => dispatch({
-            type: "auto-draft",
-            godId: shuffled(state.draft.available)[0],
-          })}
-        >
-          <Sparkles size={15} />
-          Auto-pick random god
-        </button>
+        <div className="draft-auto-actions">
+          <button
+            className="auto-draft-button"
+            disabled={inputDisabled || state.draft.pickIndex >= state.draft.order.length}
+            onClick={() => dispatch({
+              type: "auto-draft",
+              godId: shuffled(state.draft.available)[0],
+            })}
+          >
+            <Sparkles size={15} />
+            Auto-pick random god
+          </button>
+          {onQuickDraft && (
+            <button
+              className="auto-draft-button"
+              disabled={state.draft.pickIndex >= state.draft.order.length}
+              onClick={onQuickDraft}
+            >
+              <Zap size={15} />
+              Quick Draft
+            </button>
+          )}
+        </div>
         <div className="draft-progress">
           {state.draft.order.map((color, index) => (
             <div className={`draft-pip ${index < state.draft.pickIndex ? "done" : ""} ${index === state.draft.pickIndex ? "current" : ""}`} key={index}>
@@ -1383,7 +1397,9 @@ function MainMenu({
   accountError,
   onLoad,
   onDelete,
-  onNewGame,
+  onOpenLocal,
+  onOpenOnline,
+  onOpenPuzzles,
   onSignIn,
   onSignUp,
   onSignOut,
@@ -1399,7 +1415,9 @@ function MainMenu({
   accountError?: string;
   onLoad: (game: SavedGame) => void;
   onDelete: (id: string) => void;
-  onNewGame: () => void;
+  onOpenLocal: () => void;
+  onOpenOnline: () => void;
+  onOpenPuzzles: () => void;
   onSignIn: (email: string, password: string) => Promise<string>;
   onSignUp: (email: string, password: string, displayName: string) => Promise<string>;
   onSignOut: () => Promise<void>;
@@ -1422,7 +1440,9 @@ function MainMenu({
       <div className="main-menu-actions">
         <p className="eyebrow">THE DIVINE GAME</p>
         <div>
-          <button className="primary-button" onClick={onNewGame} disabled={savesLoading}>New game</button>
+          <button className="primary-button" onClick={onOpenLocal}>Local</button>
+          <button className="primary-button" onClick={onOpenOnline}>Online</button>
+          <button className="primary-button" onClick={onOpenPuzzles}>Puzzles</button>
           {(savedGames.length > 0 || savesLoading) && (
             <button className="secondary-button" onClick={() => setLoadOpen(true)} disabled={savesLoading}>Load game</button>
           )}
@@ -1591,15 +1611,44 @@ function MainMenu({
   );
 }
 
+function PlayerCountChooser({
+  category,
+  onSelect,
+}: {
+  category: StartCategory;
+  onSelect: (playerCount: PlayerCount) => void;
+}) {
+  return (
+    <>
+      <div className="start-game-heading">
+        <p className="eyebrow">{category === "local" ? "LOCAL PLAY" : "ONLINE PLAY"}</p>
+        <h1>Choose player count</h1>
+        <p>
+          {category === "local"
+            ? "Share this device or challenge the Divine AI."
+            : "Host or join a room for the exact board you want to play."}
+        </p>
+      </div>
+      <div className="player-count-grid" aria-label={`${category} player count`}>
+        {([2, 3, 4] as const).map((playerCount) => (
+          <button onClick={() => onSelect(playerCount)} key={playerCount}>
+            <Users size={34} />
+            <strong>{playerCount} Player</strong>
+          </button>
+        ))}
+      </div>
+    </>
+  );
+}
+
 function StartGamePrompt({
   online,
   fourOnline,
   threeOnline,
   defaultPlayerName,
-  initialMode,
-  canCancel,
+  category,
+  initialPlayerCount,
   onStart,
-  onOpenPuzzles,
   onOpenFourPlayer,
   onOpenThreePlayer,
   onHost,
@@ -1624,10 +1673,9 @@ function StartGamePrompt({
   fourOnline: FourPlayerOnlineState;
   threeOnline: ThreePlayerOnlineState;
   defaultPlayerName?: string;
-  initialMode: StartMode;
-  canCancel: boolean;
+  category: StartCategory;
+  initialPlayerCount?: PlayerCount;
   onStart: (mode: Exclude<GameMode, "online" | "puzzle">, difficulty: number) => void;
-  onOpenPuzzles: () => void;
   onOpenFourPlayer: () => void;
   onOpenThreePlayer: () => void;
   onHost: (name: string) => void;
@@ -1651,154 +1699,129 @@ function StartGamePrompt({
   onCancel: () => void;
   onDisconnect: () => void;
 }) {
-  const [mode, setMode] = useState<StartMode>(initialMode);
+  const [playerCount, setPlayerCount] = useState<PlayerCount | undefined>(
+    initialPlayerCount ??
+      (threeOnline.roomCode
+        ? 3
+        : fourOnline.roomCode
+          ? 4
+          : online.roomCode
+            ? 2
+            : undefined),
+  );
+  const [localMode, setLocalMode] = useState<"local" | "ai">("local");
   const [difficulty, setDifficulty] = useState(7);
   const [onlineAction, setOnlineAction] = useState<"host" | "join">("host");
-  const [onlineVariant, setOnlineVariant] = useState<
-    "classic" | "four-player" | "three-player"
-  >(
-    threeOnline.roomCode
-      ? "three-player"
-      : fourOnline.roomCode
-        ? "four-player"
-        : "classic",
-  );
   const [playerName, setPlayerName] = useState(defaultPlayerName || "Player");
   const [roomCode, setRoomCode] = useState("");
 
-  const chooseMode = (nextMode: StartMode) => {
-    if (mode === "online" && nextMode !== "online") onDisconnect();
-    setMode(nextMode);
+  const back = () => {
+    if (playerCount) {
+      onDisconnect();
+      setPlayerCount(undefined);
+      return;
+    }
+    onDisconnect();
+    onCancel();
   };
 
   return (
-    <div className="modal-backdrop">
-      <section className="start-game-modal">
-        {canCancel && <button className="close-button" onClick={onCancel}><X size={20} /></button>}
-        <p className="eyebrow">CHOOSE YOUR MATCH</p>
-        <h2>How will you play?</h2>
-        <div className="game-mode-grid">
-          <button className={mode === "local" ? "active" : ""} onClick={() => chooseMode("local")}>
-            <Users size={24} />
-            <strong>Local duel</strong>
-            <span>Two players share this device.</span>
-          </button>
-          <button className={mode === "ai" ? "active" : ""} onClick={() => chooseMode("ai")}>
-            <Bot size={24} />
-            <strong>Divine AI</strong>
-            <span>Challenge a computer opponent.</span>
-          </button>
-          <button
-            className={mode === "three-player" ? "active" : ""}
-            onClick={() => {
-              chooseMode("three-player");
+    <main className="start-game-screen">
+      <header className="start-game-header">
+        <button className="start-game-back" onClick={back}>
+          <ArrowLeft size={18} />
+          {playerCount ? `Back to ${category}` : "Back to title"}
+        </button>
+        <span>GOD CHESS</span>
+      </header>
+      <section className={`start-game-content ${category === "online" && playerCount ? "online-stage" : ""}`}>
+        {!playerCount ? (
+          <PlayerCountChooser category={category} onSelect={(count) => {
+            onDisconnect();
+            if (category === "local" && count === 3) {
               onOpenThreePlayer();
-            }}
-          >
-            <Users size={24} />
-            <strong>Three-player local</strong>
-            <span>Five boards, nine Gods, one shared device.</span>
-          </button>
-          <button
-            className={mode === "four-player" ? "active" : ""}
-            onClick={() => {
-              chooseMode("four-player");
+              return;
+            }
+            if (category === "local" && count === 4) {
               onOpenFourPlayer();
-            }}
-          >
-            <Users size={24} />
-            <strong>Four-player local</strong>
-            <span>FFA or 2v2 on the shared cross-board.</span>
-          </button>
-          <button className={mode === "online" ? "active" : ""} onClick={() => chooseMode("online")}>
-            <Globe2 size={24} />
-            <strong>Online versus</strong>
-            <span>Host a two-, three-, or four-player room.</span>
-          </button>
-          <button
-            className={mode === "puzzle" ? "active" : ""}
-            onClick={() => {
-              chooseMode("puzzle");
-              onOpenPuzzles();
-            }}
-          >
-            <Crosshair size={24} />
-            <strong>Divine puzzles</strong>
-            <span>Find the winning move from a prepared position.</span>
-          </button>
-        </div>
-
-        {mode === "ai" && (
-          <div className="difficulty-control">
-            <div>
-              <span>AI difficulty</span>
-              <strong>{difficulty}</strong>
-            </div>
-            <input
-              type="range"
-              min="1"
-              max="10"
-              value={difficulty}
-              onChange={(event) => setDifficulty(Number(event.target.value))}
-            />
-            <small>{difficulty * 10}% chance to choose its highest-scoring turn</small>
-          </div>
-        )}
-
-        {mode === "online" && (
-          <div className="online-setup">
-            {online.role === "none" &&
-              fourOnline.role === "none" &&
-              threeOnline.role === "none" && (
-              <div className="online-variant-tabs">
+              return;
+            }
+            setPlayerCount(count);
+          }} />
+        ) : category === "local" ? (
+          playerCount === 2 ? (
+            <>
+              <div className="start-game-heading">
+                <p className="eyebrow">LOCAL · 2 PLAYER</p>
+                <h1>Choose opponent</h1>
+                <p>Play together on one device or face the Divine AI.</p>
+              </div>
+              <div className="two-player-mode-grid" aria-label="Two-player local mode">
                 <button
-                  className={onlineVariant === "classic" ? "active" : ""}
-                  onClick={() => {
-                    onDisconnect();
-                    setOnlineVariant("classic");
-                  }}
+                  className={localMode === "local" ? "active" : ""}
+                  onClick={() => setLocalMode("local")}
                 >
-                  Two-player
+                  <Users size={30} />
+                  <strong>Local duel</strong>
+                  <span>Two players share this device.</span>
                 </button>
                 <button
-                  className={onlineVariant === "four-player" ? "active" : ""}
-                  onClick={() => {
-                    onDisconnect();
-                    setOnlineVariant("four-player");
-                  }}
+                  className={localMode === "ai" ? "active" : ""}
+                  onClick={() => setLocalMode("ai")}
                 >
-                  Four-player
-                </button>
-                <button
-                  className={onlineVariant === "three-player" ? "active" : ""}
-                  onClick={() => {
-                    onDisconnect();
-                    setOnlineVariant("three-player");
-                  }}
-                >
-                  Three-player
+                  <Bot size={30} />
+                  <strong>Divine AI</strong>
+                  <span>Challenge a computer opponent.</span>
                 </button>
               </div>
-            )}
-            {onlineVariant === "three-player" && threeOnline.role !== "none" ? (
+              {localMode === "ai" && (
+                <div className="difficulty-control">
+                  <div>
+                    <span>AI difficulty</span>
+                    <strong>{difficulty}</strong>
+                  </div>
+                  <input
+                    aria-label="AI difficulty"
+                    type="range"
+                    min="1"
+                    max="10"
+                    value={difficulty}
+                    onChange={(event) => setDifficulty(Number(event.target.value))}
+                  />
+                  <small>{difficulty * 10}% chance to choose its highest-scoring turn</small>
+                </div>
+              )}
+              <button
+                className="primary-button start-match-button"
+                onClick={() => onStart(localMode, difficulty)}
+              >
+                {localMode === "ai" ? "Challenge the AI" : "Begin local duel"}
+              </button>
+            </>
+          ) : (
+            <></>
+          )
+        ) : (
+          <div className="online-setup">
+            {playerCount === 3 && threeOnline.role !== "none" ? (
               <ThreePlayerOnlineLobby
                 online={threeOnline}
                 onReady={onThreeReady}
                 onAssignSeat={onThreeAssignSeat}
                 onUpdateConfig={onThreeUpdateConfig}
                 onStart={onStartThreeOnline}
-                onLeave={onDisconnect}
+                onLeave={back}
               />
-            ) : onlineVariant === "four-player" && fourOnline.role !== "none" ? (
+            ) : playerCount === 4 && fourOnline.role !== "none" ? (
               <FourPlayerOnlineLobby
                 online={fourOnline}
                 onReady={onFourReady}
                 onAssignSeat={onFourAssignSeat}
                 onUpdateConfig={onFourUpdateConfig}
                 onStart={onStartFourOnline}
-                onLeave={onDisconnect}
+                onLeave={back}
               />
-            ) : onlineVariant === "classic" && online.role !== "none" ? (
+            ) : playerCount === 2 && online.role !== "none" ? (
               online.role === "host" ? (
                 <div className="online-lobby">
                   <Wifi size={24} />
@@ -1825,6 +1848,11 @@ function StartGamePrompt({
               )
             ) : (
               <>
+                <div className="start-game-heading compact">
+                  <p className="eyebrow">ONLINE · {playerCount} PLAYER</p>
+                  <h1>Host or join</h1>
+                  <p>Use a five-character room code to meet at the same board.</p>
+                </div>
                 <div className="online-tabs">
                   <button className={onlineAction === "host" ? "active" : ""} onClick={() => setOnlineAction("host")}>
                     Host
@@ -1858,10 +1886,10 @@ function StartGamePrompt({
                     (onlineAction === "join" && roomCode.length !== 5)
                   }
                   onClick={() => {
-                    if (onlineVariant === "three-player") {
+                    if (playerCount === 3) {
                       if (onlineAction === "host") onHostThreeOnline(playerName);
                       else onJoinThreeOnline(roomCode, playerName);
-                    } else if (onlineVariant === "four-player") {
+                    } else if (playerCount === 4) {
                       if (onlineAction === "host") onHostFourOnline(playerName);
                       else onJoinFourOnline(roomCode, playerName);
                     } else if (onlineAction === "host") onHost(playerName);
@@ -1884,20 +1912,14 @@ function StartGamePrompt({
             {(online.role !== "none" ||
               fourOnline.role !== "none" ||
               threeOnline.role !== "none") &&
-              !(onlineVariant === "four-player" && fourOnline.role !== "none") &&
-              !(onlineVariant === "three-player" && threeOnline.role !== "none") && (
-              <button className="text-button leave-room-button" onClick={onDisconnect}>Leave room</button>
+              !(playerCount === 4 && fourOnline.role !== "none") &&
+              !(playerCount === 3 && threeOnline.role !== "none") && (
+              <button className="text-button leave-room-button" onClick={back}>Leave room</button>
             )}
           </div>
         )}
-
-        {mode !== "online" && mode !== "puzzle" && mode !== "four-player" && mode !== "three-player" && (
-          <button className="primary-button start-match-button" onClick={() => onStart(mode, difficulty)}>
-            {mode === "ai" ? "Challenge the AI" : "Begin local duel"}
-          </button>
-        )}
       </section>
-    </div>
+    </main>
   );
 }
 
@@ -1936,7 +1958,7 @@ function PuzzleSelectScreen({
           onClick={() => difficulty ? setDifficulty(undefined) : onBack()}
         >
           <ArrowLeft size={17} />
-          {difficulty ? "Difficulties" : "Game modes"}
+          {difficulty ? "Difficulties" : "Main menu"}
         </button>
         <p className="eyebrow">DIVINE PUZZLES</p>
         {!difficulty ? (
@@ -2700,9 +2722,9 @@ export default function App() {
   savedGamesRef.current = savedGames;
   const activeSaveId = useRef<string | undefined>(undefined);
   const [startView, setStartView] = useState<"menu" | "setup" | "three-setup" | "four-setup" | "puzzles" | "none">("menu");
-  const [setupCanCancel, setSetupCanCancel] = useState(false);
   const [setupReturnView, setSetupReturnView] = useState<"menu" | "none">("menu");
-  const [setupInitialMode, setSetupInitialMode] = useState<StartMode>("local");
+  const [setupCategory, setSetupCategory] = useState<StartCategory>("local");
+  const [setupPlayerCount, setSetupPlayerCount] = useState<PlayerCount>();
   const [fourPlayerSession, setFourPlayerSession] = useState<FourPlayerSession>();
   const [threePlayerSession, setThreePlayerSession] = useState<ThreePlayerSession>();
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -2712,6 +2734,7 @@ export default function App() {
   const stateRef = useRef(state);
   stateRef.current = state;
   const aiPlan = useRef<GameAction[]>([]);
+  const quickDraftPending = useRef(false);
   const undoStack = useRef<GameState[]>([]);
   const undoDepthRef = useRef(0);
   const turnStart = useRef<GameState | undefined>(undefined);
@@ -2975,6 +2998,25 @@ export default function App() {
     receiveState(next);
   };
 
+  const quickDraft = () => {
+    if (
+      quickDraftPending.current ||
+      stateRef.current.gameMode === "online" ||
+      stateRef.current.phase !== "draft"
+    ) return;
+    quickDraftPending.current = true;
+    aiPlan.current = [];
+    try {
+      while (stateRef.current.phase === "draft") {
+        const godId = stateRef.current.draft.available[0];
+        if (!godId) break;
+        dispatch({ type: "draft", godId });
+      }
+    } finally {
+      quickDraftPending.current = false;
+    }
+  };
+
   const changeUndoPreference = (enabled: boolean) => {
     persistUndoSetting(enabled);
     setUndoPreferred(enabled);
@@ -3205,9 +3247,9 @@ export default function App() {
 
   useEffect(() => {
     if (!fourOnline.ended) return;
-    setSetupCanCancel(false);
-    setSetupInitialMode("online");
-    setSetupReturnView("none");
+    setSetupCategory("online");
+    setSetupPlayerCount(4);
+    setSetupReturnView("menu");
     setStartView("setup");
   }, [fourOnline.ended]);
 
@@ -3220,9 +3262,9 @@ export default function App() {
 
   useEffect(() => {
     if (!threeOnline.ended) return;
-    setSetupCanCancel(false);
-    setSetupInitialMode("online");
-    setSetupReturnView("none");
+    setSetupCategory("online");
+    setSetupPlayerCount(3);
+    setSetupReturnView("menu");
     setStartView("setup");
   }, [threeOnline.ended]);
 
@@ -3287,11 +3329,14 @@ export default function App() {
       setSaveError(error instanceof Error ? error.message : "Unable to delete the saved game.");
     }
   };
-  const startNewGame = () => {
-    setFourPlayerSession(undefined);
-    setSetupCanCancel(true);
-    setSetupReturnView("menu");
-    setSetupInitialMode("local");
+  const openStartFlow = (
+    category: StartCategory,
+    playerCount?: PlayerCount,
+    returnView: "menu" | "none" = "menu",
+  ) => {
+    setSetupCategory(category);
+    setSetupPlayerCount(playerCount);
+    setSetupReturnView(returnView);
     setStartView("setup");
   };
   const beginGame = (mode: Exclude<GameMode, "online" | "puzzle">, difficulty: number) => {
@@ -3379,39 +3424,38 @@ export default function App() {
   const openNewGame = () => {
     if (threePlayerSession) {
       setThreePlayerSession(undefined);
-      setSetupCanCancel(false);
-      setSetupInitialMode("three-player");
-      setSetupReturnView("none");
+      setSetupCategory("local");
+      setSetupPlayerCount(undefined);
+      setSetupReturnView("menu");
       setStartView("three-setup");
       return;
     }
     if (fourPlayerSession) {
       setFourPlayerSession(undefined);
-      setSetupCanCancel(false);
-      setSetupInitialMode("four-player");
-      setSetupReturnView("none");
+      setSetupCategory("local");
+      setSetupPlayerCount(undefined);
+      setSetupReturnView("menu");
       setStartView("four-setup");
       return;
     }
     if (state.gameMode === "online") {
       onlineActions.disconnect();
-      setSetupCanCancel(false);
+      openStartFlow("online", 2);
+      return;
     } else if (threeOnline.snapshot?.canonical) {
       threeOnlineActions.disconnect();
-      setSetupCanCancel(false);
+      openStartFlow("online", 3);
+      return;
     } else if (fourOnline.snapshot?.canonical) {
       fourOnlineActions.disconnect();
-      setSetupCanCancel(false);
-    } else {
-      setSetupCanCancel(true);
+      openStartFlow("online", 4);
+      return;
     }
     if (state.gameMode === "puzzle") {
       setStartView("puzzles");
       return;
     }
-    setSetupInitialMode("local");
-    setSetupReturnView("none");
-    setStartView("setup");
+    openStartFlow("local", undefined, "none");
   };
   const restartPuzzle = () => {
     if (!state.puzzleId) return;
@@ -3496,7 +3540,9 @@ export default function App() {
           accountError={accountService.error}
           onLoad={loadGame}
           onDelete={(id) => void deleteSavedGame(id)}
-          onNewGame={startNewGame}
+          onOpenLocal={() => openStartFlow("local")}
+          onOpenOnline={() => openStartFlow("online")}
+          onOpenPuzzles={() => setStartView("puzzles")}
           onSignIn={accountService.signIn}
           onSignUp={accountService.signUp}
           onSignOut={accountService.signOut}
@@ -3513,7 +3559,7 @@ export default function App() {
         progressLoading={puzzleProgressLoading}
         progressError={saveError}
         onStartPuzzle={beginPuzzle}
-        onBack={() => setStartView("setup")}
+        onBack={() => setStartView("menu")}
         onDismissError={() => setSaveError(undefined)}
       />
     );
@@ -3524,7 +3570,11 @@ export default function App() {
       <FourPlayerSetup
         defaultPlayerName={accountService.account?.displayName}
         onStart={beginFourPlayerGame}
-        onBack={() => setStartView("setup")}
+        onBack={() => {
+          setSetupCategory("local");
+          setSetupPlayerCount(undefined);
+          setStartView("setup");
+        }}
       />
     );
   }
@@ -3534,7 +3584,93 @@ export default function App() {
       <ThreePlayerSetup
         defaultPlayerName={accountService.account?.displayName}
         onStart={beginThreePlayerGame}
-        onBack={() => setStartView("setup")}
+        onBack={() => {
+          setSetupCategory("local");
+          setSetupPlayerCount(undefined);
+          setStartView("setup");
+        }}
+      />
+    );
+  }
+
+  if (startView === "setup") {
+    return (
+      <StartGamePrompt
+        online={online}
+        fourOnline={fourOnline}
+        threeOnline={threeOnline}
+        defaultPlayerName={accountService.account?.displayName}
+        category={setupCategory}
+        initialPlayerCount={setupPlayerCount}
+        onStart={beginGame}
+        onOpenThreePlayer={() => {
+          setSetupCategory("local");
+          setSetupPlayerCount(undefined);
+          setStartView("three-setup");
+        }}
+        onOpenFourPlayer={() => {
+          setSetupCategory("local");
+          setSetupPlayerCount(undefined);
+          setStartView("four-setup");
+        }}
+        onHost={(name) => {
+          fourOnlineActions.disconnect();
+          threeOnlineActions.disconnect();
+          void onlineActions.hostGame(name);
+        }}
+        onJoin={(code, name) => {
+          fourOnlineActions.disconnect();
+          threeOnlineActions.disconnect();
+          void onlineActions.joinGame(code, name);
+        }}
+        onStartOnline={startHostedGame}
+        onHostFourOnline={(name) => {
+          onlineActions.disconnect();
+          threeOnlineActions.disconnect();
+          void fourOnlineActions.hostGame(name);
+        }}
+        onJoinFourOnline={(code, name) => {
+          onlineActions.disconnect();
+          threeOnlineActions.disconnect();
+          void fourOnlineActions.joinGame(code, name);
+        }}
+        onFourReady={fourOnlineActions.setReady}
+        onFourAssignSeat={fourOnlineActions.assignSeat}
+        onFourUpdateConfig={fourOnlineActions.updateConfig}
+        onStartFourOnline={() => {
+          if (fourOnlineActions.startGame()) setStartView("none");
+        }}
+        onHostThreeOnline={(name) => {
+          onlineActions.disconnect();
+          fourOnlineActions.disconnect();
+          activeSaveId.current = undefined;
+          threeOnlineActiveRef.current = true;
+          void threeOnlineActions.hostGame(name);
+        }}
+        onJoinThreeOnline={(code, name) => {
+          onlineActions.disconnect();
+          fourOnlineActions.disconnect();
+          activeSaveId.current = undefined;
+          threeOnlineActiveRef.current = true;
+          void threeOnlineActions.joinGame(code, name);
+        }}
+        onThreeReady={threeOnlineActions.setReady}
+        onThreeAssignSeat={threeOnlineActions.assignSeat}
+        onThreeUpdateConfig={threeOnlineActions.updateConfig}
+        onStartThreeOnline={() => {
+          if (threeOnlineActions.startGame()) setStartView("none");
+        }}
+        onCancel={() => {
+          onlineActions.disconnect();
+          fourOnlineActions.disconnect();
+          threeOnlineActions.disconnect();
+          setStartView(setupReturnView);
+        }}
+        onDisconnect={() => {
+          onlineActions.disconnect();
+          fourOnlineActions.disconnect();
+          threeOnlineActions.disconnect();
+        }}
       />
     );
   }
@@ -3551,10 +3687,7 @@ export default function App() {
         }}
         onNewGame={() => {
           threeOnlineActions.disconnect();
-          setSetupCanCancel(false);
-          setSetupInitialMode("online");
-          setSetupReturnView("none");
-          setStartView("setup");
+          openStartFlow("online", 3);
         }}
         onlineSession={{
           roomCode: threeOnline.snapshot.roomCode,
@@ -3597,10 +3730,7 @@ export default function App() {
         }}
         onNewGame={() => {
           fourOnlineActions.disconnect();
-          setSetupCanCancel(false);
-          setSetupInitialMode("online");
-          setSetupReturnView("none");
-          setStartView("setup");
+          openStartFlow("online", 4);
         }}
         onlineSession={{
           roomCode: fourOnline.snapshot.roomCode,
@@ -3651,10 +3781,10 @@ export default function App() {
           }}
           onNewGame={() => {
             setFourPlayerSession(undefined);
-            setSetupCanCancel(false);
-            setSetupInitialMode("local");
-            setSetupReturnView("none");
-            setStartView("setup");
+            setSetupCategory("local");
+            setSetupPlayerCount(undefined);
+            setSetupReturnView("menu");
+            setStartView("four-setup");
           }}
         />
       </>
@@ -3674,9 +3804,9 @@ export default function App() {
         onQuit={() => setStartView("menu")}
         onNewGame={() => {
           setThreePlayerSession(undefined);
-          setSetupCanCancel(false);
-          setSetupInitialMode("three-player");
-          setSetupReturnView("none");
+          setSetupCategory("local");
+          setSetupPlayerCount(undefined);
+          setSetupReturnView("menu");
           setStartView("three-setup");
         }}
       />
@@ -3696,6 +3826,7 @@ export default function App() {
           <DraftScreen
             state={state}
             dispatch={dispatch}
+            onQuickDraft={state.gameMode === "online" ? undefined : quickDraft}
             inputDisabled={inputDisabled}
             onSaveAndQuit={state.gameMode === "online" ? undefined : saveAndQuit}
             onOpenSettings={() => setSettingsOpen(true)}
@@ -3742,78 +3873,6 @@ export default function App() {
             : state.gameMode === "puzzle"
               ? "Leave puzzle"
               : "Save & quit"}
-        />
-      )}
-      {startView === "setup" && (
-        <StartGamePrompt
-          online={online}
-          fourOnline={fourOnline}
-          threeOnline={threeOnline}
-          defaultPlayerName={accountService.account?.displayName}
-          initialMode={setupInitialMode}
-          canCancel={setupCanCancel}
-          onStart={beginGame}
-          onOpenPuzzles={() => setStartView("puzzles")}
-          onOpenThreePlayer={() => setStartView("three-setup")}
-          onOpenFourPlayer={() => setStartView("four-setup")}
-          onHost={(name) => {
-            fourOnlineActions.disconnect();
-            threeOnlineActions.disconnect();
-            void onlineActions.hostGame(name);
-          }}
-          onJoin={(code, name) => {
-            fourOnlineActions.disconnect();
-            threeOnlineActions.disconnect();
-            void onlineActions.joinGame(code, name);
-          }}
-          onStartOnline={startHostedGame}
-          onHostFourOnline={(name) => {
-            onlineActions.disconnect();
-            threeOnlineActions.disconnect();
-            void fourOnlineActions.hostGame(name);
-          }}
-          onJoinFourOnline={(code, name) => {
-            onlineActions.disconnect();
-            threeOnlineActions.disconnect();
-            void fourOnlineActions.joinGame(code, name);
-          }}
-          onFourReady={fourOnlineActions.setReady}
-          onFourAssignSeat={fourOnlineActions.assignSeat}
-          onFourUpdateConfig={fourOnlineActions.updateConfig}
-          onStartFourOnline={() => {
-            if (fourOnlineActions.startGame()) setStartView("none");
-          }}
-          onHostThreeOnline={(name) => {
-            onlineActions.disconnect();
-            fourOnlineActions.disconnect();
-            activeSaveId.current = undefined;
-            threeOnlineActiveRef.current = true;
-            void threeOnlineActions.hostGame(name);
-          }}
-          onJoinThreeOnline={(code, name) => {
-            onlineActions.disconnect();
-            fourOnlineActions.disconnect();
-            activeSaveId.current = undefined;
-            threeOnlineActiveRef.current = true;
-            void threeOnlineActions.joinGame(code, name);
-          }}
-          onThreeReady={threeOnlineActions.setReady}
-          onThreeAssignSeat={threeOnlineActions.assignSeat}
-          onThreeUpdateConfig={threeOnlineActions.updateConfig}
-          onStartThreeOnline={() => {
-            if (threeOnlineActions.startGame()) setStartView("none");
-          }}
-          onCancel={() => {
-            onlineActions.disconnect();
-            fourOnlineActions.disconnect();
-            threeOnlineActions.disconnect();
-            setStartView(setupReturnView);
-          }}
-          onDisconnect={() => {
-            onlineActions.disconnect();
-            fourOnlineActions.disconnect();
-            threeOnlineActions.disconnect();
-          }}
         />
       )}
     </>

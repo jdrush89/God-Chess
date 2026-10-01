@@ -74,9 +74,12 @@ body::before {
   margin: 12px 0 13px; color: #f2eee5; letter-spacing: -.02em;
 }
 .draft-hero > p:not(.eyebrow) { color: #929199; margin: 0; }
+.draft-auto-actions {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; margin-top: 19px;
+}
 .auto-draft-button {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  margin-top: 19px; padding: 9px 13px; color: #d8c38f; background: rgba(198,161,91,.07);
+  margin: 0; padding: 9px 13px; color: #d8c38f; background: rgba(198,161,91,.07);
   border: 1px solid rgba(198,161,91,.35); cursor: pointer;
   font-size: 8px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
 }
@@ -724,8 +727,7 @@ body::before {
   border: 1px solid rgba(218,181,105,.38); box-shadow: 0 24px 70px rgba(0,0,0,.55);
   backdrop-filter: blur(10px);
 }
-.main-menu-actions > div { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.main-menu-actions > div > button:only-child { grid-column: 1 / -1; }
+.main-menu-actions > div { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .main-menu-actions .eyebrow { margin: 0 0 13px; color: #cfb06d; }
 .main-menu-actions small { display: block; margin-top: 11px; color: #8d8b85; font-size: 8px; letter-spacing: .08em; text-transform: uppercase; }
 .main-menu-error { margin: 10px 0 0; color: #e69a8e; font-size: 10px; line-height: 1.4; }
@@ -920,21 +922,72 @@ body::before {
 .save-game-modal { width: min(460px, 100%); }
 .save-game-actions { display: grid; gap: 10px; margin-top: 28px; }
 .save-game-actions .secondary-button { width: 100%; }
-.start-game-modal { width: min(820px, 100%); position: relative; }
-.start-game-modal h2 { margin: 9px 0 24px; font: 600 28px "Cinzel"; }
-.game-mode-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-.game-mode-grid > button {
-  min-height: 132px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 9px;
-  padding: 18px 12px; color: #aaa9a5; background: #101219; border: 1px solid #2d3038; cursor: pointer;
+.start-game-screen {
+  min-height: 100dvh; overflow-x: hidden; color: #e8e1d2;
+  background:
+    radial-gradient(circle at 50% -12%, rgba(198,161,91,.18), transparent 34rem),
+    linear-gradient(145deg, #171a22, #090b10 58%, #050609);
 }
-.game-mode-grid > button:hover, .game-mode-grid > button.active {
+.start-game-header {
+  min-height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 10px clamp(14px, 3vw, 36px); border-bottom: 1px solid var(--line);
+  background: rgba(8,10,15,.82); backdrop-filter: blur(10px);
+}
+.start-game-header > span {
+  color: #837b69; font: 600 9px "Cinzel"; letter-spacing: .18em;
+}
+.start-game-back {
+  min-height: 40px; display: inline-flex; align-items: center; gap: 8px; padding: 0 13px;
+  color: #bbb4a7; background: #0c0e13; border: 1px solid #343740;
+  font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; cursor: pointer;
+}
+.start-game-back:hover { color: #f3dfaa; border-color: var(--gold); }
+.start-game-content {
+  width: min(1120px, 100%); min-height: calc(100dvh - 64px); display: flex; flex-direction: column;
+  align-items: center; justify-content: center; margin: 0 auto; padding: clamp(28px, 6vh, 68px) clamp(16px, 4vw, 42px);
+}
+.start-game-content.online-stage {
+  width: min(1080px, 100%); align-items: stretch; justify-content: flex-start;
+}
+.start-game-heading { max-width: 680px; margin: 0 auto clamp(24px, 4vh, 42px); text-align: center; }
+.start-game-heading.compact { margin-bottom: 22px; }
+.start-game-heading .eyebrow { margin: 0; color: #c9a85f; }
+.start-game-heading h1 {
+  margin: 9px 0 11px; color: #f1ece2; font: 600 clamp(30px, 5vw, 52px)/1.08 "Cinzel";
+}
+.start-game-heading.compact h1 { font-size: clamp(28px, 4vw, 42px); }
+.start-game-heading > p:last-child { margin: 0; color: #85868d; font-size: 11px; line-height: 1.65; }
+.player-count-grid {
+  width: min(900px, 100%); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px;
+}
+.player-count-grid > button {
+  min-width: 0; min-height: clamp(190px, 30vh, 270px); display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 18px; padding: 28px 18px;
+  color: #d2ccbf; background: rgba(13,15,20,.8); border: 1px solid #343740; cursor: pointer;
+  box-shadow: 0 18px 50px rgba(0,0,0,.2);
+}
+.player-count-grid > button:hover {
+  color: #fff0c8; border-color: rgba(198,161,91,.72); background: rgba(198,161,91,.08);
+}
+.player-count-grid svg { color: var(--gold-bright); }
+.player-count-grid strong { font: 600 clamp(18px, 2.5vw, 25px) "Cinzel"; }
+.two-player-mode-grid {
+  width: min(760px, 100%); display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+}
+.two-player-mode-grid > button {
+  min-height: 180px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; padding: 24px; color: #aaa9a5; background: #101219; border: 1px solid #2d3038; cursor: pointer;
+}
+.two-player-mode-grid > button:hover, .two-player-mode-grid > button.active {
   color: #f0e4c8; border-color: rgba(198,161,91,.65); background: rgba(198,161,91,.08);
 }
-.game-mode-grid strong { font: 600 13px "Cinzel"; }
-.game-mode-grid span { color: #74767d; font-size: 9px; line-height: 1.45; }
+.two-player-mode-grid strong { font: 600 16px "Cinzel"; }
+.two-player-mode-grid span { color: #74767d; font-size: 9px; line-height: 1.45; }
 .difficulty-control, .online-setup {
-  margin-top: 18px; padding: 18px; text-align: left; background: rgba(5,6,9,.35); border: 1px solid var(--line);
+  width: min(760px, 100%); margin: 18px auto 0; padding: 18px; text-align: left;
+  background: rgba(5,6,9,.35); border: 1px solid var(--line);
 }
+.start-game-content.online-stage .online-setup { width: 100%; margin-top: 0; }
 .difficulty-control > div { display: flex; justify-content: space-between; align-items: baseline; }
 .difficulty-control span, .online-setup label {
   color: #9c9b98; font-size: 9px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
@@ -964,16 +1017,14 @@ body::before {
 .puzzle-card-grid > button > span { color: #777981; font-size: 7px; font-weight: 800; letter-spacing: .13em; }
 .puzzle-card-grid > button > strong { min-height: 30px; font: 600 11px/1.35 "Cinzel"; text-align: center; }
 .puzzle-card-grid > button > small { color: #777981; font-size: 8px; line-height: 1.35; text-align: center; }
-.online-tabs, .online-variant-tabs { display: grid; grid-template-columns: 1fr 1fr; margin-bottom: 16px; }
-.online-variant-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.online-tabs button, .online-variant-tabs button {
+.online-tabs { display: grid; grid-template-columns: 1fr 1fr; margin-bottom: 16px; }
+.online-tabs button {
   height: 36px; color: #777982; background: #0d0f14; border: 1px solid #2c2e36; cursor: pointer;
   font-size: 9px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
 }
-.online-tabs button.active, .online-variant-tabs button.active {
+.online-tabs button.active {
   color: #f0dba8; border-color: var(--gold); background: rgba(198,161,91,.09);
 }
-.online-variant-tabs { margin-bottom: 12px; }
 .online-setup label { display: grid; gap: 7px; margin-bottom: 13px; }
 .online-setup input {
   width: 100%; height: 42px; padding: 0 13px; color: #ece7dc; background: #0b0d12;
@@ -1340,7 +1391,12 @@ body::before {
   .god-list { grid-template-columns: 1fr; }
   .action-panel { border-left: 0; border-right: 0; }
   .rules-modal, .gameover-modal, .save-game-modal, .start-game-modal, .settings-modal, .account-modal { padding: 28px 18px; }
-  .game-mode-grid { grid-template-columns: 1fr; }
+  .start-game-header > span { display: none; }
+  .start-game-content { justify-content: flex-start; padding: 28px 12px 36px; }
+  .player-count-grid, .two-player-mode-grid { grid-template-columns: 1fr; }
+  .player-count-grid > button { min-height: 128px; gap: 10px; }
+  .two-player-mode-grid > button { min-height: 132px; }
+  .start-game-content .online-setup { padding: 14px 12px; }
   .puzzle-select-view { padding: 16px 12px 28px; }
   .puzzle-select-screen { padding-top: 58px; }
   .puzzle-difficulty-grid { grid-template-columns: 1fr; }
@@ -1638,16 +1694,6 @@ body::before {
 .three-panel-god-heading small { color: #d6c59f; font-size: 8px; text-transform: uppercase; }
 .three-generic-actions { display: grid; gap: 6px; padding: 8px; border-top: 1px solid var(--line); }
 .three-generic-actions button { min-height: 40px; display: flex; align-items: center; justify-content: center; gap: 6px; }
-.three-unused-gods {
-  display: grid; gap: 5px; padding: 11px; color: #797b82; border-top: 1px solid var(--line); font-size: 7px;
-}
-.three-unused-gods > strong { color: #c7c1b6; font: 600 9px "Cinzel"; }
-.three-unused-gods > div { display: flex; gap: 5px; }
-.three-unused-gods button { width: 44px; height: 35px; padding: 0; overflow: hidden; background: #0b0d12; border: 1px solid var(--line); }
-.three-unused-gods img { width: 100%; height: 100%; object-fit: cover; filter: grayscale(.6); }
-.three-history { padding: 11px; border-top: 1px solid var(--line); color: #85878d; font-size: 8px; }
-.three-history summary { cursor: pointer; color: #c2bdb2; }
-.three-history ol { display: grid; gap: 5px; padding-left: 17px; }
 .three-rules-modal p { color: #85868d; line-height: 1.65; }
 .three-game-page.input-gated .three-board { cursor: wait; }
 
@@ -1749,7 +1795,6 @@ body::before {
 }
 
 /* Four-player local */
-.game-mode-grid { grid-template-columns: repeat(auto-fit, minmax(138px, 1fr)); }
 .four-player-crest {
   width: 28px; height: 28px; display: grid; place-items: center; flex: 0 0 auto;
   color: #101116; background: var(--seat-color); border: 1px solid color-mix(in srgb, var(--seat-color) 76%, #fff);

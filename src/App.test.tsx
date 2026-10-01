@@ -64,6 +64,7 @@ vi.mock("./multiplayer/useThreePlayerOnlineGame", async () => {
 
 import App, { ActionPanel } from "./App";
 import { createGame, gameReducer } from "./game/engine";
+import { GODS } from "./game/gods";
 import { createDefaultThreePlayerConfig } from "./game/threePlayerConfig";
 import { createThreePlayerGame } from "./game/threePlayerEngine";
 import { createThreePlayerStateEnvelope } from "./game/threePlayerSession";
@@ -175,7 +176,7 @@ beforeEach(() => {
 });
 
 describe("game startup", () => {
-  it("shows local, AI, online, and puzzle choices when starting a new game", () => {
+  it("shows the title choices and staged Local navigation with coherent back paths", () => {
     const savedState = createGame(1);
     window.localStorage.setItem(LEGACY_SAVE_KEY, JSON.stringify({
       version: 1,
@@ -187,17 +188,40 @@ describe("game startup", () => {
     expect(screen.getByRole("img", { name: /god chess/i })).toBeTruthy();
     expect(screen.getByText("Version dev")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /settings/i })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /^new game$/i }));
+    expect(screen.getByRole("button", { name: /^local$/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^online$/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^puzzles$/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /load game/i })).toBeTruthy();
 
-    expect(screen.getByRole("button", { name: /two players share this device/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /divine ai/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /three-player local/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /online versus/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /divine puzzles/i })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /online versus/i }));
-    expect(screen.getByRole("button", { name: /^two-player$/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /^four-player$/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /^three-player$/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^local$/i }));
+    expect(screen.getByRole("button", { name: /^2 player$/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^3 player$/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^4 player$/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^2 player$/i }));
+
+    expect(screen.getByRole("button", { name: /^local duel two players/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^divine ai challenge/i }));
+    expect((screen.getByRole("slider", { name: /ai difficulty/i }) as HTMLInputElement).value)
+      .toBe("7");
+    fireEvent.click(screen.getByRole("button", { name: /back to local/i }));
+    expect(screen.getByRole("button", { name: /^3 player$/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /back to title/i }));
+    expect(screen.getByRole("button", { name: /^local$/i })).toBeTruthy();
+  });
+
+  it("routes Online player counts to Host/Join and Puzzles directly", () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /^online$/i }));
+    for (const playerCount of [2, 3, 4]) {
+      fireEvent.click(screen.getByRole("button", { name: new RegExp(`^${playerCount} player$`, "i") }));
+      expect(screen.getByText(`ONLINE · ${playerCount} PLAYER`)).toBeTruthy();
+      expect(screen.getByRole("button", { name: /^host$/i })).toBeTruthy();
+      expect(screen.getByRole("button", { name: /^join$/i })).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: /back to online/i }));
+    }
+    fireEvent.click(screen.getByRole("button", { name: /back to title/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^puzzles$/i }));
+    expect(screen.getByRole("heading", { name: /choose a difficulty/i })).toBeTruthy();
   });
 
   describe("finished classic matches", () => {
@@ -272,18 +296,20 @@ describe("game startup", () => {
 
   it("opens the local three-player setup without exposing an online room mode", () => {
     const { container } = render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /^new game$/i }));
-    fireEvent.click(screen.getByRole("button", { name: /three-player local/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^local$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^3 player$/i }));
 
     expect(screen.getByRole("heading", { name: /choose the battlefield/i })).toBeTruthy();
     expect(container.querySelectorAll(".three-variant-card")).toHaveLength(5);
     expect(screen.queryByText(/room code/i)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /close three-player setup/i }));
+    expect(screen.getByRole("button", { name: /^3 player$/i })).toBeTruthy();
   });
 
   it("autosaves the active three-player state without overwriting it with the hidden duel", async () => {
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /^new game$/i }));
-    fireEvent.click(screen.getByRole("button", { name: /three-player local/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^local$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^3 player$/i }));
     fireEvent.click(screen.getByRole("button", { name: /begin three-player draft/i }));
 
     await waitFor(() => {
@@ -294,19 +320,19 @@ describe("game startup", () => {
 
   it("leaves an existing local save untouched throughout online hosting and reconnect", async () => {
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /^new game$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^local$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^2 player$/i }));
     fireEvent.click(screen.getByRole("button", { name: /begin local duel/i }));
     await waitFor(() => {
       expect(JSON.parse(window.localStorage.getItem(SAVE_KEY) ?? "[]"))
         .toHaveLength(1);
     });
     fireEvent.click(screen.getByRole("button", { name: /save & quit/i }));
-    await screen.findByRole("button", { name: /^new game$/i });
+    await screen.findByRole("button", { name: /^local$/i });
     const existingSave = window.localStorage.getItem(SAVE_KEY);
 
-    fireEvent.click(screen.getByRole("button", { name: /^new game$/i }));
-    fireEvent.click(screen.getByRole("button", { name: /online versus/i }));
-    fireEvent.click(screen.getByRole("button", { name: /^three-player$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^online$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^3 player$/i }));
     fireEvent.click(screen.getByRole("button", { name: /create room/i }));
     act(() => {
       threeOnlineHarness.setState?.(activeThreeOnlineState());
@@ -327,12 +353,10 @@ describe("game startup", () => {
 
   it("does not create a hidden local save while joining an online room", async () => {
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /^new game$/i }));
-    fireEvent.click(screen.getByRole("button", { name: /online versus/i }));
-    fireEvent.click(screen.getByRole("button", { name: /^three-player$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^online$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^3 player$/i }));
     fireEvent.click(screen.getByRole("button", { name: /^join$/i }));
-    const inputs = screen.getAllByRole("textbox");
-    fireEvent.change(inputs[1], { target: { value: "ABCDE" } });
+    fireEvent.change(screen.getByLabelText(/room code/i), { target: { value: "ABCDE" } });
     fireEvent.click(screen.getByRole("button", { name: /join room/i }));
     act(() => {
       threeOnlineHarness.setState?.({
@@ -347,17 +371,17 @@ describe("game startup", () => {
     expect(window.localStorage.getItem(SAVE_KEY)).toBeNull();
   });
 
-  it("disconnects a pending three-player attempt when switching online variants", async () => {
+  it("disconnects a pending three-player attempt before selecting another player count", async () => {
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /^new game$/i }));
-    fireEvent.click(screen.getByRole("button", { name: /online versus/i }));
-    fireEvent.click(screen.getByRole("button", { name: /^three-player$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^online$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^3 player$/i }));
     fireEvent.click(screen.getByRole("button", { name: /create room/i }));
     expect(screen.getByRole("button", { name: /connecting/i })).toBeTruthy();
 
     const beforeSwitch = threeOnlineHarness.disconnects;
-    fireEvent.click(screen.getByRole("button", { name: /^four-player$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /back to online/i }));
     expect(threeOnlineHarness.disconnects).toBe(beforeSwitch + 1);
+    fireEvent.click(screen.getByRole("button", { name: /^4 player$/i }));
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /create room/i })).toBeTruthy();
     });
@@ -365,8 +389,7 @@ describe("game startup", () => {
 
   it("browses puzzle difficulties and starts a selected position", () => {
     const { container } = render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /^new game$/i }));
-    fireEvent.click(screen.getByRole("button", { name: /divine puzzles/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^puzzles$/i }));
 
     expect(screen.getByRole("heading", { name: /choose a difficulty/i })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /^easy/i }));
@@ -393,8 +416,7 @@ describe("game startup", () => {
     window.localStorage.setItem("god-chess-puzzle-progress-v1", JSON.stringify(["centaurs-lance"]));
 
     const { container } = render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /^new game$/i }));
-    fireEvent.click(screen.getByRole("button", { name: /divine puzzles/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^puzzles$/i }));
 
     expect(screen.getByRole("button", { name: /^easy.*1 of 5 completed/i })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /^easy/i }));
@@ -536,7 +558,8 @@ describe("game startup", () => {
 
   it("saves and quits a new game back to the main menu", async () => {
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /^new game$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^local$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^2 player$/i }));
     fireEvent.click(screen.getByRole("button", { name: /begin local duel/i }));
     fireEvent.click(screen.getByRole("button", { name: /save & quit/i }));
 
@@ -555,7 +578,8 @@ describe("game startup", () => {
 
   it("auto-picks one god at a time from the draft screen", () => {
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /^new game$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^local$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^2 player$/i }));
     fireEvent.click(screen.getByRole("button", { name: /begin local duel/i }));
     fireEvent.click(screen.getByRole("button", { name: /auto-pick random god/i }));
 
@@ -565,6 +589,71 @@ describe("game startup", () => {
     fireEvent.click(screen.getByRole("button", { name: /^resume$/i }));
     expect(screen.getByText(/black picks/i)).toBeTruthy();
     expect(screen.getByRole("button", { name: /auto-pick random god/i })).toBeTruthy();
+  });
+
+  it("quick-drafts the remaining two-player AI picks in canonical order", async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /^local$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^2 player$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^divine ai challenge/i }));
+    fireEvent.click(screen.getByRole("button", { name: /challenge the ai/i }));
+
+    const draftActions = document.querySelector(".draft-auto-actions") as HTMLElement;
+    expect(within(draftActions).getAllByRole("button").map((button) =>
+      button.textContent?.replace(/\s+/g, " ").trim()
+    )).toEqual(["Auto-pick random god", "Quick Draft"]);
+
+    let claimButton: HTMLButtonElement | undefined;
+    await waitFor(() => {
+      claimButton = document.querySelector<HTMLButtonElement>(
+        ".god-inspector .primary-button",
+      ) ?? undefined;
+      expect(claimButton).toBeTruthy();
+      expect(claimButton?.disabled).toBe(false);
+    });
+    const manuallyClaimedGod = GODS.find((god) =>
+      claimButton?.textContent?.includes(god.name)
+    )?.id;
+    expect(manuallyClaimedGod).toBeTruthy();
+    fireEvent.click(claimButton!);
+    const quickDraft = screen.getByRole("button", { name: /^quick draft$/i });
+    fireEvent.click(quickDraft);
+    fireEvent.click(quickDraft);
+
+    fireEvent.click(screen.getByRole("button", { name: /save & quit/i }));
+    await waitFor(() => expect(screen.getByRole("button", { name: /^local$/i })).toBeTruthy());
+    const saved = JSON.parse(window.localStorage.getItem(SAVE_KEY) ?? "[]")[0].state;
+    const drafted = [...saved.players.white.gods, ...saved.players.black.gods];
+    expect(saved.phase).toBe("play");
+    expect(saved.draft.pickIndex).toBe(saved.draft.order.length);
+    expect(saved.players.white.gods).toHaveLength(3);
+    expect(saved.players.black.gods).toHaveLength(3);
+    const playerPickIndexes = { white: 0, black: 0 };
+    const chronological = saved.draft.order.map((color: "white" | "black") =>
+      saved.players[color].gods[playerPickIndexes[color]++]
+    );
+    const existingPickCount = chronological.indexOf(manuallyClaimedGod!) + 1;
+    expect(existingPickCount).toBeGreaterThan(0);
+    const remaining = GODS.map((god) => god.id).filter(
+      (godId) => !chronological.slice(0, existingPickCount).includes(godId),
+    );
+    expect(chronological.slice(existingPickCount)).toEqual(
+      remaining.slice(0, chronological.length - existingPickCount),
+    );
+    expect(new Set(drafted).size).toBe(6);
+  });
+
+  it("never exposes Quick Draft for a classic online draft", () => {
+    const onlineDraft = createGame(1, { mode: "online" });
+    window.localStorage.setItem(LEGACY_SAVE_KEY, JSON.stringify({
+      version: 1,
+      savedAt: new Date().toISOString(),
+      state: onlineDraft,
+    }));
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /load game/i }));
+    fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
+    expect(screen.queryByRole("button", { name: /^quick draft$/i })).toBeNull();
   });
 
   it("lists every ability with costs and level previews while choosing an upgrade", () => {
@@ -638,7 +727,8 @@ describe("game startup", () => {
 
   it("enables undo from Settings and restores the previous completed turn", async () => {
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /^new game$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^local$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^2 player$/i }));
     fireEvent.click(screen.getByRole("button", { name: /begin local duel/i }));
     fireEvent.click(screen.getByRole("button", { name: /settings/i }));
     fireEvent.click(screen.getByRole("switch", { name: /allow undo/i }));

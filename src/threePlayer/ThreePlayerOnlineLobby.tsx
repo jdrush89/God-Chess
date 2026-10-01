@@ -169,17 +169,6 @@ export function ThreePlayerOnlineLobby({
           <span><Crown size={18} /> Victory</span>
           <div className="segmented-control">
             <button
-              className={snapshot.config.victoryMode === "first-checkmate"
-                ? "active"
-                : ""}
-              disabled={!isHost}
-              onClick={() => updateConfig((next) => {
-                next.victoryMode = "first-checkmate";
-              })}
-            >
-              First checkmate
-            </button>
-            <button
               className={snapshot.config.victoryMode === "last-survivor"
                 ? "active"
                 : ""}
@@ -188,7 +177,18 @@ export function ThreePlayerOnlineLobby({
                 next.victoryMode = "last-survivor";
               })}
             >
-              Continue
+              Last surviving
+            </button>
+            <button
+              className={snapshot.config.victoryMode === "first-checkmate"
+                ? "active"
+                : ""}
+              disabled={!isHost}
+              onClick={() => updateConfig((next) => {
+                next.victoryMode = "first-checkmate";
+              })}
+            >
+              First King captured
             </button>
           </div>
         </div>

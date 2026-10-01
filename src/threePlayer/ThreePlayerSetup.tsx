@@ -106,20 +106,20 @@ export function ThreePlayerSetup({
           <span><Crown size={18} /> Victory</span>
           <div className="segmented-control">
             <button
-              className={config.victoryMode === "first-checkmate" ? "active" : ""}
-              onClick={() => updateConfig((next) => {
-                next.victoryMode = "first-checkmate";
-              })}
-            >
-              First checkmate
-            </button>
-            <button
               className={config.victoryMode === "last-survivor" ? "active" : ""}
               onClick={() => updateConfig((next) => {
                 next.victoryMode = "last-survivor";
               })}
             >
-              Continue
+              Last surviving
+            </button>
+            <button
+              className={config.victoryMode === "first-checkmate" ? "active" : ""}
+              onClick={() => updateConfig((next) => {
+                next.victoryMode = "first-checkmate";
+              })}
+            >
+              First King captured
             </button>
           </div>
         </div>
