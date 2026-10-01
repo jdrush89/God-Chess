@@ -8,6 +8,7 @@ import { GODS } from "../game/gods";
 import { createSavedGame } from "../saves";
 import { FourPlayerGame } from "./FourPlayerGame";
 import { createFourPlayerOnlineConfig } from "../multiplayer/fourPlayerRoom";
+import { createDefaultFourPlayerConfig } from "../game/fourPlayerConfig";
 
 const SAVE_KEY = "god-chess-saves-v2";
 
@@ -40,6 +41,14 @@ const openFourPlayerSetup = () => {
   render(<App />);
   fireEvent.click(screen.getByRole("button", { name: /^new game$/i }));
   fireEvent.click(screen.getByRole("button", { name: /four-player local/i }));
+};
+
+const completeFourPlayerDraft = () => {
+  let state = createFourPlayerGame();
+  for (const god of GODS) {
+    state = fourPlayerReducer(state, { type: "draft", godId: god.id });
+  }
+  return state;
 };
 
 describe("four-player app integration", () => {
@@ -283,6 +292,12 @@ describe("four-player app integration", () => {
     expect(
       (screen.getByRole("button", { name: /barter/i }) as HTMLButtonElement).disabled,
     ).toBe(true);
+    const fundingCard = screen.getByRole("button", { name: /military funding/i })
+      .closest(".four-ability-card");
+    expect(fundingCard).toBeTruthy();
+    expect(within(fundingCard as HTMLElement).getByText("Move another pawn or finish.")).toBeTruthy();
+    expect(within(fundingCard as HTMLElement).getByRole("button", { name: /pass \/ finish/i }))
+      .toBeTruthy();
   });
 
   it("saves and reloads four-player draft state without misclassifying it", async () => {
@@ -408,5 +423,114 @@ describe("four-player app integration", () => {
     fireEvent.change(screen.getByRole("slider"), { target: { value: "8" } });
     fireEvent.click(screen.getByRole("button", { name: /replace permanently with ai/i }));
     expect(replace).toHaveBeenCalledWith(8);
+  });
+
+  it("keeps a finished four-player board view-only and restores play through undo", () => {
+    const playable = completeFourPlayerDraft();
+    const finished = structuredClone(playable);
+    finished.phase = "gameover";
+    finished.winner = {
+      seat: "north",
+      reason: "last-player",
+    };
+    finished.notice = "North wins.";
+    const { container } = render(
+      <FourPlayerGame
+        initialState={finished}
+        initialUndoHistory={[playable]}
+        undoPreferred
+        onUndoPreferenceChange={vi.fn()}
+        onPersist={vi.fn(async () => false)}
+        onQuit={vi.fn()}
+        onNewGame={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /see board/i }));
+    expect(screen.getByRole("button", { name: /view result/i })).toBeTruthy();
+    expect(container.querySelector(".finished-view")).toBeTruthy();
+    fireEvent.click(screen.getAllByTitle(/ares/i)[0]);
+    expect(screen.getByRole("button", { name: /view result/i })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /view result/i }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", {
+      name: /^undo$/i,
+    }));
+    expect(screen.queryByText(/match finished/i)).toBeNull();
+    expect(container.querySelector(".finished-view")).toBeNull();
+    expect(screen.getByText(playable.notice)).toBeTruthy();
+  });
+
+  it("shows the progressing source choice after 2v2 Salem Hex marks West b11", () => {
+    const config = createDefaultFourPlayerConfig();
+    config.mode = "teams";
+    config.teams = {
+      north: "team-a",
+      east: "team-b",
+      south: "team-a",
+      west: "team-b",
+    };
+    let state = createFourPlayerGame(config);
+    const salem = GODS.find((god) => god.id === "salem")!;
+    for (const god of [salem, ...GODS.filter((candidate) => candidate.id !== "salem")]) {
+      state = fourPlayerReducer(state, { type: "draft", godId: god.id });
+    }
+    state.phase = "play";
+    state.activeSeat = "north";
+    state.players.north.orbs = { light: 50, dark: 50 };
+    state.players.north.team = "team-a";
+    state.players.east.team = "team-b";
+    state.players.south.team = "team-a";
+    state.players.west.team = "team-b";
+    const northRook = structuredClone(state.board.d13);
+    const westPawn = structuredClone(state.board.b10);
+    const kings = Object.fromEntries(
+      Object.entries(state.board).filter(([, piece]) => piece.type === "king"),
+    );
+    expect(northRook).toBeTruthy();
+    expect(westPawn).toBeTruthy();
+    northRook.id = "hex-mover";
+    northRook.type = "rook";
+    northRook.owner = "north";
+    northRook.controller = "north";
+    westPawn.id = "west-enemy";
+    westPawn.owner = "west";
+    westPawn.controller = "west";
+    state.board = {
+      ...kings,
+      g8: northRook,
+      b11: westPawn,
+    };
+    state = fourPlayerReducer(state, { type: "select-god", godId: "salem" });
+    state = fourPlayerReducer(state, { type: "select-ability", abilityId: "hex" });
+    state = fourPlayerReducer(state, { type: "square", square: "b11" });
+
+    render(
+      <FourPlayerGame
+        initialState={state}
+        undoPreferred={false}
+        onUndoPreferenceChange={vi.fn()}
+        onPersist={vi.fn(async () => false)}
+        onQuit={vi.fn()}
+        onNewGame={vi.fn()}
+      />,
+    );
+
+    expect(
+      within(screen.getByRole("gridcell", { name: /b11.*west.*pawn/i }))
+        .getByLabelText(/hexed/i),
+    ).toBeTruthy();
+    expect(screen.getAllByText(/choose a piece to move/i).length).toBeGreaterThan(0);
+    expect(screen.getByRole("gridcell", { name: /g8.*north.*rook.*legal target/i }))
+      .toBeTruthy();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.getByRole("dialog", { name: /game paused locally/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^resume$/i }));
+    expect(screen.getAllByText(/choose a piece to move/i).length).toBeGreaterThan(0);
+    expect(screen.getByRole("gridcell", { name: /g8.*north.*rook.*legal target/i }))
+      .toBeTruthy();
+    fireEvent.click(screen.getByRole("gridcell", { name: /g8.*north.*rook/i }));
+    expect(screen.getAllByText(/choose a destination for the rook/i).length)
+      .toBeGreaterThan(0);
   });
 });

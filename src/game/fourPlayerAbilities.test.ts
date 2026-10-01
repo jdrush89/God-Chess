@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { GODS } from "./gods";
 import {
+  availableFourPlayerActions,
   createFourPlayerGame,
   fourPlayerReducer,
   hasCommittedFourPlayerAction,
@@ -63,6 +64,24 @@ const move = (
   let next = activate(state, godId, abilityId);
   next = fourPlayerReducer(next, { type: "square", square: from });
   return fourPlayerReducer(next, { type: "square", square: to });
+};
+
+const teamHexGame = (level: 1 | 2 | 3 = 1) => {
+  const state = gameFor("salem", level);
+  state.config.mode = "teams";
+  state.config.teams = {
+    north: "team-a",
+    east: "team-b",
+    south: "team-a",
+    west: "team-b",
+  };
+  state.players.north.team = "team-a";
+  state.players.east.team = "team-b";
+  state.players.south.team = "team-a";
+  state.players.west.team = "team-b";
+  state.board.g8 = piece(state, "rook", "north", "hex-mover");
+  state.board.b11 = piece(state, "pawn", "west", "west-enemy");
+  return state;
 };
 
 describe("four-player God abilities", () => {
@@ -253,6 +272,36 @@ describe("four-player God abilities", () => {
     expect(result.board.h7?.id).toBe("escort");
   });
 
+  it("allows an Escort King onto a simultaneously vacated ally square", () => {
+    const state = gameFor("leonidas");
+    delete state.board.g14;
+    state.board.g8 = piece(state, "king", "north", "escort-king");
+    state.board.h8 = piece(state, "rook", "north", "escort-rook");
+
+    let result = activate(state, "leonidas", "escort");
+    result = fourPlayerReducer(result, { type: "square", square: "g8" });
+    result = fourPlayerReducer(result, { type: "square", square: "h8" });
+
+    expect(result.legalTargets).toContain("h8");
+    result = fourPlayerReducer(result, { type: "square", square: "h8" });
+    expect(result.board.h8?.id).toBe("escort-king");
+    expect(result.board.i8?.id).toBe("escort-rook");
+  });
+
+  it("rejects an Escort that would land on a non-moving ally", () => {
+    const state = gameFor("leonidas");
+    delete state.board.g14;
+    state.board.g8 = piece(state, "king", "north", "escort-king");
+    state.board.h8 = piece(state, "rook", "north", "escort-rook");
+    state.board.i8 = piece(state, "bishop", "north", "escort-blocker");
+
+    let result = activate(state, "leonidas", "escort");
+    result = fourPlayerReducer(result, { type: "square", square: "g8" });
+    result = fourPlayerReducer(result, { type: "square", square: "h8" });
+
+    expect(result.legalTargets).not.toContain("h8");
+  });
+
   it("generalizes Medusa's Captivate, Slither, and Stone Gaze", () => {
     let state = gameFor("medusa");
     state.board.g10 = piece(state, "queen", "north", "visible-queen");
@@ -297,6 +346,76 @@ describe("four-player God abilities", () => {
     result = activate(state, "salem", "polymorph");
     result = fourPlayerReducer(result, { type: "square", square: "g10" });
     expect(result.board.g10?.status.polymorphed).toBe(2);
+  });
+
+  it("advances Salem level 1 Hex against an enemy West pawn in 2v2 teams", () => {
+    let state = activate(teamHexGame(), "salem", "hex");
+    expect(state.legalTargets).toContain("b11");
+
+    state = fourPlayerReducer(state, { type: "square", square: "b11" });
+    expect(state.board.b11.status.hexedBy).toBe("north");
+    expect(state.pending?.step).toBe("source");
+    expect(state.legalTargets).toContain("g8");
+    const sourceActions = availableFourPlayerActions(state);
+    expect(sourceActions).toContainEqual({ type: "square", square: "g8" });
+    expect(sourceActions.every((action) =>
+      JSON.stringify(fourPlayerReducer(state, action)) !== JSON.stringify(state)
+    )).toBe(true);
+
+    state = fourPlayerReducer(state, { type: "square", square: "g8" });
+    expect(state.selectedSquare).toBe("g8");
+    const destination = state.legalTargets[0];
+    expect(destination).toBeTruthy();
+    state = fourPlayerReducer(state, { type: "square", square: destination });
+    expect(state.pending).toBeUndefined();
+    expect(state.activeSeat).not.toBe("north");
+  });
+
+  it("filters Hex targets by controller/team/status and cannot strand any level", () => {
+    let state = teamHexGame(3);
+    state.board.c11 = piece(state, "pawn", "south", "teammate");
+    state.board.d11 = piece(state, "pawn", "west", "inert", null);
+    state.board.e11 = piece(state, "pawn", "south", "taken-by-enemy", "west");
+    state.board.f11 = piece(state, "pawn", "west", "taken-by-ally", "south");
+    state.board.h11 = piece(state, "pawn", "east", "already-hexed");
+    state.board.h11.status.hexedBy = "east";
+    state = activate(state, "salem", "hex");
+
+    expect(state.legalTargets).toContain("b11");
+    expect(state.legalTargets).toContain("e11");
+    expect(state.legalTargets).not.toContain("c11");
+    expect(state.legalTargets).not.toContain("d11");
+    expect(state.legalTargets).not.toContain("f11");
+    expect(state.legalTargets).not.toContain("h11");
+
+    state = fourPlayerReducer(state, { type: "square", square: "b11" });
+    expect(state.pending?.step).toBe("hex-target");
+    expect(availableFourPlayerActions(state).length).toBeGreaterThan(0);
+
+    for (const level of [1, 2, 3] as const) {
+      let leveled = activate(teamHexGame(level), "salem", "hex");
+      leveled = fourPlayerReducer(leveled, { type: "square", square: "b11" });
+      if (level > 1) {
+        expect(leveled.pending?.step).toBe("hex-target");
+        expect(availableFourPlayerActions(leveled)).toContainEqual({ type: "pass" });
+        leveled = fourPlayerReducer(leveled, { type: "pass" });
+      }
+      expect(leveled.pending?.step).toBe("source");
+      expect(availableFourPlayerActions(leveled).length).toBeGreaterThan(0);
+    }
+  });
+
+  it("finishes Hex cleanly when no controlled piece has a legal movement", () => {
+    let state = teamHexGame();
+    delete state.board.g8;
+    state.board.g14.status.gazing = true;
+    state = activate(state, "salem", "hex");
+    state = fourPlayerReducer(state, { type: "square", square: "b11" });
+
+    expect(state.board.b11.status.hexedBy).toBe("north");
+    expect(state.pending).toBeUndefined();
+    expect(state.selectedAbility).toBeUndefined();
+    expect(state.activeSeat).not.toBe("north");
   });
 
   it("generalizes Midas's Barter, Military Funding, and Leverage", () => {

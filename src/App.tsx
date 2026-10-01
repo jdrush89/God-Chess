@@ -75,6 +75,18 @@ import {
   type FourPlayerOnlineState,
 } from "./multiplayer/useFourPlayerOnlineGame";
 import {
+  threePlayerOnlineLocalSeat,
+  useThreePlayerOnlineGame,
+  type ThreePlayerOnlineState,
+} from "./multiplayer/useThreePlayerOnlineGame";
+import { GameResultPresentation } from "./GameResultPresentation";
+import { MatchEscapeMenu } from "./MatchEscapeMenu";
+import {
+  installGlobalDiagnostics,
+  recordActionTransition,
+  recordDiagnostic,
+} from "./diagnostics";
+import {
   createSavedGame,
   loadLocalSavedGames,
   mergeSavedGame,
@@ -82,6 +94,7 @@ import {
   prepareSavedState,
   saveId,
   isFourPlayerSavedGame,
+  isThreePlayerSavedGame,
   type SavedGame,
 } from "./saves";
 import {
@@ -91,15 +104,31 @@ import {
 import { FourPlayerGame } from "./fourPlayer/FourPlayerGame";
 import { FourPlayerOnlineLobby } from "./fourPlayer/FourPlayerOnlineLobby";
 import { FourPlayerSetup } from "./fourPlayer/FourPlayerSetup";
+import { createThreePlayerGame } from "./game/threePlayerEngine";
+import type {
+  ThreePlayerConfig,
+  ThreePlayerState,
+} from "./game/threePlayerTypes";
+import { THREE_PLAYER_SEATS } from "./game/threePlayerTypes";
+import { ThreePlayerGame } from "./threePlayer/ThreePlayerGame";
+import { ThreePlayerOnlineLobby } from "./threePlayer/ThreePlayerOnlineLobby";
+import { ThreePlayerSetup } from "./threePlayer/ThreePlayerSetup";
 
 type GameDispatch = (action: GameAction) => void;
-type StartMode = GameMode | "four-player";
+type StartMode = GameMode | "four-player" | "three-player";
 
 interface FourPlayerSession {
   key: string;
   state: FourPlayerState;
   undoHistory: FourPlayerState[];
   turnStart?: FourPlayerState;
+}
+
+interface ThreePlayerSession {
+  key: string;
+  state: ThreePlayerState;
+  undoHistory: ThreePlayerState[];
+  turnStart?: ThreePlayerState;
 }
 
 const PIECES: Record<Color, Record<Piece["type"], string>> = {
@@ -837,6 +866,7 @@ function AbilityCard({
   highlighted = false,
   showCost = true,
   onClick,
+  children,
 }: {
   ability: Ability;
   level: number;
@@ -849,45 +879,176 @@ function AbilityCard({
   highlighted?: boolean;
   showCost?: boolean;
   onClick: () => void;
+  children?: React.ReactNode;
 }) {
   return (
     <div
       className={`ability-card ${active ? "active" : ""} ${highlighted ? "opponent-selecting" : ""} ${disabled ? "disabled" : ""} ${!selectable && !disabled ? "read-only" : ""}`}
-      role={selectable ? "button" : undefined}
-      tabIndex={selectable ? 0 : undefined}
-      aria-disabled={disabled || undefined}
-      onClick={() => {
-        if (selectable) onClick();
-      }}
-      onKeyDown={(event) => {
-        if (selectable && (event.key === "Enter" || event.key === " ")) onClick();
-      }}
     >
-      <div className="ability-topline">
-        <strong>{ability.name}</strong>
-        <span className="level-pips">
-          {[1, 2, 3].map((item) => <i className={item <= level ? "filled" : ""} key={item} />)}
-        </span>
-      </div>
-      <AbilityRules ability={ability} level={level} previewLevelOverride={previewLevel} />
-      <div className="ability-footer">
-        <span>{footerLabel ?? `LVL ${level}`}</span>
-        <div className="ability-footer-meta">
-          {showCost && (
-            <div className="ability-cost">
-              {ability.cost?.white ? <Orb color="white" count={ability.cost.white} small /> : null}
-              {ability.cost?.black ? <Orb color="black" count={ability.cost.black} small /> : null}
-              {!ability.cost && <span className="free-tag">GENERATES</span>}
-            </div>
-          )}
-          {footerAction && <b className="upgrade-tag">{footerAction}</b>}
+      <div
+        className="ability-card-main"
+        role={selectable ? "button" : undefined}
+        tabIndex={selectable ? 0 : undefined}
+        aria-disabled={disabled || undefined}
+        onClick={() => {
+          if (selectable) onClick();
+        }}
+        onKeyDown={(event) => {
+          if (selectable && (event.key === "Enter" || event.key === " ")) {
+            event.preventDefault();
+            onClick();
+          }
+        }}
+      >
+        <div className="ability-topline">
+          <strong>{ability.name}</strong>
+          <span className="level-pips">
+            {[1, 2, 3].map((item) => <i className={item <= level ? "filled" : ""} key={item} />)}
+          </span>
+        </div>
+        <AbilityRules ability={ability} level={level} previewLevelOverride={previewLevel} />
+        <div className="ability-footer">
+          <span>{footerLabel ?? `LVL ${level}`}</span>
+          <div className="ability-footer-meta">
+            {showCost && (
+              <div className="ability-cost">
+                {ability.cost?.white ? <Orb color="white" count={ability.cost.white} small /> : null}
+                {ability.cost?.black ? <Orb color="black" count={ability.cost.black} small /> : null}
+                {!ability.cost && <span className="free-tag">GENERATES</span>}
+              </div>
+            )}
+            {footerAction && <b className="upgrade-tag">{footerAction}</b>}
+          </div>
         </div>
       </div>
+      {children && (
+        <div className="ability-pending">
+          {children}
+        </div>
+      )}
     </div>
   );
 }
 
-function ActionPanel({
+function PendingAbilityChoices({
+  state,
+  dispatch,
+  canPass,
+}: {
+  state: GameState;
+  dispatch: GameDispatch;
+  canPass: boolean;
+}) {
+  const player = state.players[state.activeColor];
+  return (
+    <>
+      <p className="ability-pending-prompt" role="status">{state.notice}</p>
+      {state.pending?.step === "grave" && (
+        <div className="grave-picker">
+          <span>YOUR GRAVEYARD</span>
+          <div>
+            {player.graveyard.map(({ piece }) => (
+              <button key={piece.id} onClick={() => dispatch({ type: "grave", pieceId: piece.id })}>
+                <PieceView piece={piece} /><small>{piece.type}</small>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      <div className="action-buttons">
+        {(state.pending?.step === "confirm-stone-gaze" ||
+          state.pending?.step === "confirm-march-home") && (
+          <button className="primary-button" onClick={() => dispatch({ type: "confirm-ability" })}>
+            Confirm {GOD_BY_ID[state.selectedGod!].abilities.find(
+              (ability) => ability.id === state.selectedAbility,
+            )?.name ?? "ability"}
+          </button>
+        )}
+        {state.pending?.step === "marked-choice" && (
+          <button className="danger-button" onClick={() => dispatch({ type: "marked-execute" })}>
+            Execute now
+          </button>
+        )}
+        {state.pending?.step === "rage-choice" && (
+          <>
+            <button className="danger-button" onClick={() => dispatch({ type: "rage-resolve", spareFriendly: false })}>
+              Capture all
+            </button>
+            <button className="secondary-button" onClick={() => dispatch({ type: "rage-resolve", spareFriendly: true })}>
+              Spare allies
+            </button>
+          </>
+        )}
+        {state.pending?.step === "barter-choice" && (
+          <>
+            <button
+              className="secondary-button"
+              disabled={player.orbs.white < 1}
+              onClick={() => dispatch({ type: "barter", give: "white" })}
+            >
+              Give white
+            </button>
+            <button
+              className="secondary-button"
+              disabled={player.orbs.black < 1}
+              onClick={() => dispatch({ type: "barter", give: "black" })}
+            >
+              Give black
+            </button>
+            <button className="text-button" onClick={() => dispatch({ type: "barter" })}>
+              Decline
+            </button>
+          </>
+        )}
+        {state.pending?.step === "resurrect-more" && (
+          <>
+            <button
+              className="secondary-button"
+              disabled={player.orbs.white < 2}
+              onClick={() => dispatch({ type: "resurrect-more", revive: true })}
+            >
+              Revive second · 2 white
+            </button>
+            <button className="text-button" onClick={() => dispatch({ type: "resurrect-more", revive: false })}>
+              Finish
+            </button>
+          </>
+        )}
+        {state.pending?.step === "siphon-choice" && (
+          <>
+            <button
+              className="secondary-button"
+              disabled={state.players[state.activeColor === "white" ? "black" : "white"].orbs.white < 2}
+              onClick={() => dispatch({ type: "siphon", amount: 2 })}
+            >
+              Steal 2
+            </button>
+            <button
+              className="secondary-button"
+              disabled={state.players[state.activeColor === "white" ? "black" : "white"].orbs.white < 1}
+              onClick={() => dispatch({ type: "siphon", amount: 1 })}
+            >
+              Steal 1
+            </button>
+            <button className="text-button" onClick={() => dispatch({ type: "siphon", amount: 0 })}>
+              Steal none
+            </button>
+          </>
+        )}
+        {canPass && (
+          <button className="secondary-button" onClick={() => dispatch({ type: "pass" })}>
+            Pass / finish
+          </button>
+        )}
+        <button className="text-button" onClick={() => dispatch({ type: "cancel" })}>
+          Cancel ability
+        </button>
+      </div>
+    </>
+  );
+}
+
+export function ActionPanel({
   state,
   dispatch,
   inspectedGodId,
@@ -1024,119 +1185,32 @@ function ActionPanel({
             className="god-level-selector"
           />
           <div className="ability-list">
-            {selectedGod.abilities.map((item) => (
-              <AbilityCard
-                ability={item}
-                level={abilityLevel(presentedPlayer.upgrades, item.id)}
-                previewLevel={godPreviewLevel}
-                active={(!readOnly && state.selectedAbility === item.id) || presentation?.abilityId === item.id}
-                highlighted={presentation?.abilityId === item.id}
-                selectable={!readOnly && canAfford(item) && (item.id !== "lure" || hasQueen)}
-                disabled={presentedGodResting || (!readOnly && (!canAfford(item) || (item.id === "lure" && !hasQueen)))}
-                footerAction={!readOnly && item.id === "lure" && !hasQueen ? "REQUIRES QUEEN" : undefined}
-                onClick={() => {
-                  if (!readOnly) dispatch({ type: "select-ability", abilityId: item.id });
-                }}
-                key={item.id}
-              />
-            ))}
+            {selectedGod.abilities.map((item) => {
+              const active = (!readOnly && state.selectedAbility === item.id) ||
+                presentation?.abilityId === item.id;
+              return (
+                <AbilityCard
+                  ability={item}
+                  level={abilityLevel(presentedPlayer.upgrades, item.id)}
+                  previewLevel={godPreviewLevel}
+                  active={active}
+                  highlighted={presentation?.abilityId === item.id}
+                  selectable={!readOnly && canAfford(item) && (item.id !== "lure" || hasQueen)}
+                  disabled={presentedGodResting || (!readOnly && (!canAfford(item) || (item.id === "lure" && !hasQueen)))}
+                  footerAction={!readOnly && item.id === "lure" && !hasQueen ? "REQUIRES QUEEN" : undefined}
+                  onClick={() => {
+                    if (!readOnly) dispatch({ type: "select-ability", abilityId: item.id });
+                  }}
+                  key={item.id}
+                >
+                  {!readOnly && active && state.selectedAbility && (
+                    <PendingAbilityChoices state={state} dispatch={dispatch} canPass={canPass} />
+                  )}
+                </AbilityCard>
+              );
+            })}
           </div>
-          {!readOnly && state.selectedAbility && (
-            <div className="action-buttons">
-              {(state.pending?.step === "confirm-stone-gaze" ||
-                state.pending?.step === "confirm-march-home") && (
-                <button className="primary-button" onClick={() => dispatch({ type: "confirm-ability" })}>
-                  Confirm {selectedGod.abilities.find((ability) => ability.id === state.selectedAbility)?.name}
-                </button>
-              )}
-              {state.pending?.step === "marked-choice" && (
-                <button className="danger-button" onClick={() => dispatch({ type: "marked-execute" })}>
-                  Execute now
-                </button>
-              )}
-              {state.pending?.step === "rage-choice" && (
-                <>
-                  <button className="danger-button" onClick={() => dispatch({ type: "rage-resolve", spareFriendly: false })}>
-                    Capture all
-                  </button>
-                  <button className="secondary-button" onClick={() => dispatch({ type: "rage-resolve", spareFriendly: true })}>
-                    Spare allies
-                  </button>
-                </>
-              )}
-              {state.pending?.step === "barter-choice" && (
-                <>
-                  <button
-                    className="secondary-button"
-                    disabled={player.orbs.white < 1}
-                    onClick={() => dispatch({ type: "barter", give: "white" })}
-                  >
-                    Give white
-                  </button>
-                  <button
-                    className="secondary-button"
-                    disabled={player.orbs.black < 1}
-                    onClick={() => dispatch({ type: "barter", give: "black" })}
-                  >
-                    Give black
-                  </button>
-                  <button className="text-button" onClick={() => dispatch({ type: "barter" })}>
-                    Decline
-                  </button>
-                </>
-              )}
-              {state.pending?.step === "resurrect-more" && (
-                <>
-                  <button
-                    className="secondary-button"
-                    disabled={player.orbs.white < 2}
-                    onClick={() => dispatch({ type: "resurrect-more", revive: true })}
-                  >
-                    Revive second · 2 white
-                  </button>
-                  <button className="text-button" onClick={() => dispatch({ type: "resurrect-more", revive: false })}>
-                    Finish
-                  </button>
-                </>
-              )}
-              {state.pending?.step === "siphon-choice" && (
-                <>
-                  <button
-                    className="secondary-button"
-                    disabled={state.players[state.activeColor === "white" ? "black" : "white"].orbs.white < 2}
-                    onClick={() => dispatch({ type: "siphon", amount: 2 })}
-                  >
-                    Steal 2
-                  </button>
-                  <button
-                    className="secondary-button"
-                    disabled={state.players[state.activeColor === "white" ? "black" : "white"].orbs.white < 1}
-                    onClick={() => dispatch({ type: "siphon", amount: 1 })}
-                  >
-                    Steal 1
-                  </button>
-                  <button className="text-button" onClick={() => dispatch({ type: "siphon", amount: 0 })}>
-                    Steal none
-                  </button>
-                </>
-              )}
-              {canPass && <button className="secondary-button" onClick={() => dispatch({ type: "pass" })}>Pass / finish</button>}
-              <button className="text-button" onClick={() => dispatch({ type: "cancel" })}>Cancel ability</button>
-            </div>
-          )}
         </>
-      )}
-      {state.pending?.step === "grave" && (
-        <div className="grave-picker">
-          <span>YOUR GRAVEYARD</span>
-          <div>
-            {player.graveyard.map(({ piece }) => (
-              <button key={piece.id} onClick={() => dispatch({ type: "grave", pieceId: piece.id })}>
-                <PieceView piece={piece} /><small>{piece.type}</small>
-              </button>
-            ))}
-          </div>
-        </div>
       )}
     </aside>
   );
@@ -1555,6 +1629,8 @@ function MainMenu({
                       <span>
                         {isFourPlayerSavedGame(game)
                           ? `Four-player ${game.state.config.mode === "teams" ? "2v2" : "FFA"} · ${game.state.players[game.state.activeSeat].name} to act`
+                          : isThreePlayerSavedGame(game)
+                            ? `Three-player ${game.state.config.boardVariant} · ${game.state.players[game.state.activeSeat].name} to act`
                           : `${game.state.gameMode === "ai" ? "Divine AI" : "Local duel"} · Round ${game.state.round} · Turn ${game.state.turn}`}
                       </span>
                     </div>
@@ -1595,7 +1671,34 @@ function MainMenu({
                           </div>
                         );
                       })
-                      : (["white", "black"] as const).map((color) => (
+                      : isThreePlayerSavedGame(game)
+                        ? THREE_PLAYER_SEATS.map((seat) => {
+                          const player = game.state.players[seat];
+                          return (
+                            <div className="saved-pantheon four-saved-pantheon" key={seat}>
+                              <span
+                                className="four-player-crest"
+                                style={{ "--seat-color": player.displayColor } as React.CSSProperties}
+                              >
+                                {seat[0].toUpperCase()}
+                              </span>
+                              <div>
+                                <strong>{player.name}</strong>
+                                <small>{seat} · {player.control.kind === "ai" ? `AI ${player.control.difficulty ?? 5}` : "Human"}</small>
+                              </div>
+                              <div className="saved-gods">
+                                {player.gods.length
+                                  ? player.gods.map((godId) => (
+                                    <span className="saved-god" title={GOD_BY_ID[godId].name} key={godId}>
+                                      <GodSigil godId={godId} size="small" />
+                                    </span>
+                                  ))
+                                  : <em>No gods drafted</em>}
+                              </div>
+                            </div>
+                          );
+                        })
+                        : (["white", "black"] as const).map((color) => (
                       <div className="saved-pantheon" key={color}>
                         <span className={`player-crest ${color}`}>{color[0].toUpperCase()}</span>
                         <div>
@@ -1657,12 +1760,14 @@ function MainMenu({
 function StartGamePrompt({
   online,
   fourOnline,
+  threeOnline,
   defaultPlayerName,
   initialMode,
   canCancel,
   onStart,
   onOpenPuzzles,
   onOpenFourPlayer,
+  onOpenThreePlayer,
   onHost,
   onJoin,
   onStartOnline,
@@ -1672,17 +1777,25 @@ function StartGamePrompt({
   onFourAssignSeat,
   onFourUpdateConfig,
   onStartFourOnline,
+  onHostThreeOnline,
+  onJoinThreeOnline,
+  onThreeReady,
+  onThreeAssignSeat,
+  onThreeUpdateConfig,
+  onStartThreeOnline,
   onCancel,
   onDisconnect,
 }: {
   online: OnlineGameState;
   fourOnline: FourPlayerOnlineState;
+  threeOnline: ThreePlayerOnlineState;
   defaultPlayerName?: string;
   initialMode: StartMode;
   canCancel: boolean;
   onStart: (mode: Exclude<GameMode, "online" | "puzzle">, difficulty: number) => void;
   onOpenPuzzles: () => void;
   onOpenFourPlayer: () => void;
+  onOpenThreePlayer: () => void;
   onHost: (name: string) => void;
   onJoin: (code: string, name: string) => void;
   onStartOnline: () => void;
@@ -1692,14 +1805,29 @@ function StartGamePrompt({
   onFourAssignSeat: (participantId: string, seat?: (typeof FOUR_PLAYER_SEATS)[number]) => void;
   onFourUpdateConfig: (config: FourPlayerConfig) => void;
   onStartFourOnline: () => void;
+  onHostThreeOnline: (name: string) => void;
+  onJoinThreeOnline: (code: string, name: string) => void;
+  onThreeReady: (ready: boolean) => void;
+  onThreeAssignSeat: (
+    participantId: string,
+    seat?: (typeof THREE_PLAYER_SEATS)[number],
+  ) => void;
+  onThreeUpdateConfig: (config: ThreePlayerConfig) => void;
+  onStartThreeOnline: () => void;
   onCancel: () => void;
   onDisconnect: () => void;
 }) {
   const [mode, setMode] = useState<StartMode>(initialMode);
   const [difficulty, setDifficulty] = useState(7);
   const [onlineAction, setOnlineAction] = useState<"host" | "join">("host");
-  const [onlineVariant, setOnlineVariant] = useState<"classic" | "four-player">(
-    fourOnline.roomCode ? "four-player" : "classic",
+  const [onlineVariant, setOnlineVariant] = useState<
+    "classic" | "four-player" | "three-player"
+  >(
+    threeOnline.roomCode
+      ? "three-player"
+      : fourOnline.roomCode
+        ? "four-player"
+        : "classic",
   );
   const [playerName, setPlayerName] = useState(defaultPlayerName || "Player");
   const [roomCode, setRoomCode] = useState("");
@@ -1727,6 +1855,17 @@ function StartGamePrompt({
             <span>Challenge a computer opponent.</span>
           </button>
           <button
+            className={mode === "three-player" ? "active" : ""}
+            onClick={() => {
+              chooseMode("three-player");
+              onOpenThreePlayer();
+            }}
+          >
+            <Users size={24} />
+            <strong>Three-player local</strong>
+            <span>Five boards, nine Gods, one shared device.</span>
+          </button>
+          <button
             className={mode === "four-player" ? "active" : ""}
             onClick={() => {
               chooseMode("four-player");
@@ -1740,7 +1879,7 @@ function StartGamePrompt({
           <button className={mode === "online" ? "active" : ""} onClick={() => chooseMode("online")}>
             <Globe2 size={24} />
             <strong>Online versus</strong>
-            <span>Host a two-player or four-player room.</span>
+            <span>Host a two-, three-, or four-player room.</span>
           </button>
           <button
             className={mode === "puzzle" ? "active" : ""}
@@ -1774,7 +1913,9 @@ function StartGamePrompt({
 
         {mode === "online" && (
           <div className="online-setup">
-            {online.role === "none" && fourOnline.role === "none" && (
+            {online.role === "none" &&
+              fourOnline.role === "none" &&
+              threeOnline.role === "none" && (
               <div className="online-variant-tabs">
                 <button
                   className={onlineVariant === "classic" ? "active" : ""}
@@ -1794,9 +1935,27 @@ function StartGamePrompt({
                 >
                   Four-player
                 </button>
+                <button
+                  className={onlineVariant === "three-player" ? "active" : ""}
+                  onClick={() => {
+                    onDisconnect();
+                    setOnlineVariant("three-player");
+                  }}
+                >
+                  Three-player
+                </button>
               </div>
             )}
-            {onlineVariant === "four-player" && fourOnline.role !== "none" ? (
+            {onlineVariant === "three-player" && threeOnline.role !== "none" ? (
+              <ThreePlayerOnlineLobby
+                online={threeOnline}
+                onReady={onThreeReady}
+                onAssignSeat={onThreeAssignSeat}
+                onUpdateConfig={onThreeUpdateConfig}
+                onStart={onStartThreeOnline}
+                onLeave={onDisconnect}
+              />
+            ) : onlineVariant === "four-player" && fourOnline.role !== "none" ? (
               <FourPlayerOnlineLobby
                 online={fourOnline}
                 onReady={onFourReady}
@@ -1860,18 +2019,22 @@ function StartGamePrompt({
                   disabled={
                     online.connecting ||
                     fourOnline.connecting ||
+                    threeOnline.connecting ||
                     !playerName.trim() ||
                     (onlineAction === "join" && roomCode.length !== 5)
                   }
                   onClick={() => {
-                    if (onlineVariant === "four-player") {
+                    if (onlineVariant === "three-player") {
+                      if (onlineAction === "host") onHostThreeOnline(playerName);
+                      else onJoinThreeOnline(roomCode, playerName);
+                    } else if (onlineVariant === "four-player") {
                       if (onlineAction === "host") onHostFourOnline(playerName);
                       else onJoinFourOnline(roomCode, playerName);
                     } else if (onlineAction === "host") onHost(playerName);
                     else onJoin(roomCode, playerName);
                   }}
                 >
-                  {online.connecting || fourOnline.connecting
+                  {online.connecting || fourOnline.connecting || threeOnline.connecting
                     ? <><LoaderCircle className="spin" size={17} /> Connecting</>
                     : onlineAction === "host"
                       ? "Create room"
@@ -1879,17 +2042,22 @@ function StartGamePrompt({
                 </button>
               </>
             )}
-            {(online.error || fourOnline.error) && (
-              <p className="online-error">{online.error ?? fourOnline.error}</p>
+            {(online.error || fourOnline.error || threeOnline.error) && (
+              <p className="online-error">
+                {online.error ?? fourOnline.error ?? threeOnline.error}
+              </p>
             )}
-            {(online.role !== "none" || fourOnline.role !== "none") &&
-              !(onlineVariant === "four-player" && fourOnline.role !== "none") && (
+            {(online.role !== "none" ||
+              fourOnline.role !== "none" ||
+              threeOnline.role !== "none") &&
+              !(onlineVariant === "four-player" && fourOnline.role !== "none") &&
+              !(onlineVariant === "three-player" && threeOnline.role !== "none") && (
               <button className="text-button leave-room-button" onClick={onDisconnect}>Leave room</button>
             )}
           </div>
         )}
 
-        {mode !== "online" && mode !== "puzzle" && mode !== "four-player" && (
+        {mode !== "online" && mode !== "puzzle" && mode !== "four-player" && mode !== "three-player" && (
           <button className="primary-button start-match-button" onClick={() => onStart(mode, difficulty)}>
             {mode === "ai" ? "Challenge the AI" : "Begin local duel"}
           </button>
@@ -2084,6 +2252,8 @@ function GameScreen({
   const [inspectedGodId, setInspectedGodId] = useState<GodId>();
   const [inspectedSquare, setInspectedSquare] = useState<Square>();
   const [graveyardColor, setGraveyardColor] = useState<Color>();
+  const gameFinished = !state.puzzleId && state.phase === "gameover";
+  const [resultOpen, setResultOpen] = useState(gameFinished);
   const kingInCheck = state.phase === "play" && isInCheck(state.board, state.activeColor, state.bananas);
   const puzzle = state.puzzleId ? PUZZLE_BY_ID[state.puzzleId] : undefined;
   const difficultyPuzzles = puzzle
@@ -2156,6 +2326,10 @@ function GameScreen({
   useEffect(() => {
     setPuzzleHintOpen(false);
   }, [state.puzzleId]);
+
+  useEffect(() => {
+    setResultOpen(gameFinished);
+  }, [gameFinished, state]);
 
   useEffect(() => {
     setPuzzleVictoryReady(false);
@@ -2388,6 +2562,10 @@ function GameScreen({
   ]);
 
   const handleGodClick = (godId: GodId, color: Color) => {
+    if (gameFinished) {
+      setInspectedGodId(godId);
+      return;
+    }
     if (state.phase === "upgrade") {
       setInspectedGodId(godId);
       return;
@@ -2399,8 +2577,12 @@ function GameScreen({
     }
     setInspectedGodId(godId);
   };
+  const gameDispatch: GameDispatch = (action) => {
+    if (gameFinished) return;
+    dispatch(action);
+  };
   return (
-    <main className={`game-page ${puzzle ? "puzzle-mode" : ""} ${state.lastAction ? "has-last-action" : ""} ${inputDisabled || opponentPresentation ? "input-locked" : ""}`}>
+    <main className={`game-page ${puzzle ? "puzzle-mode" : ""} ${state.lastAction ? "has-last-action" : ""} ${gameFinished ? "finished-view" : ""} ${inputDisabled || opponentPresentation ? "input-locked" : ""}`}>
       <header className="topbar">
         <Brand />
         <div className="game-meta">
@@ -2505,7 +2687,7 @@ function GameScreen({
           />
           <ChessBoard
             state={state}
-            dispatch={dispatch}
+            dispatch={gameDispatch}
             onInspectSquare={setInspectedSquare}
           />
           <PlayerBar
@@ -2523,18 +2705,18 @@ function GameScreen({
           {state.phase === "upgrade" ? (
             <UpgradePanel
               state={state}
-              dispatch={dispatch}
+              dispatch={gameDispatch}
               selectedGodId={inspectedGodId}
               presentation={opponentPresentation}
               onCloseGod={() => {
                 setInspectedGodId(undefined);
-                dispatch({ type: "preview-upgrade" });
+                gameDispatch({ type: "preview-upgrade" });
               }}
             />
           ) : (
             <ActionPanel
               state={state}
-              dispatch={dispatch}
+              dispatch={gameDispatch}
               inspectedGodId={inspectedGodId}
               presentation={opponentPresentation}
               onInspectGod={setInspectedGodId}
@@ -2632,16 +2814,22 @@ function GameScreen({
           </section>
         </div>
       )}
-      {!puzzle && state.phase === "gameover" && (
-        <div className="modal-backdrop">
-          <section className="gameover-modal">
-            <div className="victory-crown"><Crown size={38} /></div>
-            <p className="eyebrow">THE DIVINE GAME ENDS</p>
-            <h2>{state.winner ? `${colorLabel(state.winner)} is victorious` : "Stalemate"}</h2>
-            <p>{state.winner ? `${state.players[state.winner].name} has conquered the opposing pantheon.` : "Neither pantheon can make a legal move."}</p>
-            <button className="primary-button" onClick={onRestart}>Begin a new game</button>
-          </section>
-        </div>
+      {gameFinished && (
+        <GameResultPresentation
+          open={resultOpen}
+          eyebrow="THE DIVINE GAME ENDS"
+          title={state.winner ? `${colorLabel(state.winner)} is victorious` : "Stalemate"}
+          description={state.winner
+            ? `${state.players[state.winner].name} has conquered the opposing pantheon.`
+            : "Neither pantheon can make a legal move."}
+          newGameLabel="Begin a new game"
+          undoEnabled={undoEnabled}
+          canUndo={canUndo}
+          onOpenChange={setResultOpen}
+          onUndo={onUndo}
+          onOpenUndoSettings={onOpenSettings}
+          onNewGame={onRestart}
+        />
       )}
     </main>
   );
@@ -2649,6 +2837,7 @@ function GameScreen({
 
 export default function App() {
   const accountService = useAccount();
+  useEffect(() => installGlobalDiagnostics(), []);
   const [localSavedGames, setLocalSavedGames] = useState(loadLocalSavedGames);
   const [cloudSavedGames, setCloudSavedGames] = useState<SavedGame[]>([]);
   const [savesLoading, setSavesLoading] = useState(false);
@@ -2669,11 +2858,12 @@ export default function App() {
   const savedGamesRef = useRef(savedGames);
   savedGamesRef.current = savedGames;
   const activeSaveId = useRef<string | undefined>(undefined);
-  const [startView, setStartView] = useState<"menu" | "setup" | "four-setup" | "puzzles" | "none">("menu");
+  const [startView, setStartView] = useState<"menu" | "setup" | "three-setup" | "four-setup" | "puzzles" | "none">("menu");
   const [setupCanCancel, setSetupCanCancel] = useState(false);
   const [setupReturnView, setSetupReturnView] = useState<"menu" | "none">("menu");
   const [setupInitialMode, setSetupInitialMode] = useState<StartMode>("local");
   const [fourPlayerSession, setFourPlayerSession] = useState<FourPlayerSession>();
+  const [threePlayerSession, setThreePlayerSession] = useState<ThreePlayerSession>();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [undoPreferred, setUndoPreferred] = useState(loadUndoSetting);
   const [undoDepth, setUndoDepth] = useState(0);
@@ -2848,6 +3038,14 @@ export default function App() {
       updateUndoDepth();
       turnStart.current = next.phase === "play" ? prepareSavedState(next) : undefined;
     }
+    recordActionTransition({
+      variant: "classic",
+      mode: current.gameMode,
+      source: current.gameMode === "online" ? "online" : isAiTurn(current) ? "ai" : "human",
+      action,
+      before: current as unknown as Record<string, unknown>,
+      after: next as unknown as Record<string, unknown>,
+    });
     return next;
   };
   const canApplyUndo = () => {
@@ -2874,6 +3072,14 @@ export default function App() {
     turnStart.current = next.phase === "play" ? prepareSavedState(next) : undefined;
     aiPlan.current = [];
     receiveState(next);
+    recordActionTransition({
+      variant: "classic",
+      mode: current.gameMode,
+      source: "undo",
+      action: { type: "undo" },
+      before: current as unknown as Record<string, unknown>,
+      after: next as unknown as Record<string, unknown>,
+    });
     return next;
   };
   const applyRemoteAction = (action: GameAction) => {
@@ -2889,6 +3095,17 @@ export default function App() {
     receiveState,
   });
   const [fourOnline, fourOnlineActions] = useFourPlayerOnlineGame();
+  const [threeOnline, threeOnlineActions] = useThreePlayerOnlineGame();
+  const threeOnlineActive = threeOnline.connecting ||
+    threeOnline.role !== "none" ||
+    Boolean(threeOnline.roomCode) ||
+    Boolean(threeOnline.snapshot);
+  const threeOnlineActiveRef = useRef(threeOnlineActive);
+  threeOnlineActiveRef.current = threeOnlineActive;
+
+  useEffect(() => {
+    if (threeOnlineActive) activeSaveId.current = undefined;
+  }, [threeOnlineActive]);
 
   const dispatch: GameDispatch = (action) => {
     const current = stateRef.current;
@@ -2896,6 +3113,12 @@ export default function App() {
       const localColor = onlinePlayerColor(online, current.onlineHostColor);
       if (!localColor || current.activeColor !== localColor) return;
       if (online.role === "peer") {
+        recordDiagnostic({
+          category: "online",
+          event: "classic-action-sent",
+          context: { variant: "classic", role: "peer" },
+          data: { action },
+        });
         onlineActions.sendAction(action);
         return;
       }
@@ -2917,6 +3140,7 @@ export default function App() {
   };
 
   const persistSavedGame = useCallback(async (saved: SavedGame) => {
+    if (threeOnlineActiveRef.current) return false;
     const next = mergeSavedGame(savedGamesRef.current, saved);
     const account = accountService.account;
     try {
@@ -2932,7 +3156,7 @@ export default function App() {
         setLocalSavedGames(next);
       }
       setSaveError(undefined);
-      activeSaveId.current = saved.id;
+      if (!threeOnlineActiveRef.current) activeSaveId.current = saved.id;
       savedGamesRef.current = next;
       return true;
     } catch (error) {
@@ -2943,7 +3167,11 @@ export default function App() {
   }, [accountService.account]);
 
   const saveCurrentGame = async () => {
-    if (stateRef.current.gameMode === "online" || stateRef.current.gameMode === "puzzle") return false;
+    if (
+      threeOnlineActiveRef.current ||
+      stateRef.current.gameMode === "online" ||
+      stateRef.current.gameMode === "puzzle"
+    ) return false;
     const id = activeSaveId.current ?? saveId();
     const saved = createSavedGame(
       id,
@@ -2968,6 +3196,21 @@ export default function App() {
     ));
   }, [persistSavedGame]);
 
+  const persistThreePlayerGame = useCallback((
+    threeState: ThreePlayerState,
+    threeUndoHistory: ThreePlayerState[],
+    threeTurnStart?: ThreePlayerState,
+  ) => {
+    if (threeOnlineActiveRef.current) return false;
+    const id = activeSaveId.current ?? saveId();
+    return persistSavedGame(createSavedGame(
+      id,
+      threeState,
+      threeUndoHistory,
+      threeTurnStart,
+    ));
+  }, [persistSavedGame]);
+
   const saveAndQuit = async () => {
     if (!await saveCurrentGame()) return;
     aiPlan.current = [];
@@ -2979,19 +3222,46 @@ export default function App() {
     if (
       startView !== "none" ||
       fourPlayerSession ||
+      threePlayerSession ||
+      threeOnlineActive ||
       state.gameMode === "online" ||
       state.gameMode === "puzzle"
     ) return;
     const timer = window.setTimeout(() => void saveCurrentGame(), 120);
     return () => window.clearTimeout(timer);
-  }, [fourPlayerSession, startView, state]);
+  }, [
+    fourPlayerSession,
+    threeOnlineActive,
+    threePlayerSession,
+    startView,
+    state,
+  ]);
 
   useEffect(() => {
-    if (fourPlayerSession || startView !== "none" || !isAiTurn(state)) {
+    if (
+      fourPlayerSession ||
+      threePlayerSession ||
+      startView !== "none" ||
+      !isAiTurn(state)
+    ) {
       aiPlan.current = [];
       return;
     }
-    if (!aiPlan.current.length) aiPlan.current = chooseAiPlan(state);
+    if (!aiPlan.current.length) {
+      recordDiagnostic({
+        category: "ai",
+        event: "classic-plan-start",
+        context: { variant: "classic", mode: state.gameMode },
+        data: { phase: state.phase, activeColor: state.activeColor, turn: state.turn },
+      });
+      aiPlan.current = chooseAiPlan(state);
+      recordDiagnostic({
+        category: "ai",
+        event: "classic-plan-result",
+        context: { variant: "classic", mode: state.gameMode },
+        data: { actions: aiPlan.current },
+      });
+    }
     const action = aiPlan.current[0];
     if (!action) return;
     const timer = window.setTimeout(() => {
@@ -2999,11 +3269,91 @@ export default function App() {
       dispatch(action);
     }, aiActionDelay(action));
     return () => window.clearTimeout(timer);
-  }, [fourPlayerSession, startView, state]);
+  }, [fourPlayerSession, threePlayerSession, startView, state]);
 
   useEffect(() => {
     if (online.started) setStartView("none");
   }, [online.started]);
+
+  useEffect(() => {
+    recordDiagnostic({
+      category: "online",
+      event: "classic-lifecycle",
+      context: { variant: "classic" },
+      data: {
+        role: online.role,
+        connecting: online.connecting,
+        started: online.started,
+        awaitingSync: online.awaitingSync,
+        undoAvailable: online.undoAvailable,
+        error: online.error,
+      },
+    });
+  }, [
+    online.awaitingSync,
+    online.connecting,
+    online.error,
+    online.role,
+    online.started,
+    online.undoAvailable,
+  ]);
+
+  useEffect(() => {
+    recordDiagnostic({
+      category: "online",
+      event: "four-player-lifecycle",
+      context: { variant: "four-player" },
+      data: {
+        role: fourOnline.role,
+        connecting: fourOnline.connecting,
+        status: fourOnline.snapshot?.status,
+        revision: fourOnline.snapshot?.canonical?.revision,
+        awaitingAction: Boolean(fourOnline.awaitingActionId),
+        undoAvailable: fourOnline.snapshot?.undoAvailable,
+        error: fourOnline.error,
+      },
+    });
+  }, [
+    fourOnline.awaitingActionId,
+    fourOnline.connecting,
+    fourOnline.error,
+    fourOnline.role,
+    fourOnline.snapshot?.canonical?.revision,
+    fourOnline.snapshot?.status,
+    fourOnline.snapshot?.undoAvailable,
+  ]);
+
+  useEffect(() => {
+    recordDiagnostic({
+      category: "online",
+      event: "three-player-lifecycle",
+      context: { variant: "three-player" },
+      data: {
+        role: threeOnline.role,
+        connecting: threeOnline.connecting,
+        status: threeOnline.snapshot?.status,
+        revision: threeOnline.snapshot?.canonical?.revision,
+        awaitingAction: Boolean(threeOnline.awaitingActionId),
+        undoAvailable: threeOnline.snapshot?.undoAvailable,
+        undoVote: threeOnline.snapshot?.undoProposal
+          ? {
+            eligibleCount: threeOnline.snapshot.undoProposal.eligibleCount,
+            approvedCount: threeOnline.snapshot.undoProposal.approvedCount,
+          }
+          : undefined,
+        error: threeOnline.error,
+      },
+    });
+  }, [
+    threeOnline.awaitingActionId,
+    threeOnline.connecting,
+    threeOnline.error,
+    threeOnline.role,
+    threeOnline.snapshot?.canonical?.revision,
+    threeOnline.snapshot?.status,
+    threeOnline.snapshot?.undoAvailable,
+    threeOnline.snapshot?.undoProposal?.approvedCount,
+  ]);
 
   useEffect(() => {
     if (fourOnline.snapshot?.canonical) {
@@ -3019,6 +3369,21 @@ export default function App() {
     setSetupReturnView("none");
     setStartView("setup");
   }, [fourOnline.ended]);
+
+  useEffect(() => {
+    if (threeOnline.snapshot?.canonical) {
+      setThreePlayerSession(undefined);
+      setStartView("none");
+    }
+  }, [threeOnline.snapshot?.canonical]);
+
+  useEffect(() => {
+    if (!threeOnline.ended) return;
+    setSetupCanCancel(false);
+    setSetupInitialMode("online");
+    setSetupReturnView("none");
+    setStartView("setup");
+  }, [threeOnline.ended]);
 
   useEffect(() => {
     if (!online.started || state.gameMode !== "online") return;
@@ -3040,7 +3405,22 @@ export default function App() {
       setStartView("none");
       return;
     }
+    if (isThreePlayerSavedGame(game)) {
+      setFourPlayerSession(undefined);
+      setThreePlayerSession({
+        key: `${game.id}-${game.savedAt}`,
+        state: structuredClone(game.state),
+        undoHistory: game.undoHistory.map((snapshot) => structuredClone(snapshot)),
+        turnStart: game.turnStart ? structuredClone(game.turnStart) : undefined,
+      });
+      aiPlan.current = [];
+      clearUndoHistory();
+      setSettingsOpen(false);
+      setStartView("none");
+      return;
+    }
     setFourPlayerSession(undefined);
+    setThreePlayerSession(undefined);
     const next = structuredClone(game.state);
     restoreUndoTracking(game.undoHistory, game.turnStart, next);
     receiveState(next);
@@ -3076,7 +3456,9 @@ export default function App() {
   const beginGame = (mode: Exclude<GameMode, "online" | "puzzle">, difficulty: number) => {
     onlineActions.disconnect();
     fourOnlineActions.disconnect();
+    threeOnlineActions.disconnect();
     setFourPlayerSession(undefined);
+    setThreePlayerSession(undefined);
     activeSaveId.current = saveId();
     const next = createGame(undefined, {
       mode,
@@ -3091,6 +3473,7 @@ export default function App() {
   const beginFourPlayerGame = (config: FourPlayerConfig) => {
     onlineActions.disconnect();
     fourOnlineActions.disconnect();
+    threeOnlineActions.disconnect();
     const id = saveId();
     activeSaveId.current = id;
     clearUndoHistory();
@@ -3103,10 +3486,31 @@ export default function App() {
     });
     setStartView("none");
   };
+  const beginThreePlayerGame = (config: ThreePlayerConfig) => {
+    onlineActions.disconnect();
+    fourOnlineActions.disconnect();
+    threeOnlineActions.disconnect();
+    const id = saveId();
+    const next = createThreePlayerGame(config);
+    const session: ThreePlayerSession = {
+      key: id,
+      state: next,
+      undoHistory: [],
+    };
+    setFourPlayerSession(undefined);
+    setThreePlayerSession(session);
+    activeSaveId.current = id;
+    aiPlan.current = [];
+    clearUndoHistory();
+    setSettingsOpen(false);
+    setStartView("none");
+  };
   const beginPuzzle = (puzzleId: PuzzleId) => {
     onlineActions.disconnect();
     fourOnlineActions.disconnect();
+    threeOnlineActions.disconnect();
     setFourPlayerSession(undefined);
+    setThreePlayerSession(undefined);
     activeSaveId.current = undefined;
     const next = createPuzzleGame(puzzleId, accountService.account?.displayName);
     resetUndoTracking(next);
@@ -3118,6 +3522,7 @@ export default function App() {
   const startHostedGame = () => {
     if (!online.guest) return;
     fourOnlineActions.disconnect();
+    threeOnlineActions.disconnect();
     activeSaveId.current = undefined;
     setFourPlayerSession(undefined);
     const next = createGame(undefined, {
@@ -3131,6 +3536,14 @@ export default function App() {
     setStartView("none");
   };
   const openNewGame = () => {
+    if (threePlayerSession) {
+      setThreePlayerSession(undefined);
+      setSetupCanCancel(false);
+      setSetupInitialMode("three-player");
+      setSetupReturnView("none");
+      setStartView("three-setup");
+      return;
+    }
     if (fourPlayerSession) {
       setFourPlayerSession(undefined);
       setSetupCanCancel(false);
@@ -3141,6 +3554,9 @@ export default function App() {
     }
     if (state.gameMode === "online") {
       onlineActions.disconnect();
+      setSetupCanCancel(false);
+    } else if (threeOnline.snapshot?.canonical) {
+      threeOnlineActions.disconnect();
       setSetupCanCancel(false);
     } else if (fourOnline.snapshot?.canonical) {
       fourOnlineActions.disconnect();
@@ -3223,10 +3639,7 @@ export default function App() {
     else applyUndo();
   };
   const fourOnlineCanonical = fourOnline.snapshot?.canonical;
-  const fourOnlinePausedParticipant = fourOnline.snapshot?.participants.find(
-    (participant) =>
-      participant.id === fourOnline.snapshot?.pausedParticipantId
-  );
+  const threeOnlineCanonical = threeOnline.snapshot?.canonical;
 
   if (startView === "menu") {
     return (
@@ -3275,17 +3688,66 @@ export default function App() {
     );
   }
 
+  if (startView === "three-setup") {
+    return (
+      <ThreePlayerSetup
+        defaultPlayerName={accountService.account?.displayName}
+        onStart={beginThreePlayerGame}
+        onBack={() => setStartView("setup")}
+      />
+    );
+  }
+
+  if (startView === "none" && threeOnlineCanonical && threeOnline.snapshot) {
+    const pausedSeat = threeOnline.snapshot.pausedSeat;
+    return (
+      <ThreePlayerGame
+        key={`online-three-${threeOnline.roomCode}`}
+        initialState={threeOnlineCanonical.state}
+        onQuit={() => {
+          threeOnlineActions.disconnect();
+          setStartView("menu");
+        }}
+        onNewGame={() => {
+          threeOnlineActions.disconnect();
+          setSetupCanCancel(false);
+          setSetupInitialMode("online");
+          setSetupReturnView("none");
+          setStartView("setup");
+        }}
+        onlineSession={{
+          roomCode: threeOnline.snapshot.roomCode,
+          role: threeOnline.role === "host" ? "host" : "peer",
+          participantSeat: threePlayerOnlineLocalSeat(threeOnline),
+          status: threeOnline.snapshot.status === "paused"
+            ? "paused"
+            : threeOnline.snapshot.status === "finished"
+              ? "finished"
+              : "playing",
+          awaitingSync: Boolean(threeOnline.awaitingActionId),
+          undoAvailable: threeOnline.snapshot.undoAvailable,
+          undoProposal: threeOnline.snapshot.undoProposal,
+          pausedSeat,
+          pausedParticipantName: threeOnline.snapshot.pausedParticipantName,
+          onAction: threeOnlineActions.sendAction,
+          onUndoRequest: threeOnlineActions.requestUndo,
+          onUndoVote: threeOnlineActions.voteUndo,
+          onReplaceWithAi: pausedSeat && threeOnline.role === "host"
+            ? (difficulty) =>
+              threeOnlineActions.replaceWithAi(pausedSeat, difficulty)
+            : undefined,
+        }}
+      />
+    );
+  }
+
   if (startView === "none" && fourOnlineCanonical && fourOnline.snapshot) {
     const pausedSeat = fourOnline.snapshot.pausedSeat;
     return (
       <FourPlayerGame
         key={`online-${fourOnline.roomCode}`}
         initialState={fourOnlineCanonical.state}
-        undoPreferred={
-          fourOnline.participantId
-            ? fourOnline.snapshot.undoConsents[fourOnline.participantId] === true
-            : false
-        }
+        undoPreferred={fourOnline.snapshot.localUndoConsent}
         onUndoPreferenceChange={fourOnlineActions.setUndoConsent}
         onPersist={async () => false}
         onQuit={() => {
@@ -3309,12 +3771,10 @@ export default function App() {
               ? "finished"
               : "playing",
           awaitingSync: Boolean(fourOnline.awaitingActionId),
-          undoConsent: fourOnline.participantId
-            ? fourOnline.snapshot.undoConsents[fourOnline.participantId] === true
-            : false,
+          undoConsent: fourOnline.snapshot.localUndoConsent,
           undoAvailable: fourOnline.snapshot.undoAvailable,
           pausedSeat,
-          pausedParticipantName: fourOnlinePausedParticipant?.name,
+          pausedParticipantName: fourOnline.snapshot.pausedParticipantName,
           onAction: fourOnlineActions.sendAction,
           onUndo: fourOnlineActions.requestUndo,
           onUndoConsentChange: fourOnlineActions.setUndoConsent,
@@ -3357,6 +3817,28 @@ export default function App() {
           }}
         />
       </>
+    );
+  }
+
+  if (startView === "none" && threePlayerSession) {
+    return (
+      <ThreePlayerGame
+        key={threePlayerSession.key}
+        initialState={threePlayerSession.state}
+        initialUndoHistory={threePlayerSession.undoHistory}
+        initialTurnStart={threePlayerSession.turnStart}
+        undoPreferred={undoPreferred}
+        onUndoPreferenceChange={changeUndoPreference}
+        onPersist={persistThreePlayerGame}
+        onQuit={() => setStartView("menu")}
+        onNewGame={() => {
+          setThreePlayerSession(undefined);
+          setSetupCanCancel(false);
+          setSetupInitialMode("three-player");
+          setSetupReturnView("none");
+          setStartView("three-setup");
+        }}
+      />
     );
   }
 
@@ -3406,31 +3888,52 @@ export default function App() {
           onClose={() => setSettingsOpen(false)}
         />
       )}
+      {startView === "none" && (
+        <MatchEscapeMenu
+          onOpenSettings={state.gameMode === "puzzle"
+            ? undefined
+            : () => setSettingsOpen(true)}
+          onLeave={state.gameMode === "online" || state.gameMode === "puzzle"
+            ? openNewGame
+            : () => void saveAndQuit()}
+          leaveLabel={state.gameMode === "online"
+            ? "Leave room"
+            : state.gameMode === "puzzle"
+              ? "Leave puzzle"
+              : "Save & quit"}
+        />
+      )}
       {startView === "setup" && (
         <StartGamePrompt
           online={online}
           fourOnline={fourOnline}
+          threeOnline={threeOnline}
           defaultPlayerName={accountService.account?.displayName}
           initialMode={setupInitialMode}
           canCancel={setupCanCancel}
           onStart={beginGame}
           onOpenPuzzles={() => setStartView("puzzles")}
+          onOpenThreePlayer={() => setStartView("three-setup")}
           onOpenFourPlayer={() => setStartView("four-setup")}
           onHost={(name) => {
             fourOnlineActions.disconnect();
+            threeOnlineActions.disconnect();
             void onlineActions.hostGame(name);
           }}
           onJoin={(code, name) => {
             fourOnlineActions.disconnect();
+            threeOnlineActions.disconnect();
             void onlineActions.joinGame(code, name);
           }}
           onStartOnline={startHostedGame}
           onHostFourOnline={(name) => {
             onlineActions.disconnect();
+            threeOnlineActions.disconnect();
             void fourOnlineActions.hostGame(name);
           }}
           onJoinFourOnline={(code, name) => {
             onlineActions.disconnect();
+            threeOnlineActions.disconnect();
             void fourOnlineActions.joinGame(code, name);
           }}
           onFourReady={fourOnlineActions.setReady}
@@ -3439,14 +3942,36 @@ export default function App() {
           onStartFourOnline={() => {
             if (fourOnlineActions.startGame()) setStartView("none");
           }}
+          onHostThreeOnline={(name) => {
+            onlineActions.disconnect();
+            fourOnlineActions.disconnect();
+            activeSaveId.current = undefined;
+            threeOnlineActiveRef.current = true;
+            void threeOnlineActions.hostGame(name);
+          }}
+          onJoinThreeOnline={(code, name) => {
+            onlineActions.disconnect();
+            fourOnlineActions.disconnect();
+            activeSaveId.current = undefined;
+            threeOnlineActiveRef.current = true;
+            void threeOnlineActions.joinGame(code, name);
+          }}
+          onThreeReady={threeOnlineActions.setReady}
+          onThreeAssignSeat={threeOnlineActions.assignSeat}
+          onThreeUpdateConfig={threeOnlineActions.updateConfig}
+          onStartThreeOnline={() => {
+            if (threeOnlineActions.startGame()) setStartView("none");
+          }}
           onCancel={() => {
             onlineActions.disconnect();
             fourOnlineActions.disconnect();
+            threeOnlineActions.disconnect();
             setStartView(setupReturnView);
           }}
           onDisconnect={() => {
             onlineActions.disconnect();
             fourOnlineActions.disconnect();
+            threeOnlineActions.disconnect();
           }}
         />
       )}

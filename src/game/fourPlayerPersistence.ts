@@ -117,7 +117,9 @@ const isPieceStatus = (value: unknown): value is FourPlayerPieceStatus => {
     !(
       isRecord(value.prepared) &&
       isSeat(value.prepared.owner) &&
-      [1, 2, 3].includes(Number(value.prepared.level))
+      typeof value.prepared.level === "number" &&
+      Number.isInteger(value.prepared.level) &&
+      [1, 2, 3].includes(value.prepared.level)
     )
   ) return false;
   if (
@@ -195,7 +197,9 @@ const isUpgrades = (value: unknown) =>
   isRecord(value) && Object.entries(value).every(
     ([abilityId, level]) =>
       GODS.some((god) => god.abilities.some((ability) => ability.id === abilityId)) &&
-      [1, 2, 3].includes(Number(level)),
+      typeof level === "number" &&
+      Number.isInteger(level) &&
+      [1, 2, 3].includes(level),
   );
 
 const isPending = (value: unknown) => {

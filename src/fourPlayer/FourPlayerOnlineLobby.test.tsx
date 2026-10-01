@@ -29,27 +29,28 @@ const onlineState = (role: "host" | "peer"): FourPlayerOnlineState => {
     snapshot: {
       roomCode: "ABCDE",
       status: "lobby",
-      hostParticipantId: "host",
       participants: [
         {
-          id: "host",
+          ...(role === "host" ? { participantId: "host" } : {}),
           name: "Alex",
           host: true,
           connected: true,
           ready: false,
+          local: role === "host",
           seat: "north",
         },
         {
-          id: "guest",
+          ...(role === "host" ? { participantId: "guest" } : {}),
           name: "Alex",
           host: false,
           connected: true,
           ready: false,
+          local: role === "peer",
           seat: "east",
         },
       ],
       config,
-      undoConsents: { host: false, guest: false },
+      localUndoConsent: false,
       undoAvailable: false,
     },
   };
@@ -102,7 +103,30 @@ describe("four-player online lobby", () => {
     expect(screen.queryByRole("button", { name: /begin four-player draft/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /2v2 teams/i })).toBeNull();
     expect(screen.getAllByText(/east/i).length).toBeGreaterThan(0);
-    fireEvent.click(screen.getByRole("button", { name: /^ready$/i }));
+    const readyButton = screen.getByRole("button", { name: /^ready$/i });
+    expect((readyButton as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(readyButton);
     expect(ready).toHaveBeenCalledWith(true);
+  });
+
+  it("keeps an unassigned guest from readying", () => {
+    const online = onlineState("peer");
+    delete online.snapshot!.participants[1].seat;
+    online.snapshot!.config.seats.east.control = { kind: "ai", difficulty: 5 };
+    render(
+      <FourPlayerOnlineLobby
+        online={online}
+        onReady={vi.fn()}
+        onAssignSeat={vi.fn()}
+        onUpdateConfig={vi.fn()}
+        onStart={vi.fn()}
+        onLeave={vi.fn()}
+      />,
+    );
+
+    expect(
+      (screen.getByRole("button", { name: /^ready$/i }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
   });
 });

@@ -299,6 +299,7 @@ export const applyMove = (
   board: Record<Square, Piece>,
   move: Move,
   enPassant?: Square,
+  allowCastling = true,
 ): { board: Record<Square, Piece>; captured?: Piece; capturedSquare?: Square; enPassant?: Square } => {
   const moving = board[move.from];
   let captured = board[move.to];
@@ -318,7 +319,11 @@ export const applyMove = (
   if (type === "pawn" && (move.to[1] === "8" || move.to[1] === "1")) type = move.promotion ?? "queen";
   next[move.to] = { ...moving, type, hasMoved: true, status: { ...moving.status, movedThisTurn: true } };
 
-  if (moving.type === "king" && Math.abs(coords(move.to)[0] - coords(move.from)[0]) === 2) {
+  if (
+    allowCastling &&
+    moving.type === "king" &&
+    Math.abs(coords(move.to)[0] - coords(move.from)[0]) === 2
+  ) {
     const rank = moving.color === "white" ? 0 : 7;
     const kingSide = coords(move.to)[0] === 6;
     const rookFrom = squareAt(kingSide ? 7 : 0, rank)!;

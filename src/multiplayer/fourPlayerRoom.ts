@@ -34,19 +34,25 @@ import {
 import {
   createProtocolMessage,
   type FourPlayerHostMessage,
-  type FourPlayerParticipant,
+  type FourPlayerHostRoomSnapshot,
   type FourPlayerPeerMessage,
   type FourPlayerRoomSnapshot,
   type ProtocolMessage,
 } from "./types";
 
-interface PrivateParticipant extends FourPlayerParticipant {
+interface PrivateParticipant {
+  id: string;
+  name: string;
+  host: boolean;
+  connected: boolean;
+  ready: boolean;
+  seat?: Seat;
   peerId?: string;
   reconnectToken: string;
 }
 
 export interface FourPlayerHostCallbacks {
-  onSnapshot: (snapshot: FourPlayerRoomSnapshot) => void;
+  onSnapshot: (snapshot: FourPlayerHostRoomSnapshot) => void;
   onError: (error: string) => void;
 }
 
@@ -161,7 +167,7 @@ export class FourPlayerRoomHost {
   }
 
   get snapshot() {
-    return this.createSnapshot();
+    return this.createHostSnapshot();
   }
 
   async start() {
@@ -698,7 +704,7 @@ export class FourPlayerRoomHost {
 
   private undoAvailable() {
     if (
-      this.status !== "playing" ||
+      (this.status !== "playing" && this.status !== "finished") ||
       !this.canonical ||
       !stableState(this.canonical.state) ||
       !this.undoStack.length
@@ -713,18 +719,82 @@ export class FourPlayerRoomHost {
       );
   }
 
-  private createSnapshot(): FourPlayerRoomSnapshot {
+  private projectConfig(participantId: string) {
+    const config = structuredClone(this.config);
+    for (const seat of FOUR_PLAYER_SEATS) {
+      const control = config.seats[seat].control;
+      if (control.kind !== "online") continue;
+      config.seats[seat].control = {
+        kind: "online",
+        local: control.participantId === participantId,
+      };
+    }
+    return config;
+  }
+
+  private projectCanonical(participantId: string) {
+    if (!this.canonical) return undefined;
+    const state = prepareFourPlayerState(this.canonical.state);
+    const config = this.projectConfig(participantId);
+    state.config = config;
+    for (const seat of FOUR_PLAYER_SEATS) {
+      state.players[seat].control = structuredClone(config.seats[seat].control);
+    }
+    return createFourPlayerStateEnvelope(
+      prepareFourPlayerState(state),
+      this.canonical.revision,
+      this.canonical.lastActionId,
+    );
+  }
+
+  private createParticipants(localParticipantId: string) {
+    return [...this.participants.values()].map((participant) => ({
+      name: participant.name,
+      host: participant.host,
+      connected: participant.connected,
+      ready: participant.ready,
+      local: participant.id === localParticipantId,
+      ...(participant.seat ? { seat: participant.seat } : {}),
+    }));
+  }
+
+  private createPeerSnapshot(
+    participantId: string,
+  ): FourPlayerRoomSnapshot {
     const paused = this.disconnectedParticipant();
     return {
       roomCode: this.roomCode,
       status: this.status,
-      hostParticipantId: this.hostParticipantId,
+      participants: this.createParticipants(participantId),
+      config: this.projectConfig(participantId),
+      ...(this.canonical
+        ? {
+          canonical: this.projectCanonical(participantId),
+        }
+        : {}),
+      ...(paused
+        ? {
+          ...(paused.seat ? { pausedSeat: paused.seat } : {}),
+          pausedParticipantName: paused.name,
+        }
+        : {}),
+      localUndoConsent: this.undoConsents.get(participantId) === true,
+      undoAvailable: this.undoAvailable(),
+    };
+  }
+
+  private createHostSnapshot(): FourPlayerHostRoomSnapshot {
+    const paused = this.disconnectedParticipant();
+    return {
+      roomCode: this.roomCode,
+      status: this.status,
       participants: [...this.participants.values()].map((participant) => ({
-        id: participant.id,
+        participantId: participant.id,
         name: participant.name,
         host: participant.host,
         connected: participant.connected,
         ready: participant.ready,
+        local: participant.host,
         ...(participant.seat ? { seat: participant.seat } : {}),
       })),
       config: structuredClone(this.config),
@@ -739,28 +809,36 @@ export class FourPlayerRoomHost {
         : {}),
       ...(paused
         ? {
-          pausedParticipantId: paused.id,
           ...(paused.seat ? { pausedSeat: paused.seat } : {}),
+          pausedParticipantName: paused.name,
         }
         : {}),
-      undoConsents: Object.fromEntries(this.undoConsents),
+      localUndoConsent:
+        this.undoConsents.get(this.hostParticipantId) === true,
       undoAvailable: this.undoAvailable(),
     };
   }
 
   private publish() {
-    const snapshot = this.createSnapshot();
-    this.callbacks.onSnapshot(snapshot);
-    this.network.broadcast(createProtocolMessage("four-player", "host", {
-      type: "room_state",
-      snapshot,
-    }));
+    this.callbacks.onSnapshot(this.createHostSnapshot());
+    for (const participant of this.participants.values()) {
+      if (!participant.peerId || !participant.connected) continue;
+      this.network.send(
+        participant.peerId,
+        createProtocolMessage("four-player", "host", {
+          type: "room_state",
+          snapshot: this.createPeerSnapshot(participant.id),
+        }),
+      );
+    }
   }
 
   private sendSnapshot(peerId: string) {
+    const participantId = this.peerParticipants.get(peerId);
+    if (!participantId) return;
     this.network.send(peerId, createProtocolMessage("four-player", "host", {
       type: "room_state",
-      snapshot: this.createSnapshot(),
+      snapshot: this.createPeerSnapshot(participantId),
     }));
   }
 

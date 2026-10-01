@@ -825,6 +825,9 @@ const escortPlan = (
     if (!to) return undefined;
     landings.push({ ...companion, to });
   }
+  if (new Set(landings.map((landing) => landing.to)).size !== landings.length) {
+    return undefined;
+  }
   const simulated = structuredClone(state.board);
   for (const landing of landings) delete simulated[landing.from];
   for (const landing of landings) {
@@ -852,7 +855,7 @@ const escortPlan = (
 
 const sourceIsAllowed = (state: FourPlayerState, square: Square) => {
   const piece = state.board[square];
-  if (!piece || piece.status.gazing || !state.selectedAbility) return false;
+  if (!piece || piece.status.gazing || piece.status.frozen || !state.selectedAbility) return false;
   const abilityId = state.selectedAbility;
   const level = currentLevel(state, abilityId);
   const fundingRepeat =
@@ -1128,6 +1131,29 @@ const sourceTargets = (state: FourPlayerState, square: Square): Square[] => {
   );
 };
 
+const movableSourceSquares = (state: FourPlayerState) =>
+  Object.keys(state.board).filter((square) =>
+    sourceIsAllowed(state, square) && sourceTargets(state, square).length > 0
+  );
+
+const enterHexMovement = (state: FourPlayerState) => {
+  const sources = movableSourceSquares(state);
+  if (!sources.length) {
+    finishTurn(
+      state,
+      abilityDescription(state, ": completed Hex without a legal movement"),
+    );
+    return;
+  }
+  state.pending = {
+    ...state.pending!,
+    step: "source",
+  };
+  state.selectedSquare = undefined;
+  state.legalTargets = sources;
+  state.notice = "Choose a piece to move.";
+};
+
 const stoneGazeTargets = (state: FourPlayerState) => {
   const queens = Object.entries(state.board)
     .filter(([, piece]) => piece.controller === state.activeSeat && piece.type === "queen");
@@ -1279,8 +1305,11 @@ const activateAbility = (state: FourPlayerState, abilityId: string) => {
         )
         .map(([square]) => square);
       state.notice = `Choose up to ${capacity} hostile pieces to hex.`;
+      if (!state.legalTargets.length) enterHexMovement(state);
       return;
     }
+    enterHexMovement(state);
+    return;
   }
   if (abilityId === "march-home") {
     const king = Object.entries(state.board)
@@ -2288,9 +2317,8 @@ const handleSquare = (state: FourPlayerState, square: Square) => {
     state.board[square].status.hexedBy = state.activeSeat;
     const selected = [...(state.pending.selected ?? []), state.board[square].id];
     if (selected.length >= currentLevel(state, "hex")) {
-      state.pending = { ...state.pending, step: "source", selected };
-      state.legalTargets = [];
-      state.notice = "Choose a piece to move.";
+      state.pending = { ...state.pending, selected };
+      enterHexMovement(state);
     } else {
       state.pending = { ...state.pending, selected };
       state.legalTargets = state.legalTargets.filter((target) => target !== square);
@@ -2569,7 +2597,7 @@ export const availableFourPlayerActions = (
       (square) => ({ type: "square", square } as FourPlayerAction),
     ));
   } else if (state.pending?.step === "source") {
-    actions.push(...Object.keys(state.board).map(
+    actions.push(...movableSourceSquares(state).map(
       (square) => ({ type: "square", square } as FourPlayerAction),
     ));
   }
@@ -2878,9 +2906,7 @@ const reduceFourPlayerState = (
       } else if (["slither", "mount-rider", "funding"].includes(next.pending?.step ?? "")) {
         finishTurn(next, abilityDescription(next, ": completed the movement"));
       } else if (next.pending?.step === "hex-target" && next.pending.selected?.length) {
-        next.pending.step = "source";
-        next.legalTargets = [];
-        next.notice = "Choose a piece to move.";
+        enterHexMovement(next);
       } else if (next.pending?.step === "march-companions" && next.pending.source) {
         executeMarchHome(next, next.pending.source, next.pending.selected ?? []);
       } else if (

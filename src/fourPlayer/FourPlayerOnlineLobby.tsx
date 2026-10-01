@@ -16,6 +16,7 @@ import {
   type TeamId,
 } from "../game/fourPlayerTypes";
 import type { FourPlayerOnlineState } from "../multiplayer/useFourPlayerOnlineGame";
+import type { FourPlayerHostRoomSnapshot } from "../multiplayer/types";
 import {
   FOUR_PLAYER_PALETTES,
   FOUR_PLAYER_SEAT_LABELS,
@@ -36,7 +37,7 @@ const startErrors = (state: FourPlayerOnlineState) => {
     errors.push("Every connected Human must be ready.");
   }
   if (!snapshot.participants.find((participant) =>
-    participant.id === snapshot.hostParticipantId
+    participant.host
   )?.seat) {
     errors.push("The host must own one seat.");
   }
@@ -71,10 +72,11 @@ export function FourPlayerOnlineLobby({
       </div>
     );
   }
-  const local = snapshot.participants.find((participant) =>
-    participant.id === online.participantId
-  );
   const isHost = online.role === "host";
+  const local = snapshot.participants.find((participant) => participant.local);
+  const hostParticipants = isHost
+    ? (snapshot as FourPlayerHostRoomSnapshot).participants
+    : [];
   const errors = startErrors(online);
 
   const updateConfig = (update: (draft: FourPlayerConfig) => void) => {
@@ -118,16 +120,16 @@ export function FourPlayerOnlineLobby({
       </header>
 
       <div className="four-online-participants">
-        {snapshot.participants.map((participant) => (
+        {snapshot.participants.map((participant, index) => (
           <article
             className={`${participant.connected ? "" : "disconnected"} ${participant.ready ? "ready" : ""}`}
-            key={participant.id}
+            key={`${participant.host ? "host" : "guest"}-${participant.seat ?? "unassigned"}-${index}`}
           >
             <UserRound size={17} />
             <div>
               <strong>{participant.name}</strong>
               <small>
-                {participant.host ? "Host" : `Guest ${participant.id.slice(-4)}`}
+                {participant.host ? "Host" : "Guest"}
                 {participant.seat
                   ? ` · ${FOUR_PLAYER_SEAT_LABELS[participant.seat]}`
                   : " · Unassigned"}
@@ -233,6 +235,9 @@ export function FourPlayerOnlineLobby({
           const assigned = snapshot.participants.find((participant) =>
             participant.seat === seat
           );
+          const hostAssigned = hostParticipants.find((participant) =>
+            participant.seat === seat
+          );
           const seatConfig = snapshot.config.seats[seat];
           const difficulty = seatConfig.control.kind === "ai"
             ? seatConfig.control.difficulty ?? 5
@@ -255,19 +260,24 @@ export function FourPlayerOnlineLobby({
                 <label>
                   Controller
                   <select
-                    value={assigned?.id ?? "ai"}
+                    value={hostAssigned?.participantId ?? "ai"}
                     onChange={(event) => {
-                      if (assigned) onAssignSeat(assigned.id, undefined);
+                      if (hostAssigned) {
+                        onAssignSeat(hostAssigned.participantId, undefined);
+                      }
                       if (event.target.value !== "ai") {
                         onAssignSeat(event.target.value, seat);
                       }
                     }}
                   >
                     <option value="ai">Divine AI</option>
-                    {snapshot.participants
+                    {hostParticipants
                       .filter((participant) => participant.connected)
                       .map((participant) => (
-                        <option value={participant.id} key={participant.id}>
+                        <option
+                          value={participant.participantId}
+                          key={participant.participantId}
+                        >
                           {participant.name}{participant.host ? " (Host)" : ""}
                         </option>
                       ))}

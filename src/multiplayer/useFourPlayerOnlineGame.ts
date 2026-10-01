@@ -8,7 +8,10 @@ import {
   FourPlayerRoomHost,
   FourPlayerRoomPeer,
 } from "./fourPlayerRoom";
-import type { FourPlayerRoomSnapshot } from "./types";
+import type {
+  FourPlayerHostRoomSnapshot,
+  FourPlayerRoomSnapshot,
+} from "./types";
 
 export type FourPlayerOnlineRole = "none" | "host" | "peer";
 
@@ -18,7 +21,7 @@ export interface FourPlayerOnlineState {
   roomCode?: string;
   participantId?: string;
   playerName?: string;
-  snapshot?: FourPlayerRoomSnapshot;
+  snapshot?: FourPlayerRoomSnapshot | FourPlayerHostRoomSnapshot;
   awaitingActionId?: string;
   ended?: boolean;
   error?: string;
@@ -100,7 +103,7 @@ export const reconcileFourPlayerSnapshot = (
 export const fourPlayerOnlineLocalSeat = (
   state: FourPlayerOnlineState,
 ) => state.snapshot?.participants.find(
-  (participant) => participant.id === state.participantId,
+  (participant) => participant.local,
 )?.seat;
 
 export const fourPlayerOnlineInputDisabled = (
@@ -143,7 +146,7 @@ export const useFourPlayerOnlineGame = () => {
         role: "host",
         connecting: false,
         roomCode: snapshot.roomCode,
-        participantId: snapshot.hostParticipantId,
+        participantId: host.hostParticipantId,
         snapshot,
         awaitingActionId: undefined,
       })),

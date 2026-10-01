@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createFourPlayerGame } from "../game/fourPlayerEngine";
+import {
+  availableFourPlayerActions,
+  createFourPlayerGame,
+  fourPlayerReducer,
+} from "../game/fourPlayerEngine";
 import { createFourPlayerStateEnvelope } from "../game/fourPlayerSession";
 import { GODS } from "../game/gods";
 import type {
@@ -8,6 +12,7 @@ import type {
   TransportFactory,
 } from "./network";
 import {
+  createFourPlayerOnlineConfig,
   FourPlayerRoomHost,
   FourPlayerRoomPeer,
 } from "./fourPlayerRoom";
@@ -15,6 +20,7 @@ import {
   createProtocolMessage,
   type FourPlayerHostMessage,
   type FourPlayerPeerMessage,
+  type FourPlayerRoomSnapshot,
   type ProtocolMessage,
 } from "./types";
 
@@ -102,6 +108,16 @@ const join = (
   );
 };
 
+const latestRoomSnapshot = (
+  transport: FakeTransport,
+  peerId: string,
+) => transport.hostPayloads(peerId)
+  .filter((payload): payload is Extract<
+    FourPlayerHostMessage,
+    { type: "room_state" }
+  > => payload.type === "room_state")
+  .at(-1)?.snapshot;
+
 const readyTwoHumanRoom = () => {
   const context = setup();
   const accepted = join(context.transport, "peer-1");
@@ -132,6 +148,51 @@ describe("four-player authoritative room", () => {
     expect(host.snapshot.participants.map((participant) => participant.name))
       .toEqual(["Host", "Host", "Host", "Host"]);
     expect(JSON.stringify(host.snapshot)).not.toContain("reconnect");
+  });
+
+  it("projects recipient identity and authorizes readiness only for the sending participant", () => {
+    const { host, transport } = setup();
+    const first = join(transport, "peer-1", "First")!;
+    const second = join(transport, "peer-2", "Second")!;
+    host.assignSeat(first.participantId, "east");
+    host.assignSeat(second.participantId, "south");
+
+    const firstSnapshot = latestRoomSnapshot(transport, "peer-1")!;
+    const secondSnapshot = latestRoomSnapshot(transport, "peer-2")!;
+    expect(firstSnapshot.participants.filter((participant) => participant.local))
+      .toEqual([expect.objectContaining({ name: "First", seat: "east" })]);
+    expect(secondSnapshot.participants.filter((participant) => participant.local))
+      .toEqual([expect.objectContaining({ name: "Second", seat: "south" })]);
+    expect(JSON.stringify(firstSnapshot)).not.toContain("participantId");
+    expect(JSON.stringify(secondSnapshot)).not.toContain("participantId");
+
+    transport.receive("peer-1", { type: "ready", ready: true });
+    expect(host.snapshot.participants.find((participant) =>
+      participant.participantId === first.participantId
+    )?.ready).toBe(true);
+    expect(host.snapshot.participants.find((participant) =>
+      participant.participantId === second.participantId
+    )?.ready).toBe(false);
+    expect(host.snapshot.participants.find((participant) =>
+      participant.host
+    )?.ready).toBe(false);
+    expect(latestRoomSnapshot(transport, "peer-2")?.participants.find(
+      (participant) => participant.name === "First",
+    )?.ready).toBe(true);
+
+    transport.receive("stale-peer", { type: "ready", ready: true });
+    expect(transport.hostPayloads("stale-peer")).toContainEqual({
+      type: "error",
+      message: "Join the room before sending actions.",
+      resync: false,
+    });
+    expect(host.startErrors()).toContain(
+      "Every connected participant must be ready.",
+    );
+
+    host.setHostReady(true);
+    transport.receive("peer-2", { type: "ready", ready: true });
+    expect(host.startErrors()).toEqual([]);
   });
 
   it("validates assignments/readiness and starts 2-, 3-, and 4-Human AI-filled games", () => {
@@ -188,7 +249,9 @@ describe("four-player authoritative room", () => {
     });
     expect(host.snapshot.canonical?.revision).toBe(2);
     expect(accepted.participantId).toBe(
-      host.snapshot.participants.find((participant) => participant.seat === "east")?.id,
+      host.snapshot.participants.find((participant) =>
+        participant.seat === "east"
+      )?.participantId,
     );
   });
 
@@ -222,7 +285,20 @@ describe("four-player authoritative room", () => {
     );
     expect(rejoined?.participantId).toBe(accepted.participantId);
     expect(host.snapshot.status).toBe("playing");
-    expect(host.snapshot.undoConsents[accepted.participantId]).toBe(false);
+    expect(latestRoomSnapshot(
+      transport,
+      "peer-reconnected",
+    )?.participants.find((participant) => participant.local)).toMatchObject({
+      name: "Guest",
+      seat: "east",
+      connected: true,
+    });
+    const rejoinedSnapshot = transport.hostPayloads("peer-reconnected")
+      .filter((payload) => payload.type === "room_state")
+      .at(-1);
+    expect(rejoinedSnapshot?.type === "room_state"
+      ? rejoinedSnapshot.snapshot.localUndoConsent
+      : undefined).toBe(false);
   });
 
   it("keeps the reconnect token valid across an old/new connection race", () => {
@@ -281,7 +357,7 @@ describe("four-player authoritative room", () => {
     expect(host.replaceDisconnectedSeatWithAi("east", 9)).toBe(true);
     expect(host.snapshot.status).toBe("playing");
     expect(host.snapshot.participants.some((participant) =>
-      participant.id === accepted.participantId
+      participant.participantId === accepted.participantId
     )).toBe(false);
     expect(host.snapshot.canonical?.state.players.east.control).toEqual({
       kind: "ai",
@@ -324,9 +400,46 @@ describe("four-player authoritative room", () => {
     expect(host.snapshot.canonical?.state.draft.pickIndex).toBe(1);
   });
 
+  it("keeps authoritative undo available after the room reaches game over", () => {
+    const { host, transport } = readyTwoHumanRoom();
+    expect(host.startGame()).toBe(true);
+    const canonical = host.snapshot.canonical!;
+    let playable = canonical.state;
+    while (playable.phase === "draft") {
+      playable = fourPlayerReducer(
+        playable,
+        availableFourPlayerActions(playable)[0],
+      );
+    }
+    const finished = structuredClone(playable);
+    finished.phase = "gameover";
+    finished.winner = {
+      seat: "north",
+      reason: "last-player",
+    };
+    Reflect.set(
+      host,
+      "canonical",
+      createFourPlayerStateEnvelope(
+        finished,
+        canonical.revision + 1,
+        "finish",
+      ),
+    );
+    Reflect.set(host, "status", "finished");
+    Reflect.set(host, "undoStack", [playable]);
+
+    host.setHostUndoConsent(true);
+    transport.receive("peer-1", { type: "undo_consent", enabled: true });
+    expect(host.snapshot.undoAvailable).toBe(true);
+    host.requestHostUndo();
+    expect(host.snapshot.status).toBe("playing");
+    expect(host.snapshot.canonical?.state.phase).not.toBe("gameover");
+  });
+
   it("ignores canonical room states delivered out of revision order", () => {
     let transport!: FakeTransport;
-    const snapshots: FourPlayerRoomHost["snapshot"][] = [];
+    const snapshots: FourPlayerRoomSnapshot[] = [];
     const peer = new FourPlayerRoomPeer({
       onAccepted: vi.fn(),
       onSnapshot: (snapshot) => snapshots.push(snapshot),
@@ -337,8 +450,43 @@ describe("four-player authoritative room", () => {
       transport = new FakeTransport(callbacks);
       return transport;
     });
-    const lobby = setup().host.snapshot;
-    const state = createFourPlayerGame(lobby.config);
+    const config = createFourPlayerOnlineConfig();
+    config.seats.north = {
+      ...config.seats.north,
+      name: "Host",
+      control: { kind: "online", local: false },
+    };
+    config.seats.east = {
+      ...config.seats.east,
+      name: "Guest",
+      control: { kind: "online", local: true },
+    };
+    const state = createFourPlayerGame(config);
+    const lobby: FourPlayerRoomSnapshot = {
+      roomCode: "ABCDE",
+      status: "lobby",
+      participants: [
+        {
+          name: "Host",
+          host: true,
+          connected: true,
+          ready: true,
+          local: false,
+          seat: "north",
+        },
+        {
+          name: "Guest",
+          host: false,
+          connected: true,
+          ready: true,
+          local: true,
+          seat: "east",
+        },
+      ],
+      config,
+      localUndoConsent: false,
+      undoAvailable: false,
+    };
     const newer = {
       ...lobby,
       status: "playing" as const,

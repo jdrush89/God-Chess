@@ -255,7 +255,7 @@ const moveDirect = (state: GameState, from: Square, requestedTo: Square, telepor
     ? undefined
     : bananaOnMovePath(state, from, requestedTo, moving.controller);
   const to = peel ?? requestedTo;
-  const result = applyMove(state.board, { from, to }, state.enPassant);
+  const result = applyMove(state.board, { from, to }, state.enPassant, !teleport);
   state.board = result.board;
   state.enPassant = result.enPassant;
   if (result.captured) {
@@ -607,7 +607,7 @@ const airStrikeLandingTargets = (
 
 const sourceIsAllowed = (state: GameState, square: Square) => {
   const piece = state.board[square];
-  if (!piece || piece.status.gazing) return false;
+  if (!piece || piece.status.gazing || piece.status.frozen) return false;
   const abilityId = state.selectedAbility!;
   const color = state.activeColor;
   const level = currentLevel(state, abilityId);
@@ -686,6 +686,9 @@ const escortPlan = (state: GameState, kingSquare: Square, requestedDestination: 
     if (!destination) return undefined;
     landings.push({ ...companion, to: destination });
   }
+  if (new Set(landings.map((landing) => landing.to)).size !== landings.length) {
+    return undefined;
+  }
 
   const simulated = structuredClone(state.board);
   for (const landing of landings) delete simulated[landing.from];
@@ -693,7 +696,7 @@ const escortPlan = (state: GameState, kingSquare: Square, requestedDestination: 
     const occupant = simulated[landing.to];
     if (
       occupant?.status.hardened ||
-      (landing.piece.type === "king" && occupant?.controller === king.controller)
+      occupant?.controller === king.controller
     ) {
       return undefined;
     }
@@ -1381,8 +1384,10 @@ const executeMovement = (state: GameState, from: Square, to: Square) => {
   const teleports = ["air-lift", "pick-a-fight"];
   const result = moveDirect(state, from, to, teleports.includes(abilityId));
   if (!result) return;
-  if (moving.status.hardened && !result.captured) delete state.board[result.to].status.hardened;
-  delete state.board[result.to].status.luredBy;
+  const movedPiece = state.board[result.to];
+  if (!movedPiece) throw new Error(`Moved piece is missing from ${result.to}.`);
+  if (moving.status.hardened && !result.captured) delete movedPiece.status.hardened;
+  delete movedPiece.status.luredBy;
   recordMoveCapture(state, result.captured);
   present(state, {
     kind: "move",
