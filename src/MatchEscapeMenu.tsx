@@ -143,6 +143,7 @@ export function MatchEscapeMenu({
     <>
       <button
         className="escape-menu-trigger"
+        data-placement="top-right"
         onClick={openMenu}
         aria-label="Open match menu"
         ref={triggerRef}

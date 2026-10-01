@@ -2,10 +2,10 @@ import {
   Bot,
   BookOpen,
   Check,
+  ChevronRight,
   Crown,
   History,
-  Menu,
-  RotateCcw,
+  LoaderCircle,
   Save,
   Settings,
   Shield,
@@ -172,6 +172,94 @@ const safeInCheck = (state: UiState, seat: ThreePlayerSeat) => {
   }
 };
 
+function DraftGodPortrait({
+  godId,
+  className = "",
+}: {
+  godId: GodId;
+  className?: string;
+}) {
+  return (
+    <img
+      className={`god-portrait ${className}`}
+      src={GOD_PORTRAITS[godId]}
+      alt=""
+      decoding="async"
+    />
+  );
+}
+
+function DraftGodSigil({ godId }: { godId: GodId }) {
+  const god = GOD_BY_ID[godId];
+  return (
+    <span
+      className="god-sigil small"
+      style={{ "--accent": god.accent } as React.CSSProperties}
+      aria-hidden="true"
+    >
+      <DraftGodPortrait godId={godId} />
+    </span>
+  );
+}
+
+function DraftOrbCost({
+  affinity,
+  count,
+}: {
+  affinity: "white" | "black";
+  count: number;
+}) {
+  return (
+    <span
+      className="orb-count small"
+      aria-label={`${count} ${affinity} orb${count === 1 ? "" : "s"}`}
+    >
+      <i className={`orb ${affinity}`} />
+      <strong>{count}</strong>
+    </span>
+  );
+}
+
+function DraftLevelSelector({
+  level,
+  onChange,
+}: {
+  level: number;
+  onChange: (level: number) => void;
+}) {
+  const selectLevel = (
+    event: React.MouseEvent<HTMLButtonElement>,
+    nextLevel: number,
+  ) => {
+    event.stopPropagation();
+    onChange(nextLevel);
+  };
+
+  return (
+    <div className="level-selector god-level-selector" aria-label="All abilities levels">
+      <span>All abilities</span>
+      <button
+        type="button"
+        aria-pressed={level >= 2}
+        className={level >= 2 ? "active" : ""}
+        onClick={(event) => selectLevel(event, level >= 2 ? 1 : 2)}
+        onKeyDown={(event) => event.stopPropagation()}
+      >
+        <i /> Lv 2
+      </button>
+      <button
+        type="button"
+        aria-pressed={level >= 3}
+        className={level >= 3 ? "active" : ""}
+        onClick={(event) => selectLevel(event, level >= 3 ? 2 : 3)}
+        onKeyDown={(event) => event.stopPropagation()}
+      >
+        <i /> Lv 3
+      </button>
+    </div>
+  );
+}
+
 function LevelPreview({
   level,
   onChange,
@@ -196,68 +284,6 @@ function LevelPreview({
         </button>
       ))}
     </span>
-  );
-}
-
-function GodCard({
-  godId,
-  level,
-  claimedBy,
-  unused,
-  active,
-  disabled,
-  onInspect,
-  onChoose,
-}: {
-  godId: GodId;
-  level: number;
-  claimedBy?: ThreePlayerSeat;
-  unused?: boolean;
-  active?: boolean;
-  disabled?: boolean;
-  onInspect: () => void;
-  onChoose?: () => void;
-}) {
-  const god = GOD_BY_ID[godId];
-  return (
-    <article
-      className={`three-god-card ${active ? "active" : ""} ${claimedBy ? "claimed" : ""} ${unused ? "unused" : ""}`}
-      style={{ "--accent": god.accent } as React.CSSProperties}
-    >
-      <button className="three-god-inspect" onClick={onInspect}>
-        <img src={GOD_PORTRAITS[godId]} alt="" />
-        <span>
-          <strong>{god.name}</strong>
-          <small>{god.domain}</small>
-        </span>
-        {claimedBy && (
-          <i
-            className="three-claimed-by"
-            style={{ "--seat-color": THREE_PLAYER_PALETTES[claimedBy] } as React.CSSProperties}
-          >
-            {THREE_PLAYER_SEAT_LABELS[claimedBy][0]}
-          </i>
-        )}
-        {unused && <em>Unused</em>}
-      </button>
-      {onChoose && (
-        <button
-          className="three-god-choose"
-          disabled={disabled || Boolean(claimedBy)}
-          onClick={onChoose}
-        >
-          {claimedBy ? `Claimed by ${THREE_PLAYER_SEAT_LABELS[claimedBy]}` : `Claim ${god.name}`}
-        </button>
-      )}
-      <div className="three-god-abilities">
-        {god.abilities.map((ability) => (
-          <span key={ability.id}>
-            <strong>{ability.name}</strong>
-            <small>{ability.details[level - 1]}</small>
-          </span>
-        ))}
-      </div>
-    </article>
   );
 }
 
@@ -289,12 +315,35 @@ function ThreePlayerDraft({
     for (const godId of state.players[seat].gods) claimed.set(godId, seat);
   }
   const currentSeat = state.draft.order[state.draft.pickIndex] ?? state.activeSeat;
+  const activePlayer = state.players[currentSeat];
+  const currentGod = GOD_BY_ID[inspected];
+  const currentOwner = claimed.get(inspected);
+  const draftAction = actions.find(
+    (action) => action.type === "draft" &&
+      actionValue<GodId>(action, "godId") === inspected,
+  );
+
+  useEffect(() => {
+    setLevel(1);
+  }, [inspected]);
+
   return (
-    <main className="three-draft-page">
-      <header className="three-game-topbar">
-        <div>
-          <p className="eyebrow">THREE-PLAYER DRAFT</p>
-          <strong>Nine divine claims</strong>
+    <main className={`draft-page three-draft-page ${inputDisabled ? "input-locked" : ""}`}>
+      <header className="topbar draft-topbar three-game-topbar">
+        <div className="brand">
+          <div className="brand-mark"><Crown size={23} strokeWidth={1.5} /></div>
+          <div>
+            <div className="brand-name">GOD CHESS</div>
+            <div className="brand-subtitle">THREE-PLAYER DRAFT</div>
+          </div>
+        </div>
+        <div className="draft-turn">
+          <span
+            className="three-draft-seat-dot"
+            style={{ "--seat-color": THREE_PLAYER_PALETTES[currentSeat] } as React.CSSProperties}
+          />
+          {activePlayer.name} · {THREE_PLAYER_SEAT_LABELS[currentSeat]} picks
+          {activePlayer.control.kind === "ai" && <LoaderCircle className="spin" size={15} />}
         </div>
         <div className="three-game-actions">
           {roomCode && <span>ROOM <strong>{roomCode}</strong></span>}
@@ -310,43 +359,130 @@ function ThreePlayerDraft({
           </button>
         </div>
       </header>
-      <section className="three-draft-hero">
-        <p style={{ "--seat-color": THREE_PLAYER_PALETTES[currentSeat] } as React.CSSProperties}>
-          {state.players[currentSeat].name} picks
-        </p>
-        <h1>Choose a God.</h1>
-        <div className="three-draft-progress" aria-label="Nine draft picks">
+      <section className="draft-hero three-draft-hero">
+        <p className="eyebrow">THE THREE PANTHEONS AWAIT</p>
+        <h1>Choose your gods.</h1>
+        <p>White, Red, and Black each claim three divine allies. Three Gods remain unused.</p>
+        <div className="draft-progress three-draft-progress" aria-label="Nine draft picks">
           {state.draft.order.map((seat, index) => (
-            <span
-              className={`${index < state.draft.pickIndex ? "done" : ""} ${index === state.draft.pickIndex ? "current" : ""}`}
+            <div
+              className={`draft-pip ${index < state.draft.pickIndex ? "done" : ""} ${index === state.draft.pickIndex ? "current" : ""}`}
               style={{ "--seat-color": THREE_PLAYER_PALETTES[seat] } as React.CSSProperties}
               aria-label={`Pick ${index + 1}: ${THREE_PLAYER_SEAT_LABELS[seat]}`}
               key={`${seat}-${index}`}
-            />
+            >
+              <span>{index + 1}</span>
+              <small>{THREE_PLAYER_SEAT_LABELS[seat][0]}</small>
+            </div>
           ))}
         </div>
-        <LevelPreview level={level} onChange={setLevel} />
       </section>
-      <section className="three-draft-grid">
-        {GODS.map((god) => {
-          const draftAction = actions.find(
-            (action) => action.type === "draft" &&
-              actionValue<GodId>(action, "godId") === god.id,
-          );
-          return (
-            <GodCard
-              godId={god.id}
-              level={level}
-              claimedBy={claimed.get(god.id)}
-              active={inspected === god.id}
-              disabled={inputDisabled || !draftAction}
-              onInspect={() => setInspected(god.id)}
-              onChoose={() => draftAction && onAction(draftAction)}
-              key={god.id}
-            />
-          );
-        })}
+
+      <section className="draft-layout three-draft-layout">
+        <div className="pantheon-grid">
+          {GODS.map((god) => {
+            const owner = claimed.get(god.id);
+            return (
+              <button
+                type="button"
+                className={`draft-card ${inspected === god.id ? "inspected" : ""} ${owner ? "claimed" : ""}`}
+                key={god.id}
+                onClick={() => setInspected(god.id)}
+                style={{ "--accent": god.accent } as React.CSSProperties}
+                aria-label={`Inspect ${god.name}${owner ? `, claimed by ${THREE_PLAYER_SEAT_LABELS[owner]}` : ""}`}
+              >
+                <DraftGodPortrait godId={god.id} className="god-card-portrait" />
+                <span className="draft-card-copy">
+                  <strong>{god.name}</strong>
+                  <small>{god.domain}</small>
+                </span>
+                {owner && (
+                  <span
+                    className="three-claimed-by"
+                    style={{ "--seat-color": THREE_PLAYER_PALETTES[owner] } as React.CSSProperties}
+                    aria-hidden="true"
+                  >
+                    {THREE_PLAYER_SEAT_LABELS[owner][0]}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        <aside className="god-inspector three-god-inspector" style={{ "--accent": currentGod.accent } as React.CSSProperties}>
+          <div className="inspector-heading">
+            <DraftGodPortrait godId={currentGod.id} className="god-hero-portrait" />
+            <div>
+              <p>{currentGod.domain}</p>
+              <h2>{currentGod.name}</h2>
+              <span>{currentGod.epithet}</span>
+            </div>
+          </div>
+          <DraftLevelSelector level={level} onChange={setLevel} />
+          <div className="draft-abilities">
+            {currentGod.abilities.map((ability, index) => (
+              <div className="draft-ability" key={ability.id}>
+                <span>0{index + 1}</span>
+                <div>
+                  <strong>{ability.name}</strong>
+                  <p>{ability.summary}</p>
+                  {level >= 2 && ability.details[1] && (
+                    <p className="level-rule"><b>Lv 2:</b> {ability.details[1]}</p>
+                  )}
+                  {level >= 3 && ability.details[2] && (
+                    <p className="level-rule"><b>Lv 3:</b> {ability.details[2]}</p>
+                  )}
+                </div>
+                {ability.cost && (
+                  <div className="mini-cost">
+                    {ability.cost.white ? (
+                      <DraftOrbCost affinity="white" count={ability.cost.white} />
+                    ) : null}
+                    {ability.cost.black ? (
+                      <DraftOrbCost affinity="black" count={ability.cost.black} />
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            className="primary-button three-draft-claim"
+            onClick={() => draftAction && onAction(draftAction)}
+            disabled={inputDisabled || Boolean(currentOwner) || !draftAction}
+          >
+            {currentOwner
+              ? `Claimed by ${THREE_PLAYER_SEAT_LABELS[currentOwner]}`
+              : `Claim ${currentGod.name}`}
+            {!currentOwner && <ChevronRight size={17} />}
+          </button>
+        </aside>
       </section>
+
+      <footer className="draft-rosters three-draft-rosters">
+        {THREE_PLAYER_SEATS.map((seat) => (
+          <div className="draft-roster" key={seat}>
+            <span
+              className="three-draft-crest"
+              style={{ "--seat-color": THREE_PLAYER_PALETTES[seat] } as React.CSSProperties}
+            >
+              <Crown size={14} />
+            </span>
+            <strong>{state.players[seat].name}</strong>
+            <small>{THREE_PLAYER_SEAT_LABELS[seat]}</small>
+            <div>
+              {state.players[seat].gods.map((godId) => (
+                <DraftGodSigil godId={godId} key={godId} />
+              ))}
+              {Array.from({ length: 3 - state.players[seat].gods.length }).map((_, index) => (
+                <i className="empty-sigil" key={index} />
+              ))}
+            </div>
+          </div>
+        ))}
+      </footer>
     </main>
   );
 }
@@ -600,7 +736,6 @@ export function ThreePlayerGame({
   const [inspectedGod, setInspectedGod] = useState<GodId>(GODS[0].id);
   const [helpOpen, setHelpOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [resultOpen, setResultOpen] = useState(initialState.phase === "gameover");
   const [undoEnabled, setUndoEnabled] = useState(undoPreferred);
   const undoStack = useRef<UiState[]>(
@@ -632,8 +767,7 @@ export function ThreePlayerGame({
       onlineControl?.kind !== "online" ||
       onlineControl.local !== true ||
       helpOpen ||
-      settingsOpen ||
-      menuOpen
+      settingsOpen
     )
     : state.phase === "gameover" ||
       isThreePlayerAiTurn(state as ThreePlayerState);
@@ -1014,21 +1148,7 @@ export function ThreePlayerGame({
           >
             <Undo2 size={17} />
           </button>
-          <button onClick={() => setMenuOpen((open) => !open)} aria-label="Game menu"><Menu size={17} /></button>
         </div>
-        {menuOpen && (
-          <div className="three-game-menu">
-            <button onClick={() => void saveAndQuit()}>
-              <Save size={15} /> {onlineSession ? "Leave room" : "Save & quit"}
-            </button>
-            {!onlineSession && (
-              <button onClick={() => dispatchAction({ type: "restart" })}><RotateCcw size={15} /> Restart</button>
-            )}
-            <button onClick={onNewGame}>
-              <Crown size={15} /> {onlineSession ? "New online room" : "New setup"}
-            </button>
-          </div>
-        )}
       </header>
 
       <section className="three-game-layout">

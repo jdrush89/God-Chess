@@ -35,6 +35,14 @@ afterEach(() => {
 });
 
 describe("MatchEscapeMenu", () => {
+  it("renders one accessible top-right match trigger", () => {
+    const { container } = render(<MatchEscapeMenu />);
+    const trigger = screen.getByRole("button", { name: /open match menu/i });
+
+    expect(container.querySelectorAll(".escape-menu-trigger")).toHaveLength(1);
+    expect(trigger.getAttribute("data-placement")).toBe("top-right");
+  });
+
   it("opens with Escape, traps/restores focus, and never invokes gameplay controls", async () => {
     const onLeave = vi.fn();
     render(<MatchEscapeMenu onLeave={onLeave} />);
