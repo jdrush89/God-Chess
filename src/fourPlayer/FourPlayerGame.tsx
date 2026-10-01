@@ -543,7 +543,7 @@ function FourPlayerPanel({
         disabled={!selectableSeat}
       >
         <span className="four-player-avatar"><Crown size={18} /></span>
-        <span>
+        <span className="four-seat-identity">
           <strong>{player.name}</strong>
           <small>
             {seatName(seat)} · {player.control.kind === "ai"
@@ -554,7 +554,11 @@ function FourPlayerPanel({
         </span>
         {player.control.kind === "ai" ? <Bot size={16} /> : <UserRound size={16} />}
       </button>
-      <div className="four-panel-resources">
+      <div
+        className="four-panel-resources"
+        role="group"
+        aria-label={`${player.name} resources`}
+      >
         <Orb
           affinity="light"
           count={displayedOrbs.light}

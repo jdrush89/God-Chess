@@ -311,6 +311,8 @@ function ThreePlayerDraft({
 }) {
   const [inspected, setInspected] = useState<GodId>(GODS[0].id);
   const [level, setLevel] = useState(1);
+  const pantheonGridRef = useRef<HTMLDivElement>(null);
+  const inspectorRef = useRef<HTMLElement>(null);
   const claimed = new Map<GodId, ThreePlayerSeat>();
   for (const seat of THREE_PLAYER_SEATS) {
     for (const godId of state.players[seat].gods) claimed.set(godId, seat);
@@ -327,6 +329,32 @@ function ThreePlayerDraft({
   useEffect(() => {
     setLevel(1);
   }, [inspected]);
+
+  useEffect(() => {
+    const grid = pantheonGridRef.current;
+    const inspector = inspectorRef.current;
+    if (!grid || !inspector || typeof ResizeObserver === "undefined") return;
+
+    const compact = window.matchMedia("(max-width: 960px)");
+    const syncInspectorHeight = () => {
+      if (compact.matches) {
+        inspector.style.removeProperty("--three-draft-grid-height");
+        return;
+      }
+      inspector.style.setProperty(
+        "--three-draft-grid-height",
+        `${grid.getBoundingClientRect().height}px`,
+      );
+    };
+    const observer = new ResizeObserver(syncInspectorHeight);
+    observer.observe(grid);
+    compact.addEventListener("change", syncInspectorHeight);
+    syncInspectorHeight();
+    return () => {
+      observer.disconnect();
+      compact.removeEventListener("change", syncInspectorHeight);
+    };
+  }, []);
 
   return (
     <main className={`draft-page three-draft-page ${inputDisabled ? "input-locked" : ""}`}>
@@ -380,7 +408,7 @@ function ThreePlayerDraft({
       </section>
 
       <section className="draft-layout three-draft-layout">
-        <div className="pantheon-grid">
+        <div className="pantheon-grid" ref={pantheonGridRef}>
           {GODS.map((god) => {
             const owner = claimed.get(god.id);
             return (
@@ -411,7 +439,11 @@ function ThreePlayerDraft({
           })}
         </div>
 
-        <aside className="god-inspector three-god-inspector" style={{ "--accent": currentGod.accent } as React.CSSProperties}>
+        <aside
+          className="god-inspector three-god-inspector"
+          ref={inspectorRef}
+          style={{ "--accent": currentGod.accent } as React.CSSProperties}
+        >
           <div className="inspector-heading">
             <DraftGodPortrait godId={currentGod.id} className="god-hero-portrait" />
             <div>
@@ -421,7 +453,12 @@ function ThreePlayerDraft({
             </div>
           </div>
           <DraftLevelSelector level={level} onChange={setLevel} />
-          <div className="draft-abilities">
+          <div
+            className="draft-abilities three-draft-abilities"
+            role="region"
+            aria-label={`${currentGod.name} ability details`}
+            tabIndex={0}
+          >
             {currentGod.abilities.map((ability, index) => (
               <div className="draft-ability" key={ability.id}>
                 <span>0{index + 1}</span>

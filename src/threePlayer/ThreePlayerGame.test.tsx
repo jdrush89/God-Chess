@@ -155,6 +155,14 @@ describe("ThreePlayerGame", () => {
 
     expect(container.querySelector(".three-draft-layout > .pantheon-grid")).toBeTruthy();
     expect(container.querySelector(".three-draft-layout > .god-inspector")).toBeTruthy();
+    const abilityRegion = screen.getByRole("region", { name: /Quetzacoatl ability details/i });
+    const inspector = abilityRegion.closest(".three-god-inspector");
+    const claim = screen.getByRole("button", { name: /^Claim Quetzacoatl$/i });
+    expect(abilityRegion.classList.contains("three-draft-abilities")).toBe(true);
+    expect(abilityRegion.getAttribute("tabindex")).toBe("0");
+    expect(inspector?.children[2]).toBe(abilityRegion);
+    expect(inspector?.lastElementChild).toBe(claim);
+    expect(abilityRegion.contains(container.querySelector(".mini-cost"))).toBe(true);
     expect(container.querySelectorAll(".pantheon-grid > .draft-card")).toHaveLength(12);
     expect(container.querySelectorAll(".three-draft-claim")).toHaveLength(1);
     expect(container.querySelectorAll(".three-draft-rosters .draft-roster")).toHaveLength(3);
