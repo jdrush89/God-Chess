@@ -7,6 +7,7 @@ import {
   distance,
   flightPathSquares,
   isInCheck,
+  kingSquare,
   legalTargets,
   lineOfSight,
   pathSquares,
@@ -16,6 +17,7 @@ import {
   squareColor,
 } from "./chess";
 import { abilityLevel, GOD_BY_ID, GODS } from "./gods";
+import { hasCompleteTurn } from "./completeTurnSearch";
 import type {
   Color,
   GameMode,
@@ -56,8 +58,26 @@ const log = (state: GameState, entry: string) => {
   state.history = [entry, ...state.history].slice(0, 30);
 };
 
+const setClassicWinner = (
+  state: GameState,
+  winner: Color,
+  reason: "checkmate" | "king-death",
+) => {
+  state.phase = "gameover";
+  state.winner = winner;
+  state.result = { kind: "winner", winner, reason };
+};
+
+const setClassicStalemate = (state: GameState) => {
+  state.phase = "gameover";
+  state.winner = undefined;
+  state.result = { kind: "draw", reason: "stalemate" };
+};
+
 const colorName = (color: Color) => color[0].toUpperCase() + color.slice(1);
 const pieceName = (piece: Piece) => piece.type[0].toUpperCase() + piece.type.slice(1);
+const allowsPuzzleKingCapture = (state: GameState) =>
+  state.gameMode === "puzzle";
 
 const present = (
   state: GameState,
@@ -225,9 +245,18 @@ const sendCapturedPieceToGraveyard = (state: GameState, piece: Piece, source: Sq
   state.captureAnimations = state.captureAnimations.slice(-12);
 };
 
-const captureAt = (state: GameState, square: Square, captor: Color) => {
+const captureAt = (
+  state: GameState,
+  square: Square,
+  captor: Color,
+  allowKing = false,
+) => {
   const piece = state.board[square];
-  if (!piece || piece.status.hardened) return undefined;
+  if (
+    !piece ||
+    (!allowKing && !allowsPuzzleKingCapture(state) && piece.type === "king") ||
+    piece.status.hardened
+  ) return undefined;
   delete state.board[square];
   sendCapturedPieceToGraveyard(state, piece, square);
   if (
@@ -239,8 +268,7 @@ const captureAt = (state: GameState, square: Square, captor: Color) => {
     log(state, `${colorName(piece.status.ritual.owner)}'s ritual returns ${reward} of each orb.`);
   }
   if (piece.type === "king") {
-    state.phase = "gameover";
-    state.winner = captor;
+    setClassicWinner(state, captor, "king-death");
   }
   return piece;
 };
@@ -250,12 +278,21 @@ const currentLevelForOwner = (state: GameState, color: Color, abilityId: string)
 
 const moveDirect = (state: GameState, from: Square, requestedTo: Square, teleport = false) => {
   const moving = state.board[from];
-  if (!moving) return undefined;
+  if (
+    !moving ||
+    (state.board[requestedTo]?.type === "king" && !allowsPuzzleKingCapture(state))
+  ) return undefined;
   const peel = teleport
     ? undefined
     : bananaOnMovePath(state, from, requestedTo, moving.controller);
   const to = peel ?? requestedTo;
-  const result = applyMove(state.board, { from, to }, state.enPassant, !teleport);
+  const result = applyMove(
+    state.board,
+    { from, to },
+    state.enPassant,
+    !teleport,
+    allowsPuzzleKingCapture(state),
+  );
   state.board = result.board;
   state.enPassant = result.enPassant;
   if (result.captured) {
@@ -268,8 +305,7 @@ const moveDirect = (state: GameState, from: Square, requestedTo: Square, telepor
       addOrbs(state, result.captured.status.ritual.owner, reward, reward);
     }
     if (result.captured.type === "king") {
-      state.phase = "gameover";
-      state.winner = moving.controller;
+      setClassicWinner(state, moving.controller, "king-death");
     }
   }
   if (peel) {
@@ -378,7 +414,7 @@ const resolveStartOfTurn = (state: GameState) => {
   const returns = state.stealth[state.activeColor].filter((move) => move.returnOnTurn <= state.turn);
   for (const returning of returns) {
     if (state.board[returning.destination] && !state.board[returning.destination].status.hardened) {
-      captureAt(state, returning.destination, state.activeColor);
+      captureAt(state, returning.destination, state.activeColor, true);
     }
     if (!state.board[returning.destination]) {
       state.board[returning.destination] = {
@@ -403,14 +439,14 @@ const resolveMarkedForDeath = (state: GameState) => {
     ) {
       continue;
     }
+    if (piece.type === "king") {
+      delete piece.status.markedForDeath;
+      continue;
+    }
     delete state.board[square];
     sendCapturedPieceToGraveyard(state, piece, square);
     addOrbs(state, state.activeColor, 0, 3);
     log(state, `Death claimed the marked ${piece.type} on ${square}.`);
-    if (piece.type === "king") {
-      state.phase = "gameover";
-      state.winner = opposite(state.activeColor);
-    }
   }
 };
 
@@ -562,6 +598,7 @@ const airStrikeDropTargets = (
       if (
         dropSquare !== firstEnemy ||
         occupant.controller === state.activeColor ||
+        (occupant.type === "king" && !allowsPuzzleKingCapture(state)) ||
         occupant.status.hardened
       ) return false;
     }
@@ -638,6 +675,7 @@ const sourceIsAllowed = (state: GameState, square: Square) => {
   if (abilityId === "slither") return piece.controller === color && piece.type === "queen";
   if (abilityId === "military-funding") return piece.controller === color && piece.type === "pawn";
   if (abilityId === "charge") return piece.controller === color && piece.type === "knight";
+  if (abilityId === "marked" && piece.type === "king") return false;
   return piece.controller === color;
 };
 
@@ -765,6 +803,7 @@ const escortPlan = (state: GameState, kingSquare: Square, requestedDestination: 
   for (const landing of landings) {
     const occupant = simulated[landing.to];
     if (
+      (occupant?.type === "king" && !allowsPuzzleKingCapture(state)) ||
       occupant?.status.hardened ||
       occupant?.controller === king.controller
     ) {
@@ -823,7 +862,11 @@ const sourceTargets = (state: GameState, square: Square) => {
     return constrainLure(allSquares.filter((target) => !state.board[target] && distance(square, target) <= level + 2));
   }
   if (abilityId === "charge") {
-    return constrainLure(legalTargets(state.board, square, { forceType: "rook", bananas: state.bananas }));
+    return constrainLure(legalTargets(state.board, square, {
+      forceType: "rook",
+      bananas: state.bananas,
+      allowKingCapture: allowsPuzzleKingCapture(state),
+    }));
   }
   if (abilityId === "construction") {
     return constrainLure(legalTargets(state.board, square, { enPassant: state.enPassant, bananas: state.bananas }));
@@ -928,10 +971,18 @@ const sourceTargets = (state: GameState, square: Square) => {
     );
   }
   const charged = piece.type === "knight" && piece.status.chargeUntil
-    ? legalTargets(state.board, square, { forceType: "rook", bananas: state.bananas })
+    ? legalTargets(state.board, square, {
+      forceType: "rook",
+      bananas: state.bananas,
+      allowKingCapture: allowsPuzzleKingCapture(state),
+    })
     : [];
   return constrainLure([...new Set([
-    ...legalTargets(state.board, square, { enPassant: state.enPassant, bananas: state.bananas }),
+    ...legalTargets(state.board, square, {
+      enPassant: state.enPassant,
+      bananas: state.bananas,
+      allowKingCapture: allowsPuzzleKingCapture(state),
+    }),
     ...charged,
   ])]);
 };
@@ -1170,8 +1221,7 @@ const activateAbility = (state: GameState, abilityId: string) => {
 const recordMoveCapture = (state: GameState, captured: Piece | undefined) => {
   if (!captured) return;
   if (captured.type === "king") {
-    state.phase = "gameover";
-    state.winner = state.activeColor;
+    setClassicWinner(state, state.activeColor, "king-death");
   }
 };
 
@@ -1590,6 +1640,19 @@ const executeMarchHome = (state: GameState, kingSquare: Square, companionSquares
   const companions = companionSquares
     .map((square) => ({ square, piece: state.board[square] }))
     .filter((entry): entry is { square: Square; piece: Piece } => Boolean(entry.piece));
+  const companionLandings = companions.map(({ square, piece }) => {
+    const [file, rank] = coords(square);
+    return {
+      square,
+      piece,
+      target: squareAt(file + toFile - fromFile, rank + toRank - fromRank),
+    };
+  });
+  if (companionLandings.some(({ target }) =>
+    !target ||
+    state.board[target]?.type === "king" ||
+    state.board[target]?.status.hardened
+  )) return;
 
   const result = moveDirect(state, kingSquare, destination, true);
   if (!result) return;
@@ -1601,9 +1664,7 @@ const executeMarchHome = (state: GameState, kingSquare: Square, companionSquares
     from: kingSquare,
     to: destination,
   });
-  for (const { square, piece } of companions) {
-    const [file, rank] = coords(square);
-    const target = squareAt(file + toFile - fromFile, rank + toRank - fromRank);
+  for (const { square, piece, target } of companionLandings) {
     if (!target) continue;
     if (state.board[target]) captureAt(state, target, state.activeColor);
     delete state.board[square];
@@ -1687,7 +1748,13 @@ const chooseGravePiece = (state: GameState, pieceId: string) => {
   }
   state.pending = { ...state.pending!, step: "revive-place", movedPieceId: pieceId };
   state.legalTargets = [...new Set(bishopSquares.flatMap((square) => adjacentSquares(square)))]
-    .filter((square) => level >= 3 ? state.board[square]?.controller !== state.activeColor : !state.board[square]);
+    .filter((square) => level >= 3
+      ? state.board[square]?.controller !== state.activeColor &&
+        (
+          state.board[square]?.type !== "king" ||
+          allowsPuzzleKingCapture(state)
+        )
+      : !state.board[square]);
   state.notice = "Choose a space adjacent to one of your bishops.";
 };
 
@@ -2194,6 +2261,252 @@ const upgradeAbility = (state: GameState, abilityId: string) => {
   }
 };
 
+const canPassAction = (state: GameState) =>
+  state.selectedAbility === "construction" ||
+  state.selectedAbility === "marked" ||
+  state.pending?.step === "slither" ||
+  state.pending?.step === "mount-rider" ||
+  state.pending?.step === "funding" ||
+  state.pending?.step === "march-companions" ||
+  (state.pending?.step === "escort-companions" &&
+    Boolean(state.pending.selected?.length)) ||
+  (state.pending?.step === "hex-target" &&
+    Boolean(state.pending.selected?.length)) ||
+  state.pending?.abilityId === "snipe-shot";
+
+const availableAbilityActions = (state: GameState): GameAction[] => {
+  if (!state.selectedGod) return [];
+  return GOD_BY_ID[state.selectedGod].abilities
+    .filter((ability) => {
+      const white = ability.cost?.white ?? 0;
+      const black = ability.cost?.black ?? 0;
+      const orbs = state.players[state.activeColor].orbs;
+      return orbs.white >= white && orbs.black >= black;
+    })
+    .map((ability) => ({
+      type: "select-ability",
+      abilityId: ability.id,
+    }));
+};
+
+export const availableClassicActions = (state: GameState): GameAction[] => {
+  if (state.phase === "draft") {
+    return state.draft.available.map((godId) => ({ type: "draft", godId }));
+  }
+  if (state.phase === "upgrade") {
+    return state.players[state.activeColor].gods.flatMap((godId) =>
+      GOD_BY_ID[godId].abilities
+        .filter((ability) =>
+          (state.players[state.activeColor].upgrades[ability.id] ?? 1) < 3
+        )
+        .map((ability) => ({
+          type: "upgrade",
+          abilityId: ability.id,
+        } as GameAction)),
+    );
+  }
+  if (state.phase !== "play") return [];
+
+  if (state.pending?.abilityId === "harden-choice") {
+    return state.pending.step === "harden-choice"
+      ? state.legalTargets.map((square) => ({ type: "square", square }))
+      : [
+        { type: "harden-choice", keep: true },
+        { type: "harden-choice", keep: false },
+      ];
+  }
+  if (state.pending?.abilityId === "snipe-shot") {
+    return [
+      ...state.legalTargets.map((square) => ({
+        type: "square",
+        square,
+      } as GameAction)),
+      { type: "pass" },
+    ];
+  }
+  if (state.pending?.step === "grave") {
+    return state.players[state.activeColor].graveyard
+      .map(({ piece }) => ({ type: "grave", pieceId: piece.id }));
+  }
+  if (state.pending?.step === "marked-choice") {
+    return [{ type: "marked-execute" }, { type: "pass" }];
+  }
+  if (state.pending?.step === "rage-choice") {
+    return [
+      { type: "rage-resolve", spareFriendly: false },
+      { type: "rage-resolve", spareFriendly: true },
+    ];
+  }
+  if (state.pending?.step === "barter-choice") {
+    return [
+      { type: "barter", give: "white" },
+      { type: "barter", give: "black" },
+      { type: "barter" },
+    ];
+  }
+  if (state.pending?.step === "resurrect-more") {
+    return [
+      { type: "resurrect-more", revive: true },
+      { type: "resurrect-more", revive: false },
+    ];
+  }
+  if (state.pending?.step === "siphon-choice") {
+    return [2, 1, 0].map((amount) => ({
+      type: "siphon",
+      amount,
+    } as GameAction));
+  }
+  if (
+    state.pending?.step === "confirm-stone-gaze" ||
+    state.pending?.step === "confirm-march-home"
+  ) {
+    return [{ type: "confirm-ability" }];
+  }
+  if (!state.selectedGod) {
+    return state.players[state.activeColor].gods
+      .filter((godId) => !state.rested.includes(godId))
+      .map((godId) => ({ type: "select-god", godId }));
+  }
+  if (!state.selectedAbility) {
+    return [...availableAbilityActions(state), { type: "clear-god" }];
+  }
+
+  const actions: GameAction[] = [];
+  if (state.legalTargets.length) {
+    actions.push(...state.legalTargets.map((square) => ({
+      type: "square",
+      square,
+    } as GameAction)));
+  } else if (state.pending?.step === "source") {
+    const candidates = state.selectedAbility === "enchant"
+      ? allSquares
+      : Object.entries(state.board)
+          .filter(([, piece]) => piece.controller === state.activeColor)
+          .map(([square]) => square);
+    actions.push(...candidates.map((square) => ({
+      type: "square",
+      square,
+    } as GameAction)));
+  }
+  if (canPassAction(state)) actions.push({ type: "pass" });
+  actions.push({ type: "cancel" });
+  return actions;
+};
+
+export const classicPlanStateSignature = (state: GameState) => JSON.stringify({
+  phase: state.phase,
+  activeColor: state.activeColor,
+  turn: state.turn,
+  round: state.round,
+  draftPick: state.draft.pickIndex,
+  upgradeQueue: state.upgradeQueue,
+  selectedGod: state.selectedGod,
+  selectedAbility: state.selectedAbility,
+  selectedSquare: state.selectedSquare,
+  legalTargets: state.legalTargets,
+  pending: state.pending,
+  board: state.board,
+  players: state.players,
+  rested: state.rested,
+  bananas: state.bananas,
+  stealth: state.stealth,
+  bonusTurn: state.bonusTurn,
+  winner: state.winner,
+  result: state.result,
+});
+
+export const isCompleteClassicTurn = (
+  initial: GameState,
+  next: GameState,
+) => {
+  if (next.phase === "gameover") return true;
+  if (initial.phase === "draft") {
+    return next.draft.pickIndex !== initial.draft.pickIndex;
+  }
+  if (initial.phase === "upgrade") {
+    return next.phase !== "upgrade" ||
+      next.upgradeQueue.length !== initial.upgradeQueue.length ||
+      next.activeColor !== initial.activeColor;
+  }
+  return next.phase !== initial.phase ||
+    next.turn !== initial.turn ||
+    next.activeColor !== initial.activeColor;
+};
+
+let completeTurnSearchDepth = 0;
+
+export const hasCompleteClassicTurn = (state: GameState) => {
+  if (completeTurnSearchDepth > 0) return true;
+  const color = state.activeColor;
+  completeTurnSearchDepth += 1;
+  try {
+    return hasCompleteTurn({
+      state,
+      availableActions: availableClassicActions,
+      reduce: gameReducer,
+      signature: classicPlanStateSignature,
+      isComplete: isCompleteClassicTurn,
+      acceptComplete: (_initial, next) =>
+        Boolean(kingSquare(next.board, color)) &&
+        !isInCheck(next.board, color, next.bananas),
+      limits: {
+        maxDepth: 18,
+        maxStates: 20_000,
+        maxActionsPerState: 256,
+      },
+    });
+  } finally {
+    completeTurnSearchDepth -= 1;
+  }
+};
+
+const clearTurnSelection = (state: GameState) => {
+  state.selectedGod = undefined;
+  state.selectedAbility = undefined;
+  state.selectedSquare = undefined;
+  state.pending = undefined;
+  state.legalTargets = [];
+};
+
+const resolveClassicTurnStart = (state: GameState) => {
+  if (
+    completeTurnSearchDepth > 0 ||
+    state.phase !== "play" ||
+    state.gameMode === "puzzle" ||
+    state.result
+  ) return;
+  const color = state.activeColor;
+  if (hasCompleteClassicTurn(state)) return;
+  const king = kingSquare(state.board, color);
+  if (!king) return;
+  clearTurnSelection(state);
+  if (isInCheck(state.board, color, state.bananas)) {
+    const winner = opposite(color);
+    const piece = state.board[king];
+    delete state.board[king];
+    sendCapturedPieceToGraveyard(state, piece, king);
+    setClassicWinner(state, winner, "checkmate");
+    const message = `${colorName(color)} was checkmated by ${colorName(winner)}.`;
+    log(state, message);
+    state.lastAction = message;
+    state.notice = message;
+  } else {
+    setClassicStalemate(state);
+    const message = `${colorName(color)} was stalemated. The match is a draw.`;
+    log(state, message);
+    state.lastAction = message;
+    state.notice = message;
+  }
+};
+
+const beganClassicPlayTurn = (previous: GameState, next: GameState) =>
+  next.phase === "play" &&
+  (
+    previous.phase !== "play" ||
+    previous.turn !== next.turn ||
+    previous.activeColor !== next.activeColor
+  );
+
 export const gameReducer = (state: GameState, action: GameAction): GameState => {
   if (action.type === "new-game") {
     return createGame(undefined, { mode: action.mode, aiDifficulty: action.aiDifficulty });
@@ -2212,7 +2525,22 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
       guestName,
     });
   }
-  if (action.type === "load-game") return structuredClone(action.state);
+  if (action.type === "load-game") {
+    const loaded = structuredClone(action.state);
+    if (
+      loaded.phase === "gameover" &&
+      loaded.winner &&
+      !loaded.result
+    ) {
+      loaded.result = {
+        kind: "winner",
+        winner: loaded.winner,
+        reason: "king-death",
+      };
+    }
+    resolveClassicTurnStart(loaded);
+    return loaded;
+  }
   const previousOrbs = {
     white: { ...state.players.white.orbs },
     black: { ...state.players.black.orbs },
@@ -2272,9 +2600,11 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
     const square = findSquareById(next.board, next.pending.movedPieceId);
     if (square) {
       const doomed = next.board[square];
-      delete next.board[square];
-      sendCapturedPieceToGraveyard(next, doomed, square);
-      addOrbs(next, next.activeColor, 0, 5);
+      if (doomed.type !== "king") {
+        delete next.board[square];
+        sendCapturedPieceToGraveyard(next, doomed, square);
+        addOrbs(next, next.activeColor, 0, 5);
+      }
     }
     finishTurn(next, abilityDescription(next, ": executed the marked piece and gained 5 black orbs"));
   }
@@ -2447,5 +2777,14 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
     }
     next.orbAnimations = next.orbAnimations.slice(-8);
   }
+  const actor = state.activeColor;
+  if (
+    isCompleteClassicTurn(state, next) &&
+    Boolean(kingSquare(next.board, actor)) &&
+    isInCheck(next.board, actor, next.bananas)
+  ) {
+    return state;
+  }
+  if (beganClassicPlayTurn(state, next)) resolveClassicTurnStart(next);
   return next;
 };

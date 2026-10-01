@@ -2750,10 +2750,17 @@ function GameScreen({
         <GameResultPresentation
           open={resultOpen}
           eyebrow="THE DIVINE GAME ENDS"
-          title={state.winner ? `${colorLabel(state.winner)} is victorious` : "Stalemate"}
-          description={state.winner
-            ? `${state.players[state.winner].name} has conquered the opposing pantheon.`
-            : "Neither pantheon can make a legal move."}
+          title={state.result?.kind === "draw"
+            ? "Draw by stalemate"
+            : state.winner
+              ? `${colorLabel(state.winner)} is victorious`
+              : "The battle is over"}
+          description={state.result?.kind === "winner" &&
+              state.result.reason === "checkmate"
+            ? `${state.players[state.result.winner].name} delivered checkmate.`
+            : state.winner
+              ? `${state.players[state.winner].name} has conquered the opposing pantheon.`
+              : "The active pantheon has no complete legal turn while its King is safe."}
           newGameLabel="Begin a new game"
           undoEnabled={undoEnabled}
           canUndo={canUndo}

@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
-  ThreePlayerPiece,
   ThreePlayerSeat,
   ThreePlayerState,
 } from "./threePlayerTypes";
@@ -15,19 +14,10 @@ const mockedChess = vi.hoisted(() => ({
     | "white-and-red-mated",
 }));
 
-vi.mock("./threePlayerChess", () => {
-  const piece = (
-    id: string,
-    type: ThreePlayerPiece["type"],
-    owner: ThreePlayerSeat,
-  ): ThreePlayerPiece => ({
-    id,
-    type,
-    owner,
-    controller: owner,
-    hasMoved: false,
-    status: {},
-  });
+vi.mock("./threePlayerChess", async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import("./threePlayerChess")
+  >();
   const legalMoves = (state: ThreePlayerState, seat: ThreePlayerSeat) => {
     if (mockedChess.mode === "all-stalemate") return [];
     if (
@@ -49,12 +39,7 @@ vi.mock("./threePlayerChess", () => {
       : [];
   };
   return {
-    createThreePlayerInitialBoard: () => ({
-      "white-king": piece("white-king", "king", "white"),
-      "white-rook": piece("white-rook", "rook", "white"),
-      "red-king": piece("red-king", "king", "red"),
-      "black-king": piece("black-king", "king", "black"),
-    }),
+    ...actual,
     createThreePlayerInitialCastlingRights: () => ({
       white: { king: false, queen: false },
       red: { king: false, queen: false },
@@ -108,16 +93,28 @@ vi.mock("./threePlayerChess", () => {
 import { threePlayerPieceAffinity } from "./threePlayerConfig";
 import {
   createThreePlayerGame,
+  resolveThreePlayerTurnStart,
   threePlayerReducer,
 } from "./threePlayerEngine";
 
 const finishDraft = (
   state = createThreePlayerGame(),
-) => GODS.slice(0, 9).reduce(
-  (current, god) =>
-    threePlayerReducer(current, { type: "draft", godId: god.id }),
-  state,
-);
+) => GODS.slice(0, 9).reduce((current, god, index) => {
+  if (index === 8 && mockedChess.mode !== "normal") {
+    const seats = mockedChess.mode === "all-stalemate"
+      ? ["white", "red", "black"] as const
+      : mockedChess.mode === "white-and-red-mated"
+        ? ["white", "red"] as const
+        : mockedChess.mode === "white-mated"
+          ? ["white"] as const
+          : ["red"] as const;
+    current.rested = seats.flatMap((seat) => [
+      ...current.players[seat].gods,
+      ...(seat === current.activeSeat ? [god.id] : []),
+    ]);
+  }
+  return threePlayerReducer(current, { type: "draft", godId: god.id });
+}, state);
 
 const playLegacyMove = (state: ThreePlayerState) => {
   const from = Object.entries(state.board).find(
@@ -149,6 +146,9 @@ describe("three-player turn-start resolution", () => {
 
     state = playLegacyMove(state);
     expect(state.activeSeat).toBe("white");
+    state.rested = state.rested.filter((godId) =>
+      !state.players.red.gods.includes(godId)
+    );
     state = playLegacyMove(state);
     expect(state.activeSeat).toBe("red");
     expect(state.passCycle.passedSeats).toEqual([]);
@@ -177,12 +177,14 @@ describe("three-player turn-start resolution", () => {
     const state = finishDraft(createThreePlayerGame(config));
     expect(state.players.white.eliminated).toBe(true);
     expect(state.players.white.eliminatedBy).toBe("black");
-    expect(state.board["white-rook"].controller).toBe("black");
+    expect(Object.values(state.board)
+      .filter((piece) => piece.owner === "white")
+      .every((piece) => piece.controller === "black")).toBe(true);
     expect(state.activeSeat).toBe("red");
     expect(state.result).toBeUndefined();
   });
 
-  it("ends first-checkmate mode immediately and treats stalemate as a draw", () => {
+  it("ends first-checkmate mode only for checkmate and skips stalemates", () => {
     const mateConfig = createThreePlayerGame().config;
     mateConfig.victoryMode = "first-checkmate";
     mockedChess.mode = "white-mated";
@@ -197,7 +199,7 @@ describe("three-player turn-start resolution", () => {
     mockedChess.mode = "all-stalemate";
     expect(finishDraft(createThreePlayerGame(stalemateConfig)).result).toEqual({
       kind: "draw",
-      reason: "stalemate",
+      reason: "stalemate-cycle",
     });
   });
 
@@ -222,6 +224,7 @@ describe("three-player turn-start resolution", () => {
       state.players.white.gods.includes(god.id)
     )!.abilities[0].id;
     mockedChess.mode = "white-mated";
+    state.rested = [...state.players.white.gods];
 
     state = threePlayerReducer(state, { type: "upgrade", abilityId });
 
@@ -242,6 +245,9 @@ describe("three-player turn-start resolution", () => {
     mockedChess.mode = "all-stalemate";
 
     state = threePlayerReducer(state, { type: "upgrade", abilityId });
+    state.rested = Object.values(state.players)
+      .flatMap((player) => player.gods);
+    resolveThreePlayerTurnStart(state);
 
     expect(state.result).toEqual({
       kind: "draw",

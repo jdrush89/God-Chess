@@ -166,7 +166,7 @@ export type ThreePlayerResult =
   }
   | {
     kind: "draw";
-    reason: "stalemate" | "stalemate-cycle";
+    reason: "stalemate-cycle";
   };
 
 export interface ThreePlayerState {

@@ -1,5 +1,11 @@
 import { allSquares, coords, isInCheck, kingSquare, pieceValue, pseudoTargets } from "./chess";
-import { gameReducer, type GameAction } from "./engine";
+import {
+  availableClassicActions,
+  classicPlanStateSignature,
+  gameReducer,
+  isCompleteClassicTurn,
+  type GameAction,
+} from "./engine";
 import { GOD_BY_ID } from "./gods";
 import type { Color, GameState, GodId, Piece } from "./types";
 import { opposite } from "./types";
@@ -133,136 +139,6 @@ export const evaluateGameState = (state: GameState, color: Color) => {
   return score;
 };
 
-const stateSignature = (state: GameState) => JSON.stringify({
-  phase: state.phase,
-  activeColor: state.activeColor,
-  turn: state.turn,
-  draftPick: state.draft.pickIndex,
-  upgradeQueue: state.upgradeQueue,
-  selectedGod: state.selectedGod,
-  selectedAbility: state.selectedAbility,
-  selectedSquare: state.selectedSquare,
-  legalTargets: state.legalTargets,
-  pending: state.pending,
-  board: state.board,
-  players: state.players,
-  rested: state.rested,
-  bananas: state.bananas,
-  stealth: state.stealth,
-  winner: state.winner,
-});
-
-const canPass = (state: GameState) =>
-  state.selectedAbility === "construction" ||
-  state.selectedAbility === "marked" ||
-  state.pending?.step === "slither" ||
-  state.pending?.step === "mount-rider" ||
-  state.pending?.step === "funding" ||
-  state.pending?.step === "march-companions" ||
-  (state.pending?.step === "escort-companions" && Boolean(state.pending.selected?.length)) ||
-  (state.pending?.step === "hex-target" && Boolean(state.pending.selected?.length)) ||
-  state.pending?.abilityId === "snipe-shot";
-
-const abilityActions = (state: GameState): GameAction[] => {
-  if (!state.selectedGod) return [];
-  return GOD_BY_ID[state.selectedGod].abilities
-    .filter((ability) => {
-      const white = ability.cost?.white ?? 0;
-      const black = ability.cost?.black ?? 0;
-      const orbs = state.players[state.activeColor].orbs;
-      return orbs.white >= white && orbs.black >= black;
-    })
-    .map((ability) => ({ type: "select-ability", abilityId: ability.id }));
-};
-
-const availableActions = (state: GameState): GameAction[] => {
-  if (state.phase === "draft") {
-    return state.draft.available.map((godId) => ({ type: "draft", godId }));
-  }
-  if (state.phase === "upgrade") {
-    return state.players[state.activeColor].gods.flatMap((godId) =>
-      GOD_BY_ID[godId].abilities
-        .filter((ability) => (state.players[state.activeColor].upgrades[ability.id] ?? 1) < 3)
-        .map((ability) => ({ type: "upgrade", abilityId: ability.id } as GameAction)),
-    );
-  }
-  if (state.phase !== "play") return [];
-
-  if (state.pending?.abilityId === "harden-choice") {
-    if (state.pending.step === "harden-choice") {
-      return state.legalTargets.map((square) => ({ type: "square", square }));
-    }
-    return [
-      { type: "harden-choice", keep: true },
-      { type: "harden-choice", keep: false },
-    ];
-  }
-  if (state.pending?.step === "grave") {
-    return state.players[state.activeColor].graveyard
-      .map(({ piece }) => ({ type: "grave", pieceId: piece.id }));
-  }
-  if (state.pending?.step === "marked-choice") {
-    return [{ type: "marked-execute" }, { type: "pass" }];
-  }
-  if (state.pending?.step === "rage-choice") {
-    return [
-      { type: "rage-resolve", spareFriendly: false },
-      { type: "rage-resolve", spareFriendly: true },
-    ];
-  }
-  if (state.pending?.step === "barter-choice") {
-    return [
-      { type: "barter", give: "white" },
-      { type: "barter", give: "black" },
-      { type: "barter" },
-    ];
-  }
-  if (state.pending?.step === "resurrect-more") {
-    return [
-      { type: "resurrect-more", revive: true },
-      { type: "resurrect-more", revive: false },
-    ];
-  }
-  if (state.pending?.step === "siphon-choice") {
-    return [2, 1, 0].map((amount) => ({ type: "siphon", amount } as GameAction));
-  }
-  if (
-    state.pending?.step === "confirm-stone-gaze" ||
-    state.pending?.step === "confirm-march-home"
-  ) {
-    return [{ type: "confirm-ability" }];
-  }
-  if (!state.selectedGod) {
-    return state.players[state.activeColor].gods
-      .filter((godId) => !state.rested.includes(godId))
-      .map((godId) => ({ type: "select-god", godId }));
-  }
-  if (!state.selectedAbility) return abilityActions(state);
-
-  const actions: GameAction[] = [];
-  if (state.legalTargets.length) {
-    actions.push(...state.legalTargets.map((square) => ({ type: "square", square } as GameAction)));
-  } else if (state.pending?.step === "source") {
-    const candidates = state.selectedAbility === "enchant"
-      ? allSquares
-      : Object.entries(state.board)
-          .filter(([, piece]) => piece.controller === state.activeColor)
-          .map(([square]) => square);
-    actions.push(...candidates.map((square) => ({ type: "square", square } as GameAction)));
-  }
-  if (canPass(state)) actions.push({ type: "pass" });
-  return actions;
-};
-
-const isTurnComplete = (initial: GameState, next: GameState) => {
-  if (next.phase === "gameover") return true;
-  if (initial.phase === "draft") return next.draft.pickIndex !== initial.draft.pickIndex;
-  if (initial.phase === "upgrade") {
-    return next.phase !== "upgrade" || next.upgradeQueue.length !== initial.upgradeQueue.length;
-  }
-  return next.turn !== initial.turn || next.activeColor !== initial.activeColor;
-};
-
 const branchKey = (node: SearchNode) =>
   node.state.selectedAbility ??
   node.state.pending?.abilityId ??
@@ -304,15 +180,15 @@ export const enumerateTurnPlans = (state: GameState, color: Color = state.active
   for (let depth = 0; depth < MAX_DEPTH && frontier.length && completed.length < MAX_COMPLETED; depth += 1) {
     const expanded: SearchNode[] = [];
     for (const node of frontier) {
-      const actions = availableActions(node.state).slice(0, MAX_ACTIONS_PER_NODE);
+      const actions = availableClassicActions(node.state).slice(0, MAX_ACTIONS_PER_NODE);
       for (const action of actions) {
         const next = gameReducer(node.state, action);
-        const beforeSignature = stateSignature(node.state);
-        const signature = stateSignature(next);
+        const beforeSignature = classicPlanStateSignature(node.state);
+        const signature = classicPlanStateSignature(next);
         if (signature === beforeSignature || seen.has(signature)) continue;
         seen.add(signature);
         const candidate = { state: next, actions: [...node.actions, action] };
-        if (isTurnComplete(state, next)) completed.push(candidate);
+        if (isCompleteClassicTurn(state, next)) completed.push(candidate);
         else expanded.push(candidate);
       }
     }
@@ -404,7 +280,7 @@ export const chooseAiPlan = (
   const plans = enumerateTurnPlans(state, color);
   let actions: GameAction[];
   if (!plans.length) {
-    actions = availableActions(state).slice(0, 1);
+    actions = [];
   } else {
     const optimalChance = Math.max(0.1, Math.min(1, state.aiDifficulty / 10));
     if (random() < optimalChance || plans.length === 1) {

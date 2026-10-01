@@ -294,7 +294,7 @@ export const chooseFourPlayerAiPlan = (
     state.activeSeat,
     budgetForDifficulty(difficulty),
   );
-  if (!plans.length) return availableFourPlayerActions(state).slice(0, 1);
+  if (!plans.length) return [];
   if (difficulty >= 10 || plans.length === 1) return plans[0].actions;
   const window = Math.min(plans.length, 1 + (10 - difficulty) * 2);
   const bias = Math.pow(random(), 1 + difficulty * 0.35);

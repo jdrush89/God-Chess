@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyMove,
   createInitialBoard,
   flightPathSquares,
   isInCheck,
@@ -97,6 +98,36 @@ describe("chess movement", () => {
     expect(isInCheck(board, "white")).toBe(false);
     expect(legalTargets(board, "a2")).toContain("a3");
   });
+
+  it("does not offer or apply an ordinary King capture", () => {
+    const board = {
+      e7: testPiece("rook", "white", "white-rook"),
+      e8: testPiece("king", "black", "black-king"),
+      a1: testPiece("king", "white", "white-king"),
+    };
+
+    expect(legalTargets(board, "e7")).not.toContain("e8");
+    expect(() => applyMove(board, { from: "e7", to: "e8" }))
+      .toThrow(/cannot capture a King/);
+  });
+
+  it("does not let Marked select a King for delayed or immediate execution", () => {
+    let state = createGame(1);
+    (["death", "chiron", "teles", "midas", "ares", "artemis"] as const)
+      .forEach((godId) => {
+        state = gameReducer(state, { type: "draft", godId });
+      });
+    state.players.white.orbs.black = 10;
+    state.players.white.upgrades.marked = 3;
+
+    state = gameReducer(state, { type: "select-god", godId: "death" });
+    state = gameReducer(state, {
+      type: "select-ability",
+      abilityId: "marked",
+    });
+
+    expect(state.legalTargets).not.toContain("e1");
+  });
 });
 
 describe("game flow", () => {
@@ -127,6 +158,73 @@ describe("game flow", () => {
     expect(state.players.black.gods).toEqual(["medusa", "midas", "chiron"]);
     expect(state.phase).toBe("play");
     expect(state.activeColor).toBe("white");
+  });
+
+  it("adjudicates checkmate at turn start without a King-capture move", () => {
+    const state = createGame(1);
+    state.phase = "play";
+    state.activeColor = "white";
+    state.board = {
+      e1: testPiece("king", "white", "white-king"),
+      e8: testPiece("rook", "black", "black-rook"),
+      a8: testPiece("king", "black", "black-king"),
+    };
+
+    const result = gameReducer(state, { type: "load-game", state });
+
+    expect(result.phase).toBe("gameover");
+    expect(result.winner).toBe("black");
+    expect(result.result).toEqual({
+      kind: "winner",
+      winner: "black",
+      reason: "checkmate",
+    });
+    expect(result.board.e1).toBeUndefined();
+    expect(result.players.white.graveyard.at(-1)?.piece.id)
+      .toBe("white-king");
+    expect(result.history[0]).toBe("White was checkmated by Black.");
+  });
+
+  it("adjudicates a safe no-turn position as a stalemate draw", () => {
+    const state = createGame(1);
+    state.phase = "play";
+    state.activeColor = "white";
+    state.board = {
+      e1: testPiece("king", "white", "white-king"),
+      e8: testPiece("king", "black", "black-king"),
+    };
+
+    const result = gameReducer(state, { type: "load-game", state });
+
+    expect(result.phase).toBe("gameover");
+    expect(result.winner).toBeUndefined();
+    expect(result.result).toEqual({
+      kind: "draw",
+      reason: "stalemate",
+    });
+    expect(result.board.e1?.type).toBe("king");
+    expect(result.history[0]).toBe(
+      "White was stalemated. The match is a draw.",
+    );
+  });
+
+  it("does not falsely mate a checked King with a complete divine escape", () => {
+    const state = createGame(1);
+    state.phase = "play";
+    state.activeColor = "white";
+    state.players.white.gods = ["quetzacoatl"];
+    state.players.white.orbs.white = 3;
+    state.board = {
+      e1: testPiece("king", "white", "white-king"),
+      e8: testPiece("rook", "black", "black-rook"),
+      a8: testPiece("king", "black", "black-king"),
+    };
+
+    const result = gameReducer(state, { type: "load-game", state });
+
+    expect(result.phase).toBe("play");
+    expect(result.result).toBeUndefined();
+    expect(result.board.e1?.type).toBe("king");
   });
 
   it("auto-drafts only one god for the current player", () => {

@@ -981,7 +981,7 @@ const isThreePlayerStateVersion = (value: unknown): boolean => {
       value.result.kind === "draw" &&
       !(
         hasExactKeys(value.result, ["kind", "reason"]) &&
-        ["stalemate", "stalemate-cycle"].includes(String(value.result.reason))
+        value.result.reason === "stalemate-cycle"
       )
     ) return false;
     if (!["winner", "draw"].includes(value.result.kind)) return false;
@@ -1006,11 +1006,6 @@ const isThreePlayerStateVersion = (value: unknown): boolean => {
         )
       ) return false;
     } else if (
-      result.reason === "stalemate" &&
-      value.config.victoryMode !== "first-checkmate"
-    ) return false;
-    else if (
-      result.reason === "stalemate-cycle" &&
       !living.every((seat) => passCycle.passedSeats.includes(seat))
     ) return false;
   }

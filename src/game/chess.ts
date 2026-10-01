@@ -58,6 +58,22 @@ export const createInitialBoard = (): Record<Square, Piece> => {
   return board;
 };
 
+const canTarget = (
+  actor: Color,
+  target: Piece,
+  attacksOnly = false,
+  includeFriendlyTargets = false,
+  allowKingCapture = false,
+) => {
+  if (target.type === "king") {
+    return (attacksOnly || allowKingCapture) && target.controller !== actor;
+  }
+  return (
+    (target.controller !== actor && !target.status.hardened) ||
+    (target.controller === actor && includeFriendlyTargets)
+  );
+};
+
 const ray = (
   board: Record<Square, Piece>,
   from: Square,
@@ -68,6 +84,8 @@ const ray = (
   noCapture = false,
   bananas: Banana[] = [],
   includeFriendlyTargets = false,
+  attacksOnly = false,
+  allowKingCapture = false,
 ) => {
   const [file, rank] = coords(from);
   const moves: Square[] = [];
@@ -86,8 +104,13 @@ const ray = (
         if (
           !noCapture &&
           (
-            (occupying.controller !== color && !occupying.status.hardened) ||
-            (occupying.controller === color && includeFriendlyTargets)
+            canTarget(
+              color,
+              occupying,
+              attacksOnly,
+              includeFriendlyTargets,
+              allowKingCapture,
+            )
           )
         ) {
           moves.push(target);
@@ -97,8 +120,13 @@ const ray = (
       if (
         !noCapture &&
         (
-          (occupying.controller !== color && !occupying.status.hardened) ||
-          (occupying.controller === color && includeFriendlyTargets)
+          canTarget(
+            color,
+            occupying,
+            attacksOnly,
+            includeFriendlyTargets,
+            allowKingCapture,
+          )
         )
       ) {
         moves.push(target);
@@ -117,6 +145,7 @@ const pawnMoves = (
   enPassant?: Square,
   bananas: Banana[] = [],
   ignoreBlockers = false,
+  allowKingCapture = false,
 ) => {
   const [file, rank] = coords(from);
   const direction = piece.color === "white" ? 1 : -1;
@@ -124,7 +153,17 @@ const pawnMoves = (
   for (const dx of [-1, 1]) {
     const target = squareAt(file + dx, rank + direction);
     if (!target) continue;
-    if (attacksOnly || (board[target] && board[target].controller !== piece.controller) || target === enPassant) {
+    if (
+      attacksOnly ||
+      (board[target] && canTarget(
+        piece.controller,
+        board[target],
+        false,
+        false,
+        allowKingCapture,
+      )) ||
+      target === enPassant
+    ) {
       targets.push(target);
     }
   }
@@ -149,6 +188,7 @@ export interface MoveOptions {
   forceType?: PieceType;
   bananas?: Banana[];
   includeFriendlyTargets?: boolean;
+  allowKingCapture?: boolean;
 }
 
 export const pseudoTargets = (
@@ -173,6 +213,7 @@ export const pseudoTargets = (
       options.enPassant,
       options.bananas,
       options.ignoreBlockers,
+      options.allowKingCapture,
     );
   } else if (type === "knight") {
     const jumps = [[1, 2], [2, 1], [2, -1], [1, -2], [-1, -2], [-2, -1], [-2, 1], [-1, 2]];
@@ -181,17 +222,22 @@ export const pseudoTargets = (
       .filter((square): square is Square => Boolean(square))
       .filter((square) =>
         !board[square] ||
-        (board[square].controller !== piece.controller && !board[square].status.hardened) ||
-        (board[square].controller === piece.controller && options.includeFriendlyTargets),
+        canTarget(
+          piece.controller,
+          board[square],
+          options.attacksOnly,
+          options.includeFriendlyTargets,
+          options.allowKingCapture,
+        ),
       );
   } else if (type === "bishop") {
-    targets = ray(board, from, piece.controller, diagonal, options.maxDistance, options.ignoreBlockers, options.noCapture, options.bananas, options.includeFriendlyTargets);
+    targets = ray(board, from, piece.controller, diagonal, options.maxDistance, options.ignoreBlockers, options.noCapture, options.bananas, options.includeFriendlyTargets, options.attacksOnly, options.allowKingCapture);
   } else if (type === "rook") {
-    targets = ray(board, from, piece.controller, straight, options.maxDistance, options.ignoreBlockers, options.noCapture, options.bananas, options.includeFriendlyTargets);
+    targets = ray(board, from, piece.controller, straight, options.maxDistance, options.ignoreBlockers, options.noCapture, options.bananas, options.includeFriendlyTargets, options.attacksOnly, options.allowKingCapture);
   } else if (type === "queen") {
-    targets = ray(board, from, piece.controller, [...diagonal, ...straight], options.maxDistance, options.ignoreBlockers, options.noCapture, options.bananas, options.includeFriendlyTargets);
+    targets = ray(board, from, piece.controller, [...diagonal, ...straight], options.maxDistance, options.ignoreBlockers, options.noCapture, options.bananas, options.includeFriendlyTargets, options.attacksOnly, options.allowKingCapture);
   } else {
-    targets = ray(board, from, piece.controller, [...diagonal, ...straight], 1, false, options.noCapture, options.bananas, options.includeFriendlyTargets);
+    targets = ray(board, from, piece.controller, [...diagonal, ...straight], 1, false, options.noCapture, options.bananas, options.includeFriendlyTargets, options.attacksOnly, options.allowKingCapture);
     if (!piece.hasMoved && !options.attacksOnly && !options.forceType) {
       for (const side of ["king", "queen"] as const) {
         if (canCastle(board, piece.controller, side, options.bananas)) targets.push(side === "king" ? `g${piece.color === "white" ? "1" : "8"}` : `c${piece.color === "white" ? "1" : "8"}`);
@@ -204,7 +250,13 @@ export const pseudoTargets = (
   }
   return targets.filter((target) => {
     const occupant = board[target];
-    return !occupant || occupant.controller !== piece.controller || options.includeFriendlyTargets;
+    return !occupant || canTarget(
+      piece.controller,
+      occupant,
+      options.attacksOnly,
+      options.includeFriendlyTargets,
+      options.allowKingCapture,
+    );
   });
 };
 
@@ -300,8 +352,12 @@ export const applyMove = (
   move: Move,
   enPassant?: Square,
   allowCastling = true,
+  allowKingCapture = false,
 ): { board: Record<Square, Piece>; captured?: Piece; capturedSquare?: Square; enPassant?: Square } => {
   const moving = board[move.from];
+  if (board[move.to]?.type === "king" && !allowKingCapture) {
+    throw new Error("Ordinary moves cannot capture a King.");
+  }
   let captured = board[move.to];
   let capturedSquare = captured ? move.to : undefined;
   const next = { ...board };

@@ -40,6 +40,7 @@ import {
 } from "./fourPlayerTypes";
 import { isFourPlayerState } from "./fourPlayerPersistence";
 import { abilityLevel, GOD_BY_ID, GODS } from "./gods";
+import { hasCompleteTurn } from "./completeTurnSearch";
 import type { GodId, PieceType, Square } from "./types";
 
 const name = (seat: Seat) => seat[0].toUpperCase() + seat.slice(1);
@@ -210,6 +211,42 @@ const setWinner = (
   };
 };
 
+const setDraw = (state: FourPlayerState) => {
+  state.phase = "gameover";
+  state.drawReason = "stalemate-cycle";
+  state.notice = "The match is a draw: every living seat is stalemated.";
+};
+
+const stalematePositionSignature = (state: FourPlayerState) => JSON.stringify({
+  phase: state.phase,
+  config: state.config,
+  board: state.board,
+  players: state.players,
+  turnOrder: state.turnOrder,
+  rested: state.rested,
+  round: state.round,
+  seatTurns: state.seatTurns,
+  hostileTurns: state.hostileTurns,
+  godTurns: state.godTurns,
+  upgradeQueue: state.upgradeQueue,
+  enPassant: state.enPassant,
+  bananas: state.bananas,
+  stealth: state.stealth,
+  bonusTurn: state.bonusTurn,
+});
+
+const ensurePassCycle = (state: FourPlayerState) => {
+  state.passCycle ??= {
+    positionSignature: stalematePositionSignature(state),
+    passedSeats: [],
+  };
+  const signature = stalematePositionSignature(state);
+  if (state.passCycle.positionSignature !== signature) {
+    state.passCycle = { positionSignature: signature, passedSeats: [] };
+  }
+  return signature;
+};
+
 const evaluateLastSurvivorVictory = (state: FourPlayerState) => {
   if (state.winner) return;
   const survivors = livingSeats(state);
@@ -339,9 +376,14 @@ const captureAt = (
   state: FourPlayerState,
   square: Square,
   explicitFriendly = false,
+  allowKing = false,
 ) => {
   const piece = state.board[square];
-  if (!piece || piece.status.hardened) return undefined;
+  if (
+    !piece ||
+    (!allowKing && piece.type === "king") ||
+    piece.status.hardened
+  ) return undefined;
   if (
     !explicitFriendly &&
     piece.controller &&
@@ -372,7 +414,10 @@ const moveDirect = (
   teleport = false,
 ) => {
   const moving = state.board[from];
-  if (!moving?.controller) return undefined;
+  if (
+    !moving?.controller ||
+    state.board[requestedTo]?.type === "king"
+  ) return undefined;
   const peel = teleport ? undefined : bananaOnPath(state, from, requestedTo, moving.controller);
   const to = peel ?? requestedTo;
   const result = fourPlayerApplyMove(state.board, { from, to }, state.enPassant);
@@ -507,7 +552,9 @@ const resolveStartOfTurn = (state: FourPlayerState) => {
   );
   for (const returning of returns) {
     const occupant = state.board[returning.destination];
-    if (occupant && !occupant.status.hardened) captureAt(state, returning.destination, true);
+    if (occupant && !occupant.status.hardened) {
+      captureAt(state, returning.destination, true, true);
+    }
     if (!state.board[returning.destination]) {
       state.board[returning.destination] = {
         ...returning.piece,
@@ -529,6 +576,10 @@ const resolveMarkedForDeath = (state: FourPlayerState) => {
       piece.status.markedForDeath?.owner !== state.activeSeat ||
       piece.status.markedForDeath.round > state.round
     ) continue;
+    if (piece.type === "king") {
+      delete piece.status.markedForDeath;
+      continue;
+    }
     delete state.board[square];
     sendToGraveyard(state, piece, square);
     addOrbs(state, state.activeSeat, 0, 3);
@@ -638,6 +689,7 @@ export const createFourPlayerGame = (
     nextOrbAnimationId: 1,
     attackSequence: 0,
     kingAttackRecency: emptyKingAttackRecency(),
+    passCycle: { positionSignature: "", passedSeats: [] },
     upgradeQueue: [],
     legalTargets: [],
     legalSeats: [],
@@ -743,7 +795,15 @@ const airStrikeDropTargets = (
     : undefined;
   return path.filter((square) => {
     const occupying = afterCarrier[square];
-    if (occupying && (square !== firstEnemy || !hostilePiece(state, occupying) || occupying.status.hardened)) {
+    if (
+      occupying &&
+      (
+        square !== firstEnemy ||
+        !hostilePiece(state, occupying) ||
+        occupying.type === "king" ||
+        occupying.status.hardened
+      )
+    ) {
       return false;
     }
     const simulated = { ...afterCarrier };
@@ -834,6 +894,7 @@ const escortPlan = (
   for (const landing of landings) {
     const occupying = simulated[landing.to];
     if (
+      occupying?.type === "king" ||
       occupying?.status.hardened ||
       (
         occupying?.controller &&
@@ -889,6 +950,7 @@ const sourceIsAllowed = (state: FourPlayerState, square: Square) => {
   if (abilityId === "slither") return piece.controller === state.activeSeat && piece.type === "queen";
   if (abilityId === "military-funding") return piece.controller === state.activeSeat && piece.type === "pawn";
   if (abilityId === "charge") return piece.controller === state.activeSeat && piece.type === "knight";
+  if (abilityId === "marked" && piece.type === "king") return false;
   return piece.controller === state.activeSeat;
 };
 
@@ -1818,7 +1880,7 @@ const executeMarchHome = (
     if (
       occupant &&
       !movingSources.has(landing.to) &&
-      occupant.status.hardened
+      (occupant.status.hardened || occupant.type === "king")
     ) {
       state.notice = "March Home cannot replace a hardened piece.";
       return;
@@ -2749,6 +2811,7 @@ const checkmateStateSignature = (state: FourPlayerState) => JSON.stringify({
   enPassant: state.enPassant,
   bonusTurn: state.bonusTurn,
   winner: state.winner,
+  drawReason: state.drawReason,
 });
 
 const completedTurnFor = (
@@ -2760,31 +2823,30 @@ const completedTurnFor = (
   candidate.turn !== initial.turn ||
   candidate.activeSeat !== initial.activeSeat;
 
-const hasCheckEscape = (state: FourPlayerState) => {
+export const hasCompleteFourPlayerTurn = (state: FourPlayerState) => {
   const defender = state.activeSeat;
-  const seen = new Set<string>([checkmateStateSignature(state)]);
-  let frontier = [state];
-  for (let depth = 0; depth < 16 && frontier.length; depth += 1) {
-    const nextFrontier: FourPlayerState[] = [];
-    for (const candidate of frontier) {
-      for (const action of availableFourPlayerActions(candidate)) {
-        const next = reduceFourPlayerState(candidate, action, false);
-        const signature = checkmateStateSignature(next);
-        if (signature === checkmateStateSignature(candidate) || seen.has(signature)) continue;
-        seen.add(signature);
-        if (completedTurnFor(state, next)) {
-          if (
-            !next.players[defender].eliminated &&
-            !fourPlayerIsInCheck(next.board, defender, next.config, next.bananas)
-          ) return true;
-          continue;
-        }
-        nextFrontier.push(next);
-      }
-    }
-    frontier = nextFrontier;
-  }
-  return false;
+  return hasCompleteTurn({
+    state,
+    availableActions: availableFourPlayerActions,
+    reduce: (candidate, action) =>
+      reduceFourPlayerState(candidate, action, false),
+    signature: checkmateStateSignature,
+    isComplete: completedTurnFor,
+    acceptComplete: (_initial, next) =>
+      !next.players[defender].eliminated &&
+      Boolean(fourPlayerKingSquare(next.board, defender)) &&
+      !fourPlayerIsInCheck(
+        next.board,
+        defender,
+        next.config,
+        next.bananas,
+      ),
+    limits: {
+      maxDepth: 18,
+      maxStates: 24_000,
+      maxActionsPerState: 256,
+    },
+  });
 };
 
 const mostRecentCheckingSeat = (state: FourPlayerState, defender: Seat) => {
@@ -2792,38 +2854,65 @@ const mostRecentCheckingSeat = (state: FourPlayerState, defender: Seat) => {
   const attackers = checkingSeats(state, defender);
   return attackers.sort((first, second) =>
     (state.kingAttackRecency![defender][second] ?? 0) -
-    (state.kingAttackRecency![defender][first] ?? 0)
+      (state.kingAttackRecency![defender][first] ?? 0) ||
+    FOUR_PLAYER_SEATS.indexOf(second) - FOUR_PLAYER_SEATS.indexOf(first)
   )[0];
 };
 
-const resolveTurnStartCheckmates = (state: FourPlayerState) => {
+const resolveTurnStartAdjudication = (state: FourPlayerState) => {
+  let guard = 0;
   while (
     state.phase === "play" &&
     !state.winner &&
-    fourPlayerIsInCheck(state.board, state.activeSeat, state.config, state.bananas) &&
-    !hasCheckEscape(state)
+    !state.drawReason &&
+    guard < 16
   ) {
-    const eliminated = state.activeSeat;
-    const captor = mostRecentCheckingSeat(state, eliminated);
-    const kingSquare = fourPlayerKingSquare(state.board, eliminated);
-    const king = kingSquare ? state.board[kingSquare] : undefined;
-    if (!captor || !kingSquare || !king) return;
-    delete state.board[kingSquare];
-    sendToGraveyard(state, king, kingSquare, captor);
-    log(state, `${name(eliminated)} was checkmated by ${name(captor)}.`);
+    guard += 1;
+    const seat = state.activeSeat;
+    ensurePassCycle(state);
+    if (hasCompleteFourPlayerTurn(state)) return;
+    if (fourPlayerIsInCheck(
+      state.board,
+      seat,
+      state.config,
+      state.bananas,
+    )) {
+      const captor = mostRecentCheckingSeat(state, seat);
+      const kingSquare = fourPlayerKingSquare(state.board, seat);
+      const king = kingSquare ? state.board[kingSquare] : undefined;
+      if (!captor || !kingSquare || !king) return;
+      delete state.board[kingSquare];
+      sendToGraveyard(state, king, kingSquare, captor);
+      log(state, `${name(seat)} was checkmated by ${name(captor)}.`);
+      if (state.winner) return;
+    } else {
+      if (!state.passCycle!.passedSeats.includes(seat)) {
+        state.passCycle!.passedSeats.push(seat);
+      }
+      log(state, `${name(seat)} was stalemated and skipped.`);
+      const survivors = livingSeats(state);
+      if (survivors.every((survivor) =>
+        state.passCycle!.passedSeats.includes(survivor)
+      )) {
+        setDraw(state);
+        return;
+      }
+    }
     state.selectedGod = undefined;
     state.selectedAbility = undefined;
     state.selectedSquare = undefined;
     state.pending = undefined;
     state.legalTargets = [];
     state.legalSeats = [];
-    if (state.winner) return;
     state.turn += 1;
-    state.activeSeat = nextLivingSeat(state, eliminated);
+    if (state.enPassant && state.enPassant.expiresOnTurn < state.turn) {
+      state.enPassant = undefined;
+    }
+    state.activeSeat = nextLivingSeat(state, seat);
     const beforeStart = clone(state);
     resolveStartOfTurn(state);
     recordKingAttackChanges(beforeStart, state);
-    if (!state.winner) {
+    if (!state.winner && !state.drawReason) {
       state.notice = `${name(state.activeSeat)} to act. Choose an available God.`;
     }
   }
@@ -2851,7 +2940,9 @@ const reduceFourPlayerState = (
     loaded.nextOrbAnimationId ??=
       Math.max(0, ...loaded.orbAnimations.map((event) => event.id)) + 1;
     recordKingAttackChanges(undefined, loaded);
-    if (resolveCheckmate && loaded.phase === "play") resolveTurnStartCheckmates(loaded);
+    if (resolveCheckmate && loaded.phase === "play") {
+      resolveTurnStartAdjudication(loaded);
+    }
     return loaded;
   }
   if (action.type === "restart") return createFourPlayerGame(state.config);
@@ -2965,9 +3056,11 @@ const reduceFourPlayerState = (
         const square = findSquareById(next, next.pending.movedPieceId);
         if (square) {
           const doomed = next.board[square];
-          delete next.board[square];
-          sendToGraveyard(next, doomed, square);
-          addOrbs(next, next.activeSeat, 0, 5);
+          if (doomed.type !== "king") {
+            delete next.board[square];
+            sendToGraveyard(next, doomed, square);
+            addOrbs(next, next.activeSeat, 0, 5);
+          }
         }
         finishTurn(next, abilityDescription(next, ": executed the marked piece"));
       } else {
@@ -3064,8 +3157,16 @@ const reduceFourPlayerState = (
     next.orbAnimations = next.orbAnimations.slice(-16);
   }
   recordKingAttackChanges(state, next);
+  const actor = state.activeSeat;
+  if (
+    completedTurnFor(state, next) &&
+    !next.players[actor].eliminated &&
+    fourPlayerIsInCheck(next.board, actor, next.config, next.bananas)
+  ) {
+    return state;
+  }
   if (resolveCheckmate && beganPlayTurn(state, next)) {
-    resolveTurnStartCheckmates(next);
+    resolveTurnStartAdjudication(next);
   }
   return next;
 };

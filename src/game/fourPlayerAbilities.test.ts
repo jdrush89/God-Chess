@@ -171,6 +171,7 @@ describe("four-player God abilities", () => {
     expect(result.board.g10?.status.luredBy).toBe("north");
 
     state = gameFor("teles");
+    state.players.north.gods.push("chiron");
     state.board.g8 = piece(state, "pawn", "south", "enchanted");
     state.board.g12 = piece(state, "pawn", "north", "follow-up");
     result = activate(state, "teles", "enchant");

@@ -164,6 +164,17 @@ export interface UpgradePreview {
   abilityId?: string;
 }
 
+export type ClassicResult =
+  | {
+    kind: "winner";
+    winner: Color;
+    reason: "checkmate" | "king-death";
+  }
+  | {
+    kind: "draw";
+    reason: "stalemate";
+  };
+
 export interface GameState {
   phase: "draft" | "play" | "upgrade" | "gameover";
   gameMode: GameMode;
@@ -199,6 +210,7 @@ export interface GameState {
   upgradePreview?: UpgradePreview;
   bonusTurn?: Color;
   winner?: Color;
+  result?: ClassicResult;
   history: string[];
   lastAction?: string;
   notice: string;

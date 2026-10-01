@@ -173,6 +173,7 @@ export class ThreePlayerRoomHost {
   private processedActionIds = new Set<string>();
   private aiPlan: ThreePlayerAction[] = [];
   private aiPlanningRevision?: number;
+  private aiNoPlanRevision?: number;
   private aiGeneration = 0;
   private aiTimer?: number;
   private stopped = false;
@@ -743,7 +744,8 @@ export class ThreePlayerRoomHost {
       this.undoProposal ||
       !isThreePlayerAiTurn(this.canonical.state) ||
       this.aiTimer !== undefined ||
-      this.aiPlanningRevision !== undefined
+      this.aiPlanningRevision !== undefined ||
+      this.aiNoPlanRevision === this.canonical.revision
     ) return;
     if (this.aiPlan.length) {
       this.aiTimer = globalThis.setTimeout(() => {
@@ -771,10 +773,7 @@ export class ThreePlayerRoomHost {
       ) return;
       this.aiPlanningRevision = undefined;
       this.aiPlan = plan;
-      if (!this.aiPlan.length) {
-        this.aiPlan = availableThreePlayerActions(this.canonical.state)
-          .slice(0, 1);
-      }
+      this.aiNoPlanRevision = this.aiPlan.length ? undefined : revision;
       this.scheduleAi();
     }).catch((error) => {
       if (generation !== this.aiGeneration) return;

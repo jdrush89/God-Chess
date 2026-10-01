@@ -186,6 +186,36 @@ describe("saved-game variants", () => {
       .toBeUndefined();
   });
 
+  it("round-trips a classic stalemate result and its post-game undo state", () => {
+    let state = createGame(1);
+    for (const god of GODS.slice(0, 6)) {
+      state = gameReducer(state, { type: "draft", godId: god.id });
+    }
+    const undo = structuredClone(state);
+    state.phase = "gameover";
+    state.winner = undefined;
+    state.result = { kind: "draw", reason: "stalemate" };
+    state.notice = "White was stalemated. The match is a draw.";
+
+    const normalized = normalizeSavedGame(JSON.parse(JSON.stringify(
+      createSavedGame("classic-stalemate", state, [undo], undo),
+    )));
+
+    expect(normalized && !isFourPlayerSavedGame(normalized) &&
+      !isThreePlayerSavedGame(normalized)).toBe(true);
+    if (
+      !normalized ||
+      isFourPlayerSavedGame(normalized) ||
+      isThreePlayerSavedGame(normalized)
+    ) return;
+    expect(normalized.state.result).toEqual({
+      kind: "draw",
+      reason: "stalemate",
+    });
+    expect(normalized.undoHistory[0].phase).toBe("play");
+    expect(normalized.turnStart?.phase).toBe("play");
+  });
+
   it("rejects primitive state values without throwing", () => {
     expect(() => normalizeSavedGame({
       version: 3,

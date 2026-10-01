@@ -1,5 +1,8 @@
 import { fourPlayerSquares } from "./fourPlayerChess";
-import { validateFourPlayerConfig } from "./fourPlayerConfig";
+import {
+  seatsAreHostile,
+  validateFourPlayerConfig,
+} from "./fourPlayerConfig";
 import {
   FOUR_PLAYER_SEATS,
   type FourPlayerConfig,
@@ -300,6 +303,9 @@ export const isFourPlayerState = (value: unknown): value is FourPlayerState => {
   if (!isUnique(draftedGods)) return false;
   const board = value.board as Record<string, FourPlayerPiece>;
   const players = value.players as unknown as FourPlayerState["players"];
+  const passCycle = value.passCycle as FourPlayerState["passCycle"];
+  const kingAttackRecency =
+    value.kingAttackRecency as FourPlayerState["kingAttackRecency"];
 
   for (const piece of Object.values(board)) {
     if (piece.controller && players[piece.controller].eliminated) return false;
@@ -356,6 +362,13 @@ export const isFourPlayerState = (value: unknown): value is FourPlayerState => {
     value.nextOrbAnimationId !== undefined && !isInteger(value.nextOrbAnimationId, 1) ||
     value.attackSequence !== undefined && !isInteger(value.attackSequence) ||
     value.kingAttackRecency !== undefined && !isKingAttackRecency(value.kingAttackRecency) ||
+    value.passCycle !== undefined &&
+      (
+        !isRecord(value.passCycle) ||
+        typeof value.passCycle.positionSignature !== "string" ||
+        !isSeatArray(value.passCycle.passedSeats)
+      ) ||
+    value.drawReason !== undefined && value.drawReason !== "stalemate-cycle" ||
     value.lastAction !== undefined && typeof value.lastAction !== "string"
   ) return false;
   if (
@@ -399,7 +412,11 @@ export const isFourPlayerState = (value: unknown): value is FourPlayerState => {
       (value.winner.team !== undefined && !TEAM_IDS.has(String(value.winner.team)))
     ) return false;
   }
-  if ((value.phase === "gameover") !== Boolean(value.winner)) return false;
+  if (value.winner !== undefined && value.drawReason !== undefined) return false;
+  if (
+    (value.phase === "gameover") !==
+      Boolean(value.winner || value.drawReason)
+  ) return false;
   if (value.phase === "upgrade") {
     if (
       !value.upgradeQueue.length ||
@@ -408,6 +425,31 @@ export const isFourPlayerState = (value: unknown): value is FourPlayerState => {
     ) return false;
   } else if (value.upgradeQueue.length) return false;
   if (value.phase !== "gameover" && players[value.activeSeat].eliminated) return false;
+  if (
+    passCycle !== undefined &&
+    passCycle.passedSeats.some((seat) => players[seat].eliminated)
+  ) return false;
+  if (
+    value.drawReason === "stalemate-cycle" &&
+    !FOUR_PLAYER_SEATS
+      .filter((seat) => !players[seat].eliminated)
+      .every((seat) => passCycle?.passedSeats.includes(seat))
+  ) return false;
+  if (kingAttackRecency !== undefined) {
+    const attackSequence = value.attackSequence ?? 0;
+    for (const defender of FOUR_PLAYER_SEATS) {
+      for (const [attacker, sequence] of Object.entries(
+        kingAttackRecency[defender],
+      )) {
+        if (
+          !isSeat(attacker) ||
+          !seatsAreHostile(value.config, defender, attacker) ||
+          !isInteger(sequence, 1) ||
+          sequence > attackSequence
+        ) return false;
+      }
+    }
+  }
 
   for (const seat of FOUR_PLAYER_SEATS) {
     const kings = [
@@ -435,6 +477,10 @@ export const prepareFourPlayerState = (state: FourPlayerState): FourPlayerState 
     east: {},
     south: {},
     west: {},
+  };
+  prepared.passCycle ??= {
+    positionSignature: "",
+    passedSeats: [],
   };
   return prepared;
 };
