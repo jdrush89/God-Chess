@@ -551,9 +551,11 @@ describe("game startup", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: /save & quit/i }));
     await waitFor(() => expect(screen.getByRole("img", { name: /god chess/i })).toBeTruthy());
-    const storedGames = JSON.parse(window.localStorage.getItem(SAVE_KEY) ?? "[]");
-    expect(storedGames[0].version).toBe(3);
-    expect(storedGames[0].undoHistory).toHaveLength(1);
+    await waitFor(() => {
+      const storedGames = JSON.parse(window.localStorage.getItem(SAVE_KEY) ?? "[]");
+      expect(storedGames[0].version).toBe(3);
+      expect(storedGames[0].undoHistory).toHaveLength(1);
+    });
 
     cleanup();
     render(<App />);
