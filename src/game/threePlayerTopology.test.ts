@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { threePlayerCellAffinity } from "./threePlayerDivineGeometry";
 import {
   getThreePlayerTopology,
   threePlayerTopologies,
@@ -261,23 +262,36 @@ describe("hex topologies", () => {
     expect(topology.castlingBySeat).toEqual({ white: [], red: [], black: [] });
   });
 
-  it("maps three geometric classes to deterministic, balanced affinities", () => {
-    const first = getThreePlayerTopology("three-hexagonal");
-    const second = getThreePlayerTopology("three-hexagonal");
-    expect(first.cellDescriptors.map((cell) => cell.affinity))
-      .toEqual(second.cellDescriptors.map((cell) => cell.affinity));
-    expect(first.cellDescriptors.filter((cell) => cell.geometricClass === 0)
-      .every((cell) => cell.affinity === "light")).toBe(true);
-    expect(first.cellDescriptors.filter((cell) => cell.geometricClass === 1)
-      .every((cell) => cell.affinity === "dark")).toBe(true);
-    expect(new Set(
-      first.cellDescriptors.filter((cell) => cell.geometricClass === 2)
-        .map((cell) => cell.affinity),
-    )).toEqual(new Set(["light", "dark"]));
-    const light = first.cellDescriptors.filter((cell) => cell.affinity === "light").length;
-    const dark = first.cells.length - light;
-    expect(Math.abs(light - dark)).toBeLessThanOrEqual(5);
-  });
+  it.each(["three-hexagonal", "triad"] as const)(
+    "keeps ordinary %s affinities fixed while neutral cells alternate by turn",
+    (boardVariant) => {
+      const topology = getThreePlayerTopology(boardVariant);
+      const config = {
+        boardVariant,
+      } as Parameters<typeof threePlayerCellAffinity>[0]["config"];
+      const classZero = topology.cellDescriptors.filter(
+        (cell) => cell.geometricClass === 0,
+      );
+      const classOne = topology.cellDescriptors.filter(
+        (cell) => cell.geometricClass === 1,
+      );
+      const classTwo = topology.cellDescriptors.filter(
+        (cell) => cell.geometricClass === 2,
+      );
+
+      for (const turn of [1, 2, 3]) {
+        expect(classZero.every((cell) =>
+          threePlayerCellAffinity({ config, turn }, cell.id) === "light"
+        )).toBe(true);
+        expect(classOne.every((cell) =>
+          threePlayerCellAffinity({ config, turn }, cell.id) === "dark"
+        )).toBe(true);
+        expect(new Set(classTwo.map((cell) =>
+          threePlayerCellAffinity({ config, turn }, cell.id)
+        ))).toEqual(new Set([turn % 2 === 1 ? "light" : "dark"]));
+      }
+    },
+  );
 });
 
 describe("branched and wrapped topologies", () => {

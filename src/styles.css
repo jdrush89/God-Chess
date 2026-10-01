@@ -1444,13 +1444,17 @@ body::before {
 .three-setup-footer p { margin: 3px 0; color: #e39a8e; font-size: 10px; }
 .three-setup-footer p.valid { color: #95c3a4; }
 
-.three-board { width: 100%; height: 100%; overflow: visible; touch-action: manipulation; }
+.three-board {
+  width: 100%; height: 100%; max-width: 100%; max-height: 100%; min-width: 0; min-height: 0;
+  display: block; overflow: hidden; touch-action: manipulation;
+}
 .three-board-cell {
   stroke: rgba(16,18,24,.88); stroke-width: .07; vector-effect: non-scaling-stroke;
   transition: filter .15s, stroke .15s, opacity .15s;
 }
 .three-board-cell.light { fill: #c5b99f; }
 .three-board-cell.dark { fill: #514e4c; }
+.three-board-cell.neutral { fill: #777a80; }
 .three-board-cell.selected { stroke: #f5d98e; stroke-width: .18; filter: brightness(1.14); }
 .three-board-cell.legal { stroke: #e1ba66; stroke-width: .15; filter: brightness(1.18); }
 .three-board-cell.legal-occupied { stroke: #a23f38; stroke-width: .2; }
@@ -1589,8 +1593,20 @@ body::before {
 .three-turn-status strong, .three-turn-status small { display: block; }
 .three-turn-status strong { color: #ddd7cc; font-size: 10px; }
 .three-turn-status small { margin-top: 3px; color: #777981; font-size: 8px; }
+.three-neutral-affinity {
+  min-height: 34px; display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 7px 12px; color: #aaaeb5; background: #151820; border: 1px solid var(--line);
+  border-bottom: 0; font-size: 9px; letter-spacing: .02em;
+}
+.three-neutral-affinity strong { color: #e8e4da; }
+.three-neutral-affinity .orb { width: 11px; height: 11px; flex: 0 0 auto; }
+.three-neutral-swatch {
+  width: 16px; height: 16px; flex: 0 0 auto; background: #777a80; border: 1px solid #a9adb4;
+  box-shadow: inset 0 0 0 2px rgba(20,22,28,.35);
+}
 .three-board-frame {
-  width: 100%; height: min(72vh, 760px); min-height: 430px; display: grid; place-items: center;
+  width: 100%; height: min(72vh, 760px); min-width: 0; min-height: 430px;
+  display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); place-items: center;
   padding: 14px; overflow: hidden; border: 1px solid #705c39;
   background: radial-gradient(circle, #252932, #101218 72%);
   box-shadow: 0 24px 64px rgba(0,0,0,.38), inset 0 0 0 3px #0c0e13;

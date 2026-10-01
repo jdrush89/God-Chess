@@ -3,6 +3,8 @@ import {
   availableThreePlayerActions,
   threePlayerReducer,
 } from "../game/threePlayerEngine";
+import { threePlayerCellAffinity } from "../game/threePlayerDivineGeometry";
+import { getThreePlayerTopology } from "../game/threePlayerTopology";
 import { createThreePlayerStateEnvelope } from "../game/threePlayerSession";
 import { THREE_PLAYER_BOARD_VARIANTS } from "../game/threePlayerTypes";
 import { GODS } from "../game/gods";
@@ -484,6 +486,8 @@ describe("three-player authoritative room", () => {
     const newer = structuredClone(current);
     newer.canonical!.revision = 5;
     newer.canonical!.state.revision = 5;
+    newer.canonical!.state.config.boardVariant = "three-hexagonal";
+    newer.canonical!.state.turn = 2;
     newer.canonical!.lastActionId = "newer";
     const older = structuredClone(newer);
     older.canonical!.revision = 4;
@@ -494,6 +498,12 @@ describe("three-player authoritative room", () => {
     transport.receiveHost({ type: "room_state", snapshot: older });
 
     expect(snapshots).toEqual([newer]);
+    const neutralCell = getThreePlayerTopology("three-hexagonal")
+      .cellDescriptors.find((cell) => cell.geometricClass === 2)!.id;
+    expect(threePlayerCellAffinity(
+      snapshots[0].canonical!.state,
+      neutralCell,
+    )).toBe("dark");
     peer.disconnect();
   });
 });

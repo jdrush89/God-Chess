@@ -97,6 +97,42 @@ const installDeterministicAiWorker = () => {
 };
 
 describe("ThreePlayerGame", () => {
+  it("auto-picks one deterministic available God for the local Human seat", () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.5);
+    const { container } = renderGame(createThreePlayerGame());
+    const autoPick = screen.getByRole("button", {
+      name: /^Auto-pick random god$/i,
+    });
+
+    expect((autoPick as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(autoPick);
+
+    const expectedGod = GODS[Math.floor(GODS.length * 0.5)];
+    expect(container.querySelectorAll(".three-draft-progress .draft-pip.done")).toHaveLength(1);
+    expect(screen.getByRole("button", {
+      name: new RegExp(`Inspect ${expectedGod.name}, claimed by White`, "i"),
+    })).toBeTruthy();
+    expect(screen.getByText(/Red · Red picks/i)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^Claim Quetzacoatl$/i })).toBeTruthy();
+  });
+
+  it("ignores rapid repeated local auto-picks from the same draft revision", () => {
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    const { container } = renderGame(createThreePlayerGame());
+    const autoPick = screen.getByRole("button", {
+      name: /^Auto-pick random god$/i,
+    });
+
+    fireEvent.click(autoPick);
+    fireEvent.click(autoPick);
+
+    expect(container.querySelectorAll(".three-draft-progress .draft-pip.done")).toHaveLength(1);
+    expect(screen.getByText(/Red · Red picks/i)).toBeTruthy();
+    expect(screen.getByRole("button", {
+      name: /Inspect Quetzacoatl, claimed by White/i,
+    })).toBeTruthy();
+  });
+
   it("inspects an unclaimed God and advances exactly one draft pick", () => {
     const { container } = renderGame(createThreePlayerGame());
 
@@ -208,12 +244,15 @@ describe("ThreePlayerGame", () => {
   it("auto-drafts consecutive AI seats one pick at a time until the next Human turn", async () => {
     const terminateWorker = installDeterministicAiWorker();
     vi.spyOn(window, "matchMedia").mockImplementation(matchMedia(true));
+    vi.spyOn(Math, "random").mockReturnValue(0);
     const config = createDefaultThreePlayerConfig();
     config.seats.red.control = { kind: "ai", difficulty: 1 };
     config.seats.black.control = { kind: "ai", difficulty: 1 };
     const { container, unmount } = renderGame(createThreePlayerGame(config));
 
-    fireEvent.click(screen.getByRole("button", { name: /^Claim Quetzacoatl$/i }));
+    fireEvent.click(screen.getByRole("button", {
+      name: /^Auto-pick random god$/i,
+    }));
 
     await waitFor(() => {
       expect(screen.getByText(/White · White picks/i)).toBeTruthy();
@@ -223,6 +262,159 @@ describe("ThreePlayerGame", () => {
       .toContain("6W");
     unmount();
     expect(terminateWorker).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables or hides auto-pick when draft input is not authorized", () => {
+    const localAiConfig = createDefaultThreePlayerConfig();
+    localAiConfig.seats.white.control = { kind: "ai", difficulty: 1 };
+    const { rerender } = render(
+      <ThreePlayerGame
+        initialState={createThreePlayerGame(localAiConfig)}
+        onQuit={() => undefined}
+        onNewGame={() => undefined}
+      />,
+    );
+    expect((screen.getByRole("button", {
+      name: /^Auto-pick random god$/i,
+    }) as HTMLButtonElement).disabled).toBe(true);
+
+    const onlineConfig = createDefaultThreePlayerConfig();
+    onlineConfig.seats.white.control = { kind: "online", local: false };
+    onlineConfig.seats.red.control = { kind: "online", local: true };
+    onlineConfig.seats.black.control = { kind: "ai", difficulty: 1 };
+    const onlineState = createThreePlayerGame(onlineConfig);
+    const onlineSession: ThreePlayerOnlineSession = {
+      roomCode: "ABCDE",
+      role: "peer",
+      participantSeat: "red",
+      status: "playing",
+      awaitingSync: false,
+      undoAvailable: false,
+      onAction: vi.fn(),
+      onUndoRequest: vi.fn(),
+      onUndoVote: vi.fn(),
+    };
+    rerender(
+      <ThreePlayerGame
+        initialState={onlineState}
+        onQuit={() => undefined}
+        onNewGame={() => undefined}
+        onlineSession={onlineSession}
+      />,
+    );
+    expect((screen.getByRole("button", {
+      name: /^Auto-pick random god$/i,
+    }) as HTMLButtonElement).disabled).toBe(true);
+
+    rerender(
+      <ThreePlayerGame
+        initialState={onlineState}
+        onQuit={() => undefined}
+        onNewGame={() => undefined}
+        onlineSession={{
+          ...onlineSession,
+          participantSeat: "white",
+          awaitingSync: true,
+        }}
+      />,
+    );
+    expect((screen.getByRole("button", {
+      name: /^Auto-pick random god$/i,
+    }) as HTMLButtonElement).disabled).toBe(true);
+
+    rerender(
+      <ThreePlayerGame
+        initialState={onlineState}
+        onQuit={() => undefined}
+        onNewGame={() => undefined}
+        onlineSession={{
+          ...onlineSession,
+          participantSeat: "white",
+          status: "paused",
+        }}
+      />,
+    );
+    expect((screen.getByRole("button", {
+      name: /^Auto-pick random god$/i,
+    }) as HTMLButtonElement).disabled).toBe(true);
+
+    cleanup();
+    renderGame(completeDraft());
+    expect(screen.queryByRole("button", {
+      name: /^Auto-pick random god$/i,
+    })).toBeNull();
+  });
+
+  it("shows live neutral affinity for hex boards across online snapshots", async () => {
+    const config = createDefaultThreePlayerConfig();
+    config.boardVariant = "triad";
+    config.seats.white.control = { kind: "online", local: true };
+    config.seats.red.control = { kind: "online", local: false };
+    config.seats.black.control = { kind: "ai", difficulty: 1 };
+    const lightState = completeDraft(createThreePlayerGame(config));
+    const onlineSession: ThreePlayerOnlineSession = {
+      roomCode: "ABCDE",
+      role: "host",
+      participantSeat: "white",
+      status: "playing",
+      awaitingSync: false,
+      undoAvailable: false,
+      onAction: vi.fn(),
+      onUndoRequest: vi.fn(),
+      onUndoVote: vi.fn(),
+    };
+    const { rerender } = render(
+      <ThreePlayerGame
+        initialState={lightState}
+        onQuit={() => undefined}
+        onNewGame={() => undefined}
+        onlineSession={onlineSession}
+      />,
+    );
+
+    expect(screen.getByRole("status").textContent)
+      .toMatch(/Gray spaces count as Light this turn/i);
+
+    const darkState = structuredClone(lightState);
+    darkState.turn = 2;
+    darkState.revision += 1;
+    rerender(
+      <ThreePlayerGame
+        initialState={darkState}
+        onQuit={() => undefined}
+        onNewGame={() => undefined}
+        onlineSession={onlineSession}
+      />,
+    );
+
+    await waitFor(() => expect(screen.getByRole("status").textContent)
+      .toMatch(/Gray spaces count as Dark this turn/i));
+  });
+
+  it("updates neutral affinity after local undo and hides it on other boards", () => {
+    const config = createDefaultThreePlayerConfig();
+    config.boardVariant = "three-hexagonal";
+    const lightState = completeDraft(createThreePlayerGame(config));
+    const darkState = structuredClone(lightState);
+    darkState.turn = 2;
+    darkState.revision += 1;
+    const rendered = render(
+      <ThreePlayerGame
+        initialState={darkState}
+        initialUndoHistory={[lightState]}
+        onQuit={() => undefined}
+        onNewGame={() => undefined}
+      />,
+    );
+    expect(screen.getByRole("status").textContent)
+      .toMatch(/Gray spaces count as Dark this turn/i);
+    fireEvent.click(screen.getByRole("button", { name: /^Undo$/i }));
+    expect(screen.getByRole("status").textContent)
+      .toMatch(/Gray spaces count as Light this turn/i);
+
+    rendered.unmount();
+    renderGame(completeDraft());
+    expect(screen.queryByText(/Gray spaces count as/i)).toBeNull();
   });
 
   it("shows Red's dynamic affinity and gates interaction during AI turns", () => {
@@ -449,6 +641,49 @@ describe("ThreePlayerGame", () => {
     expect(screen.getByText(/Red picks/i)).toBeTruthy();
     expect(screen.queryByText(/Save & quit/i)).toBeNull();
     expect(screen.getByText(/Leave room/i)).toBeTruthy();
+  });
+
+  it("routes one authorized online auto-pick and locks repeated submissions until acknowledgement", () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.25);
+    const config = createDefaultThreePlayerConfig();
+    config.seats.white.control = { kind: "online", local: true };
+    config.seats.red.control = { kind: "online", local: false };
+    config.seats.black.control = { kind: "ai", difficulty: 5 };
+    const state = createThreePlayerGame(config);
+    const onAction = vi.fn();
+    render(
+      <ThreePlayerGame
+        initialState={state}
+        onQuit={() => undefined}
+        onNewGame={() => undefined}
+        onlineSession={{
+          roomCode: "ABCDE",
+          role: "host",
+          participantSeat: "white",
+          status: "playing",
+          awaitingSync: false,
+          undoAvailable: false,
+          onAction,
+          onUndoRequest: vi.fn(),
+          onUndoVote: vi.fn(),
+        }}
+      />,
+    );
+    const autoPick = screen.getByRole("button", {
+      name: /^Auto-pick random god$/i,
+    });
+
+    fireEvent.click(autoPick);
+    fireEvent.click(autoPick);
+
+    expect(onAction).toHaveBeenCalledTimes(1);
+    expect(onAction).toHaveBeenCalledWith({
+      type: "draft",
+      godId: GODS[Math.floor(GODS.length * 0.25)].id,
+    });
+    expect((screen.getByRole("button", {
+      name: /^Auto-pick random god$/i,
+    }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("gates an inactive online guest from confirming a draft pick", () => {

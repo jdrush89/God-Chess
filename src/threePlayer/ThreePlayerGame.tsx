@@ -10,6 +10,7 @@ import {
   Save,
   Settings,
   Shield,
+  Sparkles,
   Skull,
   Undo2,
   UserRound,
@@ -27,6 +28,10 @@ import {
   isThreePlayerAiTurn,
 } from "../game/threePlayerAi";
 import { threePlayerIsInCheck } from "../game/threePlayerChess";
+import {
+  threePlayerHasAlternatingNeutralCells,
+  threePlayerNeutralCellAffinity,
+} from "../game/threePlayerDivineGeometry";
 import {
   availableThreePlayerActions,
   threePlayerReducer,
@@ -293,6 +298,7 @@ function ThreePlayerDraft({
   actions,
   inputDisabled,
   onAction,
+  onAutoDraft,
   onExit,
   exitLabel,
   canUndo,
@@ -303,6 +309,7 @@ function ThreePlayerDraft({
   actions: UiAction[];
   inputDisabled: boolean;
   onAction: (action: UiAction) => void;
+  onAutoDraft: () => void;
   onExit: () => void;
   exitLabel: string;
   canUndo: boolean;
@@ -392,6 +399,15 @@ function ThreePlayerDraft({
         <p className="eyebrow">THE THREE PANTHEONS AWAIT</p>
         <h1>Choose your gods.</h1>
         <p>White, Red, and Black each claim three divine allies. Three Gods remain unused.</p>
+        <button
+          type="button"
+          className="auto-draft-button"
+          disabled={inputDisabled || !actions.some((action) => action.type === "draft")}
+          onClick={onAutoDraft}
+        >
+          <Sparkles size={15} />
+          Auto-pick random god
+        </button>
         <div className="draft-progress three-draft-progress" aria-label="Nine draft picks">
           {state.draft.order.map((seat, index) => (
             <div
@@ -776,6 +792,8 @@ export function ThreePlayerGame({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [resultOpen, setResultOpen] = useState(initialState.phase === "gameover");
   const [undoEnabled, setUndoEnabled] = useState(undoPreferred);
+  const [autoDraftPending, setAutoDraftPending] = useState(false);
+  const autoDraftPendingRef = useRef(false);
   const undoStack = useRef<UiState[]>(
     initialUndoHistory.map((snapshot) => clone(snapshot) as UiState),
   );
@@ -794,7 +812,7 @@ export function ThreePlayerGame({
   const onlineControl = onlineSession?.participantSeat
     ? state.players[onlineSession.participantSeat].control
     : undefined;
-  const inputDisabled = onlineSession
+  const inputDisabled = autoDraftPending || (onlineSession
     ? (
       state.phase === "gameover" ||
       onlineSession.status !== "playing" ||
@@ -808,7 +826,7 @@ export function ThreePlayerGame({
       settingsOpen
     )
     : state.phase === "gameover" ||
-      isThreePlayerAiTurn(state as ThreePlayerState);
+      isThreePlayerAiTurn(state as ThreePlayerState));
   const selectedCell = state.selectedCell ?? localSelectedCell;
   const moveActions = actions.filter((action) => action.type === "move");
   const legalCells = state.legalCells?.length
@@ -871,6 +889,41 @@ export function ThreePlayerGame({
       setUndoDepth(undoStack.current.length);
     }
   };
+
+  const autoDraft = () => {
+    if (
+      inputDisabled ||
+      autoDraftPendingRef.current ||
+      stateRef.current.phase !== "draft"
+    ) return;
+    const draftActions = availableThreePlayerActions(
+      stateRef.current as ThreePlayerState,
+    ).filter(
+      (action): action is Extract<ThreePlayerAction, { type: "draft" }> =>
+        action.type === "draft",
+    );
+    if (!draftActions.length) return;
+    const action = draftActions[Math.floor(Math.random() * draftActions.length)];
+    if (!action) return;
+    autoDraftPendingRef.current = true;
+    setAutoDraftPending(true);
+    dispatchAction(action);
+  };
+
+  useEffect(() => {
+    if (onlineSession) return;
+    const releaseTimer = window.setTimeout(() => {
+      autoDraftPendingRef.current = false;
+      setAutoDraftPending(false);
+    }, 0);
+    return () => window.clearTimeout(releaseTimer);
+  }, [onlineSession, state.revision]);
+
+  useEffect(() => {
+    if (!onlineSession) return;
+    autoDraftPendingRef.current = false;
+    setAutoDraftPending(false);
+  }, [initialState.revision, onlineSession?.roomCode]);
 
   useEffect(() => {
     if (!onlineSession) return;
@@ -1103,6 +1156,7 @@ export function ThreePlayerGame({
           actions={actions}
           inputDisabled={inputDisabled}
           onAction={dispatchAction}
+          onAutoDraft={autoDraft}
           onExit={() => void saveAndQuit()}
           exitLabel={onlineSession ? "Leave room" : "Save & quit"}
           canUndo={canUndo}
@@ -1162,6 +1216,10 @@ export function ThreePlayerGame({
     );
   const variant = THREE_PLAYER_VARIANTS.find(
     (item) => item.id === state.config.boardVariant,
+  );
+  const neutralAffinity = threePlayerNeutralCellAffinity(state);
+  const showNeutralAffinity = threePlayerHasAlternatingNeutralCells(
+    state.config.boardVariant,
   );
 
   return (
@@ -1232,6 +1290,22 @@ export function ThreePlayerGame({
               </small>
             </div>
           </div>
+          {showNeutralAffinity && (
+            <div
+              className={`three-neutral-affinity ${neutralAffinity}`}
+              role="status"
+              aria-live="polite"
+            >
+              <span className="three-neutral-swatch" aria-hidden="true" />
+              <span>
+                Gray spaces count as <strong>{neutralAffinity === "light" ? "Light" : "Dark"}</strong> this turn
+              </span>
+              <i
+                className={`orb ${neutralAffinity === "light" ? "white" : "black"}`}
+                aria-hidden="true"
+              />
+            </div>
+          )}
           <div className="three-board-frame">
             <ThreePlayerBoard
               state={state as ThreePlayerState}

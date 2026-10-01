@@ -12,7 +12,7 @@ afterEach(cleanup);
 
 describe("ThreePlayerBoard", () => {
   it.each(THREE_PLAYER_BOARD_VARIANTS)(
-    "renders every %s topology cell in one accessible SVG",
+    "renders every %s topology cell inside a padded accessible SVG",
     (variant) => {
       const config = createDefaultThreePlayerConfig();
       config.boardVariant = variant;
@@ -28,6 +28,51 @@ describe("ThreePlayerBoard", () => {
       expect(container.querySelectorAll("[data-cell]").length).toBe(
         getThreePlayerTopology(variant).cells.length,
       );
+      const [minX, minY, width, height] = board.getAttribute("viewBox")!
+        .split(" ")
+        .map(Number);
+      const maxX = minX + width;
+      const maxY = minY + height;
+      for (const descriptor of getThreePlayerTopology(variant).cellDescriptors) {
+        const shape = descriptor.render.shape;
+        const points = shape.kind === "polygon"
+          ? shape.points
+          : [
+            [shape.cx - shape.outerRadius, shape.cy - shape.outerRadius],
+            [shape.cx + shape.outerRadius, shape.cy + shape.outerRadius],
+          ];
+        expect(points.every(([x, y]) =>
+          x > minX && x < maxX && y > minY && y < maxY
+        )).toBe(true);
+      }
+    },
+  );
+
+  it.each(["three-hexagonal", "triad"] as const)(
+    "renders only geometric class 2 as neutral on %s",
+    (variant) => {
+      const config = createDefaultThreePlayerConfig();
+      config.boardVariant = variant;
+      const state = createThreePlayerGame(config);
+      const topology = getThreePlayerTopology(variant);
+      const { container, rerender } = render(<ThreePlayerBoard state={state} />);
+
+      for (const descriptor of topology.cellDescriptors) {
+        const cell = container.querySelector(`[data-cell="${descriptor.id}"]`)!;
+        expect(cell.classList.contains("neutral")).toBe(
+          descriptor.geometricClass === 2,
+        );
+      }
+
+      const next = structuredClone(state);
+      next.turn = 2;
+      rerender(<ThreePlayerBoard state={next} />);
+      for (const descriptor of topology.cellDescriptors.filter(
+        (cell) => cell.geometricClass === 2,
+      )) {
+        expect(container.querySelector(`[data-cell="${descriptor.id}"]`)
+          ?.classList.contains("neutral")).toBe(true);
+      }
     },
   );
 
