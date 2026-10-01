@@ -496,7 +496,7 @@ describe("ThreePlayerGame", () => {
     fireEvent.keyDown(window, { key: "Escape" });
     expect(screen.getByRole("dialog", { name: /game paused locally/i })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /^resume$/i }));
-    expect(screen.getByText(state.notice)).toBeTruthy();
+    expect(screen.getAllByText(state.notice).length).toBeGreaterThan(0);
     expect(screen.getByText(/Round 1 · Turn 1/i)).toBeTruthy();
   });
 
@@ -507,7 +507,7 @@ describe("ThreePlayerGame", () => {
     fireEvent.click(screen.getByRole("button", { name: new RegExp(firstGod, "i") }));
 
     const ability = screen.getAllByRole("button").find((button) =>
-      button.closest(".three-ability-list") && !button.hasAttribute("disabled")
+      button.closest(".ability-list") && !button.hasAttribute("aria-disabled")
     );
     expect(ability).toBeTruthy();
     fireEvent.click(ability!);
@@ -516,6 +516,86 @@ describe("ThreePlayerGame", () => {
     expect(legalCell).toBeTruthy();
     fireEvent.click(screen.getByRole("gridcell", { name: new RegExp(`^${legalCell}`) }));
     expect(container.querySelector(".three-board-cell.selected, .three-board-cell.legal")).toBeTruthy();
+  });
+
+  it("uses the shared God rows, chosen-God header, and ability cards", () => {
+    const state = completeDraft();
+    const godId = state.players.white.gods[0];
+    const god = GOD_BY_ID[godId];
+    const { container } = renderGame(state);
+
+    const godRow = screen.getByRole("button", { name: new RegExp(god.name, "i") });
+    expect(godRow.classList.contains("god-row")).toBe(true);
+    fireEvent.click(godRow);
+
+    expect(container.querySelector(".chosen-god")).toBeTruthy();
+    expect(container.querySelectorAll(".ability-list > .ability-card")).toHaveLength(
+      god.abilities.length,
+    );
+    expect(container.querySelector(".three-pantheon-list")).toBeNull();
+    expect(container.querySelector(".three-ability-card")).toBeNull();
+  });
+
+  it("inspects resting Gods read-only without bypassing action authorization", () => {
+    const state = completeDraft();
+    state.players.white.gods = ["teles"];
+    state.rested = ["teles"];
+    const { container } = renderGame(state);
+
+    const resting = screen.getByRole("button", { name: /Teles/i });
+    expect(resting.classList.contains("resting")).toBe(true);
+    fireEvent.click(resting);
+
+    expect(screen.getByText(/Teles is resting · abilities are unavailable/i)).toBeTruthy();
+    expect(container.querySelectorAll(".ability-card.read-only")).toHaveLength(
+      GOD_BY_ID.teles.abilities.length,
+    );
+    expect(container.querySelectorAll(".ability-card [role='button']")).toHaveLength(0);
+  });
+
+  it("routes shared-panel selections only for the authorized online seat", () => {
+    const config = createDefaultThreePlayerConfig();
+    config.seats.white.control = { kind: "online", local: true };
+    config.seats.red.control = { kind: "online", local: false };
+    config.seats.black.control = { kind: "ai", difficulty: 5 };
+    const state = completeDraft(createThreePlayerGame(config));
+    const onAction = vi.fn();
+    const session: ThreePlayerOnlineSession = {
+      roomCode: "ABCDE",
+      role: "host",
+      participantSeat: "white",
+      status: "playing",
+      awaitingSync: false,
+      undoAvailable: false,
+      onAction,
+      onUndoRequest: vi.fn(),
+      onUndoVote: vi.fn(),
+    };
+    const { rerender } = render(
+      <ThreePlayerGame
+        initialState={state}
+        onQuit={() => undefined}
+        onNewGame={() => undefined}
+        onlineSession={session}
+      />,
+    );
+
+    const god = GOD_BY_ID[state.players.white.gods[0]];
+    fireEvent.click(screen.getByRole("button", { name: new RegExp(god.name, "i") }));
+    expect(onAction).toHaveBeenCalledWith({ type: "select-god", godId: god.id });
+
+    rerender(
+      <ThreePlayerGame
+        initialState={state}
+        onQuit={() => undefined}
+        onNewGame={() => undefined}
+        onlineSession={{ ...session, participantSeat: "red" }}
+      />,
+    );
+    const unauthorized = screen.getByRole("button", { name: new RegExp(god.name, "i") });
+    expect((unauthorized as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(unauthorized);
+    expect(onAction).toHaveBeenCalledTimes(1);
   });
 
   it("attaches pending follow-up choices to the initiating ability", () => {
@@ -531,7 +611,7 @@ describe("ThreePlayerGame", () => {
     state.notice = "Revive another piece?";
     renderGame(state);
 
-    const card = screen.getByText("Resurrect").closest(".three-ability-card");
+    const card = screen.getByText("Resurrect").closest(".ability-card");
     expect(card).toBeTruthy();
     expect(within(card as HTMLElement).getByRole("status").textContent)
       .toContain("Revive another piece");
@@ -556,7 +636,7 @@ describe("ThreePlayerGame", () => {
     });
     fireEvent.click(godButton);
     const ability = screen.getAllByRole("button").find((button) =>
-      button.closest(".three-ability-list") && !button.hasAttribute("disabled")
+      button.closest(".ability-list") && !button.hasAttribute("aria-disabled")
     )!;
     fireEvent.click(ability);
     const source = container.querySelector(".three-board-cell.legal")?.getAttribute("data-cell");
@@ -933,7 +1013,7 @@ describe("ThreePlayerGame", () => {
     });
     const firstRender = renderGame(enemyMove);
     const { container } = firstRender;
-    const enchantCard = screen.getByText("Enchant").closest(".three-ability-card");
+    const enchantCard = screen.getByText("Enchant").closest(".ability-card");
     expect(enchantCard).toBeTruthy();
     expect(within(enchantCard as HTMLElement).getByText(/choose a highlighted hostile piece/i))
       .toBeTruthy();
@@ -957,7 +1037,7 @@ describe("ThreePlayerGame", () => {
 
     firstRender.unmount();
     const followupRender = renderGame(followup);
-    const followupCard = screen.getByText("Enchant").closest(".three-ability-card");
+    const followupCard = screen.getByText("Enchant").closest(".ability-card");
     expect(followupCard).toBeTruthy();
     expect(within(followupCard as HTMLElement).getByText(/make one ordinary legal move/i))
       .toBeTruthy();

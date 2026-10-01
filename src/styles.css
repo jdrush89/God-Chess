@@ -1619,42 +1619,29 @@ body::before {
   grid-area: actions; min-width: 0; max-height: calc(72vh + 92px); overflow: auto;
   border: 1px solid var(--line); background: linear-gradient(#161920, #101218);
 }
-.three-action-panel > header { padding: 16px; border-bottom: 1px solid var(--line); }
-.three-action-panel h2 { margin: 5px 0 0; color: #ebe5da; font: 600 17px "Cinzel"; }
-.three-pantheon-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; padding: 8px; }
-.three-pantheon-list button {
-  min-width: 0; min-height: 70px; position: relative; overflow: hidden; padding: 0; color: #fff;
-  background: #0c0e13; border: 1px solid var(--line); text-align: left;
+.three-action-panel .god-list { display: grid; gap: 8px; padding: 10px; }
+.three-action-panel .god-row { height: 132px; min-height: 132px; margin: 0; aspect-ratio: auto; }
+.three-action-panel .ability-list, .three-upgrade-list { display: grid; gap: 8px; padding: 10px; }
+.three-action-panel .ability-card { min-width: 0; }
+.three-action-panel .ability-pending .three-generic-actions { padding-top: 2px; border-top: 0; }
+.three-upgrade-list > section { min-width: 0; }
+.three-panel-god-heading {
+  height: 106px; position: relative; display: flex; flex-direction: column; justify-content: flex-end;
+  overflow: hidden; padding: 12px; border: 1px solid var(--line);
 }
-.three-pantheon-list button.active { border-color: var(--gold); }
-.three-pantheon-list button.resting { opacity: .42; filter: grayscale(1); }
-.three-pantheon-list img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .6; }
-.three-pantheon-list span { position: absolute; inset: auto 5px 5px; display: grid; text-shadow: 0 1px 4px #000; }
-.three-pantheon-list strong { overflow: hidden; font-size: 7px; text-overflow: ellipsis; }
-.three-pantheon-list small { font-size: 6px; text-transform: uppercase; }
-.three-ability-list { display: grid; gap: 6px; padding: 8px; }
-.three-ability-card {
-  overflow: hidden; background: rgba(255,255,255,.018); border: 1px solid var(--line);
+.three-panel-god-heading::after {
+  content: ""; position: absolute; inset: 0; background: linear-gradient(transparent, rgba(5,6,9,.94));
 }
-.three-ability-card.active { border-color: rgba(198,161,91,.7); }
-.three-ability-card-main {
-  width: 100%;
-  display: grid; gap: 6px; padding: 10px; color: #aaa69d; background: rgba(255,255,255,.018);
-  border: 0; text-align: left;
-}
-.three-ability-card-main > span { display: flex; justify-content: space-between; gap: 8px; }
-.three-ability-list strong { color: #e4ded3; font: 600 10px "Cinzel"; }
-.three-ability-list small, .three-ability-list em { color: #7a7c83; font-size: 7px; font-style: normal; text-transform: uppercase; }
-.three-ability-list p { margin: 0; color: #7f8188; font-size: 8px; line-height: 1.45; }
-.three-ability-pending { padding: 0 10px 10px; border-top: 1px solid rgba(198,161,91,.24); }
-.three-ability-pending > p { padding: 9px 0 3px; color: #c6a15b; }
-.three-ability-pending .three-generic-actions { padding: 6px 0 0; border-top: 0; }
+.three-panel-god-heading .god-portrait { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.three-panel-god-heading strong, .three-panel-god-heading small { position: relative; z-index: 1; }
+.three-panel-god-heading strong { color: #fff; font: 600 14px "Cinzel"; }
+.three-panel-god-heading small { color: #d6c59f; font-size: 8px; text-transform: uppercase; }
 .three-generic-actions { display: grid; gap: 6px; padding: 8px; border-top: 1px solid var(--line); }
 .three-generic-actions button { min-height: 40px; display: flex; align-items: center; justify-content: center; gap: 6px; }
-.three-pending-summary, .three-unused-gods {
+.three-unused-gods {
   display: grid; gap: 5px; padding: 11px; color: #797b82; border-top: 1px solid var(--line); font-size: 7px;
 }
-.three-pending-summary strong, .three-unused-gods > strong { color: #c7c1b6; font: 600 9px "Cinzel"; }
+.three-unused-gods > strong { color: #c7c1b6; font: 600 9px "Cinzel"; }
 .three-unused-gods > div { display: flex; gap: 5px; }
 .three-unused-gods button { width: 44px; height: 35px; padding: 0; overflow: hidden; background: #0b0d12; border: 1px solid var(--line); }
 .three-unused-gods img { width: 100%; height: 100%; object-fit: cover; filter: grayscale(.6); }

@@ -1,4 +1,5 @@
 import {
+  ArrowLeft,
   Bot,
   BookOpen,
   Check,
@@ -19,6 +20,11 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { GameResultPresentation } from "../GameResultPresentation";
 import { MatchEscapeMenu } from "../MatchEscapeMenu";
+import {
+  GodPortrait,
+  PlayerAbilityCard,
+} from "../PlayerGodPanel";
+import { LevelSelector } from "../UpgradePreview";
 import {
   recordActionTransition,
   recordDiagnostic,
@@ -47,7 +53,7 @@ import {
   type ThreePlayerSeat,
   type ThreePlayerState,
 } from "../game/threePlayerTypes";
-import { GOD_BY_ID, GODS } from "../game/gods";
+import { abilityLevel, GOD_BY_ID, GODS } from "../game/gods";
 import type { GodId } from "../game/types";
 import { ThreePlayerBoard } from "./ThreePlayerBoard";
 import { getThreePlayerTopology } from "../game/threePlayerTopology";
@@ -263,33 +269,6 @@ function DraftLevelSelector({
         <i /> Lv 3
       </button>
     </div>
-  );
-}
-
-function LevelPreview({
-  level,
-  onChange,
-}: {
-  level: number;
-  onChange: (level: number) => void;
-}) {
-  return (
-    <span className="three-level-preview" aria-label="Ability preview levels">
-      {[1, 2, 3].map((item) => (
-        <button
-          type="button"
-          className={level === item ? "active" : ""}
-          aria-pressed={level === item}
-          onClick={(event) => {
-            event.stopPropagation();
-            onChange(item);
-          }}
-          key={item}
-        >
-          Lv {item}
-        </button>
-      ))}
-    </span>
   );
 }
 
@@ -786,8 +765,9 @@ export function ThreePlayerGame({
   const stateRef = useRef(state);
   stateRef.current = state;
   const [localSelectedCell, setLocalSelectedCell] = useState<ThreePlayerCell>();
-  const [previewLevel, setPreviewLevel] = useState(1);
-  const [inspectedGod, setInspectedGod] = useState<GodId>(GODS[0].id);
+  const [previewLevel, setPreviewLevel] = useState<number>();
+  const [inspectedGod, setInspectedGod] = useState<GodId>();
+  const [selectedUpgradeAbility, setSelectedUpgradeAbility] = useState<string>();
   const [helpOpen, setHelpOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [resultOpen, setResultOpen] = useState(initialState.phase === "gameover");
@@ -942,6 +922,12 @@ export function ThreePlayerGame({
   useEffect(() => {
     setResultOpen(state.phase === "gameover");
   }, [state]);
+
+  useEffect(() => {
+    setPreviewLevel(undefined);
+    setSelectedUpgradeAbility(undefined);
+    setInspectedGod(undefined);
+  }, [state.activeSeat, state.phase]);
 
   useEffect(() => {
     if (onlineSession?.undoProposal) setResultOpen(false);
@@ -1206,10 +1192,36 @@ export function ThreePlayerGame({
 
   const legalSeats = new Set(state.legalSeats ?? []);
   const selectedGod = state.selectedGod ?? inspectedGod;
+  const selectedGodDefinition = selectedGod ? GOD_BY_ID[selectedGod] : undefined;
+  const readOnlyGod = Boolean(inspectedGod && !state.selectedGod);
+  const activePlayer = state.players[state.activeSeat];
+  const committedAbility = Boolean(state.selectedAbility && state.pending);
+  const defaultPreviewLevel = selectedGodDefinition
+    ? Math.min(...selectedGodDefinition.abilities.map((ability) =>
+      abilityLevel(activePlayer.upgrades, ability.id)
+    ))
+    : 1;
+  const defaultUpgradePreviewLevel = Math.min(
+    ...activePlayer.gods.flatMap((godId) =>
+      GOD_BY_ID[godId].abilities.map((ability) =>
+        abilityLevel(activePlayer.upgrades, ability.id)
+      )
+    ),
+  );
   const selectedGodActions = actions.filter((action) => action.type === "select-god");
   const selectedAbilityActions = actions.filter((action) => action.type === "select-ability");
+  const upgradeActions = actions.filter((action) => action.type === "upgrade");
+  const clearGodAction = actions.find((action) => action.type === "clear-god");
   const genericActions = actions.filter((action) =>
-    !["draft", "move", "cell", "select-god", "select-ability"].includes(action.type)
+    ![
+      "draft",
+      "move",
+      "cell",
+      "select-god",
+      "select-ability",
+      "clear-god",
+      "upgrade",
+    ].includes(action.type)
   );
   const attachedGenericActions = state.selectedAbility && state.pending
     ? genericActions
@@ -1229,6 +1241,11 @@ export function ThreePlayerGame({
   const showNeutralAffinity = threePlayerHasAlternatingNeutralCells(
     state.config.boardVariant,
   );
+  const selectedUpgradeAction = selectedUpgradeAbility
+    ? upgradeActions.find((action) =>
+      actionValue<string>(action, "abilityId") === selectedUpgradeAbility
+    )
+    : undefined;
 
   return (
     <main className={`three-game-page ${state.phase === "gameover" ? "finished-view" : ""} ${inputDisabled ? "input-gated" : ""}`}>
@@ -1330,120 +1347,239 @@ export function ThreePlayerGame({
           </div>
         </section>
 
-        <aside className="three-action-panel">
-          <header>
-            <p className="eyebrow">DIVINE ACTIONS</p>
-            <h2>{GOD_BY_ID[selectedGod]?.name ?? "Choose a God"}</h2>
-            <LevelPreview level={previewLevel} onChange={setPreviewLevel} />
-          </header>
-
-          <div className="three-pantheon-list">
-            {state.players[state.activeSeat].gods.map((godId) => {
-              const action = selectedGodActions.find(
-                (candidate) => actionValue<GodId>(candidate, "godId") === godId,
-              );
-              return (
-                <button
-                  className={`${selectedGod === godId ? "active" : ""} ${state.rested.includes(godId) ? "resting" : ""}`}
-                  disabled={inputDisabled || (selectedGodActions.length > 0 && !action)}
-                  onClick={() => {
-                    setInspectedGod(godId);
-                    if (action) dispatchAction(action);
-                  }}
-                  key={godId}
-                >
-                  <img src={GOD_PORTRAITS[godId]} alt="" />
-                  <span><strong>{GOD_BY_ID[godId].name}</strong><small>{GOD_BY_ID[godId].domain}</small></span>
-                </button>
-              );
-            })}
+        <aside
+          className={`three-action-panel ${state.phase === "upgrade" ? "upgrade-panel" : ""} ${state.phase === "play" && !selectedGod ? "god-selection-panel" : ""}`}
+        >
+          <div className="panel-heading">
+            <span>{state.phase === "upgrade" ? "DIVINE UPGRADE" : readOnlyGod ? "PANTHEON DETAILS" : "DIVINE ACTION"}</span>
+            <small>ROUND {state.round}</small>
           </div>
 
-          {selectedGod && (
-            <div className="three-ability-list">
-              {GOD_BY_ID[selectedGod].abilities.map((ability) => {
-                const action = selectedAbilityActions.find(
-                  (candidate) => actionValue<string>(candidate, "abilityId") === ability.id,
-                );
-                const level = state.players[state.activeSeat].upgrades[ability.id] ?? previewLevel;
-                const active = state.selectedAbility === ability.id;
-                return (
-                  <article
-                    className={`three-ability-card ${active ? "active" : ""}`}
-                    key={ability.id}
-                  >
-                    <button
-                      className="three-ability-card-main"
-                      disabled={
-                        inputDisabled ||
-                        Boolean(state.pending && state.selectedAbility) ||
-                        (selectedAbilityActions.length > 0 && !action)
-                      }
-                      onClick={() => action && dispatchAction(action)}
-                    >
-                      <span><strong>{ability.name}</strong><small>Level {level}</small></span>
-                      <p>{ability.details[level - 1]}</p>
-                      {ability.cost && (
-                        <em>
-                          {Object.entries(ability.cost).map(([orb, amount]) => `${amount} ${orb}`).join(" · ")}
-                        </em>
-                      )}
-                    </button>
-                    {active && state.pending && state.selectedAbility === ability.id && (
-                      <div className="three-ability-pending" aria-label={`${ability.name} follow-up actions`}>
-                        <p role="status">{state.notice}</p>
-                        {attachedGenericActions.length > 0 && (
-                          <div className="three-generic-actions">
-                            {attachedGenericActions.map((pendingAction, index) => (
-                              <button
-                                className={pendingAction.type === "cancel" ? "danger-button" : "secondary-button"}
-                                disabled={inputDisabled}
-                                onClick={() => dispatchAction(pendingAction)}
-                                key={`${pendingAction.type}-${index}-${actionLabel(pendingAction)}`}
-                              >
-                                {pendingAction.type === "confirm-ability" && <Check size={15} />}
-                                {actionLabel(pendingAction)}
-                              </button>
-                            ))}
-                          </div>
-                        )}
+          {state.phase === "upgrade" ? (
+            <>
+              <div className="panel-empty">
+                <Sparkles size={25} />
+                <h3>Choose an ability to strengthen</h3>
+                <p>Compare your pantheon, preview its higher levels, then confirm one upgrade.</p>
+              </div>
+              <LevelSelector
+                level={previewLevel ?? defaultUpgradePreviewLevel}
+                onChange={setPreviewLevel}
+                label="All abilities"
+                className="god-level-selector"
+              />
+              <div className="three-upgrade-list">
+                {activePlayer.gods.map((godId) => {
+                  const god = GOD_BY_ID[godId];
+                  return (
+                    <section key={godId}>
+                      <div className="three-panel-god-heading">
+                        <GodPortrait godId={godId} />
+                        <strong>{god.name}</strong>
+                        <small>{god.domain}</small>
                       </div>
-                    )}
-                  </article>
-                );
-              })}
-            </div>
-          )}
-
-          {detachedGenericActions.length > 0 && (
-            <div className="three-generic-actions" aria-label="Available actions">
-              {detachedGenericActions.map((action, index) => (
+                      {god.abilities.map((ability) => {
+                        const level = abilityLevel(activePlayer.upgrades, ability.id);
+                        const action = upgradeActions.find((candidate) =>
+                          actionValue<string>(candidate, "abilityId") === ability.id
+                        );
+                        return (
+                          <PlayerAbilityCard
+                            ability={ability}
+                            level={level}
+                            previewLevel={previewLevel}
+                            active={selectedUpgradeAbility === ability.id}
+                            selectable={!inputDisabled && Boolean(action)}
+                            disabled={inputDisabled || !action}
+                            footerLabel={`CURRENT LVL ${level}`}
+                            footerAction={level >= 3 ? "MAX LEVEL" : `SELECT LVL ${level + 1}`}
+                            showCost={false}
+                            onClick={() => setSelectedUpgradeAbility(ability.id)}
+                            key={ability.id}
+                          />
+                        );
+                      })}
+                    </section>
+                  );
+                })}
+              </div>
+              <div className="upgrade-confirmation">
                 <button
-                  className={action.type === "cancel" ? "danger-button" : "secondary-button"}
-                  disabled={inputDisabled}
-                  onClick={() => dispatchAction(action)}
-                  key={`${action.type}-${index}-${actionLabel(action)}`}
+                  className="primary-button"
+                  disabled={inputDisabled || !selectedUpgradeAction}
+                  onClick={() => {
+                    if (selectedUpgradeAction) dispatchAction(selectedUpgradeAction);
+                  }}
                 >
-                  {action.type === "confirm-ability" && <Check size={15} />}
-                  {actionLabel(action)}
+                  {selectedUpgradeAbility
+                    ? `Confirm ${GODS.flatMap((god) => god.abilities).find(
+                      (ability) => ability.id === selectedUpgradeAbility,
+                    )?.name ?? "ability"} upgrade`
+                    : "Select an ability to upgrade"}
                 </button>
-              ))}
-            </div>
+              </div>
+            </>
+          ) : !selectedGodDefinition ? (
+            <>
+              <div className="panel-empty">
+                <Sparkles size={25} />
+                <h3>{activePlayer.name} to act</h3>
+                <p>{state.notice}</p>
+              </div>
+              {detachedGenericActions.length > 0 && (
+                <div className="three-generic-actions" aria-label="Available actions">
+                  {detachedGenericActions.map((action, index) => (
+                    <button
+                      className={action.type === "cancel" ? "danger-button" : "secondary-button"}
+                      disabled={inputDisabled}
+                      onClick={() => dispatchAction(action)}
+                      key={`${action.type}-${index}-${actionLabel(action)}`}
+                    >
+                      {action.type === "confirm-ability" && <Check size={15} />}
+                      {actionLabel(action)}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {!state.pending && (
+                <div className="god-list">
+                  {activePlayer.gods.map((godId) => {
+                    const god = GOD_BY_ID[godId];
+                    const resting = state.rested.includes(godId);
+                    const action = selectedGodActions.find(
+                      (candidate) => actionValue<GodId>(candidate, "godId") === godId,
+                    );
+                    return (
+                      <button
+                        className={`god-row ${resting ? "resting" : ""}`}
+                        disabled={inputDisabled || (!resting && !action)}
+                        onClick={() => {
+                          if (resting) {
+                            setInspectedGod(godId);
+                          } else if (action) {
+                            setInspectedGod(undefined);
+                            dispatchAction(action);
+                          }
+                        }}
+                        style={{ "--accent": god.accent } as React.CSSProperties}
+                        key={godId}
+                      >
+                        <GodPortrait godId={godId} className="god-row-portrait" />
+                        <span className="god-row-copy">
+                          <strong>{god.name}</strong>
+                          <small>{resting ? "RESTING · VIEW" : god.domain}</small>
+                        </span>
+                        {resting ? <i className="rest-token">Z</i> : <ChevronRight size={17} />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <div
+                className="chosen-god"
+                style={{ "--accent": selectedGodDefinition.accent } as React.CSSProperties}
+              >
+                <GodPortrait
+                  godId={selectedGodDefinition.id}
+                  className="god-hero-portrait"
+                />
+                <div>
+                  <span>{selectedGodDefinition.domain}</span>
+                  <h3>{selectedGodDefinition.name}</h3>
+                  <p>{selectedGodDefinition.epithet}</p>
+                </div>
+                <button
+                  className="god-back-button"
+                  disabled={!readOnlyGod && committedAbility}
+                  onClick={() => {
+                    if (readOnlyGod) {
+                      setInspectedGod(undefined);
+                      return;
+                    }
+                    if (clearGodAction) dispatchAction(clearGodAction);
+                  }}
+                  aria-label={readOnlyGod ? "Close god details" : "Choose a different god"}
+                >
+                  <ArrowLeft size={17} />
+                </button>
+              </div>
+              {readOnlyGod && (
+                <div className={`inspection-banner ${state.rested.includes(selectedGodDefinition.id) ? "resting" : ""}`}>
+                  <BookOpen size={14} />
+                  {state.rested.includes(selectedGodDefinition.id)
+                    ? `${selectedGodDefinition.name} is resting · abilities are unavailable`
+                    : "Viewing unused God · abilities are read-only"}
+                </div>
+              )}
+              <LevelSelector
+                level={previewLevel ?? defaultPreviewLevel}
+                onChange={setPreviewLevel}
+                label="All abilities"
+                className="god-level-selector"
+              />
+              <div className="ability-list">
+                {selectedGodDefinition.abilities.map((ability) => {
+                  const action = selectedAbilityActions.find(
+                    (candidate) => actionValue<string>(candidate, "abilityId") === ability.id,
+                  );
+                  const level = abilityLevel(activePlayer.upgrades, ability.id);
+                  const active = !readOnlyGod && state.selectedAbility === ability.id;
+                  const unavailable = !readOnlyGod && !action;
+                  return (
+                    <PlayerAbilityCard
+                      ability={ability}
+                      level={level}
+                      previewLevel={previewLevel}
+                      active={active}
+                      selectable={!readOnlyGod && !inputDisabled && !committedAbility && Boolean(action)}
+                      disabled={inputDisabled || committedAbility || unavailable}
+                      footerAction={unavailable ? "UNAVAILABLE" : undefined}
+                      onClick={() => {
+                        if (action) dispatchAction(action);
+                      }}
+                      key={ability.id}
+                    >
+                      {active && state.pending && (
+                        <div aria-label={`${ability.name} follow-up actions`}>
+                          <p className="ability-pending-prompt" role="status">{state.notice}</p>
+                          {attachedGenericActions.length > 0 && (
+                            <div className="three-generic-actions">
+                              {attachedGenericActions.map((pendingAction, index) => (
+                                <button
+                                  className={pendingAction.type === "cancel" ? "danger-button" : "secondary-button"}
+                                  disabled={inputDisabled}
+                                  onClick={() => dispatchAction(pendingAction)}
+                                  key={`${pendingAction.type}-${index}-${actionLabel(pendingAction)}`}
+                                >
+                                  {pendingAction.type === "confirm-ability" && <Check size={15} />}
+                                  {actionLabel(pendingAction)}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </PlayerAbilityCard>
+                  );
+                })}
+              </div>
+            </>
           )}
-
-          <section className="three-pending-summary">
-            <strong>Status</strong>
-            <span>{state.pending ? `Pending ${String(state.pending.type ?? "action")}` : "No pending divine action"}</span>
-            <span>Upgrade queue: {state.upgradeQueue?.join(", ") || "none"}</span>
-            <span>Bananas: {typeof state.bananas === "number" ? state.bananas : state.bananas ? Object.keys(state.bananas).length : 0}</span>
-            <span>Presentation events: {(state.presentationEvents?.length ?? 0) + (state.orbAnimations?.length ?? 0)}</span>
-          </section>
 
           <section className="three-unused-gods">
             <strong>Unused Gods</strong>
             <div>
               {unusedGods.map((godId) => (
-                <button onClick={() => setInspectedGod(godId)} title={GOD_BY_ID[godId].name} key={godId}>
+                <button
+                  onClick={() => {
+                    if (!state.selectedGod && !committedAbility) setInspectedGod(godId);
+                  }}
+                  title={GOD_BY_ID[godId].name}
+                  key={godId}
+                >
                   <img src={GOD_PORTRAITS[godId]} alt={GOD_BY_ID[godId].name} />
                 </button>
               ))}

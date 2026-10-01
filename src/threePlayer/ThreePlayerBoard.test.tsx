@@ -136,4 +136,37 @@ describe("ThreePlayerBoard", () => {
     expect(container.querySelector(`[data-cell="${cell}"]`)?.parentElement
       ?.querySelector(".three-board-banana")).toBeTruthy();
   });
+
+  it.each(["three-player", "three-circular"] as const)(
+    "keeps every starting %s piece centered and scaled inside its canonical cell",
+    (variant) => {
+      const config = createDefaultThreePlayerConfig();
+      config.boardVariant = variant;
+      const state = createThreePlayerGame(config);
+      const topology = getThreePlayerTopology(variant);
+      const { container } = render(<ThreePlayerBoard state={state} />);
+
+      const pieces = [...container.querySelectorAll<SVGTextElement>(".three-board-piece")];
+      expect(pieces).toHaveLength(48);
+      for (const piece of pieces) {
+        const cell = piece.parentElement?.querySelector<SVGElement>("[data-cell]")
+          ?.getAttribute("data-cell");
+        expect(cell).toBeTruthy();
+        const descriptor = topology.cellById.get(cell!)!;
+        expect(Number(piece.getAttribute("x"))).toBeCloseTo(descriptor.render.x, 8);
+        expect(Number(piece.getAttribute("y"))).toBeCloseTo(descriptor.render.y, 8);
+        const fontSize = Number.parseFloat(piece.style.fontSize);
+        expect(fontSize).toBeGreaterThan(0.2);
+        expect(fontSize).toBeLessThanOrEqual(0.76);
+      }
+    },
+  );
+
+  it("keeps Circular cells away from the collapsed center point", () => {
+    const topology = getThreePlayerTopology("three-circular");
+    const sectors = topology.cellDescriptors.map((cell) => cell.render.shape)
+      .filter((shape) => shape.kind === "annular-sector");
+    expect(sectors).toHaveLength(96);
+    expect(Math.min(...sectors.map((shape) => shape.innerRadius))).toBeGreaterThanOrEqual(1.5);
+  });
 });
