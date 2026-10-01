@@ -1440,7 +1440,13 @@ function MainMenu({
       <div className="main-menu-actions">
         <p className="eyebrow">THE DIVINE GAME</p>
         <div>
-          <button className="primary-button" onClick={onOpenLocal}>Local</button>
+          <button
+            className="primary-button"
+            onClick={onOpenLocal}
+            disabled={savesLoading}
+          >
+            Local
+          </button>
           <button className="primary-button" onClick={onOpenOnline}>Online</button>
           <button className="primary-button" onClick={onOpenPuzzles}>Puzzles</button>
           {(savedGames.length > 0 || savesLoading) && (
@@ -1701,13 +1707,15 @@ function StartGamePrompt({
 }) {
   const [playerCount, setPlayerCount] = useState<PlayerCount | undefined>(
     initialPlayerCount ??
-      (threeOnline.roomCode
-        ? 3
-        : fourOnline.roomCode
-          ? 4
-          : online.roomCode
-            ? 2
-            : undefined),
+      (category === "online"
+        ? threeOnline.roomCode
+          ? 3
+          : fourOnline.roomCode
+            ? 4
+            : online.roomCode
+              ? 2
+              : undefined
+        : undefined),
   );
   const [localMode, setLocalMode] = useState<"local" | "ai">("local");
   const [difficulty, setDifficulty] = useState(7);
@@ -2703,6 +2711,7 @@ export default function App() {
   useEffect(() => installGlobalDiagnostics(), []);
   const [localSavedGames, setLocalSavedGames] = useState(loadLocalSavedGames);
   const [cloudSavedGames, setCloudSavedGames] = useState<SavedGame[]>([]);
+  const [cloudSavesLoadedFor, setCloudSavesLoadedFor] = useState<string>();
   const [savesLoading, setSavesLoading] = useState(false);
   const [saveError, setSaveError] = useState<string>();
   const [localCompletedPuzzles, setLocalCompletedPuzzles] = useState(loadLocalCompletedPuzzles);
@@ -2712,6 +2721,10 @@ export default function App() {
   }>({ completed: [] });
   const [puzzleProgressLoading, setPuzzleProgressLoading] = useState(false);
   const savedGames = accountService.account ? cloudSavedGames : localSavedGames;
+  const savesHydrating = Boolean(
+    accountService.account &&
+    cloudSavesLoadedFor !== accountService.account.userId
+  );
   const completedPuzzleIds = accountService.account
     ? cloudPuzzleProgress.userId === accountService.account.userId
       ? cloudPuzzleProgress.completed
@@ -2745,6 +2758,7 @@ export default function App() {
     setSaveError(undefined);
     if (!accountService.account) {
       setCloudSavedGames([]);
+      setCloudSavesLoadedFor(undefined);
       setSavesLoading(false);
       return;
     }
@@ -2759,7 +2773,10 @@ export default function App() {
         if (active) setSaveError(error instanceof Error ? error.message : "Unable to load cloud saves.");
       })
       .finally(() => {
-        if (active) setSavesLoading(false);
+        if (active) {
+          setCloudSavesLoadedFor(accountService.account?.userId);
+          setSavesLoading(false);
+        }
       });
     return () => {
       active = false;
@@ -3531,7 +3548,7 @@ export default function App() {
       <>
         <MainMenu
           savedGames={savedGames}
-          savesLoading={savesLoading}
+          savesLoading={savesLoading || savesHydrating}
           saveError={saveError}
           account={accountService.account}
           accountConfigured={accountService.configured}

@@ -202,6 +202,26 @@ describe("ThreePlayerGame", () => {
     expect(screen.queryByLabelText("Full history")).toBeNull();
   });
 
+  it("keeps long history entries in a dedicated keyboard-scrollable body", () => {
+    const state = completeDraft();
+    state.history = Array.from(
+      { length: 80 },
+      (_, index) => `Chronicle entry ${index + 1}`,
+    );
+    renderGame(state);
+
+    fireEvent.click(screen.getByRole("button", { name: /^history$/i }));
+
+    const drawer = screen.getByLabelText("Full history");
+    const body = screen.getByLabelText("Chronicle entries");
+    const close = screen.getByRole("button", { name: /close history/i });
+    expect(body.className).toBe("history-drawer-body");
+    expect((body as HTMLElement).tabIndex).toBe(0);
+    expect(body.contains(screen.getByText("Chronicle entry 80"))).toBe(true);
+    expect(body.contains(close)).toBe(false);
+    expect(drawer.firstElementChild?.className).toBe("history-drawer-header");
+  });
+
   it("inspects an unclaimed God and advances exactly one draft pick", () => {
     const { container } = renderGame(createThreePlayerGame());
 

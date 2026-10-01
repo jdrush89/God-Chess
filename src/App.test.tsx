@@ -15,6 +15,26 @@ const threeOnlineHarness = vi.hoisted(() => ({
   disconnects: 0,
 }));
 
+const accountHarness = vi.hoisted(() => ({
+  account: undefined as
+    | { userId: string; email: string; displayName: string }
+    | undefined,
+  configured: false,
+  loading: false,
+  working: false,
+  error: undefined as string | undefined,
+  signIn: vi.fn(async () => "Signed in."),
+  signUp: vi.fn(async () => "Account created."),
+  signOut: vi.fn(async () => undefined),
+  updateDisplayName: vi.fn(async () => "Display name updated."),
+}));
+
+const cloudSaveHarness = vi.hoisted(() => ({
+  load: vi.fn(),
+  upsert: vi.fn(async () => undefined),
+  remove: vi.fn(async () => undefined),
+}));
+
 vi.mock("./multiplayer/useThreePlayerOnlineGame", async () => {
   const React = await import("react");
   return {
@@ -61,6 +81,31 @@ vi.mock("./multiplayer/useThreePlayerOnlineGame", async () => {
     },
   };
 });
+
+vi.mock("./account/useAccount", () => ({
+  useAccount: () => ({
+    account: accountHarness.account,
+    configured: accountHarness.configured,
+    loading: accountHarness.loading,
+    working: accountHarness.working,
+    error: accountHarness.error,
+    signIn: accountHarness.signIn,
+    signUp: accountHarness.signUp,
+    signOut: accountHarness.signOut,
+    updateDisplayName: accountHarness.updateDisplayName,
+  }),
+}));
+
+vi.mock("./account/cloudSaves", () => ({
+  loadCloudSavedGames: cloudSaveHarness.load,
+  upsertCloudSavedGame: cloudSaveHarness.upsert,
+  deleteCloudSavedGame: cloudSaveHarness.remove,
+}));
+
+vi.mock("./account/cloudPuzzleProgress", () => ({
+  loadCloudCompletedPuzzles: vi.fn(async () => []),
+  upsertCloudCompletedPuzzles: vi.fn(async () => undefined),
+}));
 
 import App, { ActionPanel } from "./App";
 import { createGame, gameReducer } from "./game/engine";
@@ -167,6 +212,19 @@ afterEach(() => {
 });
 
 beforeEach(() => {
+  accountHarness.account = undefined;
+  accountHarness.configured = false;
+  accountHarness.loading = false;
+  accountHarness.working = false;
+  accountHarness.error = undefined;
+  accountHarness.signIn.mockClear();
+  accountHarness.signUp.mockClear();
+  accountHarness.signOut.mockClear();
+  accountHarness.updateDisplayName.mockClear();
+  cloudSaveHarness.load.mockReset();
+  cloudSaveHarness.load.mockResolvedValue([]);
+  cloudSaveHarness.upsert.mockClear();
+  cloudSaveHarness.remove.mockClear();
   threeOnlineHarness.state = {
     role: "none",
     connecting: false,
@@ -176,6 +234,59 @@ beforeEach(() => {
 });
 
 describe("game startup", () => {
+  it("gates Local until cloud save hydration preserves the existing library", async () => {
+    accountHarness.account = {
+      userId: "account-1",
+      email: "player@example.com",
+      displayName: "Player",
+    };
+    accountHarness.configured = true;
+    const existing = createSavedGame("cloud-existing", createGame(1), []);
+    let resolveSaves!: (games: typeof existing[]) => void;
+    cloudSaveHarness.load.mockImplementation(() =>
+      new Promise((resolve) => {
+        resolveSaves = resolve;
+      })
+    );
+
+    render(<App />);
+
+    const local = screen.getByRole("button", { name: /^local$/i }) as HTMLButtonElement;
+    expect(local.disabled).toBe(true);
+    fireEvent.click(local);
+    expect(screen.queryByRole("heading", { name: /choose player count/i })).toBeNull();
+    expect(cloudSaveHarness.upsert).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveSaves([existing]);
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(local.disabled).toBe(false));
+    expect(screen.getByRole("button", { name: /load game/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /load game/i }));
+    expect(screen.getByRole("button", {
+      name: new RegExp(`load saved game from ${new Date(existing.savedAt).toLocaleString()}`, "i"),
+    })).toBeTruthy();
+  });
+
+  it("always opens Local at the player-count chooser despite stale online room state", () => {
+    threeOnlineHarness.state = {
+      role: "none",
+      connecting: false,
+      roomCode: "ABCDE",
+    };
+
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /^local$/i }));
+
+    expect(screen.getByRole("heading", { name: /choose player count/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^2 player$/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^3 player$/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^4 player$/i })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: /choose opponent/i })).toBeNull();
+  });
+
   it("shows the title choices and staged Local navigation with coherent back paths", () => {
     const savedState = createGame(1);
     window.localStorage.setItem(LEGACY_SAVE_KEY, JSON.stringify({

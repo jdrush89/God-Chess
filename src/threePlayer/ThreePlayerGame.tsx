@@ -1623,13 +1623,19 @@ export function ThreePlayerGame({
 
       {historyOpen && (
         <aside className="history-drawer" aria-label="Full history">
-          <div>
+          <div className="history-drawer-header">
             <h3><History size={18} /> Chronicle</h3>
             <button onClick={() => setHistoryOpen(false)} aria-label="Close history"><X size={18} /></button>
           </div>
-          {state.history.map((entry, index) => (
-            <p key={`${entry}-${index}`}><span>{index + 1}</span>{entry}</p>
-          ))}
+          <div
+            className="history-drawer-body"
+            aria-label="Chronicle entries"
+            tabIndex={0}
+          >
+            {state.history.map((entry, index) => (
+              <p key={`${entry}-${index}`}><span>{index + 1}</span>{entry}</p>
+            ))}
+          </div>
         </aside>
       )}
 

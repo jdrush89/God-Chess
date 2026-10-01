@@ -60,43 +60,75 @@ export const useOnlineGame = (callbacks: OnlineCallbacks) => {
   const [state, setState] = useState(initialState);
   const hostRef = useRef<MultiplayerHost | undefined>(undefined);
   const peerRef = useRef<MultiplayerPeer | undefined>(undefined);
+  const attemptGeneration = useRef(0);
   const callbacksRef = useRef(callbacks);
   callbacksRef.current = callbacks;
 
   useEffect(() => () => {
-    hostRef.current?.stop();
-    peerRef.current?.disconnect();
+    attemptGeneration.current += 1;
+    const host = hostRef.current;
+    const peer = peerRef.current;
+    hostRef.current = undefined;
+    peerRef.current = undefined;
+    host?.stop();
+    peer?.disconnect();
   }, []);
 
   const hostGame = useCallback(async (hostName: string) => {
-    hostRef.current?.stop();
-    peerRef.current?.disconnect();
+    const generation = attemptGeneration.current + 1;
+    attemptGeneration.current = generation;
+    const previousHost = hostRef.current;
+    const previousPeer = peerRef.current;
+    hostRef.current = undefined;
+    peerRef.current = undefined;
+    previousHost?.stop();
+    previousPeer?.disconnect();
     setState({ ...initialState, connecting: true });
-    const host = new MultiplayerHost(hostName, {
+    let host: MultiplayerHost;
+    const isCurrent = () =>
+      attemptGeneration.current === generation &&
+      hostRef.current === host;
+    host = new MultiplayerHost(hostName, {
       getState: () => callbacksRef.current.getState(),
       applyRemoteAction: (action) => callbacksRef.current.applyRemoteAction(action),
       applyUndo: () => callbacksRef.current.applyUndo(),
       canUndo: () => callbacksRef.current.canUndo(),
-      onGuestJoined: (guest) => setState((current) => ({ ...current, guest })),
-      onGuestLeft: () => setState((current) => ({
-        ...current,
-        guest: undefined,
-        started: false,
-        localColor: undefined,
-        undoConsent: { ...current.undoConsent, peer: false },
-        undoAvailable: false,
-        error: current.started ? "The other player disconnected." : undefined,
-      })),
-      onUndoSettings: (hostEnabled, guestEnabled, canUndo) => setState((current) => ({
-        ...current,
-        undoConsent: { host: hostEnabled, peer: guestEnabled },
-        undoAvailable: canUndo,
-      })),
-      onError: (error) => setState((current) => ({ ...current, error, connecting: false })),
+      onGuestJoined: (guest) => {
+        if (isCurrent()) setState((current) => ({ ...current, guest }));
+      },
+      onGuestLeft: () => {
+        if (!isCurrent()) return;
+        setState((current) => ({
+          ...current,
+          guest: undefined,
+          started: false,
+          localColor: undefined,
+          undoConsent: { ...current.undoConsent, peer: false },
+          undoAvailable: false,
+          error: current.started ? "The other player disconnected." : undefined,
+        }));
+      },
+      onUndoSettings: (hostEnabled, guestEnabled, canUndo) => {
+        if (!isCurrent()) return;
+        setState((current) => ({
+          ...current,
+          undoConsent: { host: hostEnabled, peer: guestEnabled },
+          undoAvailable: canUndo,
+        }));
+      },
+      onError: (error) => {
+        if (isCurrent()) {
+          setState((current) => ({ ...current, error, connecting: false }));
+        }
+      },
     });
+    hostRef.current = host;
     try {
       const roomCode = await host.start();
-      hostRef.current = host;
+      if (!isCurrent()) {
+        host.stop();
+        return;
+      }
       setState({
         ...initialState,
         role: "host",
@@ -104,6 +136,8 @@ export const useOnlineGame = (callbacks: OnlineCallbacks) => {
         hostName,
       });
     } catch (error) {
+      if (!isCurrent()) return;
+      hostRef.current = undefined;
       host.stop();
       setState({
         ...initialState,
@@ -114,29 +148,41 @@ export const useOnlineGame = (callbacks: OnlineCallbacks) => {
   }, []);
 
   const joinGame = useCallback(async (roomCode: string, playerName: string) => {
-    hostRef.current?.stop();
-    peerRef.current?.disconnect();
+    const generation = attemptGeneration.current + 1;
+    attemptGeneration.current = generation;
+    const previousHost = hostRef.current;
+    const previousPeer = peerRef.current;
+    hostRef.current = undefined;
+    peerRef.current = undefined;
+    previousHost?.stop();
+    previousPeer?.disconnect();
     const normalizedCode = roomCode.trim().toUpperCase();
     setState({
       ...initialState,
       roomCode: normalizedCode,
       connecting: true,
     });
-    const peer = new MultiplayerPeer({
-      onJoinAccepted: (guest, acceptedCode) => setState((current) => ({
-        ...current,
-        role: "peer",
-        roomCode: acceptedCode,
-        guest,
-        connecting: false,
-        awaitingSync: false,
-      })),
-      onLobbyState: (hostName, guest) => setState((current) => ({
-        ...current,
-        hostName,
-        guest,
-      })),
+    let peer: MultiplayerPeer;
+    const isCurrent = () =>
+      attemptGeneration.current === generation &&
+      peerRef.current === peer;
+    peer = new MultiplayerPeer({
+      onJoinAccepted: (guest, acceptedCode) => {
+        if (!isCurrent()) return;
+        setState((current) => ({
+          ...current,
+          role: "peer",
+          roomCode: acceptedCode,
+          guest,
+          connecting: false,
+          awaitingSync: false,
+        }));
+      },
+      onLobbyState: (hostName, guest) => {
+        if (isCurrent()) setState((current) => ({ ...current, hostName, guest }));
+      },
       onGameStart: (gameState, guestColor) => {
+        if (!isCurrent()) return;
         callbacksRef.current.receiveState(gameState);
         setState((current) => ({
           ...current,
@@ -147,15 +193,21 @@ export const useOnlineGame = (callbacks: OnlineCallbacks) => {
         }));
       },
       onStateSync: (gameState) => {
+        if (!isCurrent()) return;
         callbacksRef.current.receiveState(gameState);
         setState((current) => ({ ...current, awaitingSync: false }));
       },
-      onUndoSettings: (hostEnabled, guestEnabled, canUndo) => setState((current) => ({
-        ...current,
-        undoConsent: { host: hostEnabled, peer: guestEnabled },
-        undoAvailable: canUndo,
-      })),
+      onUndoSettings: (hostEnabled, guestEnabled, canUndo) => {
+        if (!isCurrent()) return;
+        setState((current) => ({
+          ...current,
+          undoConsent: { host: hostEnabled, peer: guestEnabled },
+          undoAvailable: canUndo,
+        }));
+      },
       onRejected: (reason) => {
+        if (!isCurrent()) return;
+        peerRef.current = undefined;
         peer.disconnect();
         setState({
           ...initialState,
@@ -163,18 +215,29 @@ export const useOnlineGame = (callbacks: OnlineCallbacks) => {
           error: reason,
         });
       },
-      onDisconnected: () => setState((current) => ({
-        ...current,
-        started: false,
-        localColor: undefined,
-        error: "The host disconnected.",
-      })),
-      onError: (error) => setState((current) => ({ ...current, error, connecting: false })),
+      onDisconnected: () => {
+        if (!isCurrent()) return;
+        peerRef.current = undefined;
+        setState((current) => ({
+          ...current,
+          started: false,
+          localColor: undefined,
+          error: "The host disconnected.",
+        }));
+      },
+      onError: (error) => {
+        if (isCurrent()) {
+          setState((current) => ({ ...current, error, connecting: false }));
+        }
+      },
     });
+    peerRef.current = peer;
     try {
       await peer.connect(normalizedCode, playerName.trim().slice(0, 24) || "Guest");
-      peerRef.current = peer;
+      if (!isCurrent()) peer.disconnect();
     } catch (error) {
+      if (!isCurrent()) return;
+      peerRef.current = undefined;
       peer.disconnect();
       setState({
         ...initialState,
@@ -230,10 +293,13 @@ export const useOnlineGame = (callbacks: OnlineCallbacks) => {
   }, [state]);
 
   const disconnect = useCallback(() => {
-    hostRef.current?.stop();
-    peerRef.current?.disconnect();
+    attemptGeneration.current += 1;
+    const host = hostRef.current;
+    const peer = peerRef.current;
     hostRef.current = undefined;
     peerRef.current = undefined;
+    host?.stop();
+    peer?.disconnect();
     setState(initialState);
   }, []);
 
