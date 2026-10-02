@@ -910,6 +910,8 @@ describe("game flow", () => {
     }), "c2", "c3");
     expect(moved.players.white.orbs).toEqual({ white: 1, black: 1 });
     expect(moved.pending?.step).toBe("slither-orb");
+    expect(moved.notice).toMatch(/^Slither:/);
+    expect(moved.notice).not.toMatch(/Serpentine Step/);
     expect(availableClassicActions(moved)).toEqual([
       { type: "orb", orb: "white" },
       { type: "orb", orb: "black" },
@@ -937,6 +939,31 @@ describe("game flow", () => {
     expect(state.players.white.orbs).toEqual({ white: 2, black: 2 });
     state = gameReducer(state, { type: "orb", orb: "white" });
     expect(state.players.white.orbs).toEqual({ white: 3, black: 2 });
+  });
+
+  it("uses Serpentine Step in Medusa's multi-move follow-up copy", () => {
+    const state = createGame(1);
+    state.phase = "play";
+    state.activeColor = "white";
+    state.players.white.gods = ["medusa"];
+    state.players.black.gods = ["quetzacoatl"];
+    state.players.white.upgrades.slither = 1;
+    state.players.white.orbs.white = 1;
+    state.board = {
+      a1: testPiece("king", "white", "white-king"),
+      h8: testPiece("king", "black", "black-king"),
+      c2: testPiece("queen", "white", "medusa-queen"),
+    };
+
+    let moved = gameReducer(state, { type: "select-god", godId: "medusa" });
+    moved = gameReducer(moved, { type: "select-ability", abilityId: "slither" });
+    moved = gameReducer(moved, { type: "square", square: "c2" });
+    expect(moved.legalTargets).toContain("d3");
+    moved = gameReducer(moved, { type: "square", square: "d3" });
+
+    expect(moved.pending?.step).toBe("slither");
+    expect(moved.notice).toMatch(/^Serpentine Step/);
+    expect(moved.notice).not.toMatch(/^Slither/);
   });
 
   it("requires a level 1 Air Strike passenger to land on an empty crossed space", () => {

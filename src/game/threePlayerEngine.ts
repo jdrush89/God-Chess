@@ -2347,8 +2347,8 @@ const executeMovement = (
         noCapture: true,
       });
       state.notice = unlimited
-        ? "Slither may continue; pass to stop."
-        : `Slither has ${remaining} moves remaining.`;
+        ? "Serpentine Step may continue; pass to stop."
+        : `Serpentine Step has ${remaining} moves remaining.`;
       return;
     }
   }

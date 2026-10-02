@@ -768,6 +768,8 @@ describe("four-player ability safety regressions", () => {
     expect(state.legalTargets).toContain("g12");
     state = fourPlayerReducer(state, { type: "square", square: "g12" });
     expect(state.pending?.step).toBe("slither");
+    expect(state.notice).toMatch(/^Serpentine Step/);
+    expect(state.notice).not.toMatch(/^Slither/);
     expect(state.legalTargets).toEqual([]);
     expect(state.board.g12?.id).toBe("slithering-queen");
   });

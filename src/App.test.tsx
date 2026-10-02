@@ -1036,7 +1036,7 @@ describe("game startup", () => {
     }));
 
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /load game/i }));
+    openPlayOption("Load");
     fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
 
     expect(screen.getByRole("button", { name: /gain white/i })).toBeTruthy();

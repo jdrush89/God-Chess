@@ -1602,8 +1602,8 @@ const executeMovement = (state: GameState, from: Square, to: Square) => {
       state.selectedSquare = result.to;
       state.legalTargets = pseudoTargets(state.board, result.to, { forceType: "bishop", noCapture: true, ignoreCheck: true });
       state.notice = unlimited
-        ? "Slither may continue any number of times. Pass to stop."
-        : `Slither may continue (${remaining} move${remaining === 1 ? "" : "s"} remaining). Pass to stop.`;
+        ? "Serpentine Step may continue any number of times. Pass to stop."
+        : `Serpentine Step may continue (${remaining} move${remaining === 1 ? "" : "s"} remaining). Pass to stop.`;
       return;
     }
   }
