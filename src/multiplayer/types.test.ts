@@ -116,6 +116,14 @@ describe("versioned multiplayer protocol", () => {
     })).toBeUndefined();
   });
 
+  it("round-trips the committed classic Slither orb choice", () => {
+    const message = createProtocolMessage("classic", "peer", {
+      type: "game_action",
+      action: { type: "orb", orb: "black" },
+    });
+    expect(normalizeProtocolMessage(message)).toEqual(message);
+  });
+
   it("round-trips online snapshots with hostile Kings carrying Hex status", () => {
     const classicState = createGame(undefined, { mode: "online" });
     Object.values(classicState.board).find((piece) =>

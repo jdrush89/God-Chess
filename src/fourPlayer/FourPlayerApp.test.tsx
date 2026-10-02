@@ -108,11 +108,11 @@ describe("four-player app integration", () => {
     openFourPlayerSetup();
     fireEvent.click(screen.getByRole("button", { name: /begin four-player draft/i }));
 
-    expect(screen.queryByText(/enemy piece you fly over/i)).toBeNull();
+    expect(screen.queryByText(/snake is 2 or more pieces/i)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /lv 2/i }));
-    expect(screen.getByText(/enemy piece you fly over/i)).toBeTruthy();
+    expect(screen.getByText(/snake is 2 or more pieces/i)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /lv 3/i }));
-    expect(screen.getByText(/friendly piece you fly over/i)).toBeTruthy();
+    expect(screen.getByText(/1 orb per piece in the snake/i)).toBeTruthy();
   });
 
   it("keeps drafted Gods inspectable while preventing them from being claimed again", () => {
@@ -405,7 +405,7 @@ describe("four-player app integration", () => {
     expect(within(panel).getByRole("heading", { name: /choose an ability to strengthen/i })).toBeTruthy();
     expect(within(panel).getByText(/compare every ability in your pantheon/i)).toBeTruthy();
     expect(panel.querySelectorAll(".four-upgrade-list .ability-card")).toHaveLength(9);
-    expect(screen.queryByText(/enemy piece you fly over/i)).toBeNull();
+    expect(screen.queryByText(/snake is 2 or more pieces/i)).toBeNull();
 
     const allAbilities = within(panel).getByLabelText(/all abilities levels/i);
     const levelTwo = within(allAbilities).getByRole("button", { name: /lv 2/i });
@@ -415,20 +415,20 @@ describe("four-player app integration", () => {
     fireEvent.click(levelTwo);
     expect(levelTwo.classList.contains("active")).toBe(true);
     expect(levelTwo.getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByText(/enemy piece you fly over/i)).toBeTruthy();
+    expect(screen.getByText(/snake is 2 or more pieces/i)).toBeTruthy();
     fireEvent.click(levelThree);
     expect(levelThree.classList.contains("active")).toBe(true);
     expect(levelThree.getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByText(/friendly piece you fly over/i)).toBeTruthy();
+    expect(screen.getByText(/1 orb per piece in the snake/i)).toBeTruthy();
     fireEvent.click(levelThree);
     expect(levelThree.classList.contains("active")).toBe(false);
     expect(levelThree.getAttribute("aria-pressed")).toBe("false");
-    expect(screen.queryByText(/friendly piece you fly over/i)).toBeNull();
+    expect(screen.queryByText(/1 orb per piece in the snake/i)).toBeNull();
 
-    const flightCard = within(panel).getByText("Flight").closest(".ability-card") as HTMLElement;
-    fireEvent.click(within(flightCard).getByRole("button", { name: /^flight/i }));
-    expect(flightCard.classList.contains("active")).toBe(true);
-    const confirm = within(panel).getByRole("button", { name: /confirm flight.*lv 2/i });
+    const slitherCard = within(panel).getByText("Slither").closest(".ability-card") as HTMLElement;
+    fireEvent.click(within(slitherCard).getByRole("button", { name: /^slither/i }));
+    expect(slitherCard.classList.contains("active")).toBe(true);
+    const confirm = within(panel).getByRole("button", { name: /confirm slither.*lv 2/i });
     expect((confirm as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(confirm);
     expect(screen.getByText(/east upgrades one ability/i)).toBeTruthy();
@@ -454,13 +454,13 @@ describe("four-player app integration", () => {
       />,
     );
 
-    const flightCard = screen.getByText("Flight").closest(".ability-card") as HTMLElement;
-    const flightControl = within(flightCard).getByRole("button", { name: /^flight/i });
-    expect(flightCard.classList.contains("disabled")).toBe(true);
-    expect(flightControl.getAttribute("aria-disabled")).toBe("true");
-    expect(within(flightCard).getByText("MAX LEVEL")).toBeTruthy();
-    fireEvent.click(flightControl);
-    expect(flightCard.classList.contains("active")).toBe(false);
+    const slitherCard = screen.getByText("Slither").closest(".ability-card") as HTMLElement;
+    const slitherControl = within(slitherCard).getByRole("button", { name: /^slither/i });
+    expect(slitherCard.classList.contains("disabled")).toBe(true);
+    expect(slitherControl.getAttribute("aria-disabled")).toBe("true");
+    expect(within(slitherCard).getByText("MAX LEVEL")).toBeTruthy();
+    fireEvent.click(slitherControl);
+    expect(slitherCard.classList.contains("active")).toBe(false);
     expect(
       (screen.getByRole("button", { name: /select an ability to upgrade/i }) as HTMLButtonElement)
         .disabled,
@@ -517,9 +517,9 @@ describe("four-player app integration", () => {
         }}
       />,
     );
-    const authorizedFlight = screen.getByText("Flight").closest(".ability-card") as HTMLElement;
-    fireEvent.click(within(authorizedFlight).getByRole("button", { name: /^flight/i }));
-    fireEvent.click(screen.getByRole("button", { name: /confirm flight.*lv 2/i }));
+    const authorizedSlither = screen.getByText("Slither").closest(".ability-card") as HTMLElement;
+    fireEvent.click(within(authorizedSlither).getByRole("button", { name: /^slither/i }));
+    fireEvent.click(screen.getByRole("button", { name: /confirm slither.*lv 2/i }));
     expect(onAction).toHaveBeenCalledWith({ type: "upgrade", abilityId: "flight" });
     authorized.unmount();
 
@@ -546,8 +546,8 @@ describe("four-player app integration", () => {
         }}
       />,
     );
-    const remoteFlight = screen.getByText("Flight").closest(".ability-card") as HTMLElement;
-    expect(within(remoteFlight).getByRole("button", { name: /^flight/i }).getAttribute("aria-disabled"))
+    const remoteSlither = screen.getByText("Slither").closest(".ability-card") as HTMLElement;
+    expect(within(remoteSlither).getByRole("button", { name: /^slither/i }).getAttribute("aria-disabled"))
       .toBe("true");
     expect(
       (screen.getByRole("button", { name: /select an ability to upgrade/i }) as HTMLButtonElement)
@@ -569,8 +569,8 @@ describe("four-player app integration", () => {
         onNewGame={vi.fn()}
       />,
     );
-    const aiFlight = screen.getByText("Flight").closest(".ability-card") as HTMLElement;
-    expect(within(aiFlight).getByRole("button", { name: /^flight/i }).getAttribute("aria-disabled"))
+    const aiSlither = screen.getByText("Slither").closest(".ability-card") as HTMLElement;
+    expect(within(aiSlither).getByRole("button", { name: /^slither/i }).getAttribute("aria-disabled"))
       .toBe("true");
   });
 
@@ -616,6 +616,46 @@ describe("four-player app integration", () => {
     expect(within(fundingCard as HTMLElement).getByText("Move another pawn or finish.")).toBeTruthy();
     expect(within(fundingCard as HTMLElement).getByRole("button", { name: /pass \/ finish/i }))
       .toBeTruthy();
+  });
+
+  it("renders Quetzacoatl's committed Slither orb choice", () => {
+    let state = createFourPlayerGame();
+    const draftOrder = [
+      GODS.find((god) => god.id === "quetzacoatl")!,
+      ...GODS.filter((god) => god.id !== "quetzacoatl"),
+    ];
+    for (const god of draftOrder) {
+      state = fourPlayerReducer(state, { type: "draft", godId: god.id });
+    }
+    state.activeSeat = "north";
+    state.selectedGod = "quetzacoatl";
+    state.selectedAbility = "flight";
+    const movedPieceId = Object.values(state.board).find(
+      (piece) => piece.controller === "north" && piece.type === "rook",
+    )!.id;
+    state.pending = {
+      godId: "quetzacoatl",
+      abilityId: "flight",
+      step: "slither-orb",
+      destination: "g9",
+      movedPieceId,
+    };
+    state.notice = "Slither: choose one extra light or dark orb.";
+
+    render(
+      <FourPlayerGame
+        initialState={state}
+        undoPreferred={false}
+        onUndoPreferenceChange={vi.fn()}
+        onPersist={vi.fn(async () => false)}
+        onQuit={vi.fn()}
+        onNewGame={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: /gain light/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /gain dark/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /cancel ability/i })).toBeNull();
   });
 
   it("saves and reloads four-player draft state without misclassifying it", async () => {

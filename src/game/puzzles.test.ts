@@ -209,7 +209,7 @@ describe("puzzle mode", () => {
     expect(legalTargets(state.board, "g7")).toEqual([]);
   });
 
-  it("uses a new Flight setup concept in Position Fourteen", () => {
+  it("uses a new Slither setup concept in Position Fourteen", () => {
     const usage = PUZZLE_GOD_USAGE_BY_ID["skyward-charge"];
     expect(usage.solutionAbilities.quetzacoatl).toEqual(["flight"]);
     expect(PUZZLE_GOD_INDEX.quetzacoatl.solutionAbilitiesByPuzzle["skyward-charge"])

@@ -10,6 +10,7 @@ import {
   pathSquares,
 } from "./chess";
 import {
+  availableClassicActions,
   createGame,
   gameReducer,
   hasCompleteClassicTurn,
@@ -25,6 +26,32 @@ const testPiece = (type: PieceType, color: Color, id: string): Piece => ({
   hasMoved: false,
   status: {},
 });
+
+const quetzSlitherState = (
+  level: 1 | 2 | 3,
+  board: Record<string, Piece>,
+) => {
+  const state = createGame(1);
+  state.phase = "play";
+  state.activeColor = "white";
+  state.players.white.gods = ["quetzacoatl"];
+  state.players.black.gods = ["medusa"];
+  state.players.white.upgrades.flight = level;
+  state.board = board;
+  state.notice = "White to act.";
+  return state;
+};
+
+const useClassicSlither = (
+  state: ReturnType<typeof quetzSlitherState>,
+  from: string,
+  to: string,
+) => {
+  let next = gameReducer(state, { type: "select-god", godId: "quetzacoatl" });
+  next = gameReducer(next, { type: "select-ability", abilityId: "flight" });
+  next = gameReducer(next, { type: "square", square: from });
+  return gameReducer(next, { type: "square", square: to });
+};
 
 const createPreparedShotTurn = (level: 1 | 2 | 3 = 1) => {
   let state = createGame(1);
@@ -822,63 +849,121 @@ describe("game flow", () => {
     expect(state.rested).toEqual(expect.arrayContaining(["ares", "medusa"]));
   });
 
-  it("counts a non-capturing knight as flying for Quetzacoatl", () => {
-    let state = createGame(1);
-    (["ares", "quetzacoatl", "midas", "death", "artemis", "medusa"] as const).forEach((godId) => {
-      state = gameReducer(state, { type: "draft", godId });
+  it("keeps Quetzacoatl's flight ID while displaying Slither and renames Medusa's ability", () => {
+    expect(GOD_BY_ID.quetzacoatl.abilities[0]).toMatchObject({
+      id: "flight",
+      name: "Slither",
     });
-    state = gameReducer(state, { type: "select-god", godId: "ares" });
-    state = gameReducer(state, { type: "select-ability", abilityId: "threaten" });
-    state = gameReducer(state, { type: "square", square: "e2" });
-    state = gameReducer(state, { type: "square", square: "e4" });
-    state = gameReducer(state, { type: "select-god", godId: "quetzacoatl" });
-    state = gameReducer(state, { type: "select-ability", abilityId: "flight" });
-    state = gameReducer(state, { type: "square", square: "b8" });
-    state = gameReducer(state, { type: "square", square: "c6" });
-    expect(state.players.black.orbs.black).toBe(1);
-    expect(state.orbAnimations).toEqual(expect.arrayContaining([
-      expect.objectContaining({ player: "black", orb: "black", amount: 1, total: 1, source: "c6" }),
-    ]));
-    expect(state.board.c6?.type).toBe("knight");
+    expect(GOD_BY_ID.medusa.abilities.find((ability) => ability.id === "slither")?.name)
+      .toBe("Serpentine Step");
   });
 
-  it("caps Flight level 1 at one orb of each crossed piece color", () => {
-    let state = createGame(1);
-    (["ares", "quetzacoatl", "midas", "death", "artemis", "medusa"] as const).forEach((godId) => {
-      state = gameReducer(state, { type: "draft", godId });
+  it("rewards a singleton snake and uses ordinary blockers and captures", () => {
+    let state = quetzSlitherState(1, {
+      a1: testPiece("king", "white", "white-king"),
+      h8: testPiece("king", "black", "black-king"),
+      a2: testPiece("rook", "white", "mover"),
+      a3: testPiece("pawn", "black", "blocker"),
     });
-    state = gameReducer(state, { type: "select-god", godId: "ares" });
-    state = gameReducer(state, { type: "select-ability", abilityId: "threaten" });
-    state = gameReducer(state, { type: "square", square: "e2" });
-    state = gameReducer(state, { type: "square", square: "e4" });
     state = gameReducer(state, { type: "select-god", godId: "quetzacoatl" });
     state = gameReducer(state, { type: "select-ability", abilityId: "flight" });
-    state = gameReducer(state, { type: "square", square: "b8" });
-    state = gameReducer(state, { type: "square", square: "c6" });
-    expect(state.players.black.orbs).toEqual({ white: 0, black: 1 });
+    state = gameReducer(state, { type: "square", square: "a2" });
+    expect(state.legalTargets).toContain("a3");
+    expect(state.legalTargets).not.toContain("a4");
+    state = gameReducer(state, { type: "square", square: "a3" });
+    expect(state.board.a3?.id).toBe("mover");
+    expect(state.players.black.graveyard.at(-1)?.piece.id).toBe("blocker");
+    expect(state.players.white.orbs).toEqual({ white: 1, black: 0 });
   });
 
-  it("grants Flight level 3's full benefit to a knight moving two files and one rank", () => {
-    let state = createGame(1);
-    (["quetzacoatl", "chiron", "midas", "death", "artemis", "medusa"] as const).forEach((godId) => {
-      state = gameReducer(state, { type: "draft", godId });
-    });
-    state.players.white.upgrades.flight = 3;
-    delete state.board.d2;
-    state = gameReducer(state, { type: "select-god", godId: "quetzacoatl" });
-    state = gameReducer(state, { type: "select-ability", abilityId: "flight" });
-    state = gameReducer(state, { type: "square", square: "b1" });
-    state = gameReducer(state, { type: "square", square: "d2" });
-    expect(state.players.white.orbs.white).toBe(3);
+  it("caps level 1 at one orb per affinity for a mixed diagonal chain", () => {
+    const state = useClassicSlither(quetzSlitherState(1, {
+      a1: testPiece("king", "white", "white-king"),
+      h8: testPiece("king", "black", "black-king"),
+      c2: testPiece("rook", "white", "mover"),
+      d4: testPiece("bishop", "white", "white-link"),
+      e5: testPiece("bishop", "black", "black-link"),
+    }), "c2", "c3");
+    expect(state.players.white.orbs).toEqual({ white: 1, black: 1 });
+    expect(state.activeColor).toBe("black");
   });
 
-  it("documents Flight's capped level 1 reward explicitly", () => {
-    expect(GOD_BY_ID.quetzacoatl.abilities[0].summary).toContain(
-      "Gain 1 white orb if you fly over any number of white pieces",
-    );
-    expect(GOD_BY_ID.quetzacoatl.abilities[0].summary).toContain(
-      "1 black orb if you fly over any number of black pieces",
-    );
+  it("disqualifies the moved component when any member has an orthogonal neighbor", () => {
+    const state = useClassicSlither(quetzSlitherState(1, {
+      a1: testPiece("king", "white", "white-king"),
+      h8: testPiece("king", "black", "black-king"),
+      c2: testPiece("rook", "white", "mover"),
+      d4: testPiece("bishop", "white", "white-link"),
+      e4: testPiece("pawn", "black", "orthogonal-to-link"),
+      f2: testPiece("pawn", "white", "unrelated-snake-a"),
+      g3: testPiece("pawn", "black", "unrelated-snake-b"),
+    }), "c2", "c3");
+    expect(state.players.white.orbs).toEqual({ white: 0, black: 0 });
+  });
+
+  it("commits level 2 to an extra orb choice before ending the turn", () => {
+    const moved = useClassicSlither(quetzSlitherState(2, {
+      a1: testPiece("king", "white", "white-king"),
+      h8: testPiece("king", "black", "black-king"),
+      c2: testPiece("rook", "white", "mover"),
+      d4: testPiece("bishop", "black", "dark-link"),
+    }), "c2", "c3");
+    expect(moved.players.white.orbs).toEqual({ white: 1, black: 1 });
+    expect(moved.pending?.step).toBe("slither-orb");
+    expect(moved.notice).toMatch(/^Slither:/);
+    expect(moved.notice).not.toMatch(/Serpentine Step/);
+    expect(availableClassicActions(moved)).toEqual([
+      { type: "orb", orb: "white" },
+      { type: "orb", orb: "black" },
+    ]);
+    expect(gameReducer(moved, { type: "cancel" })).toBe(moved);
+    expect(gameReducer(moved, { type: "pass" })).toBe(moved);
+    expect(gameReducer(moved, { type: "clear-god" })).toBe(moved);
+    expect(gameReducer(moved, { type: "select-god", godId: "quetzacoatl" })).toBe(moved);
+    expect(gameReducer(moved, { type: "select-ability", abilityId: "air-lift" })).toBe(moved);
+
+    const resolved = gameReducer(moved, { type: "orb", orb: "black" });
+    expect(resolved.players.white.orbs).toEqual({ white: 1, black: 2 });
+    expect(resolved.activeColor).toBe("black");
+  });
+
+  it("grants level 3 per-piece affinity rewards plus the level 2 choice", () => {
+    let state = useClassicSlither(quetzSlitherState(3, {
+      a1: testPiece("king", "white", "white-king"),
+      h8: testPiece("king", "black", "black-king"),
+      c2: testPiece("rook", "white", "mover"),
+      d4: testPiece("bishop", "white", "white-link"),
+      e5: testPiece("bishop", "black", "black-link"),
+      f6: testPiece("pawn", "black", "black-tail"),
+    }), "c2", "c3");
+    expect(state.players.white.orbs).toEqual({ white: 2, black: 2 });
+    state = gameReducer(state, { type: "orb", orb: "white" });
+    expect(state.players.white.orbs).toEqual({ white: 3, black: 2 });
+  });
+
+  it("uses Serpentine Step in Medusa's multi-move follow-up copy", () => {
+    const state = createGame(1);
+    state.phase = "play";
+    state.activeColor = "white";
+    state.players.white.gods = ["medusa"];
+    state.players.black.gods = ["quetzacoatl"];
+    state.players.white.upgrades.slither = 1;
+    state.players.white.orbs.white = 1;
+    state.board = {
+      a1: testPiece("king", "white", "white-king"),
+      h8: testPiece("king", "black", "black-king"),
+      c2: testPiece("queen", "white", "medusa-queen"),
+    };
+
+    let moved = gameReducer(state, { type: "select-god", godId: "medusa" });
+    moved = gameReducer(moved, { type: "select-ability", abilityId: "slither" });
+    moved = gameReducer(moved, { type: "square", square: "c2" });
+    expect(moved.legalTargets).toContain("d3");
+    moved = gameReducer(moved, { type: "square", square: "d3" });
+
+    expect(moved.pending?.step).toBe("slither");
+    expect(moved.notice).toMatch(/^Serpentine Step/);
+    expect(moved.notice).not.toMatch(/^Slither/);
   });
 
   it("requires a level 1 Air Strike passenger to land on an empty crossed space", () => {

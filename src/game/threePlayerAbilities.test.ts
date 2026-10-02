@@ -16,6 +16,7 @@ import type {
   ThreePlayerSeat,
   ThreePlayerState,
 } from "./threePlayerTypes";
+import { THREE_PLAYER_BOARD_VARIANTS } from "./threePlayerTypes";
 
 const piece = (
   id: string,
@@ -88,6 +89,33 @@ const abilityState = (
   return state;
 };
 
+const threePlayerSlitherSetup = (
+  boardVariant: ThreePlayerState["config"]["boardVariant"],
+  level: 1 | 2 | 3 = 2,
+) => {
+  const state = abilityState("quetzacoatl", level, boardVariant);
+  const topology = getThreePlayerTopology(boardVariant);
+  state.board = {};
+  const destination = topology.cells.find((cell) =>
+    topology.orthogonalNeighbors(cell).length > 0 &&
+    topology.diagonalNeighbors(cell).length > 0
+  );
+  if (!destination) throw new Error(`No Slither destination for ${boardVariant}.`);
+  const source = topology.orthogonalNeighbors(destination)[0];
+  const darkLink = topology.diagonalNeighbors(destination)[0];
+  state.board[source] = piece("slither-mover", "rook", "white");
+  state.board[darkLink] = piece("slither-dark-link", "pawn", "black");
+  const excluded = new Set([
+    source,
+    destination,
+    darkLink,
+    ...topology.kingNeighbors(destination),
+    ...topology.kingNeighbors(darkLink),
+  ]);
+  addSafeWhiteKing(state, excluded);
+  return { state, source, destination };
+};
+
 describe("three-player God catalog", () => {
   it("implements every catalog ability", () => {
     expect(unsupportedThreePlayerAbilities()).toEqual([]);
@@ -116,6 +144,85 @@ describe("three-player God catalog", () => {
       );
     }
   }
+
+  it.each(THREE_PLAYER_BOARD_VARIANTS)(
+    "uses canonical diagonal and orthogonal adjacency for Slither on %s",
+    (boardVariant) => {
+      const setup = threePlayerSlitherSetup(boardVariant);
+      let state = threePlayerReducer(setup.state, {
+        type: "select-god",
+        godId: "quetzacoatl",
+      });
+      state = threePlayerReducer(state, {
+        type: "select-ability",
+        abilityId: "flight",
+      });
+      state = threePlayerReducer(state, {
+        type: "cell",
+        cell: setup.source,
+      });
+      state = threePlayerReducer(state, {
+        type: "cell",
+        cell: setup.destination,
+      });
+      if (state.legalPaths.length) {
+        state = threePlayerReducer(state, {
+          type: "path",
+          pathId: state.legalPaths[0],
+        });
+      }
+
+      expect(state.players.white.orbs).toEqual({ light: 51, dark: 51 });
+      expect(state.pending?.step).toBe("slither-orb");
+      expect(availableThreePlayerActions(state)).toEqual([
+        { type: "orb", orb: "light" },
+        { type: "orb", orb: "dark" },
+      ]);
+      const resolved = threePlayerReducer(state, {
+        type: "orb",
+        orb: "dark",
+      });
+      expect(resolved.players.white.orbs).toEqual({ light: 51, dark: 52 });
+    },
+  );
+
+  it("uses Serpentine Step in Medusa's three-player follow-up copy", () => {
+    const state = abilityState("medusa", 1);
+    const topology = getThreePlayerTopology(state.config.boardVariant);
+    state.board = {};
+    const source = topology.cells.find((cell) =>
+      topology.diagonalNeighbors(cell).length > 0
+    )!;
+    const destination = topology.diagonalNeighbors(source)[0];
+    state.board[source] = piece("medusa-queen", "queen", "white");
+    addSafeWhiteKing(state, new Set([
+      source,
+      destination,
+      ...topology.kingNeighbors(source),
+      ...topology.kingNeighbors(destination),
+    ]));
+
+    let moved = threePlayerReducer(state, {
+      type: "select-god",
+      godId: "medusa",
+    });
+    moved = threePlayerReducer(moved, {
+      type: "select-ability",
+      abilityId: "slither",
+    });
+    moved = threePlayerReducer(moved, { type: "cell", cell: source });
+    moved = threePlayerReducer(moved, { type: "cell", cell: destination });
+    if (moved.legalPaths.length) {
+      moved = threePlayerReducer(moved, {
+        type: "path",
+        pathId: moved.legalPaths[0],
+      });
+    }
+
+    expect(moved.pending?.step).toBe("slither");
+    expect(moved.notice).toMatch(/^Serpentine Step/);
+    expect(moved.notice).not.toMatch(/^Slither/);
+  });
 
   it("runs Enchant as hostile move then one ordinary controlled move", () => {
     let state = abilityState("teles", 1);

@@ -352,6 +352,10 @@ describe("three-player persistence", () => {
         movedPieceId,
         movesRemaining: -1,
       }],
+      ["quetzacoatl", "flight", "slither-orb", {
+        destination,
+        movedPieceId,
+      }],
       ["midas", "military-funding", "funding", { selected: [movedPieceId] }],
       ["salem", "poison-cloud", "poison-area", {
         source,
