@@ -2004,7 +2004,7 @@ export function FourPlayerGame({
           <button onClick={() => setHistoryOpen(true)}><History size={18} /><span>History</span></button>
           <button onClick={() => setRulesOpen(true)}><BookOpen size={18} /><span>Rules</span></button>
           <button onClick={() => setSettingsOpen(true)}><Settings size={18} /><span>Settings</span></button>
-          <button onClick={onNewGame}><RotateCcw size={18} /><span>New game</span></button>
+          <button onClick={onNewGame}><RotateCcw size={18} /><span>New setup</span></button>
         </div>
       </header>
 
@@ -2136,7 +2136,7 @@ export function FourPlayerGame({
               : state.winner
                 ? "The last surviving player controls the cross-board."
                 : "Every living seat was stalemated in the same unchanged position."}
-          newGameLabel="Begin a new game"
+          newGameLabel="Begin a new setup"
           undoEnabled={onlineSession?.undoConsent ?? undoPreferred}
           canUndo={canUndo}
           onOpenChange={setResultOpen}

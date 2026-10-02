@@ -732,6 +732,7 @@ body::before {
 .main-menu-actions > div { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .main-menu-actions .eyebrow { margin: 0 0 13px; color: #cfb06d; }
 .main-menu-actions small { display: block; margin-top: 11px; color: #8d8b85; font-size: 8px; letter-spacing: .08em; text-transform: uppercase; }
+.main-start-button { width: 100%; min-height: 48px; }
 .main-menu-error { margin: 10px 0 0; color: #e69a8e; font-size: 10px; line-height: 1.4; }
 .puzzle-select-view {
   min-height: 100dvh; padding: clamp(18px, 4vw, 44px);
@@ -924,6 +925,61 @@ body::before {
 .save-game-modal { width: min(460px, 100%); }
 .save-game-actions { display: grid; gap: 10px; margin-top: 28px; }
 .save-game-actions .secondary-button { width: 100%; }
+.setup-navigation-shell {
+  min-height: 100dvh; overflow-x: clip; color: #e8e1d2;
+  background:
+    radial-gradient(circle at 50% -12%, rgba(198,161,91,.18), transparent 34rem),
+    linear-gradient(145deg, #171a22, #090b10 58%, #050609);
+}
+.setup-navigation-header {
+  position: sticky; z-index: 45; top: 0; min-height: 64px;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 10px clamp(14px, 3vw, 36px); border-bottom: 1px solid var(--line);
+  background: rgba(8,10,15,.94); backdrop-filter: blur(12px);
+}
+.setup-navigation-header > span {
+  color: #837b69; font: 600 9px "Cinzel"; letter-spacing: .18em;
+}
+.setup-navigation-back {
+  min-height: 40px; display: inline-flex; align-items: center; gap: 8px; padding: 0 13px;
+  color: #bbb4a7; background: #0c0e13; border: 1px solid #343740;
+  font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; cursor: pointer;
+}
+.setup-navigation-back:hover { color: #f3dfaa; border-color: var(--gold); }
+.setup-navigation-content { width: 100%; min-width: 0; }
+.play-menu-heading {
+  max-width: 680px; margin: clamp(48px, 10vh, 100px) auto clamp(24px, 5vh, 46px);
+  padding: 0 20px; text-align: center;
+}
+.play-menu-heading .eyebrow { margin: 0; }
+.play-menu-heading h1 {
+  margin: 9px 0 11px; color: #f1ece2; font: 600 clamp(32px, 5vw, 54px)/1.08 "Cinzel";
+}
+.play-menu-heading > p:last-child { margin: 0; color: #85868d; font-size: 11px; line-height: 1.65; }
+.play-menu-grid {
+  width: min(920px, calc(100% - 32px)); display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px; margin: 0 auto;
+}
+.play-menu-grid > button {
+  min-width: 0; min-height: clamp(170px, 28vh, 250px); display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 16px; padding: 24px 16px;
+  color: #d2ccbf; background: rgba(13,15,20,.8); border: 1px solid #343740; cursor: pointer;
+  box-shadow: 0 18px 50px rgba(0,0,0,.2);
+}
+.play-menu-grid > button:hover:not(:disabled) {
+  color: #fff0c8; border-color: rgba(198,161,91,.72); background: rgba(198,161,91,.08);
+}
+.play-menu-grid > button:disabled { color: #66676d; cursor: not-allowed; opacity: .62; }
+.play-menu-grid svg { color: var(--gold-bright); }
+.play-menu-grid strong { font: 600 clamp(17px, 2vw, 23px) "Cinzel"; }
+.play-load-status {
+  min-height: 18px; margin: 16px auto 42px; padding: 0 18px; color: #7c7d83;
+  font-size: 9px; letter-spacing: .08em; text-align: center; text-transform: uppercase;
+}
+.shell-library {
+  width: min(760px, calc(100% - 32px)); max-height: none; margin: clamp(26px, 5vh, 52px) auto;
+}
+.shell-library .saved-game-list { max-height: none; }
 .start-game-screen {
   min-height: 100dvh; overflow-x: hidden; color: #e8e1d2;
   background:
@@ -1421,6 +1477,7 @@ body::before {
     #0b0d12;
 }
 .three-setup-page { padding: 52px max(18px, calc((100vw - 1240px) / 2)) 42px; }
+.three-setup-page.embedded { min-height: auto; padding-top: 38px; background: transparent; }
 .three-setup-header {
   position: relative; display: flex; justify-content: space-between; gap: 24px;
   padding: 0 52px 25px 0; border-bottom: 1px solid var(--line);
@@ -1807,6 +1864,7 @@ body::before {
 .four-setup-page {
   min-height: 100vh; padding: 58px max(24px, calc((100vw - 1240px) / 2)) 48px;
 }
+.four-setup-page.embedded { min-height: auto; padding-top: 38px; background: transparent; }
 .four-setup-header {
   position: relative; display: flex; align-items: flex-start; justify-content: space-between; gap: 30px;
   padding: 0 54px 28px 0; border-bottom: 1px solid var(--line);
@@ -2188,6 +2246,7 @@ body::before {
 }
 
 @media (max-width: 980px) {
+  .play-menu-grid { grid-template-columns: 1fr 1fr; }
   .four-game-page .header-actions span { display: none; }
   .four-seat-setup-grid { grid-template-columns: 1fr 1fr; }
   .four-online-seats { grid-template-columns: 1fr 1fr; }
@@ -2213,10 +2272,17 @@ body::before {
 }
 
 @media (max-width: 640px) {
+  .setup-navigation-header { min-height: 58px; padding: 8px 12px; }
+  .setup-navigation-header > span { display: none; }
+  .setup-navigation-back { min-height: 38px; }
+  .play-menu-heading { margin: 34px auto 24px; }
+  .play-menu-grid { grid-template-columns: 1fr; width: calc(100% - 24px); gap: 10px; }
+  .play-menu-grid > button { min-height: 112px; flex-direction: row; gap: 12px; }
+  .shell-library { width: calc(100% - 24px); margin: 20px auto; padding: 24px 12px 12px; }
   .game-page > .topbar .brand,
   .four-game-page > .topbar .brand,
   .draft-page > .draft-topbar .brand { display: none; }
-  .four-setup-page { padding: 32px 12px 24px; }
+  .four-setup-page, .four-setup-page.embedded { padding: 28px 12px 24px; }
   .four-setup-header { padding-right: 42px; }
   .four-setup-options, .four-seat-setup-grid { grid-template-columns: 1fr; }
   .four-online-options, .four-online-seats { grid-template-columns: 1fr; }

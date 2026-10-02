@@ -27,10 +27,12 @@ export function ThreePlayerSetup({
   defaultPlayerName,
   onStart,
   onBack,
+  embedded = false,
 }: {
   defaultPlayerName?: string;
   onStart: (config: ThreePlayerConfig) => void;
   onBack: () => void;
+  embedded?: boolean;
 }) {
   const [config, setConfig] = useState(() =>
     createLocalThreePlayerConfig(defaultPlayerName)
@@ -62,7 +64,7 @@ export function ThreePlayerSetup({
   };
 
   return (
-    <main className="three-setup-page">
+    <main className={`three-setup-page${embedded ? " embedded" : ""}`}>
       <header className="three-setup-header">
         <div>
           <p className="eyebrow">THREE-PLAYER LOCAL</p>
@@ -72,9 +74,11 @@ export function ThreePlayerSetup({
             Black contest one topology-driven board.
           </p>
         </div>
-        <button className="close-button" onClick={onBack} aria-label="Close three-player setup">
-          <X size={20} />
-        </button>
+        {!embedded && (
+          <button className="close-button" onClick={onBack} aria-label="Close three-player setup">
+            <X size={20} />
+          </button>
+        )}
       </header>
 
       <section className="three-variant-grid" aria-label="Board variant">
