@@ -25,10 +25,12 @@ export function FourPlayerSetup({
   defaultPlayerName,
   onStart,
   onBack,
+  embedded = false,
 }: {
   defaultPlayerName?: string;
   onStart: (config: FourPlayerConfig) => void;
   onBack: () => void;
+  embedded?: boolean;
 }) {
   const [config, setConfig] = useState(() =>
     createLocalFourPlayerConfig(defaultPlayerName)
@@ -74,7 +76,7 @@ export function FourPlayerSetup({
   };
 
   return (
-    <main className="four-setup-page">
+    <main className={`four-setup-page${embedded ? " embedded" : ""}`}>
       <header className="four-setup-header">
         <div>
           <p className="eyebrow">FOUR-PLAYER LOCAL</p>
@@ -84,9 +86,11 @@ export function FourPlayerSetup({
             through east, south, and west.
           </p>
         </div>
-        <button className="close-button" onClick={onBack} aria-label="Close four-player setup">
-          <X size={20} />
-        </button>
+        {!embedded && (
+          <button className="close-button" onClick={onBack} aria-label="Close four-player setup">
+            <X size={20} />
+          </button>
+        )}
       </header>
 
       <section className="four-setup-options" aria-label="Four-player match options">

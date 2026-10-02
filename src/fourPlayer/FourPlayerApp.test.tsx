@@ -41,9 +41,17 @@ afterEach(() => {
   window.localStorage.clear();
 });
 
+const openPlayOption = (name: "Local" | "Load") => {
+  const start = screen.queryByRole("button", { name: /^start$/i });
+  if (start) fireEvent.click(start);
+  fireEvent.click(screen.getByRole("button", {
+    name: new RegExp(`^${name}$`, "i"),
+  }));
+};
+
 const openFourPlayerSetup = () => {
   render(<App />);
-  fireEvent.click(screen.getByRole("button", { name: /^local$/i }));
+  openPlayOption("Local");
   fireEvent.click(screen.getByRole("button", { name: /^4 player$/i }));
 };
 
@@ -60,7 +68,7 @@ const completeFourPlayerDraft = (
 describe("four-player app integration", () => {
   it("offers four-player mode and validates that one seat remains Human", () => {
     const { container } = render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /^local$/i }));
+    openPlayOption("Local");
     expect(screen.getByRole("button", { name: /^4 player$/i })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /^4 player$/i }));
     expect(screen.getByRole("heading", { name: /gather four pantheons/i })).toBeTruthy();
@@ -80,17 +88,19 @@ describe("four-player app integration", () => {
     expect(document.querySelectorAll(".four-draft-progress .draft-pip")).toHaveLength(12);
   });
 
-  it("opens New game in the matching setup and backs out to the Local chooser", () => {
+  it("opens New setup in the shared shell and backs out to the Local chooser", () => {
     const state = completeFourPlayerDraft();
     window.localStorage.setItem(SAVE_KEY, JSON.stringify([
       createSavedGame("four-new-setup", state, [], state),
     ]));
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /load game/i }));
+    openPlayOption("Load");
     fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
-    fireEvent.click(screen.getByRole("button", { name: /^new game$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^new setup$/i }));
     expect(screen.getByRole("heading", { name: /gather four pantheons/i })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /close four-player setup/i }));
+    expect(document.querySelectorAll(".setup-navigation-header")).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: /close four-player setup/i })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /back to local/i }));
     expect(screen.getByRole("button", { name: /^4 player$/i })).toBeTruthy();
   });
 
@@ -197,7 +207,7 @@ describe("four-player app integration", () => {
 
   it("uses per-seat AI difficulty and advances chained AI draft seats", async () => {
     const { container } = render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /^local$/i }));
+    openPlayOption("Local");
     fireEvent.click(screen.getByRole("button", { name: /^4 player$/i }));
     for (const seat of ["east", "west"]) {
       const card = container.querySelector(`.four-seat-setup-card.seat-${seat}`) as HTMLElement;
@@ -213,7 +223,7 @@ describe("four-player app integration", () => {
 
   it("persists team layout, alternating turns, victory, and takeover options", async () => {
     const { container } = render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /^local$/i }));
+    openPlayOption("Local");
     fireEvent.click(screen.getByRole("button", { name: /^4 player$/i }));
     fireEvent.click(screen.getByRole("button", { name: /2v2 teams/i }));
     fireEvent.click(
@@ -254,7 +264,7 @@ describe("four-player app integration", () => {
     ]));
 
     const { container } = render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /load game/i }));
+    openPlayOption("Load");
     fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
 
     expect(screen.getAllByRole("gridcell")).toHaveLength(160);
@@ -332,7 +342,7 @@ describe("four-player app integration", () => {
     ]));
 
     const { container } = render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /load game/i }));
+    openPlayOption("Load");
     fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
 
     expect(container.querySelector(".four-player-panel.seat-east.eliminated")).toBeTruthy();
@@ -362,7 +372,7 @@ describe("four-player app integration", () => {
     ]));
 
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /load game/i }));
+    openPlayOption("Load");
     fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
 
     const finish = screen.getByRole("button", { name: /pass \/ finish/i });
@@ -589,7 +599,7 @@ describe("four-player app integration", () => {
     ]));
 
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /load game/i }));
+    openPlayOption("Load");
     fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
 
     expect(
@@ -620,7 +630,7 @@ describe("four-player app integration", () => {
     expect(stored[0].state.variant).toBe("four-player");
     expect(stored[0].state.players.north.gods).toEqual(["ares"]);
 
-    fireEvent.click(screen.getByRole("button", { name: /load game/i }));
+    openPlayOption("Load");
     expect(screen.getByText(/four-player ffa/i)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
     expect(screen.getByText(/player 2.*east picks/i)).toBeTruthy();
@@ -638,7 +648,7 @@ describe("four-player app integration", () => {
     fireEvent.click(screen.getByRole("button", { name: /save & quit/i }));
     await waitFor(() => expect(screen.getByRole("img", { name: /god chess/i })).toBeTruthy());
 
-    fireEvent.click(screen.getByRole("button", { name: /load game/i }));
+    openPlayOption("Load");
     fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
     const undo = screen.getByRole("button", { name: /^undo$/i });
     expect((undo as HTMLButtonElement).disabled).toBe(false);

@@ -116,6 +116,7 @@ import { THREE_PLAYER_SEATS } from "./game/threePlayerTypes";
 import { ThreePlayerGame } from "./threePlayer/ThreePlayerGame";
 import { ThreePlayerOnlineLobby } from "./threePlayer/ThreePlayerOnlineLobby";
 import { ThreePlayerSetup } from "./threePlayer/ThreePlayerSetup";
+import { SetupNavigationShell } from "./SetupNavigationShell";
 import { AbilityRules, LevelSelector } from "./UpgradePreview";
 
 type GameDispatch = (action: GameAction) => void;
@@ -1387,47 +1388,31 @@ function SettingsModal({
 }
 
 function MainMenu({
-  savedGames,
-  savesLoading,
   saveError,
   account,
   accountConfigured,
   accountLoading,
   accountWorking,
   accountError,
-  onLoad,
-  onDelete,
-  onOpenLocal,
-  onOpenOnline,
-  onOpenPuzzles,
+  onStart,
   onSignIn,
   onSignUp,
   onSignOut,
   onUpdateDisplayName,
 }: {
-  savedGames: SavedGame[];
-  savesLoading: boolean;
   saveError?: string;
   account?: AccountProfile;
   accountConfigured: boolean;
   accountLoading: boolean;
   accountWorking: boolean;
   accountError?: string;
-  onLoad: (game: SavedGame) => void;
-  onDelete: (id: string) => void;
-  onOpenLocal: () => void;
-  onOpenOnline: () => void;
-  onOpenPuzzles: () => void;
+  onStart: () => void;
   onSignIn: (email: string, password: string) => Promise<string>;
   onSignUp: (email: string, password: string, displayName: string) => Promise<string>;
   onSignOut: () => Promise<void>;
   onUpdateDisplayName: (displayName: string) => Promise<string>;
 }) {
-  const [loadOpen, setLoadOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
-  useEffect(() => {
-    if (!savedGames.length) setLoadOpen(false);
-  }, [savedGames.length]);
   return (
     <section className="main-menu-screen">
       <img className="main-menu-art" src={TITLE_ART} alt="God Chess" />
@@ -1439,166 +1424,11 @@ function MainMenu({
       </button>
       <div className="main-menu-actions">
         <p className="eyebrow">THE DIVINE GAME</p>
-        <div>
-          <button
-            className="primary-button"
-            onClick={onOpenLocal}
-            disabled={savesLoading}
-          >
-            Local
-          </button>
-          <button className="primary-button" onClick={onOpenOnline}>Online</button>
-          <button className="primary-button" onClick={onOpenPuzzles}>Puzzles</button>
-          {(savedGames.length > 0 || savesLoading) && (
-            <button className="secondary-button" onClick={() => setLoadOpen(true)} disabled={savesLoading}>Load game</button>
-          )}
-        </div>
-        {savesLoading
-          ? <small>Loading cloud saves...</small>
-          : savedGames.length > 0 && (
-            <small>
-              {savedGames.length} {account ? "cloud " : ""}saved game{savedGames.length === 1 ? "" : "s"}
-            </small>
-          )}
+        <button className="primary-button main-start-button" onClick={onStart}>
+          Start
+        </button>
         {saveError && <p className="main-menu-error" role="alert">{saveError}</p>}
       </div>
-      {loadOpen && (
-        <div className="load-game-backdrop" onMouseDown={() => setLoadOpen(false)}>
-          <section className="load-game-library" onMouseDown={(event) => event.stopPropagation()}>
-            <button className="close-button" onClick={() => setLoadOpen(false)} aria-label="Close saved games">
-              <X size={20} />
-            </button>
-            <p className="eyebrow">SAVED PANTHEONS</p>
-            <h2>Load game</h2>
-            <div className="saved-game-list">
-              {savesLoading && (
-                <div className="saved-games-loading">
-                  <LoaderCircle className="spin" size={22} />
-                  Loading cloud saves
-                </div>
-              )}
-              {!savesLoading && savedGames.map((game) => (
-                <article className="saved-game-card" key={game.id}>
-                  <button
-                    className="saved-game-load"
-                    onClick={() => onLoad(game)}
-                    aria-label={`Load saved game from ${new Date(game.savedAt).toLocaleString()}`}
-                  >
-                    <div className="saved-game-meta">
-                      <strong>{new Date(game.savedAt).toLocaleString()}</strong>
-                      <span>
-                        {isFourPlayerSavedGame(game)
-                          ? `Four-player ${game.state.config.mode === "teams" ? "2v2" : "FFA"} · ${game.state.players[game.state.activeSeat].name} to act`
-                          : isThreePlayerSavedGame(game)
-                            ? `Three-player ${game.state.config.boardVariant} · ${game.state.players[game.state.activeSeat].name} to act`
-                          : `${game.state.gameMode === "ai" ? "Divine AI" : "Local duel"} · Round ${game.state.round} · Turn ${game.state.turn}`}
-                      </span>
-                    </div>
-                    {isFourPlayerSavedGame(game)
-                      ? FOUR_PLAYER_SEATS.map((seat) => {
-                        const player = game.state.players[seat];
-                        return (
-                          <div className="saved-pantheon four-saved-pantheon" key={seat}>
-                            <span
-                              className="four-player-crest"
-                              style={{ "--seat-color": player.displayColor } as React.CSSProperties}
-                            >
-                              {seat[0].toUpperCase()}
-                            </span>
-                            <div>
-                              <strong>{player.name}</strong>
-                              <small>
-                                {seat} · {player.control.kind === "ai"
-                                  ? `AI ${player.control.difficulty ?? 5}`
-                                  : "Human"}
-                                {player.team ? ` · ${player.team === "team-a" ? "Team A" : "Team B"}` : ""}
-                              </small>
-                            </div>
-                            <div className="saved-gods">
-                              {player.gods.length
-                                ? player.gods.map((godId) => (
-                                  <span
-                                    className="saved-god"
-                                    title={GOD_BY_ID[godId].name}
-                                    aria-label={GOD_BY_ID[godId].name}
-                                    key={godId}
-                                  >
-                                    <GodSigil godId={godId} size="small" />
-                                  </span>
-                                ))
-                                : <em>No gods drafted</em>}
-                            </div>
-                          </div>
-                        );
-                      })
-                      : isThreePlayerSavedGame(game)
-                        ? THREE_PLAYER_SEATS.map((seat) => {
-                          const player = game.state.players[seat];
-                          return (
-                            <div className="saved-pantheon four-saved-pantheon" key={seat}>
-                              <span
-                                className="four-player-crest"
-                                style={{ "--seat-color": player.displayColor } as React.CSSProperties}
-                              >
-                                {seat[0].toUpperCase()}
-                              </span>
-                              <div>
-                                <strong>{player.name}</strong>
-                                <small>{seat} · {player.control.kind === "ai" ? `AI ${player.control.difficulty ?? 5}` : "Human"}</small>
-                              </div>
-                              <div className="saved-gods">
-                                {player.gods.length
-                                  ? player.gods.map((godId) => (
-                                    <span className="saved-god" title={GOD_BY_ID[godId].name} key={godId}>
-                                      <GodSigil godId={godId} size="small" />
-                                    </span>
-                                  ))
-                                  : <em>No gods drafted</em>}
-                              </div>
-                            </div>
-                          );
-                        })
-                        : (["white", "black"] as const).map((color) => (
-                      <div className="saved-pantheon" key={color}>
-                        <span className={`player-crest ${color}`}>{color[0].toUpperCase()}</span>
-                        <div>
-                          <strong>{game.state.players[color].name}</strong>
-                          <small>{color}</small>
-                        </div>
-                        <div className="saved-gods">
-                          {game.state.players[color].gods.length
-                            ? game.state.players[color].gods.map((godId) => (
-                              <span
-                                className="saved-god"
-                                title={GOD_BY_ID[godId].name}
-                                aria-label={GOD_BY_ID[godId].name}
-                                key={godId}
-                              >
-                                <GodSigil godId={godId} size="small" />
-                              </span>
-                            ))
-                            : <em>No gods drafted</em>}
-                        </div>
-                      </div>
-                      ))}
-                  </button>
-                  <button
-                    className="delete-save-button"
-                    onClick={() => onDelete(game.id)}
-                    aria-label={`Delete saved game from ${new Date(game.savedAt).toLocaleString()}`}
-                    title="Delete saved game"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </article>
-              ))}
-              {!savesLoading && savedGames.length === 0 && (
-                <p className="saved-games-empty">No saved games are stored in this account yet.</p>
-              )}
-            </div>
-          </section>
-        </div>
-      )}
       {accountOpen && (
         <AccountModal
           account={account}
@@ -1613,6 +1443,215 @@ function MainMenu({
           onUpdateDisplayName={onUpdateDisplayName}
         />
       )}
+    </section>
+  );
+}
+
+function PlayMenu({
+  savedGames,
+  savesLoading,
+  saveError,
+  account,
+  onBack,
+  onOpenLocal,
+  onOpenOnline,
+  onOpenPuzzles,
+  onOpenLoad,
+}: {
+  savedGames: SavedGame[];
+  savesLoading: boolean;
+  saveError?: string;
+  account?: AccountProfile;
+  onBack: () => void;
+  onOpenLocal: () => void;
+  onOpenOnline: () => void;
+  onOpenPuzzles: () => void;
+  onOpenLoad: () => void;
+}) {
+  const loadDescription = savesLoading
+    ? "Loading saved games."
+    : savedGames.length === 0
+      ? "No saved games available."
+      : `${savedGames.length} ${account ? "cloud " : ""}saved game${savedGames.length === 1 ? "" : "s"} available.`;
+  return (
+    <SetupNavigationShell backLabel="Back to title" onBack={onBack}>
+      <div className="play-menu-heading">
+        <p className="eyebrow">PLAY</p>
+        <h1>Choose your path.</h1>
+        <p>Begin a local match, meet online, solve a puzzle, or continue a saved game.</p>
+      </div>
+      <div className="play-menu-grid" role="group" aria-label="Play options">
+        <button onClick={onOpenLocal}>
+          <Users size={30} />
+          <strong>Local</strong>
+        </button>
+        <button onClick={onOpenOnline}>
+          <Wifi size={30} />
+          <strong>Online</strong>
+        </button>
+        <button onClick={onOpenPuzzles}>
+          <Crosshair size={30} />
+          <strong>Puzzles</strong>
+        </button>
+        <button
+          onClick={onOpenLoad}
+          disabled={savesLoading || savedGames.length === 0}
+          aria-label="Load"
+          aria-describedby="play-load-status"
+        >
+          {savesLoading ? <LoaderCircle className="spin" size={30} /> : <History size={30} />}
+          <strong>Load</strong>
+        </button>
+      </div>
+      <p className="play-load-status" id="play-load-status" role="status">
+        {loadDescription}
+      </p>
+      {saveError && <p className="main-menu-error" role="alert">{saveError}</p>}
+    </SetupNavigationShell>
+  );
+}
+
+function SavedGameLibrary({
+  savedGames,
+  savesLoading,
+  onLoad,
+  onDelete,
+}: {
+  savedGames: SavedGame[];
+  savesLoading: boolean;
+  onLoad: (game: SavedGame) => void;
+  onDelete: (id: string) => void;
+}) {
+  return (
+    <section className="load-game-library shell-library">
+      <p className="eyebrow">SAVED PANTHEONS</p>
+      <h2>Load game</h2>
+      <div className="saved-game-list">
+        {savesLoading && (
+          <div className="saved-games-loading">
+            <LoaderCircle className="spin" size={22} />
+            Loading cloud saves
+          </div>
+        )}
+        {!savesLoading && savedGames.map((game) => (
+          <article className="saved-game-card" key={game.id}>
+            <button
+              className="saved-game-load"
+              onClick={() => onLoad(game)}
+              aria-label={`Load saved game from ${new Date(game.savedAt).toLocaleString()}`}
+            >
+              <div className="saved-game-meta">
+                <strong>{new Date(game.savedAt).toLocaleString()}</strong>
+                <span>
+                  {isFourPlayerSavedGame(game)
+                    ? `Four-player ${game.state.config.mode === "teams" ? "2v2" : "FFA"} · ${game.state.players[game.state.activeSeat].name} to act`
+                    : isThreePlayerSavedGame(game)
+                      ? `Three-player ${game.state.config.boardVariant} · ${game.state.players[game.state.activeSeat].name} to act`
+                      : `${game.state.gameMode === "ai" ? "Divine AI" : "Local duel"} · Round ${game.state.round} · Turn ${game.state.turn}`}
+                </span>
+              </div>
+              {isFourPlayerSavedGame(game)
+                ? FOUR_PLAYER_SEATS.map((seat) => {
+                  const player = game.state.players[seat];
+                  return (
+                    <div className="saved-pantheon four-saved-pantheon" key={seat}>
+                      <span
+                        className="four-player-crest"
+                        style={{ "--seat-color": player.displayColor } as React.CSSProperties}
+                      >
+                        {seat[0].toUpperCase()}
+                      </span>
+                      <div>
+                        <strong>{player.name}</strong>
+                        <small>
+                          {seat} · {player.control.kind === "ai"
+                            ? `AI ${player.control.difficulty ?? 5}`
+                            : "Human"}
+                          {player.team ? ` · ${player.team === "team-a" ? "Team A" : "Team B"}` : ""}
+                        </small>
+                      </div>
+                      <div className="saved-gods">
+                        {player.gods.length
+                          ? player.gods.map((godId) => (
+                            <span
+                              className="saved-god"
+                              title={GOD_BY_ID[godId].name}
+                              aria-label={GOD_BY_ID[godId].name}
+                              key={godId}
+                            >
+                              <GodSigil godId={godId} size="small" />
+                            </span>
+                          ))
+                          : <em>No gods drafted</em>}
+                      </div>
+                    </div>
+                  );
+                })
+                : isThreePlayerSavedGame(game)
+                  ? THREE_PLAYER_SEATS.map((seat) => {
+                    const player = game.state.players[seat];
+                    return (
+                      <div className="saved-pantheon four-saved-pantheon" key={seat}>
+                        <span
+                          className="four-player-crest"
+                          style={{ "--seat-color": player.displayColor } as React.CSSProperties}
+                        >
+                          {seat[0].toUpperCase()}
+                        </span>
+                        <div>
+                          <strong>{player.name}</strong>
+                          <small>{seat} · {player.control.kind === "ai" ? `AI ${player.control.difficulty ?? 5}` : "Human"}</small>
+                        </div>
+                        <div className="saved-gods">
+                          {player.gods.length
+                            ? player.gods.map((godId) => (
+                              <span className="saved-god" title={GOD_BY_ID[godId].name} key={godId}>
+                                <GodSigil godId={godId} size="small" />
+                              </span>
+                            ))
+                            : <em>No gods drafted</em>}
+                        </div>
+                      </div>
+                    );
+                  })
+                  : (["white", "black"] as const).map((color) => (
+                <div className="saved-pantheon" key={color}>
+                  <span className={`player-crest ${color}`}>{color[0].toUpperCase()}</span>
+                  <div>
+                    <strong>{game.state.players[color].name}</strong>
+                    <small>{color}</small>
+                  </div>
+                  <div className="saved-gods">
+                    {game.state.players[color].gods.length
+                      ? game.state.players[color].gods.map((godId) => (
+                        <span
+                          className="saved-god"
+                          title={GOD_BY_ID[godId].name}
+                          aria-label={GOD_BY_ID[godId].name}
+                          key={godId}
+                        >
+                          <GodSigil godId={godId} size="small" />
+                        </span>
+                      ))
+                      : <em>No gods drafted</em>}
+                  </div>
+                </div>
+                  ))}
+            </button>
+            <button
+              className="delete-save-button"
+              onClick={() => onDelete(game.id)}
+              aria-label={`Delete saved game from ${new Date(game.savedAt).toLocaleString()}`}
+              title="Delete saved game"
+            >
+              <Trash2 size={16} />
+            </button>
+          </article>
+        ))}
+        {!savesLoading && savedGames.length === 0 && (
+          <p className="saved-games-empty">No saved games are stored in this account yet.</p>
+        )}
+      </div>
     </section>
   );
 }
@@ -1734,14 +1773,11 @@ function StartGamePrompt({
   };
 
   return (
-    <main className="start-game-screen">
-      <header className="start-game-header">
-        <button className="start-game-back" onClick={back}>
-          <ArrowLeft size={18} />
-          {playerCount ? `Back to ${category}` : "Back to title"}
-        </button>
-        <span>GOD CHESS</span>
-      </header>
+    <SetupNavigationShell
+      backLabel={playerCount ? `Back to ${category}` : "Back to Play"}
+      onBack={back}
+      contentClassName={category === "online" && playerCount ? "online-stage" : ""}
+    >
       <section className={`start-game-content ${category === "online" && playerCount ? "online-stage" : ""}`}>
         {!playerCount ? (
           <PlayerCountChooser category={category} onSelect={(count) => {
@@ -1927,7 +1963,7 @@ function StartGamePrompt({
           </div>
         )}
       </section>
-    </main>
+    </SetupNavigationShell>
   );
 }
 
@@ -1966,7 +2002,7 @@ function PuzzleSelectScreen({
           onClick={() => difficulty ? setDifficulty(undefined) : onBack()}
         >
           <ArrowLeft size={17} />
-          {difficulty ? "Difficulties" : "Main menu"}
+          {difficulty ? "Difficulties" : "Play menu"}
         </button>
         <p className="eyebrow">DIVINE PUZZLES</p>
         {!difficulty ? (
@@ -2734,8 +2770,8 @@ export default function App() {
   const savedGamesRef = useRef(savedGames);
   savedGamesRef.current = savedGames;
   const activeSaveId = useRef<string | undefined>(undefined);
-  const [startView, setStartView] = useState<"menu" | "setup" | "three-setup" | "four-setup" | "puzzles" | "none">("menu");
-  const [setupReturnView, setSetupReturnView] = useState<"menu" | "none">("menu");
+  const [startView, setStartView] = useState<"menu" | "play" | "load" | "setup" | "three-setup" | "four-setup" | "puzzles" | "none">("menu");
+  const [setupReturnView, setSetupReturnView] = useState<"menu" | "play" | "none">("menu");
   const [setupCategory, setSetupCategory] = useState<StartCategory>("local");
   const [setupPlayerCount, setSetupPlayerCount] = useState<PlayerCount>();
   const [fourPlayerSession, setFourPlayerSession] = useState<FourPlayerSession>();
@@ -3349,7 +3385,7 @@ export default function App() {
   const openStartFlow = (
     category: StartCategory,
     playerCount?: PlayerCount,
-    returnView: "menu" | "none" = "menu",
+    returnView: "menu" | "play" | "none" = "menu",
   ) => {
     setSetupCategory(category);
     setSetupPlayerCount(playerCount);
@@ -3443,7 +3479,7 @@ export default function App() {
       setThreePlayerSession(undefined);
       setSetupCategory("local");
       setSetupPlayerCount(undefined);
-      setSetupReturnView("menu");
+      setSetupReturnView("play");
       setStartView("three-setup");
       return;
     }
@@ -3451,7 +3487,7 @@ export default function App() {
       setFourPlayerSession(undefined);
       setSetupCategory("local");
       setSetupPlayerCount(undefined);
-      setSetupReturnView("menu");
+      setSetupReturnView("play");
       setStartView("four-setup");
       return;
     }
@@ -3545,27 +3581,48 @@ export default function App() {
 
   if (startView === "menu") {
     return (
-      <>
-        <MainMenu
+      <MainMenu
+        saveError={saveError}
+        account={accountService.account}
+        accountConfigured={accountService.configured}
+        accountLoading={accountService.loading}
+        accountWorking={accountService.working}
+        accountError={accountService.error}
+        onStart={() => setStartView("play")}
+        onSignIn={accountService.signIn}
+        onSignUp={accountService.signUp}
+        onSignOut={accountService.signOut}
+        onUpdateDisplayName={accountService.updateDisplayName}
+      />
+    );
+  }
+
+  if (startView === "play") {
+    return (
+      <PlayMenu
+        savedGames={savedGames}
+        savesLoading={savesLoading || savesHydrating}
+        saveError={saveError}
+        account={accountService.account}
+        onBack={() => setStartView("menu")}
+        onOpenLocal={() => openStartFlow("local", undefined, "play")}
+        onOpenOnline={() => openStartFlow("online", undefined, "play")}
+        onOpenPuzzles={() => setStartView("puzzles")}
+        onOpenLoad={() => setStartView("load")}
+      />
+    );
+  }
+
+  if (startView === "load") {
+    return (
+      <SetupNavigationShell backLabel="Back to Play" onBack={() => setStartView("play")}>
+        <SavedGameLibrary
           savedGames={savedGames}
           savesLoading={savesLoading || savesHydrating}
-          saveError={saveError}
-          account={accountService.account}
-          accountConfigured={accountService.configured}
-          accountLoading={accountService.loading}
-          accountWorking={accountService.working}
-          accountError={accountService.error}
           onLoad={loadGame}
           onDelete={(id) => void deleteSavedGame(id)}
-          onOpenLocal={() => openStartFlow("local")}
-          onOpenOnline={() => openStartFlow("online")}
-          onOpenPuzzles={() => setStartView("puzzles")}
-          onSignIn={accountService.signIn}
-          onSignUp={accountService.signUp}
-          onSignOut={accountService.signOut}
-          onUpdateDisplayName={accountService.updateDisplayName}
         />
-      </>
+      </SetupNavigationShell>
     );
   }
 
@@ -3576,7 +3633,7 @@ export default function App() {
         progressLoading={puzzleProgressLoading}
         progressError={saveError}
         onStartPuzzle={beginPuzzle}
-        onBack={() => setStartView("menu")}
+        onBack={() => setStartView("play")}
         onDismissError={() => setSaveError(undefined)}
       />
     );
@@ -3584,29 +3641,49 @@ export default function App() {
 
   if (startView === "four-setup") {
     return (
-      <FourPlayerSetup
-        defaultPlayerName={accountService.account?.displayName}
-        onStart={beginFourPlayerGame}
+      <SetupNavigationShell
+        backLabel="Back to Local"
         onBack={() => {
           setSetupCategory("local");
           setSetupPlayerCount(undefined);
           setStartView("setup");
         }}
-      />
+      >
+        <FourPlayerSetup
+          embedded
+          defaultPlayerName={accountService.account?.displayName}
+          onStart={beginFourPlayerGame}
+          onBack={() => {
+            setSetupCategory("local");
+            setSetupPlayerCount(undefined);
+            setStartView("setup");
+          }}
+        />
+      </SetupNavigationShell>
     );
   }
 
   if (startView === "three-setup") {
     return (
-      <ThreePlayerSetup
-        defaultPlayerName={accountService.account?.displayName}
-        onStart={beginThreePlayerGame}
+      <SetupNavigationShell
+        backLabel="Back to Local"
         onBack={() => {
           setSetupCategory("local");
           setSetupPlayerCount(undefined);
           setStartView("setup");
         }}
-      />
+      >
+        <ThreePlayerSetup
+          embedded
+          defaultPlayerName={accountService.account?.displayName}
+          onStart={beginThreePlayerGame}
+          onBack={() => {
+            setSetupCategory("local");
+            setSetupPlayerCount(undefined);
+            setStartView("setup");
+          }}
+        />
+      </SetupNavigationShell>
     );
   }
 
@@ -3800,7 +3877,7 @@ export default function App() {
             setFourPlayerSession(undefined);
             setSetupCategory("local");
             setSetupPlayerCount(undefined);
-            setSetupReturnView("menu");
+            setSetupReturnView("play");
             setStartView("four-setup");
           }}
         />
@@ -3823,7 +3900,7 @@ export default function App() {
           setThreePlayerSession(undefined);
           setSetupCategory("local");
           setSetupPlayerCount(undefined);
-          setSetupReturnView("menu");
+          setSetupReturnView("play");
           setStartView("three-setup");
         }}
       />
