@@ -62,6 +62,31 @@ const renderGame = (state: ThreePlayerState) =>
     />,
   );
 
+it("renders Quetzacoatl's committed Slither orb choice", () => {
+  const state = completeDraft();
+  state.phase = "play";
+  state.activeSeat = "white";
+  state.players.white.gods = ["quetzacoatl"];
+  state.selectedGod = "quetzacoatl";
+  state.selectedAbility = "flight";
+  state.pending = {
+    godId: "quetzacoatl",
+    abilityId: "flight",
+    step: "slither-orb",
+    destination: Object.keys(state.board)[0],
+    movedPieceId: Object.values(state.board)[0].id,
+  };
+  state.notice = "Slither: choose one extra light or dark orb.";
+
+  renderGame(state);
+
+  expect(screen.getByRole("button", { name: /choose light orb/i })).toBeTruthy();
+  expect(screen.getByRole("button", { name: /choose dark orb/i })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: /^cancel$/i })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: /choose dark orb/i }));
+  expect(screen.getByText(/used Slither with Quetzacoatl/i)).toBeTruthy();
+});
+
 const installDeterministicAiWorker = () => {
   const terminate = vi.fn();
   class DeterministicAiWorker {

@@ -41,6 +41,7 @@ import {
 import { isFourPlayerState } from "./fourPlayerPersistence";
 import { abilityLevel, GOD_BY_ID, GODS } from "./gods";
 import { hasCompleteTurn } from "./completeTurnSearch";
+import { qualifyingSnake } from "./slither";
 import type { GodId, PieceType, Square } from "./types";
 
 const name = (seat: Seat) => seat[0].toUpperCase() + seat.slice(1);
@@ -122,6 +123,7 @@ const COMMITTED_PENDING_STEPS = new Set([
   "siphon-amount",
   "siphon-seat",
   "slither",
+  "slither-orb",
 ]);
 
 export const hasCommittedFourPlayerAction = (state: FourPlayerState) => {
@@ -1034,23 +1036,6 @@ const sourceTargets = (state: FourPlayerState, square: Square): Square[] => {
       }).filter((target) => !board[target]),
     );
   }
-  if (abilityId === "flight") {
-    const targets = [...new Set([
-      ...fourPlayerLegalTargets(state.board, square, state.config, {
-        enPassant: state.enPassant,
-        bananas: state.bananas,
-      }),
-      ...fourPlayerPseudoTargets(state.board, square, state.config, {
-        ignoreBlockers: true,
-        noCapture: true,
-        bananas: state.bananas,
-      }),
-    ])].filter((target) => {
-      const board = fourPlayerApplyMove(state.board, { from: square, to: target }, state.enPassant).board;
-      return !fourPlayerIsInCheck(board, state.activeSeat, state.config, state.bananas);
-    });
-    return constrainLure(state, square, targets);
-  }
   if (abilityId === "air-lift") {
     return constrainLure(
       state,
@@ -1573,24 +1558,35 @@ const resolveMoveEffect = (
   const [toFile, toRank] = fourPlayerCoords(to);
   const [forwardFile, forwardRank] = forwardDirection(moving.owner);
   if (abilityId === "flight") {
-    const flew = moving.type !== "knight" || !captured;
-    const crossed = (flew ? fourPlayerFlightPathSquares(from, to) : [])
-      .map((square) => state.board[square])
-      .filter((piece): piece is FourPlayerPiece => Boolean(piece));
+    const snake = qualifyingSnake(
+      to,
+      (square) => Boolean(state.board[square]),
+      (square) => {
+        const orthogonal = new Set(fourPlayerAdjacentSquares(square, false));
+        return fourPlayerAdjacentSquares(square)
+          .filter((neighbor) => !orthogonal.has(neighbor));
+      },
+      (square) => fourPlayerAdjacentSquares(square, false),
+    );
     for (const affinity of ["light", "dark"] as OrbAffinity[]) {
-      const matching = crossed.filter((piece) => piece.orbAffinity === affinity);
-      let reward = matching.length ? 1 : 0;
-      if (level >= 2) {
-        reward += matching.filter((piece) =>
-          piece.controller && seatsAreHostile(state.config, state.activeSeat, piece.controller)
-        ).length;
-      }
-      if (level >= 3 && toRank !== fromRank) {
-        reward += matching.filter((piece) =>
-          piece.controller && seatsAreAllies(state.config, state.activeSeat, piece.controller)
-        ).length;
-      }
+      const matching = snake.filter((square) =>
+        state.board[square].orbAffinity === affinity
+      ).length;
+      const reward = level >= 3 ? matching : Number(matching > 0);
       addAffinityOrb(state, state.activeSeat, affinity, reward);
+    }
+    if (level >= 2 && snake.length >= 2) {
+      state.pending = {
+        godId: state.selectedGod!,
+        abilityId,
+        step: "slither-orb",
+        destination: to,
+        movedPieceId: moving.id,
+      };
+      state.selectedSquare = undefined;
+      state.legalTargets = [];
+      state.notice = "Slither: choose one extra light or dark orb.";
+      return "pending";
     }
   } else if (abilityId === "gallop") {
     if (moving.type === "knight") addOrbs(state, state.activeSeat, level, 0);
@@ -2759,6 +2755,12 @@ export const availableFourPlayerActions = (
       { type: "orb" },
     ];
   }
+  if (state.pending?.step === "slither-orb") {
+    return [
+      { type: "orb", orb: "light" },
+      { type: "orb", orb: "dark" },
+    ];
+  }
   if (
     state.pending?.step === "rage-choice" ||
     state.pending?.step === "marked-choice" ||
@@ -3016,6 +3018,10 @@ const reduceFourPlayerState = (
     addOrbs(next, target, -stolen, 0);
     addOrbs(next, next.activeSeat, stolen, 0);
     finishTurn(next, abilityDescription(next, `: stole ${stolen} light orbs from ${name(target)}`));
+  } else if (action.type === "orb" && next.pending?.step === "slither-orb") {
+    if (!action.orb) return state;
+    addAffinityOrb(next, next.activeSeat, action.orb, 1);
+    finishTurn(next, abilityDescription(next, `: chose 1 extra ${action.orb} orb`));
   } else if (action.type === "orb" && next.pending?.step === "barter-orb" && next.pending.targetSeat) {
     const target = next.pending.targetSeat;
     if (action.orb && activePlayer(next).orbs[action.orb] > 0) {

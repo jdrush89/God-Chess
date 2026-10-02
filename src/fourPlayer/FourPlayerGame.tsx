@@ -823,6 +823,24 @@ function PendingChoices({
         </div>
       );
     }
+    if (pending.step === "slither-orb") {
+      return (
+        <div className="four-choice-buttons">
+          <button
+            className="secondary-button"
+            onClick={() => dispatch({ type: "orb", orb: "light" })}
+          >
+            Gain light
+          </button>
+          <button
+            className="secondary-button"
+            onClick={() => dispatch({ type: "orb", orb: "dark" })}
+          >
+            Gain dark
+          </button>
+        </div>
+      );
+    }
     if (pending.step === "harden-decision") {
       return (
         <div className="four-choice-buttons">

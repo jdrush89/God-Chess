@@ -18,6 +18,7 @@ import {
 } from "./chess";
 import { abilityLevel, GOD_BY_ID, GODS } from "./gods";
 import { hasCompleteTurn } from "./completeTurnSearch";
+import { qualifyingSnake } from "./slither";
 import type {
   Color,
   GameMode,
@@ -44,6 +45,7 @@ export type GameAction =
   | { type: "marked-execute" }
   | { type: "rage-resolve"; spareFriendly: boolean }
   | { type: "barter"; give?: Color }
+  | { type: "orb"; orb: Color }
   | { type: "resurrect-more"; revive: boolean }
   | { type: "harden-choice"; keep: boolean }
   | { type: "siphon"; amount: 0 | 1 | 2 }
@@ -852,16 +854,6 @@ const sourceTargets = (state: GameState, square: Square) => {
         .filter((target) => !board[target]),
     );
   }
-  if (abilityId === "flight") {
-    const candidates = [...new Set([
-      ...legalTargets(state.board, square, { enPassant: state.enPassant, bananas: state.bananas }),
-      ...pseudoTargets(state.board, square, { ignoreBlockers: true, noCapture: true, bananas: state.bananas }),
-    ])];
-    return constrainLure(candidates.filter((target) => {
-      const simulated = applyMove(state.board, { from: square, to: target }, state.enPassant).board;
-      return !isInCheck(simulated, piece.controller, state.bananas);
-    }));
-  }
   if (abilityId === "air-lift") {
     return constrainLure(allSquares.filter((target) => !state.board[target] && distance(square, target) <= level + 2));
   }
@@ -1246,31 +1238,38 @@ const resolveMoveEffect = (
   const forward = color === "white" ? 1 : -1;
 
   if (abilityId === "flight") {
-    const flew = moving.type !== "knight" || !captured;
-    const crossed = (flew ? flightPathSquares(from, to) : [])
-      .map((square) => state.board[square])
-      .filter(Boolean);
-    const baseWhite = crossed.some((piece) => piece.color === "white") ? 1 : 0;
-    const baseBlack = crossed.some((piece) => piece.color === "black") ? 1 : 0;
-    const enemyWhite = level >= 2
-      ? crossed.filter((piece) => piece.controller !== color && piece.color === "white").length
-      : 0;
-    const enemyBlack = level >= 2
-      ? crossed.filter((piece) => piece.controller !== color && piece.color === "black").length
-      : 0;
-    const movedOnlyHorizontally = toRank === fromRank;
-    const friendlyWhite = level >= 3 && !movedOnlyHorizontally
-      ? crossed.filter((piece) => piece.controller === color && piece.color === "white").length
-      : 0;
-    const friendlyBlack = level >= 3 && !movedOnlyHorizontally
-      ? crossed.filter((piece) => piece.controller === color && piece.color === "black").length
-      : 0;
-    addOrbs(
-      state,
-      color,
-      baseWhite + enemyWhite + friendlyWhite,
-      baseBlack + enemyBlack + friendlyBlack,
+    const snake = qualifyingSnake(
+      to,
+      (square) => Boolean(state.board[square]),
+      (square) => {
+        const orthogonal = new Set(adjacentSquares(square, false));
+        return adjacentSquares(square).filter((neighbor) => !orthogonal.has(neighbor));
+      },
+      (square) => adjacentSquares(square, false),
     );
+    if (snake.length) {
+      const white = snake.filter((square) => state.board[square].color === "white").length;
+      const black = snake.filter((square) => state.board[square].color === "black").length;
+      addOrbs(
+        state,
+        color,
+        level >= 3 ? white : Number(white > 0),
+        level >= 3 ? black : Number(black > 0),
+      );
+      if (level >= 2 && snake.length >= 2) {
+        state.pending = {
+          godId: state.selectedGod!,
+          abilityId,
+          step: "slither-orb",
+          destination: to,
+          movedPieceId: moving.id,
+        };
+        state.selectedSquare = undefined;
+        state.legalTargets = [];
+        state.notice = "Slither: choose one extra white or black orb.";
+        return "pending";
+      }
+    }
   } else if (abilityId === "gallop") {
     const bonus = level;
     if (moving.type === "knight") addOrbs(state, color, bonus, 0);
@@ -2348,6 +2347,12 @@ export const availableClassicActions = (state: GameState): GameAction[] => {
       { type: "barter" },
     ];
   }
+  if (state.pending?.step === "slither-orb") {
+    return [
+      { type: "orb", orb: "white" },
+      { type: "orb", orb: "black" },
+    ];
+  }
   if (state.pending?.step === "resurrect-more") {
     return [
       { type: "resurrect-more", revive: true },
@@ -2393,7 +2398,7 @@ export const availableClassicActions = (state: GameState): GameAction[] => {
     } as GameAction)));
   }
   if (canPassAction(state)) actions.push({ type: "pass" });
-  actions.push({ type: "cancel" });
+  if (state.pending?.step !== "slither-orb") actions.push({ type: "cancel" });
   return actions;
 };
 
@@ -2472,6 +2477,9 @@ const clearTurnSelection = (state: GameState) => {
   state.legalTargets = [];
 };
 
+const hasCommittedClassicAction = (state: GameState) =>
+  state.pending?.step === "slither-orb";
+
 const resolveClassicTurnStart = (state: GameState) => {
   if (
     completeTurnSearchDepth > 0 ||
@@ -2547,6 +2555,11 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
     resolveClassicTurnStart(loaded);
     return loaded;
   }
+  if (
+    state.phase === "play" &&
+    hasCommittedClassicAction(state) &&
+    ["pass", "cancel", "clear-god", "select-god", "select-ability"].includes(action.type)
+  ) return state;
   const previousOrbs = {
     white: { ...state.players.white.orbs },
     black: { ...state.players.black.orbs },
@@ -2554,7 +2567,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
   const animationSource =
     action.type === "square"
       ? action.square
-      : action.type === "barter" || action.type === "siphon"
+      : action.type === "barter" || action.type === "siphon" || action.type === "orb"
         ? state.pending?.destination
         : action.type === "marked-execute" && state.pending?.movedPieceId
           ? findSquareById(state.board, state.pending.movedPieceId)
@@ -2568,13 +2581,17 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
   if (action.type === "draft" && next.phase === "draft") draftGod(next, action.godId);
   else if (action.type === "auto-draft" && next.phase === "draft") draftGod(next, action.godId);
   else if (action.type === "select-god" && next.phase === "play") {
+    if (hasCommittedClassicAction(next)) return state;
     selectGod(next, action.godId);
     if (next.selectedGod === action.godId) {
       present(next, { kind: "god", godId: action.godId });
     }
   }
   else if (action.type === "clear-god" && next.phase === "play" && next.selectedGod) {
-    if (next.pending?.step === "enchant-followup-move") return state;
+    if (
+      next.pending?.step === "enchant-followup-move" ||
+      hasCommittedClassicAction(next)
+    ) return state;
     if (next.selectedAbility) refundCost(next);
     next.selectedGod = undefined;
     next.selectedAbility = undefined;
@@ -2584,7 +2601,10 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
     next.notice = `${colorName(next.activeColor)} to act. Choose an available god.`;
   }
   else if (action.type === "select-ability" && next.phase === "play") {
-    if (next.pending?.step === "enchant-followup-move") return state;
+    if (
+      next.pending?.step === "enchant-followup-move" ||
+      hasCommittedClassicAction(next)
+    ) return state;
     if (next.selectedAbility) refundCost(next);
     activateAbility(next, action.abilityId);
     if (next.selectedGod && next.selectedAbility === action.abilityId) {
@@ -2642,6 +2662,15 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
     } else {
       finishTurn(next, abilityDescription(next, ": declined the trade"));
     }
+  }
+  else if (action.type === "orb" && next.pending?.step === "slither-orb") {
+    addOrbs(
+      next,
+      next.activeColor,
+      action.orb === "white" ? 1 : 0,
+      action.orb === "black" ? 1 : 0,
+    );
+    finishTurn(next, abilityDescription(next, `: chose 1 extra ${action.orb} orb`));
   }
   else if (action.type === "resurrect-more" && next.pending?.step === "resurrect-more") {
     if (action.revive) {
@@ -2701,6 +2730,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
   }
   else if (action.type === "upgrade" && next.phase === "upgrade") upgradeAbility(next, action.abilityId);
   else if (action.type === "cancel" && next.phase === "play") {
+    if (next.pending?.step === "slither-orb") return state;
     if (next.pending?.step === "enchant-followup-move") return state;
     const progressed = next.pending && ["slither", "funding", "banana", "hire"].includes(next.pending.step);
     if (progressed) {
