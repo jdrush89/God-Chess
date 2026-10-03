@@ -8,6 +8,7 @@ import {
   fourPlayerLegalTargets,
   fourPlayerLineOfSight,
   fourPlayerLineOfSightSquares,
+  fourPlayerOrdinaryAttackedSquares,
   fourPlayerPathSquares,
   fourPlayerSquares,
   forwardDirection,
@@ -52,6 +53,23 @@ describe("four-player cross geometry", () => {
     expect(fourPlayerPathSquares("d4", "d1")).toEqual(["d3", "d2"]);
     expect(fourPlayerLineOfSightSquares("d4", "a1")).toEqual([]);
     expect(fourPlayerLineOfSight({}, "d1", "a4")).toBe(false);
+  });
+
+  it("keeps ordinary attacks independent of Charge and sliding blockers", () => {
+    const board: Record<string, FourPlayerPiece> = {
+      g8: {
+        ...piece("knight", "north", "charged-knight"),
+        status: { chargeUntil: "god" as const },
+      },
+      f10: piece("pawn", "south", "ordinary-target"),
+      g10: piece("rook", "south", "charge-only-target"),
+    };
+    expect(fourPlayerOrdinaryAttackedSquares(board, "g8", config)).toContain("f10");
+    expect(fourPlayerOrdinaryAttackedSquares(board, "g8", config)).not.toContain("g10");
+
+    board.g8 = piece("rook", "north", "slider");
+    board.g9 = piece("pawn", "north", "blocker");
+    expect(fourPlayerOrdinaryAttackedSquares(board, "g8", config)).not.toContain("g10");
   });
 
   it("defines forward, left, and right from every seat", () => {

@@ -348,11 +348,26 @@ export const threePlayerIsSquareAttackedBy = (
 ) => Object.entries(state.board).some(([from, piece]) =>
   piece.controller === attacker &&
   !piece.status.frozen &&
-  threePlayerPseudoTargets(state, from, {
+  threePlayerOrdinaryAttackCells(state, from).includes(cell)
+);
+
+export function threePlayerOrdinaryAttackCells(
+  state: ThreePlayerState,
+  from: ThreePlayerCell,
+) {
+  return threePlayerPseudoTargets(state, from, {
     attacksOnly: true,
     ignoreCheck: true,
-  }).includes(cell)
-);
+  });
+}
+
+export function threePlayerOrdinaryAttackedCells(
+  state: ThreePlayerState,
+  from: ThreePlayerCell,
+) {
+  return threePlayerOrdinaryAttackCells(state, from)
+    .filter((cell) => Boolean(state.board[cell]));
+}
 
 export const threePlayerIsSquareAttacked = (
   state: ThreePlayerState,

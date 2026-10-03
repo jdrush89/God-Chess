@@ -298,10 +298,10 @@ export const GODS: God[] = [
         "Ties count for the white-orb reward. Gain 1 extra white orb if the moved piece is the sole farthest advanced piece.",
         "Gain 1 black orb for each enemy piece being attacked instead of only 1 black orb.",
       ]),
-      ability("pick-a-fight", "Pick a Fight", "Teleport a knight or bishop to any empty space where it is being attacked.", "teleport", [
-        "Knight or bishop lands where attacked.",
-        "You may instead teleport the knight or bishop to an empty space where it attacks 2 enemy pieces.",
-        "You may teleport any type of piece to an empty space where it is being attacked.",
+      ability("pick-a-fight", "Pick a Fight", "Move a knight or bishop to an ordinarily legal empty space where it is being attacked.", "move", [
+        "Knight or bishop lands on a legal empty space where it is attacked.",
+        "It may instead land on a legal empty space where it attacks 2 enemy pieces.",
+        "You may move any type of piece to a legal empty space where it is attacked.",
       ], { white: 2 }),
       ability("cull-the-weak", "Cull the Weak", "Move a piece to a spot where it is attacking multiple pieces. Capture the lowest point value piece that it is attacking.", "move", [
         "Capture the lowest-value attacked piece.",

@@ -264,8 +264,33 @@ export const isSquareAttacked = (board: Record<Square, Piece>, square: Square, b
   Object.entries(board).some(([from, piece]) =>
     piece.controller === by &&
     !piece.status.frozen &&
-    pseudoTargets(board, from, { attacksOnly: true, ignoreCheck: true, bananas }).includes(square),
+    ordinaryAttackSquares(board, from, bananas).includes(square),
   );
+
+export function ordinaryAttackSquares(
+  board: Record<Square, Piece>,
+  from: Square,
+  bananas: Banana[] = [],
+) {
+  return pseudoTargets(board, from, {
+    attacksOnly: true,
+    ignoreCheck: true,
+    bananas,
+  });
+}
+
+export function ordinaryAttackedPieceSquares(
+  board: Record<Square, Piece>,
+  from: Square,
+  bananas: Banana[] = [],
+) {
+  const attacker = board[from];
+  if (!attacker) return [];
+  return ordinaryAttackSquares(board, from, bananas).filter((square) => {
+    const target = board[square];
+    return target && target.controller !== attacker.controller;
+  });
+}
 
 export const kingSquare = (board: Record<Square, Piece>, color: Color) =>
   Object.entries(board).find(([, piece]) => piece.type === "king" && piece.controller === color)?.[0];

@@ -14,10 +14,12 @@ import {
   threePlayerCanOrdinarilyCapture,
   threePlayerCheckingSeats,
   threePlayerIsInCheck,
+  threePlayerIsSquareAttacked,
   threePlayerKingCell,
   threePlayerLegalTargets,
   threePlayerLegalMoves,
   threePlayerLineOfSight,
+  threePlayerOrdinaryAttackedCells,
   threePlayerPieceValue,
   threePlayerPseudoTargets,
 } from "./threePlayerChess";
@@ -904,9 +906,7 @@ const preparedDetails = (piece: ThreePlayerPiece) =>
 const preparedShotTargets = (
   state: ThreePlayerState,
   source: string,
-) => threePlayerPseudoTargets(state, source, {
-  attacksOnly: true,
-}).filter((target) => {
+) => threePlayerOrdinaryAttackedCells(state, source).filter((target) => {
   const victim = state.board[target];
   if (!hostilePiece(state, victim) || victim.type === "king") return false;
   const simulated = clone(state);
@@ -1416,30 +1416,27 @@ const sourceTargets = (state: ThreePlayerState, cell: string): string[] => {
   }
   if (abilityId === "pick-a-fight") {
     if (level < 3 && !["knight", "bishop"].includes(piece.type)) return [];
+    const ordinaryTargets = threePlayerLegalTargets(state, cell)
+      .filter((target) => !state.board[target]);
     return constrainLure(
       state,
       cell,
       safeTeleportTargets(
         state,
         cell,
-        getTopologyCells(state).filter((target) => {
-          if (state.board[target]) return false;
+        ordinaryTargets.filter((target) => {
           const simulated = clone(state);
           delete simulated.board[cell];
           simulated.board[target] = piece;
-          const attacked = THREE_PLAYER_SEATS.some((attacker) =>
-            attacker !== state.activeSeat &&
-            Object.entries(simulated.board).some(([enemyCell, enemy]) =>
-              enemy.controller === attacker &&
-              threePlayerPseudoTargets(simulated, enemyCell, {
-                attacksOnly: true,
-                includeAlliedTargets: true,
-              }).includes(target)
-            )
+          const attacked = threePlayerIsSquareAttacked(
+            simulated,
+            target,
+            state.activeSeat,
           );
-          const attacksTwo = threePlayerPseudoTargets(simulated, target, {
-            attacksOnly: true,
-          }).filter((candidate) =>
+          const attacksTwo = threePlayerOrdinaryAttackedCells(
+            simulated,
+            target,
+          ).filter((candidate) =>
             hostilePiece(state, simulated.board[candidate])
           ).length >= 2;
           return attacked || (level >= 2 && attacksTwo);
@@ -1491,9 +1488,7 @@ const sourceTargets = (state: ThreePlayerState, cell: string): string[] => {
       const simulated = clone(state);
       const applied = threePlayerApplyMove(simulated, { from: cell, to: target });
       simulated.board = applied.board;
-      return threePlayerPseudoTargets(simulated, target, {
-        attacksOnly: true,
-      }).filter((attacked) =>
+      return threePlayerOrdinaryAttackedCells(simulated, target).filter((attacked) =>
         hostilePiece(state, simulated.board[attacked])
       ).length >= 2;
     });
@@ -2077,9 +2072,7 @@ const resolveMoveEffect = (
       return "pending";
     }
   } else if (abilityId === "threaten") {
-    const attacked = threePlayerPseudoTargets(state, to, {
-      attacksOnly: true,
-    }).filter((cell) =>
+    const attacked = threePlayerOrdinaryAttackedCells(state, to).filter((cell) =>
       hostilePiece(state, state.board[cell]) &&
       Boolean(state.board[cell])
     ).length;
@@ -2106,9 +2099,7 @@ const resolveMoveEffect = (
       );
     }
   } else if (abilityId === "cull-the-weak") {
-    const attacked = threePlayerPseudoTargets(state, to, {
-      attacksOnly: true,
-    }).filter((cell) =>
+    const attacked = threePlayerOrdinaryAttackedCells(state, to).filter((cell) =>
       hostilePiece(state, state.board[cell]) &&
       state.board[cell].type !== "king"
     );
@@ -2289,7 +2280,7 @@ const executeMovement = (
     state,
     from,
     to,
-    ["air-lift", "pick-a-fight"].includes(abilityId),
+    abilityId === "air-lift",
     state.selectedPath,
   );
   if (!result) {
@@ -3103,9 +3094,7 @@ const handleCell = (state: ThreePlayerState, cell: string) => {
     const attacker = findCellById(state, state.pending.movedPieceId!);
     if (!attacker) return;
     const victim = state.board[cell];
-    const attacked = threePlayerPseudoTargets(state, attacker, {
-      attacksOnly: true,
-    }).filter((target) =>
+    const attacked = threePlayerOrdinaryAttackedCells(state, attacker).filter((target) =>
       hostilePiece(state, state.board[target]) &&
       state.board[target].type !== "king"
     );

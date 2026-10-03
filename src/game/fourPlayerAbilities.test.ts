@@ -625,8 +625,8 @@ describe("four-player God abilities", () => {
     state = gameFor("ares");
     state.board.g8 = piece(state, "knight", "north", "fighter");
     state.board.f11 = piece(state, "rook", "south", "attacker");
-    result = move(state, "ares", "pick-a-fight", "g8", "f9");
-    expect(result.board.f9?.id).toBe("fighter");
+    result = move(state, "ares", "pick-a-fight", "g8", "f10");
+    expect(result.board.f10?.id).toBe("fighter");
 
     state = gameFor("ares");
     state.board.g8 = piece(state, "rook", "north", "culler");
