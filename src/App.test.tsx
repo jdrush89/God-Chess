@@ -970,8 +970,8 @@ describe("game startup", () => {
     openPlayOption("Load");
     fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
     fireEvent.click(screen.getAllByRole("button", { name: /quetzacoatl/i }).at(-1)!);
-    fireEvent.click(screen.getByRole("button", { name: /^flight/i }));
-    fireEvent.click(screen.getByRole("button", { name: /confirm flight/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^slither/i }));
+    fireEvent.click(screen.getByRole("button", { name: /confirm slither/i }));
 
     expect(screen.getByText(/black upgrades one ability/i)).toBeTruthy();
     const undo = screen.getByRole("button", { name: /^undo$/i });
@@ -980,9 +980,9 @@ describe("game startup", () => {
 
     expect(screen.getByText(/white upgrades one ability/i)).toBeTruthy();
     fireEvent.click(screen.getAllByRole("button", { name: /quetzacoatl/i }).at(-1)!);
-    const flightCard = screen.getByText("Flight").closest(".ability-card");
-    expect(flightCard).toBeTruthy();
-    expect(within(flightCard as HTMLElement).getByText("CURRENT LVL 1")).toBeTruthy();
+    const slitherCard = screen.getByText("Slither").closest(".ability-card");
+    expect(slitherCard).toBeTruthy();
+    expect(within(slitherCard as HTMLElement).getByText("CURRENT LVL 1")).toBeTruthy();
   });
 
   it("previews instant ability targets before confirming the effect", () => {
@@ -1011,6 +1011,39 @@ describe("game startup", () => {
     fireEvent.click(screen.getByRole("button", { name: /confirm stone gaze/i }));
 
     expect(container.querySelector('[data-piece-id="white-pawn-4"] [data-status="frozen"]')).toBeTruthy();
+  });
+
+  it("renders Slither's committed orb choice without a cancel control", () => {
+    const savedState = createGame(1);
+    savedState.phase = "play";
+    savedState.activeColor = "white";
+    savedState.players.white.gods = ["quetzacoatl"];
+    savedState.players.black.gods = ["medusa"];
+    savedState.selectedGod = "quetzacoatl";
+    savedState.selectedAbility = "flight";
+    savedState.pending = {
+      godId: "quetzacoatl",
+      abilityId: "flight",
+      step: "slither-orb",
+      destination: "c3",
+      movedPieceId: "white-rook",
+    };
+    savedState.notice = "Slither: choose one extra white or black orb.";
+    window.localStorage.setItem(LEGACY_SAVE_KEY, JSON.stringify({
+      version: 1,
+      savedAt: new Date().toISOString(),
+      state: savedState,
+    }));
+
+    render(<App />);
+    openPlayOption("Load");
+    fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
+
+    expect(screen.getByRole("button", { name: /gain white/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /gain black/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /cancel ability/i })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /gain black/i }));
+    expect(screen.getByText(/black to act/i)).toBeTruthy();
   });
 
   it("lists multiple saved games with pantheons and allows deletion", () => {

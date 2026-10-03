@@ -50,6 +50,7 @@ import {
 } from "./threePlayerTypes";
 import { abilityLevel, GOD_BY_ID, GODS } from "./gods";
 import { hasCompleteTurn } from "./completeTurnSearch";
+import { qualifyingSnake } from "./slither";
 import type { GodId, PieceType } from "./types";
 
 const clone = <T>(value: T): T => structuredClone(value);
@@ -206,6 +207,7 @@ const COMMITTED_PENDING_STEPS = new Set([
   "siphon-amount",
   "siphon-seat",
   "slither",
+  "slither-orb",
 ]);
 
 export const hasCommittedThreePlayerAction = (state: ThreePlayerState) => {
@@ -1368,14 +1370,6 @@ const sourceTargets = (state: ThreePlayerState, cell: string): string[] => {
         .filter((target) => !simulated.board[target]),
     );
   }
-  if (abilityId === "flight") {
-    const ordinary = threePlayerLegalTargets(state, cell);
-    const flying = threePlayerLegalTargets(state, cell, {
-      ignoreBlockers: true,
-      noCapture: true,
-    });
-    return constrainLure(state, cell, [...new Set([...ordinary, ...flying])]);
-  }
   if (abilityId === "air-lift") {
     const targets = getTopologyCells(state).filter((target) =>
       !state.board[target] &&
@@ -1832,33 +1826,33 @@ const resolveMoveEffect = (
 ) => {
   const level = currentLevel(state, abilityId);
   if (abilityId === "flight") {
-    const crossed = threePlayerCrossedCells(
-      state,
-      from,
+    const snake = qualifyingSnake(
       to,
-      state.selectedPath,
-    )
-      .map((cell) => boardBefore?.[cell])
-      .filter((piece): piece is ThreePlayerPiece => Boolean(piece));
+      (cell) => Boolean(state.board[cell]),
+      (cell) => threePlayerDiagonalCells(state, cell),
+      (cell) => threePlayerOrthogonalCells(state, cell),
+    );
     for (const affinity of ["light", "dark"] as const) {
-      const matching = crossed.filter((piece) =>
-        threePlayerPieceAffinity(state, piece) === affinity
-      );
-      let reward = matching.length ? 1 : 0;
-      if (level >= 2) {
-        reward += matching.filter((piece) =>
-          piece.controller !== state.activeSeat
-        ).length;
-      }
-      if (
-        level >= 3 &&
-        threePlayerAdvanceClass(state, moving.owner, from, to) !== "sideways"
-      ) {
-        reward += matching.filter((piece) =>
-          piece.controller === state.activeSeat
-        ).length;
-      }
+      const matching = snake.filter((cell) =>
+        threePlayerPieceAffinity(state, state.board[cell]) === affinity
+      ).length;
+      const reward = level >= 3 ? matching : Number(matching > 0);
       addAffinityOrb(state, state.activeSeat, affinity, reward, to);
+    }
+    if (level >= 2 && snake.length >= 2) {
+      state.pending = {
+        godId: state.selectedGod!,
+        abilityId,
+        step: "slither-orb",
+        destination: to,
+        movedPieceId: moving.id,
+      };
+      state.selectedCell = undefined;
+      state.selectedPath = undefined;
+      state.legalCells = [];
+      state.legalPaths = [];
+      state.notice = "Slither: choose one extra light or dark orb.";
+      return "pending";
     }
   } else if (abilityId === "gallop") {
     if (moving.type === "knight") {
@@ -2353,8 +2347,8 @@ const executeMovement = (
         noCapture: true,
       });
       state.notice = unlimited
-        ? "Slither may continue; pass to stop."
-        : `Slither has ${remaining} moves remaining.`;
+        ? "Serpentine Step may continue; pass to stop."
+        : `Serpentine Step has ${remaining} moves remaining.`;
       return;
     }
   }
@@ -2703,7 +2697,6 @@ const exactMovementPaths = (
     piece.type === "knight" &&
     piece.status.chargeUntil &&
     ![
-      "flight",
       "air-lift",
       "charge",
       "slither",
@@ -2713,10 +2706,8 @@ const exactMovementPaths = (
       "enchant",
     ].includes(state.selectedAbility)
   ) lineKinds.add("rook");
-  const ignoresBlockers = state.selectedAbility === "flight";
   const paths = [...lineKinds].flatMap((kind) =>
     topology.paths(from, to, kind).filter((path) =>
-      ignoresBlockers ||
       path.cells.slice(0, -1).every((cell) => !state.board[cell])
     )
   );
@@ -3395,6 +3386,18 @@ const handleOrb = (
   state: ThreePlayerState,
   orb?: ThreePlayerOrbAffinity,
 ) => {
+  if (state.pending?.step === "slither-orb") {
+    if (!orb) return;
+    addAffinityOrb(
+      state,
+      state.activeSeat,
+      orb,
+      1,
+      state.pending.destination,
+    );
+    finishDivineTurn(state, abilityDescription(state, `: chose 1 extra ${orb} orb`));
+    return;
+  }
   if (
     state.pending?.step !== "barter-orb" ||
     !state.pending.targetSeat
@@ -3546,6 +3549,12 @@ export const availableThreePlayerActions = (
         ? [{ type: "orb", orb: "dark" } as ThreePlayerAction]
         : []),
       { type: "orb" },
+    ];
+  }
+  if (state.pending?.step === "slither-orb") {
+    return [
+      { type: "orb", orb: "light" },
+      { type: "orb", orb: "dark" },
     ];
   }
   if (

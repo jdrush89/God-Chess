@@ -849,6 +849,16 @@ function PendingAbilityChoices({
             </button>
           </>
         )}
+        {state.pending?.step === "slither-orb" && (
+          <>
+            <button className="secondary-button" onClick={() => dispatch({ type: "orb", orb: "white" })}>
+              Gain white
+            </button>
+            <button className="secondary-button" onClick={() => dispatch({ type: "orb", orb: "black" })}>
+              Gain black
+            </button>
+          </>
+        )}
         {state.pending?.step === "resurrect-more" && (
           <>
             <button
@@ -889,9 +899,11 @@ function PendingAbilityChoices({
             Pass / finish
           </button>
         )}
-        <button className="text-button" onClick={() => dispatch({ type: "cancel" })}>
-          Cancel ability
-        </button>
+        {state.pending?.step !== "slither-orb" && (
+          <button className="text-button" onClick={() => dispatch({ type: "cancel" })}>
+            Cancel ability
+          </button>
+        )}
       </div>
     </>
   );

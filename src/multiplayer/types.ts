@@ -341,6 +341,10 @@ const normalizeGameAction = (value: unknown): GameAction | undefined => {
           (value.give === undefined || isColor(value.give))
         ? { type: "barter", ...(value.give ? { give: value.give } : {}) }
         : undefined;
+    case "orb":
+      return hasExactKeys(value, ["type", "orb"]) && isColor(value.orb)
+        ? { type: "orb", orb: value.orb }
+        : undefined;
     case "resurrect-more":
       return hasExactKeys(value, ["type", "revive"]) && isBoolean(value.revive)
         ? { type: "resurrect-more", revive: value.revive }

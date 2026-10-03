@@ -18,10 +18,10 @@ export const GODS: God[] = [
     accent: "#62c8a9",
     symbol: "Q",
     abilities: [
-      ability("flight", "Flight", "Move a piece. When moving, you may fly over any piece. You may not capture pieces if you fly. Gain 1 white orb if you fly over any number of white pieces and 1 black orb if you fly over any number of black pieces.", "move", [
-        "Gain at most 1 orb of each color from flying.",
-        "You get 1 orb of the matching color from each enemy piece you fly over.",
-        "You get 1 orb of the matching color from each friendly piece you fly over if the move is not entirely horizontal.",
+      ability("flight", "Slither", "Move a piece. Gain orbs if you form a snake. A snake is 1 or more pieces that are diagonally adjacent to other pieces, and not orthogonally adjacent to any piece. Gain 1 white orb if the snake contains a white piece and 1 black orb if it contains a black piece.", "move", [
+        "Gain 1 white orb if the snake contains a white piece and 1 black orb if it contains a black piece.",
+        "If the snake is 2 or more pieces, gain an extra orb of your choice.",
+        "Gain 1 orb per piece in the snake in addition to the extra from level 2. The orbs gained match the piece colors.",
       ]),
       ability("air-lift", "Air Lift", "Teleport the King to an empty space within 3 spaces.", "teleport", [
         "Range 3.",
@@ -223,7 +223,7 @@ export const GODS: God[] = [
         "If the piece moves from out of a queen’s line of sight into that queen’s line of sight, gain 2 matching orbs from that queen instead.",
         "If the piece moves into a queen’s line of sight, gain 3 matching orbs from that queen instead.",
       ]),
-      ability("slither", "Slither", "The queen can move diagonally twice, but can’t capture any pieces.", "multi-move", [
+      ability("slither", "Serpentine Step", "The queen can move diagonally twice, but can’t capture any pieces.", "multi-move", [
         "Move twice.",
         "The queen can move diagonally three times.",
         "The queen can move diagonally any number of times.",

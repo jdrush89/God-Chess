@@ -424,7 +424,7 @@ const risingMonument = (playerName?: string) => {
     ["d3", piece("white-monument-pawn-d", "pawn", "white")],
     ["e2", piece("white-monument-pawn-e", "pawn", "white")],
     ["f2", piece("white-monument-pawn-f", "pawn", "white")],
-    ["f5", piece("white-flight-screen", "pawn", "white")],
+    ["f5", piece("white-air-strike-screen", "pawn", "white")],
     ["g2", piece("white-passenger", "pawn", "white")],
     ["h2", piece("white-pawn-h", "pawn", "white")],
     ["f7", piece("black-king", "king", "black")],
@@ -659,13 +659,12 @@ const skywardCharge = (playerName?: string) => {
   state.board = board(
     ["b1", piece("white-king", "king", "white")],
     ["d1", piece("white-queen", "queen", "white")],
-    ["a7", piece("white-flying-rook", "rook", "white")],
-    ["g3", piece("white-guard-rook", "rook", "white")],
+    ["a7", piece("white-guard-rook", "rook", "white")],
+    ["g3", piece("white-slithering-rook", "rook", "white")],
     ["f1", piece("white-bishop-f", "bishop", "white")],
     ["a3", piece("white-knight-a", "knight", "white")],
     ["f3", piece("white-knight-f", "knight", "white")],
     ["a2", piece("white-pawn-a", "pawn", "white")],
-    ["b7", piece("white-flight-screen", "pawn", "white")],
     ["c2", piece("white-pawn-c", "pawn", "white")],
     ["d2", piece("white-pawn-d", "pawn", "white")],
     ["e2", piece("white-pawn-e", "pawn", "white")],
@@ -678,7 +677,6 @@ const skywardCharge = (playerName?: string) => {
     ["e7", piece("black-pawn-e", "pawn", "black")],
     ["c6", piece("black-pawn-c", "pawn", "black")],
     ["d7", piece("black-pawn-d", "pawn", "black")],
-    ["f7", piece("black-pawn-f", "pawn", "black")],
   );
   state.players.white.upgrades = {
     flight: 2,
@@ -1028,15 +1026,16 @@ export const PUZZLES: PuzzleDefinition[] = [
     title: "Position Fourteen",
     difficulty: "medium",
     objective: "Capture the black King in two divine turns.",
-    hint: "Cross the crowded seventh rank without capturing, then turn the protected landing square into the center of destruction.",
-    solutionSummary: "Use Flight to move the rook from a7 to g7, then use Rage to engulf the boxed-in King.",
+    hint: "Complete a mixed-color snake beside the boxed-in King, then turn the landing square into the center of destruction.",
+    solutionSummary: "Use Slither to move the rook from g3 to g7, choose the extra orb, then use Rage to engulf the boxed-in King.",
     playerTurns: 2,
     solutionTurns: [
       [
         { type: "select-god", godId: "quetzacoatl" },
         { type: "select-ability", abilityId: "flight" },
-        { type: "square", square: "a7" },
+        { type: "square", square: "g3" },
         { type: "square", square: "g7" },
+        { type: "orb", orb: "white" },
       ],
       [
         { type: "select-god", godId: "kangus" },

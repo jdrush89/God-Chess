@@ -86,13 +86,14 @@ const teamHexGame = (level: 1 | 2 | 3 = 1) => {
 };
 
 describe("four-player God abilities", () => {
-  it("generalizes Quetzacoatl's Flight, Air Lift, and Air Strike", () => {
+  it("generalizes Quetzacoatl's Slither, Air Lift, and Air Strike", () => {
     let state = gameFor("quetzacoatl");
     state.board.g8 = piece(state, "rook", "north", "carrier");
-    state.board.g9 = piece(state, "pawn", "south", "crossed");
-    let result = move(state, "quetzacoatl", "flight", "g8", "g10");
-    expect(result.board.g10?.id).toBe("carrier");
+    state.board.h10 = piece(state, "pawn", "east", "dark-link", "north");
+    let result = move(state, "quetzacoatl", "flight", "g8", "g9");
+    expect(result.board.g9?.id).toBe("carrier");
     expect(result.players.north.orbs.light).toBe(51);
+    expect(result.players.north.orbs.dark).toBe(51);
 
     state = gameFor("quetzacoatl");
     delete state.board.g14;
@@ -110,6 +111,44 @@ describe("four-player God abilities", () => {
     result = fourPlayerReducer(result, { type: "square", square: "g9" });
     expect(result.board.g10?.id).toBe("air-carrier");
     expect(result.board.g9?.id).toBe("passenger");
+  });
+
+  it("commits Slither's extra choice and uses piece affinity rather than controller", () => {
+    const state = gameFor("quetzacoatl", 2);
+    state.board.g8 = piece(state, "rook", "north", "carrier");
+    state.board.h10 = piece(state, "pawn", "east", "dark-link", "north");
+
+    const moved = move(state, "quetzacoatl", "flight", "g8", "g9");
+    expect(moved.players.north.orbs).toEqual({ light: 51, dark: 51 });
+    expect(moved.pending?.step).toBe("slither-orb");
+    expect(hasCommittedFourPlayerAction(moved)).toBe(true);
+    expect(availableFourPlayerActions(moved)).toEqual([
+      { type: "orb", orb: "light" },
+      { type: "orb", orb: "dark" },
+    ]);
+
+    const resolved = fourPlayerReducer(moved, { type: "orb", orb: "dark" });
+    expect(resolved.players.north.orbs).toEqual({ light: 51, dark: 52 });
+    expect(resolved.activeSeat).toBe("east");
+  });
+
+  it("grants level 3 per-piece affinity rewards and rejects orthogonally touched chains", () => {
+    let state = gameFor("quetzacoatl", 3);
+    state.board.g8 = piece(state, "rook", "north", "carrier");
+    state.board.h10 = piece(state, "pawn", "east", "dark-link");
+    state.board.i11 = piece(state, "bishop", "south", "light-tail");
+
+    let moved = move(state, "quetzacoatl", "flight", "g8", "g9");
+    expect(moved.players.north.orbs).toEqual({ light: 52, dark: 51 });
+    moved = fourPlayerReducer(moved, { type: "orb", orb: "light" });
+    expect(moved.players.north.orbs).toEqual({ light: 53, dark: 51 });
+
+    state = gameFor("quetzacoatl");
+    state.board.g8 = piece(state, "rook", "north", "carrier");
+    state.board.h10 = piece(state, "pawn", "east", "dark-link");
+    state.board.i10 = piece(state, "pawn", "west", "orthogonal-blocker");
+    const disqualified = move(state, "quetzacoatl", "flight", "g8", "g9");
+    expect(disqualified.players.north.orbs).toEqual({ light: 50, dark: 50 });
   });
 
   it("generalizes Chiron's Gallop, Mount, and Charge", () => {
@@ -729,6 +768,8 @@ describe("four-player ability safety regressions", () => {
     expect(state.legalTargets).toContain("g12");
     state = fourPlayerReducer(state, { type: "square", square: "g12" });
     expect(state.pending?.step).toBe("slither");
+    expect(state.notice).toMatch(/^Serpentine Step/);
+    expect(state.notice).not.toMatch(/^Slither/);
     expect(state.legalTargets).toEqual([]);
     expect(state.board.g12?.id).toBe("slithering-queen");
   });

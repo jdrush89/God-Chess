@@ -130,6 +130,10 @@ const PENDING_STEP_RULES: Readonly<Record<string, PendingStepRule>> = {
     abilities: ["slither"],
     required: ["source", "movedPieceId", "movesRemaining"],
   },
+  "slither-orb": {
+    abilities: ["flight"],
+    required: ["destination", "movedPieceId"],
+  },
   funding: { abilities: ["military-funding"], required: ["selected"] },
   "poison-area": {
     abilities: ["poison-cloud"],
