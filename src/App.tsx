@@ -661,7 +661,7 @@ function PieceView({ piece }: { piece: Piece }) {
   );
 }
 
-function ChessBoard({
+export function ChessBoard({
   state,
   dispatch,
   onInspectSquare,
@@ -702,7 +702,7 @@ function ChessBoard({
               >
                 {file === "a" && <span className="rank-label">{rank}</span>}
                 {rank === "1" && <span className="file-label">{file}</span>}
-                {legal && !piece && <span className="move-dot" />}
+                {legal && !piece && <span className="move-target-dot" aria-hidden="true" />}
                 {effectPreview && (
                   <span className="effect-preview-icon">
                     {state.selectedAbility === "stone-gaze" ? <Eye /> : <Crown />}

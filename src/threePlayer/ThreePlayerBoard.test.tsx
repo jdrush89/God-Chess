@@ -97,6 +97,53 @@ describe("ThreePlayerBoard", () => {
     expect(container.querySelector(`[data-cell="${target}"]`)?.classList.contains("path")).toBe(true);
   });
 
+  it.each(THREE_PLAYER_BOARD_VARIANTS)(
+    "renders centered empty-target dots and occupied capture markers on %s",
+    (variant) => {
+      const config = createDefaultThreePlayerConfig();
+      config.boardVariant = variant;
+      const state = createThreePlayerGame(config);
+      const topology = getThreePlayerTopology(variant);
+      const occupied = Object.keys(state.board)[0];
+      const empty = topology.cells.find((cell) => !state.board[cell])!;
+      const { container } = render(
+        <ThreePlayerBoard state={state} legalCells={[empty, occupied]} />,
+      );
+
+      const emptyCell = container.querySelector(`[data-cell="${empty}"]`)!;
+      const occupiedCell = container.querySelector(`[data-cell="${occupied}"]`)!;
+      const marker = emptyCell.parentElement?.querySelector("circle.move-target-dot");
+      expect(emptyCell.classList.contains("legal-destination")).toBe(true);
+      expect(marker).toBeTruthy();
+      expect(marker?.getAttribute("cx")).toBe(
+        String(topology.cellById.get(empty)!.render.x),
+      );
+      expect(marker?.getAttribute("cy")).toBe(
+        String(topology.cellById.get(empty)!.render.y),
+      );
+      expect(occupiedCell.classList.contains("legal-occupied")).toBe(true);
+      expect(occupiedCell.parentElement?.querySelector(".move-target-dot")).toBeNull();
+    },
+  );
+
+  it("keeps ability effect previews distinct from ordinary move targets", () => {
+    const state = createThreePlayerGame();
+    const target = Object.keys(state.board)[0];
+    state.pending = {
+      godId: "medusa",
+      abilityId: "stone-gaze",
+      step: "confirm-stone-gaze",
+    };
+    const { container } = render(
+      <ThreePlayerBoard state={state} legalCells={[target]} />,
+    );
+    const targetCell = container.querySelector(`[data-cell="${target}"]`)!;
+
+    expect(targetCell.classList.contains("effect-preview")).toBe(true);
+    expect(targetCell.classList.contains("legal-destination")).toBe(false);
+    expect(targetCell.parentElement?.querySelector(".move-target-dot")).toBeNull();
+  });
+
   it("visually distinguishes Enchant source and destination highlights", () => {
     const state = createThreePlayerGame();
     const source = Object.keys(state.board)[0];

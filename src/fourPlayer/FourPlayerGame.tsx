@@ -641,7 +641,7 @@ function FourPlayerBoard({
                 {(rank === 3 || rank === 10) && (
                   <span className="file-label">{String.fromCharCode(97 + file)}</span>
                 )}
-                {legal && !piece && <span className="move-dot" />}
+                {legal && !piece && <span className="move-target-dot" aria-hidden="true" />}
                 {banana && <span className="banana" title="Banana peel">⌁</span>}
                 {captureEffects.has(square) && <span className="four-capture-effect"><Skull /></span>}
                 {piece && <PieceView piece={piece} state={state} square={square} />}
