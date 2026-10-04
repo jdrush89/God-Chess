@@ -107,7 +107,7 @@ vi.mock("./account/cloudPuzzleProgress", () => ({
   upsertCloudCompletedPuzzles: vi.fn(async () => undefined),
 }));
 
-import App, { ActionPanel } from "./App";
+import App, { ActionPanel, ChessBoard } from "./App";
 import { createGame, gameReducer } from "./game/engine";
 import { GODS } from "./game/gods";
 import { createDefaultThreePlayerConfig } from "./game/threePlayerConfig";
@@ -674,6 +674,26 @@ describe("game startup", () => {
     expect(screen.queryByText(/choose an available god/i)).toBeNull();
   });
 
+  it("renders empty legal destinations as dots while preserving occupied capture markers", () => {
+    const state = createGame(1);
+    state.phase = "play";
+    state.legalTargets = ["e4", "e7"];
+    const { container } = render(
+      <ChessBoard
+        state={state}
+        dispatch={vi.fn()}
+        onInspectSquare={vi.fn()}
+      />,
+    );
+
+    const emptyTarget = container.querySelector('[data-square="e4"]');
+    const occupiedTarget = container.querySelector('[data-square="e7"]');
+    expect(emptyTarget?.classList.contains("legal-destination")).toBe(true);
+    expect(emptyTarget?.querySelector(".move-target-dot")).toBeTruthy();
+    expect(occupiedTarget?.classList.contains("legal-occupied")).toBe(true);
+    expect(occupiedTarget?.querySelector(".move-target-dot")).toBeNull();
+  });
+
   it("highlights and applies Salem Hex to a hostile King", () => {
     let state = createGame(1);
     for (const godId of [
@@ -1011,6 +1031,10 @@ describe("game startup", () => {
     expect(screen.getByRole("gridcell", {
       name: /e2, white pawn, affected by selected ability/i,
     })).toBeTruthy();
+    const preview = container.querySelector('[data-square="e2"]');
+    expect(preview?.classList.contains("effect-preview")).toBe(true);
+    expect(preview?.classList.contains("legal-destination")).toBe(false);
+    expect(preview?.querySelector(".move-target-dot")).toBeNull();
     expect(container.querySelector('[data-piece-id="white-pawn-4"] [data-status="frozen"]')).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: /confirm stone gaze/i }));

@@ -114,6 +114,8 @@ export function ThreePlayerBoard({
     state.pending?.step === "enchant-enemy-move" ||
     state.pending?.step === "enchant-followup-move"
   ) && !selectedCell;
+  const previewingEffect = state.pending?.step === "confirm-stone-gaze" ||
+    state.pending?.step === "confirm-march-home";
 
   return (
     <svg
@@ -127,6 +129,8 @@ export function ThreePlayerBoard({
         const piece = state.board[descriptor.id];
         const banana = state.bananas.find(({ cell }) => cell === descriptor.id);
         const isLegal = legal.has(descriptor.id);
+        const isEffectPreview = previewingEffect && isLegal;
+        const isMoveTarget = isLegal && !isEffectPreview;
         const isSelected = descriptor.id === selectedCell;
         const visualClass = descriptor.geometricClass === 2 &&
           threePlayerHasAlternatingNeutralCells(variant)
@@ -139,10 +143,11 @@ export function ThreePlayerBoard({
         const cellClass = [
           "three-board-cell",
           visualClass,
-          isLegal ? "legal" : "",
-          piece && isLegal ? "legal-occupied" : "",
-          isLegal && enchantSourceChoice ? "legal-source" : "",
-          isLegal && !enchantSourceChoice ? "legal-destination" : "",
+          isMoveTarget ? "legal" : "",
+          piece && isMoveTarget ? "legal-occupied" : "",
+          isMoveTarget && enchantSourceChoice ? "legal-source" : "",
+          isMoveTarget && !enchantSourceChoice ? "legal-destination" : "",
+          isEffectPreview ? "effect-preview" : "",
           isSelected ? "selected" : "",
           path.has(descriptor.id) ? "path" : "",
         ].filter(Boolean).join(" ");
@@ -197,6 +202,15 @@ export function ThreePlayerBoard({
             key={descriptor.id}
           >
             {shape}
+            {isMoveTarget && !piece && (
+              <circle
+                className="move-target-dot"
+                cx={descriptor.render.x}
+                cy={descriptor.render.y}
+                r={pieceFontSize(descriptor, variant) * 0.14}
+                aria-hidden="true"
+              />
+            )}
             {piece && !preview && (
               <text
                 className={`three-board-piece seat-${piece.controller ?? piece.owner} ${piece.controller ? "" : "inert"}`}

@@ -287,6 +287,55 @@ describe("four-player app integration", () => {
     ).toBeTruthy();
   });
 
+  it("renders empty legal destinations as dots and occupied targets as capture markers", () => {
+    const state = completeFourPlayerDraft();
+    state.legalTargets = ["g8", "g14"];
+    const { container } = render(
+      <FourPlayerGame
+        initialState={state}
+        undoPreferred={false}
+        onUndoPreferenceChange={vi.fn()}
+        onPersist={vi.fn(async () => false)}
+        onQuit={vi.fn()}
+        onNewGame={vi.fn()}
+      />,
+    );
+
+    const emptyTarget = container.querySelector('[data-square="g8"]');
+    const occupiedTarget = container.querySelector('[data-square="g14"]');
+    expect(emptyTarget?.classList.contains("legal-destination")).toBe(true);
+    expect(emptyTarget?.querySelector(".move-target-dot")).toBeTruthy();
+    expect(occupiedTarget?.classList.contains("legal-occupied")).toBe(true);
+    expect(occupiedTarget?.querySelector(".move-target-dot")).toBeNull();
+  });
+
+  it("keeps four-player effect previews distinct from move-target dots", () => {
+    const state = completeFourPlayerDraft();
+    state.selectedGod = "medusa";
+    state.selectedAbility = "stone-gaze";
+    state.pending = {
+      godId: "medusa",
+      abilityId: "stone-gaze",
+      step: "confirm-stone-gaze",
+    };
+    state.legalTargets = ["g14"];
+    const { container } = render(
+      <FourPlayerGame
+        initialState={state}
+        undoPreferred={false}
+        onUndoPreferenceChange={vi.fn()}
+        onPersist={vi.fn(async () => false)}
+        onQuit={vi.fn()}
+        onNewGame={vi.fn()}
+      />,
+    );
+
+    const preview = container.querySelector('[data-square="g14"]');
+    expect(preview?.classList.contains("effect-preview")).toBe(true);
+    expect(preview?.classList.contains("legal-destination")).toBe(false);
+    expect(preview?.querySelector(".move-target-dot")).toBeNull();
+  });
+
   it("stacks side-seat identity above a complete resource row for long team names", () => {
     const config = createDefaultFourPlayerConfig();
     config.mode = "teams";
