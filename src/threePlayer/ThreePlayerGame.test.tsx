@@ -160,6 +160,7 @@ describe("ThreePlayerGame", () => {
   });
 
   it("quick-drafts every remaining local pick without changing prior ownership", async () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.75);
     const config = createDefaultThreePlayerConfig();
     config.seats.red.control = { kind: "ai", difficulty: 5 };
     config.seats.black.control = { kind: "ai", difficulty: 5 };
@@ -183,7 +184,11 @@ describe("ThreePlayerGame", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Claim Ares$/i }));
     let expected = threePlayerReducer(initial, { type: "draft", godId: "ares" });
     while (expected.phase === "draft") {
-      expected = threePlayerReducer(expected, availableThreePlayerActions(expected)[0]);
+      const actions = availableThreePlayerActions(expected);
+      expected = threePlayerReducer(
+        expected,
+        actions[Math.floor(actions.length * 0.75)],
+      );
     }
 
     const quickDraft = screen.getByRole("button", { name: /^quick draft$/i });

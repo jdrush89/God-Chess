@@ -540,6 +540,34 @@ const refundCost = (state: GameState) => {
   addOrbs(state, state.activeColor, cost.white, cost.black);
 };
 
+const COMMITTED_PENDING_STEPS = new Set([
+  "banana",
+  "barter-choice",
+  "cull-choice",
+  "enchant-followup-move",
+  "funding",
+  "hire",
+  "marked-choice",
+  "mount-place",
+  "mount-rider",
+  "rage-choice",
+  "resurrect-more",
+  "siphon-choice",
+  "slither",
+  "slither-orb",
+]);
+
+export const hasCommittedClassicAction = (state: GameState) => {
+  const pending = state.pending;
+  if (!pending) return false;
+  if (COMMITTED_PENDING_STEPS.has(pending.step)) return true;
+  if (
+    ["grave", "revive-place"].includes(pending.step) &&
+    Boolean(pending.selected?.length)
+  ) return true;
+  return pending.abilityId === "hex" && Boolean(pending.selected?.length);
+};
+
 const allowedEnchantTypes = (level: number): PieceType[] =>
   level === 1
     ? ["pawn", "knight", "bishop"]
@@ -2406,7 +2434,7 @@ export const availableClassicActions = (state: GameState): GameAction[] => {
     } as GameAction)));
   }
   if (canPassAction(state)) actions.push({ type: "pass" });
-  if (state.pending?.step !== "slither-orb") actions.push({ type: "cancel" });
+  if (!hasCommittedClassicAction(state)) actions.push({ type: "cancel" });
   return actions;
 };
 
@@ -2485,9 +2513,6 @@ const clearTurnSelection = (state: GameState) => {
   state.legalTargets = [];
 };
 
-const hasCommittedClassicAction = (state: GameState) =>
-  state.pending?.step === "slither-orb";
-
 const resolveClassicTurnStart = (state: GameState) => {
   if (
     completeTurnSearchDepth > 0 ||
@@ -2565,7 +2590,13 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
   if (
     state.phase === "play" &&
     hasCommittedClassicAction(state) &&
-    ["pass", "cancel", "clear-god", "select-god", "select-ability"].includes(action.type)
+    ["cancel", "clear-god", "select-god", "select-ability"].includes(action.type)
+  ) return state;
+  if (
+    state.phase === "play" &&
+    action.type === "pass" &&
+    hasCommittedClassicAction(state) &&
+    !canPassAction(state)
   ) return state;
   const previousOrbs = {
     white: { ...state.players.white.orbs },
@@ -2737,19 +2768,13 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
   }
   else if (action.type === "upgrade" && next.phase === "upgrade") upgradeAbility(next, action.abilityId);
   else if (action.type === "cancel" && next.phase === "play") {
-    if (next.pending?.step === "slither-orb") return state;
-    if (next.pending?.step === "enchant-followup-move") return state;
-    const progressed = next.pending && ["slither", "funding", "banana", "hire"].includes(next.pending.step);
-    if (progressed) {
-      finishTurn(next, abilityDescription(next, ": completed the action"));
-    } else {
-      refundCost(next);
-      next.selectedAbility = undefined;
-      next.selectedSquare = undefined;
-      next.pending = undefined;
-      next.legalTargets = [];
-      next.notice = next.selectedGod ? "Choose an ability." : "Choose an available god.";
-    }
+    if (hasCommittedClassicAction(next)) return state;
+    refundCost(next);
+    next.selectedAbility = undefined;
+    next.selectedSquare = undefined;
+    next.pending = undefined;
+    next.legalTargets = [];
+    next.notice = next.selectedGod ? "Choose an ability." : "Choose an available god.";
   } else if (action.type === "pass" && next.phase === "play" && next.selectedGod) {
     if (
       compelledLuredSquares(next).length &&

@@ -61,6 +61,7 @@ import {
   type Seat,
 } from "../game/fourPlayerTypes";
 import { abilityLevel, GOD_BY_ID, GODS } from "../game/gods";
+import { randomItem } from "../game/random";
 import type { Ability, GodId, PieceType, Square } from "../game/types";
 import {
   FOUR_PLAYER_PALETTES,
@@ -342,8 +343,8 @@ function FourPlayerDraft({
               className="auto-draft-button"
               disabled={inputDisabled || !state.draft.available.length}
               onClick={() => {
-                const index = Math.floor(Math.random() * state.draft.available.length);
-                dispatch({ type: "draft", godId: state.draft.available[index] });
+                const godId = randomItem(state.draft.available);
+                if (godId) dispatch({ type: "draft", godId });
               }}
             >
               Auto-pick a God
@@ -992,7 +993,13 @@ function FourActionPanel({
   useEffect(() => {
     setGodPreviewLevel(undefined);
     setSelectedUpgradeAbilityId(undefined);
-  }, [presentedGodId, state.activeSeat]);
+  }, [
+    presentedGodId,
+    state.activeSeat,
+    state.phase,
+    state.round,
+    state.upgradeQueue[0],
+  ]);
 
   if (state.phase === "upgrade") {
     const selectedUpgradeGod = active.gods
@@ -1628,7 +1635,7 @@ export function FourPlayerGame({
     setAiWorking(false);
     try {
       while (stateRef.current.phase === "draft") {
-        const godId = stateRef.current.draft.available[0];
+        const godId = randomItem(stateRef.current.draft.available);
         if (!godId) break;
         if (!applyAction({ type: "draft", godId })) break;
       }

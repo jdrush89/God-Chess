@@ -14,6 +14,7 @@ import {
   availableClassicActions,
   createGame,
   gameReducer,
+  hasCommittedClassicAction,
   hasCompleteClassicTurn,
 } from "./engine";
 import { GOD_BY_ID } from "./gods";
@@ -879,7 +880,7 @@ describe("game flow", () => {
       .toBe("Serpentine Step");
   });
 
-  it("rewards a singleton snake and uses ordinary blockers and captures", () => {
+  it("does not reward an isolated moved piece and uses ordinary blockers and captures", () => {
     let state = quetzSlitherState(1, {
       a1: testPiece("king", "white", "white-king"),
       h8: testPiece("king", "black", "black-king"),
@@ -894,7 +895,20 @@ describe("game flow", () => {
     state = gameReducer(state, { type: "square", square: "a3" });
     expect(state.board.a3?.id).toBe("mover");
     expect(state.players.black.graveyard.at(-1)?.piece.id).toBe("blocker");
+    expect(state.players.white.orbs).toEqual({ white: 0, black: 0 });
+  });
+
+  it("rewards a one-member snake established by a nonqualifying diagonal neighbor", () => {
+    const state = useClassicSlither(quetzSlitherState(2, {
+      a1: testPiece("king", "white", "white-king"),
+      h8: testPiece("king", "black", "black-king"),
+      c2: testPiece("rook", "white", "mover"),
+      d4: testPiece("bishop", "black", "diagonal-neighbor"),
+      e4: testPiece("pawn", "black", "orthogonal-blocker"),
+    }), "c2", "c3");
     expect(state.players.white.orbs).toEqual({ white: 1, black: 0 });
+    expect(state.pending).toBeUndefined();
+    expect(state.activeColor).toBe("black");
   });
 
   it("caps level 1 at one orb per affinity for a mixed diagonal chain", () => {
@@ -909,7 +923,7 @@ describe("game flow", () => {
     expect(state.activeColor).toBe("black");
   });
 
-  it("disqualifies the moved component when any member has an orthogonal neighbor", () => {
+  it("excludes an orthogonally touched piece without invalidating qualifying members", () => {
     const state = useClassicSlither(quetzSlitherState(1, {
       a1: testPiece("king", "white", "white-king"),
       h8: testPiece("king", "black", "black-king"),
@@ -919,7 +933,7 @@ describe("game flow", () => {
       f2: testPiece("pawn", "white", "unrelated-snake-a"),
       g3: testPiece("pawn", "black", "unrelated-snake-b"),
     }), "c2", "c3");
-    expect(state.players.white.orbs).toEqual({ white: 0, black: 0 });
+    expect(state.players.white.orbs).toEqual({ white: 1, black: 0 });
   });
 
   it("commits level 2 to an extra orb choice before ending the turn", () => {
@@ -956,10 +970,101 @@ describe("game flow", () => {
       d4: testPiece("bishop", "white", "white-link"),
       e5: testPiece("bishop", "black", "black-link"),
       f6: testPiece("pawn", "black", "black-tail"),
+      f5: testPiece("pawn", "black", "orthogonal-blocker"),
     }), "c2", "c3");
-    expect(state.players.white.orbs).toEqual({ white: 2, black: 2 });
+    expect(state.players.white.orbs).toEqual({ white: 2, black: 0 });
     state = gameReducer(state, { type: "orb", orb: "white" });
-    expect(state.players.white.orbs).toEqual({ white: 3, black: 2 });
+    expect(state.players.white.orbs).toEqual({ white: 3, black: 0 });
+  });
+
+  it("keeps every classic post-move pending step committed", () => {
+    const committedSteps = [
+      "banana",
+      "barter-choice",
+      "cull-choice",
+      "enchant-followup-move",
+      "funding",
+      "hire",
+      "marked-choice",
+      "mount-place",
+      "mount-rider",
+      "rage-choice",
+      "resurrect-more",
+      "siphon-choice",
+      "slither",
+      "slither-orb",
+    ];
+    for (const step of committedSteps) {
+      const state = quetzSlitherState(1, {
+        a1: testPiece("king", "white", "white-king"),
+        h8: testPiece("king", "black", "black-king"),
+      });
+      state.selectedGod = "quetzacoatl";
+      state.selectedAbility = "flight";
+      state.pending = {
+        godId: "quetzacoatl",
+        abilityId: "flight",
+        step,
+      };
+      expect(hasCommittedClassicAction(state), step).toBe(true);
+      expect(availableClassicActions(state), step).not.toContainEqual({ type: "cancel" });
+    }
+
+    const preCommit = quetzSlitherState(1, {
+      a1: testPiece("king", "white", "white-king"),
+      h8: testPiece("king", "black", "black-king"),
+    });
+    preCommit.selectedGod = "quetzacoatl";
+    preCommit.selectedAbility = "flight";
+    preCommit.pending = {
+      godId: "quetzacoatl",
+      abilityId: "flight",
+      step: "source",
+    };
+    expect(hasCommittedClassicAction(preCommit)).toBe(false);
+    expect(availableClassicActions(preCommit)).toContainEqual({ type: "cancel" });
+  });
+
+  it("rejects cancellation and ability switching after a Mount move", () => {
+    let state = createGame(2);
+    state.phase = "play";
+    state.activeColor = "black";
+    state.players.black.gods = ["chiron", "kangus"];
+    state.players.black.orbs.white = 1;
+    state = gameReducer(state, { type: "select-god", godId: "chiron" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "mount" });
+    state = gameReducer(state, { type: "square", square: "b8" });
+    state = gameReducer(state, { type: "square", square: "c6" });
+
+    expect(state.board.c6?.type).toBe("knight");
+    expect(state.board.b8).toBeUndefined();
+    expect(state.pending?.step).toBe("mount-rider");
+    expect(availableClassicActions(state)).toEqual(expect.arrayContaining([
+      { type: "square", square: "b7" },
+      { type: "pass" },
+    ]));
+    for (const forbidden of [
+      { type: "cancel" },
+      { type: "clear-god" },
+      { type: "select-god", godId: "kangus" },
+      { type: "select-ability", abilityId: "ritual-sacrifice" },
+    ] as const) {
+      expect(availableClassicActions(state)).not.toContainEqual(forbidden);
+    }
+
+    for (const action of [
+      { type: "cancel" },
+      { type: "clear-god" },
+      { type: "select-god", godId: "kangus" },
+      { type: "select-ability", abilityId: "ritual-sacrifice" },
+    ] as const) {
+      expect(gameReducer(state, action)).toBe(state);
+    }
+
+    const completed = gameReducer(state, { type: "pass" });
+    expect(completed.board.c6?.type).toBe("knight");
+    expect(completed.activeColor).toBe("white");
+    expect(completed.pending).toBeUndefined();
   });
 
   it("uses Serpentine Step in Medusa's multi-move follow-up copy", () => {

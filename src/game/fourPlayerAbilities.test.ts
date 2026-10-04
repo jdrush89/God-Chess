@@ -132,7 +132,7 @@ describe("four-player God abilities", () => {
     expect(resolved.activeSeat).toBe("east");
   });
 
-  it("grants level 3 per-piece affinity rewards and rejects orthogonally touched chains", () => {
+  it("grants level 3 per-piece affinity rewards and excludes orthogonally touched pieces", () => {
     let state = gameFor("quetzacoatl", 3);
     state.board.g8 = piece(state, "rook", "north", "carrier");
     state.board.h10 = piece(state, "pawn", "east", "dark-link");
@@ -148,7 +148,7 @@ describe("four-player God abilities", () => {
     state.board.h10 = piece(state, "pawn", "east", "dark-link");
     state.board.i10 = piece(state, "pawn", "west", "orthogonal-blocker");
     const disqualified = move(state, "quetzacoatl", "flight", "g8", "g9");
-    expect(disqualified.players.north.orbs).toEqual({ light: 50, dark: 50 });
+    expect(disqualified.players.north.orbs).toEqual({ light: 51, dark: 50 });
   });
 
   it("generalizes Chiron's Gallop, Mount, and Charge", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chooseAiPlan, evaluateGameState } from "./ai";
+import { chooseAiPlan, enumerateTurnPlans, evaluateGameState } from "./ai";
 import { createGame, gameReducer } from "./engine";
 import { PUZZLE_BY_ID } from "./puzzles";
 import type { Piece, PieceType } from "./types";
@@ -76,6 +76,40 @@ describe("Divine AI", () => {
     for (const action of plan) state = gameReducer(state, action);
     expect(state.activeColor).toBe("black");
     expect(state.pending).toBeUndefined();
+  });
+
+  it("finishes every committed Mount plan without chaining a second God or ability", () => {
+    let state = createGame(2, { mode: "ai", aiDifficulty: 10 });
+    state.phase = "play";
+    state.activeColor = "black";
+    state.players.black.gods = ["chiron", "kangus"];
+    state.players.black.orbs.white = 1;
+    state = gameReducer(state, { type: "select-god", godId: "chiron" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "mount" });
+    state = gameReducer(state, { type: "square", square: "b8" });
+    state = gameReducer(state, { type: "square", square: "c6" });
+
+    const plans = enumerateTurnPlans(state);
+    expect(plans.length).toBeGreaterThan(0);
+    expect(plans.some((plan) => plan.actions.at(-1)?.type === "pass")).toBe(true);
+    expect(plans.every((plan) =>
+      plan.actions.every((action) =>
+        action.type !== "select-god" &&
+        action.type !== "select-ability" &&
+        action.type !== "clear-god" &&
+        action.type !== "cancel"
+      )
+    )).toBe(true);
+    expect(plans.every((plan) =>
+      plan.state.turn > state.turn &&
+      plan.state.activeColor === "white" &&
+      plan.state.pending === undefined
+    )).toBe(true);
+
+    const chosen = chooseAiPlan(state, () => 0);
+    expect(chosen.some((action) =>
+      action.type === "select-god" || action.type === "select-ability"
+    )).toBe(false);
   });
 
   it("strongly prefers a defended piece over the same piece left hanging", () => {

@@ -53,6 +53,7 @@ import {
   PUZZLES,
   type PuzzleDifficulty,
 } from "./game/puzzles";
+import { randomItem } from "./game/random";
 import type { Ability, ActionPresentation, CaptureAnimation, Color, GameMode, GameState, GodId, OrbAnimation, OrbColor, Piece, PuzzleId, Square } from "./game/types";
 import { AccountModal } from "./account/AccountModal";
 import { deleteCloudSavedGame, loadCloudSavedGames, upsertCloudSavedGame } from "./account/cloudSaves";
@@ -3073,7 +3074,7 @@ export default function App() {
     aiPlan.current = [];
     try {
       while (stateRef.current.phase === "draft") {
-        const godId = stateRef.current.draft.available[0];
+        const godId = randomItem(stateRef.current.draft.available);
         if (!godId) break;
         dispatch({ type: "draft", godId });
       }
