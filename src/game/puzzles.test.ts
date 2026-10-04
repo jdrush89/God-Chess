@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import readme from "../../README.md?raw";
-import { chooseAiPlan, enumerateTurnPlans, isAiTurn } from "./ai";
+import { chooseAiPlan, enumerateTurnPlans, evaluateGameState, isAiTurn } from "./ai";
 import { kingSquare, legalTargets } from "./chess";
-import { gameReducer } from "./engine";
+import { availableClassicActions, gameReducer } from "./engine";
 import { GOD_BY_ID, GODS } from "./gods";
 import {
   PUZZLE_GOD_INDEX,
@@ -17,6 +17,48 @@ describe("puzzle mode", () => {
     expect(PUZZLES.filter((puzzle) => puzzle.playerTurns === 2)).toHaveLength(10);
     expect(PUZZLES.filter((puzzle) => puzzle.difficulty === "easy")).toHaveLength(5);
     expect(PUZZLES.filter((puzzle) => puzzle.difficulty === "medium")).toHaveLength(10);
+  });
+
+  it("starts every puzzle without unexplained Stone Gaze freezes", () => {
+    const frozenPieces = PUZZLES.flatMap((puzzle) =>
+      Object.entries(puzzle.createState().board)
+        .filter(([, piece]) => piece.status.frozen || piece.status.frozenBy)
+        .map(([square, piece]) => `${puzzle.id}:${square}:${piece.id}`)
+    );
+
+    expect(frozenPieces).toEqual([]);
+  });
+
+  it("ends Position Nine immediately when Monument completes a mating construction", () => {
+    const puzzle = PUZZLES.find((candidate) => candidate.id === "rising-monument")!;
+    let state = puzzle.createState();
+    for (const square of ["f5", "c8"] as const) {
+      delete state.board[square];
+    }
+    state.board.e8 = { ...state.board.a1, id: "white-construction-e8" };
+    state.board.g8 = { ...state.board.h1, id: "white-construction-g8" };
+    state.puzzlePlayerTurnsRemaining = 1;
+
+    for (const action of [
+      { type: "select-god", godId: "anubis" },
+      { type: "select-ability", abilityId: "monument" },
+      { type: "square", square: "f2" },
+      { type: "square", square: "d3" },
+      { type: "square", square: "e2" },
+      { type: "square", square: "f2" },
+    ] as const) {
+      state = gameReducer(state, action);
+    }
+
+    expect(state).toMatchObject({
+      phase: "gameover",
+      winner: "white",
+      puzzleFailed: false,
+      result: { kind: "winner", winner: "white", reason: "checkmate" },
+    });
+    expect(kingSquare(state.board, "black")).toBeUndefined();
+    expect(isAiTurn(state)).toBe(false);
+    expect(chooseAiPlan(state, () => 0)).toEqual([]);
   });
 
   it.each([
@@ -195,7 +237,7 @@ describe("puzzle mode", () => {
   it("blocks Position Thirteen's retreat before and after the best defensive reply", () => {
     const puzzle = PUZZLES.find((candidate) => candidate.id === "royal-landing")!;
     let state = puzzle.createState();
-    expect(state.board.g8).toMatchObject({ type: "knight", controller: "black" });
+    expect(state.board.g8).toMatchObject({ type: "rook", controller: "black" });
     expect(state.board.h8).toMatchObject({ type: "rook", controller: "black" });
 
     for (const action of puzzle.solutionTurns[0]) state = gameReducer(state, action);
@@ -209,6 +251,35 @@ describe("puzzle mode", () => {
     expect(legalTargets(state.board, "g7")).toEqual([]);
   });
 
+  it("keeps Position Eleven's King boxed in and solvable after every optimal response", () => {
+    const puzzle = PUZZLES.find((candidate) => candidate.id === "funded-flight")!;
+    let staged = puzzle.createState();
+    for (const action of puzzle.solutionTurns[0]) staged = gameReducer(staged, action);
+
+    expect(kingSquare(staged.board, "black")).toBe("f7");
+    expect(legalTargets(staged.board, "f7")).toEqual([]);
+
+    const responses = enumerateTurnPlans(staged, "black");
+    expect(responses.length).toBeGreaterThan(0);
+    const bestScore = evaluateGameState(responses[0].state, "black");
+    const optimalResponses = responses.filter(
+      (response) => evaluateGameState(response.state, "black") === bestScore,
+    );
+    expect(optimalResponses.length).toBeGreaterThan(0);
+
+    for (const response of optimalResponses) {
+      expect(kingSquare(response.state.board, "black")).toBe("f7");
+      let solved = response.state;
+      for (const action of puzzle.solutionTurns[1]) solved = gameReducer(solved, action);
+      expect(solved).toMatchObject({
+        phase: "gameover",
+        winner: "white",
+        puzzleFailed: false,
+        result: { kind: "winner", winner: "white", reason: "king-death" },
+      });
+    }
+  });
+
   it("uses a new Slither setup concept in Position Fourteen", () => {
     const usage = PUZZLE_GOD_USAGE_BY_ID["skyward-charge"];
     expect(usage.solutionAbilities.quetzacoatl).toEqual(["flight"]);
@@ -217,6 +288,57 @@ describe("puzzle mode", () => {
     const earlierAbilities = PUZZLE_GOD_USAGE.slice(0, 13)
       .flatMap((entry) => Object.values(entry.solutionAbilities).flat());
     expect(earlierAbilities).not.toContain("flight");
+  });
+
+  it("requires Position Fourteen's intended Slither to fund Rage", () => {
+    const puzzle = PUZZLES.find((candidate) => candidate.id === "skyward-charge")!;
+    const initial = puzzle.createState();
+    expect(initial.players.white.orbs.black).toBe(1);
+
+    let unaffordable = gameReducer(initial, { type: "select-god", godId: "kangus" });
+    expect(availableClassicActions(unaffordable)).not.toContainEqual({
+      type: "select-ability",
+      abilityId: "rage",
+    });
+
+    let staged = initial;
+    for (const action of puzzle.solutionTurns[0].slice(0, -1)) {
+      staged = gameReducer(staged, action);
+    }
+    expect(staged.pending?.step).toBe("slither-orb");
+    expect(staged.players.white.orbs.black).toBe(2);
+    staged = gameReducer(staged, puzzle.solutionTurns[0].at(-1)!);
+    expect(staged.players.white.orbs.black).toBe(3);
+
+    const fundedPlans = enumerateTurnPlans(initial).filter(
+      (plan) => plan.state.players.white.orbs.black >= 3,
+    );
+    expect(fundedPlans.length).toBeGreaterThan(0);
+    expect(fundedPlans.every((plan) =>
+      plan.actions.some(
+        (action) => action.type === "select-ability" && action.abilityId === "flight",
+      ) &&
+      plan.actions.some((action) => action.type === "square" && action.square === "g3") &&
+      plan.actions.some((action) => action.type === "square" && action.square === "g7") &&
+      plan.actions.some((action) => action.type === "orb" && action.orb === "black")
+    )).toBe(true);
+
+    const responses = enumerateTurnPlans(staged, "black");
+    expect(responses.length).toBeGreaterThan(0);
+    const bestScore = evaluateGameState(responses[0].state, "black");
+    const optimalResponses = responses.filter(
+      (response) => evaluateGameState(response.state, "black") === bestScore,
+    );
+    expect(optimalResponses.length).toBeGreaterThan(0);
+    for (const response of optimalResponses) {
+      let solved = response.state;
+      for (const action of puzzle.solutionTurns[1]) solved = gameReducer(solved, action);
+      expect(solved).toMatchObject({
+        phase: "gameover",
+        winner: "white",
+        puzzleFailed: false,
+      });
+    }
   });
 
   it("keeps Position Fifteen within standard knight counts and makes the provoker pinned", () => {

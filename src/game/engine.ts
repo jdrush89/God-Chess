@@ -7,9 +7,11 @@ import {
   distance,
   flightPathSquares,
   isInCheck,
+  isSquareAttacked,
   kingSquare,
   legalTargets,
   lineOfSight,
+  ordinaryAttackedPieceSquares,
   pathSquares,
   pieceValue,
   pseudoTargets,
@@ -68,6 +70,9 @@ const setClassicWinner = (
   state.phase = "gameover";
   state.winner = winner;
   state.result = { kind: "winner", winner, reason };
+  if (state.gameMode === "puzzle" && winner !== state.aiColor) {
+    state.puzzleFailed = false;
+  }
 };
 
 const setClassicStalemate = (state: GameState) => {
@@ -372,7 +377,7 @@ const preparedDetails = (piece: Piece) => {
 };
 
 const preparedShotTargets = (state: GameState, square: Square) =>
-  pseudoTargets(state.board, square, { attacksOnly: true, bananas: state.bananas })
+  ordinaryAttackedPieceSquares(state.board, square, state.bananas)
     .filter((target) => {
       const piece = state.board[target];
       return piece?.controller === opposite(state.activeColor) &&
@@ -909,17 +914,24 @@ const sourceTargets = (state: GameState, square: Square) => {
   if (abilityId === "pick-a-fight") {
     const eligible = level >= 3 || piece.type === "knight" || piece.type === "bishop";
     if (!eligible) return [];
-    return constrainLure(allSquares.filter((target) => {
-      if (state.board[target]) return false;
+    const ordinaryTargets = legalTargets(state.board, square, {
+      enPassant: state.enPassant,
+      bananas: state.bananas,
+    }).filter((target) => !state.board[target]);
+    return constrainLure(ordinaryTargets.filter((target) => {
       const simulated = { ...state.board, [target]: piece };
       delete simulated[square];
-      const attacked = Object.entries(simulated).some(
-        ([enemySquare, enemy]) =>
-          enemy.controller !== state.activeColor &&
-          pseudoTargets(simulated, enemySquare, { attacksOnly: true, bananas: state.bananas }).includes(target),
+      const attacked = isSquareAttacked(
+        simulated,
+        target,
+        opposite(state.activeColor),
+        state.bananas,
       );
-      const attacksTwo = pseudoTargets(simulated, target, { attacksOnly: true, bananas: state.bananas })
-        .filter((candidate) => simulated[candidate]?.controller !== state.activeColor).length >= 2;
+      const attacksTwo = ordinaryAttackedPieceSquares(
+        simulated,
+        target,
+        state.bananas,
+      ).length >= 2;
       return attacked || (level >= 2 && attacksTwo);
     }));
   }
@@ -961,8 +973,7 @@ const sourceTargets = (state: GameState, square: Square) => {
     return constrainLure(
       legalTargets(state.board, square, { enPassant: state.enPassant, bananas: state.bananas }).filter((target) => {
         const simulated = applyMove(state.board, { from: square, to: target }, state.enPassant).board;
-        return pseudoTargets(simulated, target, { attacksOnly: true, bananas: state.bananas })
-          .filter((attacked) => simulated[attacked]?.controller === opposite(state.activeColor)).length >= 2;
+        return ordinaryAttackedPieceSquares(simulated, target, state.bananas).length >= 2;
       }),
     );
   }
@@ -1422,8 +1433,7 @@ const resolveMoveEffect = (
       return "pending";
     }
   } else if (abilityId === "threaten") {
-    const attacked = pseudoTargets(state.board, to, { attacksOnly: true })
-      .filter((square) => state.board[square]?.controller === enemy).length;
+    const attacked = ordinaryAttackedPieceSquares(state.board, to).length;
     if (attacked) addOrbs(state, color, 0, level >= 3 ? attacked : 1);
     const ranks = Object.entries(state.board)
       .filter(([, piece]) => piece.controller === color)
@@ -1432,8 +1442,7 @@ const resolveMoveEffect = (
     const tied = ranks.filter((rank) => rank === Math.max(...ranks)).length;
     if (advancement === Math.max(...ranks) && (level >= 2 || tied === 1)) addOrbs(state, color, tied === 1 && level >= 2 ? 2 : 1, 0);
   } else if (abilityId === "cull-the-weak") {
-    const attacked = pseudoTargets(state.board, to, { attacksOnly: true })
-      .filter((square) => state.board[square]?.controller === enemy);
+    const attacked = ordinaryAttackedPieceSquares(state.board, to);
     if (attacked.length >= 2) {
       const lowestValue = Math.min(...attacked.map((square) => pieceValue(state.board[square].type)));
       const allowedChoices = attacked.filter((square) => {
@@ -1554,7 +1563,7 @@ const executeMovement = (state: GameState, from: Square, to: Square) => {
   const originalController = moving.controller;
   if (enchantingEnemy) moving.controller = state.activeColor;
   const boardBefore = structuredClone(state.board);
-  const teleports = ["air-lift", "pick-a-fight"];
+  const teleports = ["air-lift"];
   const result = moveDirect(state, from, to, teleports.includes(abilityId));
   if (!result) {
     if (enchantingEnemy) moving.controller = originalController;
@@ -2024,8 +2033,7 @@ const handleSquare = (state: GameState, square: Square) => {
     if (!state.legalTargets.includes(square) || !state.board[square]) return;
     const attackerSquare = findSquareById(state.board, state.pending.movedPieceId);
     if (!attackerSquare) return;
-    const attacked = pseudoTargets(state.board, attackerSquare, { attacksOnly: true })
-      .filter((target) => state.board[target]?.controller === opposite(state.activeColor));
+    const attacked = ordinaryAttackedPieceSquares(state.board, attackerSquare);
     const lowestValue = Math.min(...attacked.map((target) => pieceValue(state.board[target].type)));
     if (pieceValue(state.board[square].type) === lowestValue) {
       captureAt(state, square, state.activeColor);
@@ -2484,7 +2492,6 @@ const resolveClassicTurnStart = (state: GameState) => {
   if (
     completeTurnSearchDepth > 0 ||
     state.phase !== "play" ||
-    state.gameMode === "puzzle" ||
     state.result ||
     state.selectedGod ||
     state.selectedAbility

@@ -7,6 +7,7 @@ import {
   legalTargets,
   lineOfSight,
   lineOfSightSquares,
+  ordinaryAttackedPieceSquares,
   pathSquares,
 } from "./chess";
 import {
@@ -78,6 +79,26 @@ describe("chess movement", () => {
     expect(legalTargets(board, "e2")).toEqual(expect.arrayContaining(["e3", "e4"]));
     expect(legalTargets(board, "b1")).toEqual(expect.arrayContaining(["a3", "c3"]));
     expect(legalTargets(board, "a1")).toHaveLength(0);
+  });
+
+  it("keeps ordinary attacks independent of Charge and blocked by pieces", () => {
+    const board = {
+      a1: testPiece("king", "white", "white-king"),
+      h8: testPiece("king", "black", "black-king"),
+      d4: {
+        ...testPiece("knight", "white", "charged-knight"),
+        status: { chargeUntil: "god" as const },
+      },
+      f5: testPiece("pawn", "black", "ordinary-target"),
+      d6: testPiece("rook", "black", "charge-only-target"),
+      a4: testPiece("rook", "white", "slider"),
+      a5: testPiece("pawn", "white", "blocker"),
+      a6: testPiece("queen", "black", "blocked-target"),
+    };
+
+    expect(ordinaryAttackedPieceSquares(board, "d4")).toContain("f5");
+    expect(ordinaryAttackedPieceSquares(board, "d4")).not.toContain("d6");
+    expect(ordinaryAttackedPieceSquares(board, "a4")).not.toContain("a6");
   });
 
   it("does not trace intermediate squares for a knight jump", () => {
@@ -964,6 +985,49 @@ describe("game flow", () => {
     expect(moved.pending?.step).toBe("slither");
     expect(moved.notice).toMatch(/^Serpentine Step/);
     expect(moved.notice).not.toMatch(/^Slither/);
+  });
+
+  it("limits Pick a Fight to ordinary moves with real combat pressure", () => {
+    const targets = (board: Record<string, Piece>) => {
+      let state = createGame(1);
+      state.phase = "play";
+      state.activeColor = "white";
+      state.players.white.gods = ["ares"];
+      state.players.black.gods = ["medusa"];
+      state.players.white.orbs.white = 2;
+      state.players.white.upgrades["pick-a-fight"] = 2;
+      state.board = board;
+      state = gameReducer(state, { type: "select-god", godId: "ares" });
+      state = gameReducer(state, { type: "select-ability", abilityId: "pick-a-fight" });
+      state = gameReducer(state, { type: "square", square: "e5" });
+      return state.legalTargets;
+    };
+    const base = {
+      a1: testPiece("king", "white", "white-king"),
+      b8: testPiece("king", "black", "black-king"),
+      e5: {
+        ...testPiece("knight", "white", "fighter"),
+        status: { chargeUntil: "god" as const },
+      },
+      e7: testPiece("pawn", "black", "first-target"),
+    };
+
+    expect(targets(base)).not.toContain("g6");
+
+    const attackingTwo = {
+      ...base,
+      h8: testPiece("rook", "black", "second-target"),
+      f8: testPiece("pawn", "white", "friendly-non-target"),
+    };
+    const pressureTargets = targets(attackingTwo);
+    expect(pressureTargets).toContain("g6");
+    expect(pressureTargets).not.toContain("e6");
+
+    const attackedAfterLanding = {
+      ...base,
+      f7: testPiece("bishop", "black", "attacker"),
+    };
+    expect(targets(attackedAfterLanding)).toContain("g6");
   });
 
   it("requires a level 1 Air Strike passenger to land on an empty crossed space", () => {

@@ -337,13 +337,31 @@ export const fourPlayerIsSquareAttackedBy = (
 ) => Object.entries(board).some(([from, piece]) =>
   piece.controller === attacker &&
   !piece.status.frozen &&
-  fourPlayerPseudoTargets(board, from, config, {
+  fourPlayerOrdinaryAttackSquares(board, from, config, bananas).includes(square),
+);
+
+export function fourPlayerOrdinaryAttackSquares(
+  board: Record<Square, FourPlayerPiece>,
+  from: Square,
+  config: FourPlayerConfig,
+  bananas: FourPlayerBanana[] = [],
+) {
+  return fourPlayerPseudoTargets(board, from, config, {
     attacksOnly: true,
     ignoreCheck: true,
     bananas,
-    includeAlliedTargets: true,
-  }).includes(square),
-);
+  });
+}
+
+export function fourPlayerOrdinaryAttackedSquares(
+  board: Record<Square, FourPlayerPiece>,
+  from: Square,
+  config: FourPlayerConfig,
+  bananas: FourPlayerBanana[] = [],
+) {
+  return fourPlayerOrdinaryAttackSquares(board, from, config, bananas)
+    .filter((square) => Boolean(board[square]));
+}
 
 export const fourPlayerIsSquareAttacked = (
   board: Record<Square, FourPlayerPiece>,

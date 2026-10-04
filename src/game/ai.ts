@@ -1,4 +1,5 @@
 import { allSquares, coords, isInCheck, kingSquare, pieceValue, pseudoTargets } from "./chess";
+import { enumerateCompleteTurnPlans } from "./completeTurnSearch";
 import {
   availableClassicActions,
   classicPlanStateSignature,
@@ -228,13 +229,52 @@ const hasWinningTurn = (state: GameState, color: Color) => {
   );
 };
 
+const hasWinningAirStrikeTurn = (state: GameState, color: Color) => {
+  if (state.phase === "gameover") return false;
+  const turn = state.activeColor === color ? state : hypotheticalTurnFor(state, color);
+  const gods = turn.players[color].gods.filter((godId) =>
+    !turn.rested.includes(godId) &&
+    GOD_BY_ID[godId].abilities.some((ability) => ability.id === "air-strike")
+  );
+
+  return gods.some((godId) => {
+    let selected = gameReducer(turn, { type: "select-god", godId });
+    selected = gameReducer(selected, {
+      type: "select-ability",
+      abilityId: "air-strike",
+    });
+    if (selected.selectedAbility !== "air-strike") return false;
+    return enumerateCompleteTurnPlans({
+      state: selected,
+      availableActions: availableClassicActions,
+      reduce: gameReducer,
+      signature: classicPlanStateSignature,
+      isComplete: isCompleteClassicTurn,
+      acceptComplete: (_initial, next) =>
+        next.phase === "gameover" &&
+        next.winner === color &&
+        Boolean(kingSquare(next.board, color)) &&
+        !kingSquare(next.board, opposite(color)),
+      limits: {
+        maxDepth: 4,
+        maxStates: 50_000,
+        maxActionsPerState: 256,
+        maxPlans: 1,
+      },
+    }).length > 0;
+  });
+};
+
+const hasImmediateWinningTurn = (state: GameState, color: Color) =>
+  hasWinningAirStrikeTurn(state, color) || hasWinningTurn(state, color);
+
 const bestTacticalDefense = (
   state: GameState,
   color: Color,
   plans: AiTurnPlan[],
 ) => {
   const enemy = opposite(color);
-  if (!hasWinningTurn(state, enemy)) return undefined;
+  if (!hasImmediateWinningTurn(state, enemy)) return undefined;
 
   const initialKing = Object.entries(state.board).find(
     ([, piece]) => piece.controller === color && piece.type === "king",
@@ -267,7 +307,7 @@ const bestTacticalDefense = (
     .slice(0, 32);
 
   for (const { plan } of candidates) {
-    if (!hasWinningTurn(plan.state, enemy)) return plan;
+    if (!hasImmediateWinningTurn(plan.state, enemy)) return plan;
   }
   return undefined;
 };

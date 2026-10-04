@@ -125,6 +125,7 @@ describe("Divine AI", () => {
       let state = puzzle.createState();
       for (const action of puzzle.solutionTurns[0]) state = gameReducer(state, action);
       delete state.board.f8;
+      delete state.board.b4;
 
       const response = chooseAiPlan(state, () => 0);
       for (const action of response) state = gameReducer(state, action);
@@ -139,12 +140,31 @@ describe("Divine AI", () => {
     let state = puzzle.createState();
     for (const action of puzzle.solutionTurns[0]) state = gameReducer(state, action);
     delete state.board.h8;
+    for (const piece of Object.values(state.board)) {
+      if (piece.controller === "black" && piece.type !== "king") {
+        piece.status.movedThisTurn = true;
+      }
+    }
 
     const response = chooseAiPlan(state, () => 0);
     for (const action of response) state = gameReducer(state, action);
 
     expect(state.board.h8).toMatchObject({ type: "king", controller: "black" });
     expect(state.board.h7?.type).not.toBe("king");
+  });
+
+  it("moves the King away from an imminent legal Air Strike capture", () => {
+    const puzzle = PUZZLE_BY_ID["funded-flight"];
+    let state = puzzle.createState();
+    for (const action of puzzle.solutionTurns[0]) state = gameReducer(state, action);
+    delete state.board.f8;
+    delete state.board.b4;
+
+    const response = chooseAiPlan(state, () => 0);
+    for (const action of response) state = gameReducer(state, action);
+
+    expect(state.board.f8).toMatchObject({ type: "king", controller: "black" });
+    expect(state.board.f7?.type).not.toBe("king");
   });
 
   it("captures the hanging Pick a Fight knight when the apparent defender is unpinned", () => {

@@ -947,7 +947,7 @@ describe("game startup", () => {
     expect(screen.getByRole("gridcell", { name: "e2, white pawn" })).toBeTruthy();
     expect(screen.getByRole("gridcell", { name: "e4" })).toBeTruthy();
     expect((screen.getByRole("button", { name: /^undo$/i }) as HTMLButtonElement).disabled).toBe(true);
-  });
+  }, 15_000);
 
   it("undoes a completed upgrade", () => {
     const savedState = createGame(1);

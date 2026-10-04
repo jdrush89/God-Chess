@@ -6,10 +6,12 @@ import {
   fourPlayerDistance,
   fourPlayerFlightPathSquares,
   fourPlayerIsInCheck,
+  fourPlayerIsSquareAttacked,
   fourPlayerIsSquareAttackedBy,
   fourPlayerKingSquare,
   fourPlayerLegalTargets,
   fourPlayerLineOfSight,
+  fourPlayerOrdinaryAttackedSquares,
   fourPlayerPathSquares,
   fourPlayerPieceValue,
   fourPlayerPseudoTargets,
@@ -501,10 +503,12 @@ const preparedDetails = (piece: FourPlayerPiece) => {
 };
 
 const preparedShotTargets = (state: FourPlayerState, source: Square) =>
-  fourPlayerPseudoTargets(state.board, source, state.config, {
-    attacksOnly: true,
-    bananas: state.bananas,
-  }).filter((target) => {
+  fourPlayerOrdinaryAttackedSquares(
+    state.board,
+    source,
+    state.config,
+    state.bananas,
+  ).filter((target) => {
     const piece = state.board[target];
     if (
       !piece?.controller ||
@@ -1123,28 +1127,34 @@ const sourceTargets = (state: FourPlayerState, square: Square): Square[] => {
   }
   if (abilityId === "pick-a-fight") {
     if (level < 3 && !["knight", "bishop"].includes(piece.type)) return [];
+    const ordinaryTargets = fourPlayerLegalTargets(
+      state.board,
+      square,
+      state.config,
+      {
+        enPassant: state.enPassant,
+        bananas: state.bananas,
+      },
+    ).filter((target) => !state.board[target]);
     return constrainLure(
       state,
       square,
-      fourPlayerSquares.filter((target) => {
-        if (state.board[target]) return false;
+      ordinaryTargets.filter((target) => {
         const simulated = { ...state.board, [target]: piece };
         delete simulated[square];
-        const attacked = FOUR_PLAYER_SEATS.some((attacker) =>
-          seatsAreHostile(state.config, state.activeSeat, attacker) &&
-          Object.entries(simulated).some(([enemySquare, enemy]) =>
-            enemy.controller === attacker &&
-            fourPlayerPseudoTargets(simulated, enemySquare, state.config, {
-              attacksOnly: true,
-              bananas: state.bananas,
-              includeAlliedTargets: true,
-            }).includes(target)
-          )
+        const attacked = fourPlayerIsSquareAttacked(
+          simulated,
+          target,
+          state.activeSeat,
+          state.config,
+          state.bananas,
         );
-        const attacksTwo = fourPlayerPseudoTargets(simulated, target, state.config, {
-          attacksOnly: true,
-          bananas: state.bananas,
-        }).filter((candidate) => hostilePiece(state, simulated[candidate])).length >= 2;
+        const attacksTwo = fourPlayerOrdinaryAttackedSquares(
+          simulated,
+          target,
+          state.config,
+          state.bananas,
+        ).filter((candidate) => hostilePiece(state, simulated[candidate])).length >= 2;
         if (!attacked && !(level >= 2 && attacksTwo)) return false;
         return !fourPlayerIsInCheck(
           simulated,
@@ -1225,10 +1235,12 @@ const sourceTargets = (state: FourPlayerState, square: Square): Square[] => {
         bananas: state.bananas,
       }).filter((target) => {
         const board = fourPlayerApplyMove(state.board, { from: square, to: target }, state.enPassant).board;
-        return fourPlayerPseudoTargets(board, target, state.config, {
-          attacksOnly: true,
-          bananas: state.bananas,
-        }).filter((attacked) => hostilePiece(state, board[attacked])).length >= 2;
+        return fourPlayerOrdinaryAttackedSquares(
+          board,
+          target,
+          state.config,
+          state.bananas,
+        ).filter((attacked) => hostilePiece(state, board[attacked])).length >= 2;
       }),
     );
   }
@@ -1773,9 +1785,11 @@ const resolveMoveEffect = (
       return "pending";
     }
   } else if (abilityId === "threaten") {
-    const attacked = fourPlayerPseudoTargets(state.board, to, state.config, {
-      attacksOnly: true,
-    }).filter((square) => hostilePiece(state, state.board[square])).length;
+    const attacked = fourPlayerOrdinaryAttackedSquares(
+      state.board,
+      to,
+      state.config,
+    ).filter((square) => hostilePiece(state, state.board[square])).length;
     if (attacked) addOrbs(state, state.activeSeat, 0, level >= 3 ? attacked : 1);
     const advancement = (square: Square, piece: FourPlayerPiece) => {
       const [file, rank] = fourPlayerCoords(square);
@@ -1791,9 +1805,11 @@ const resolveMoveEffect = (
       addOrbs(state, state.activeSeat, level >= 2 && tied === 1 ? 2 : 1, 0);
     }
   } else if (abilityId === "cull-the-weak") {
-    const attacked = fourPlayerPseudoTargets(state.board, to, state.config, {
-      attacksOnly: true,
-    }).filter((square) => hostilePiece(state, state.board[square]));
+    const attacked = fourPlayerOrdinaryAttackedSquares(
+      state.board,
+      to,
+      state.config,
+    ).filter((square) => hostilePiece(state, state.board[square]));
     if (attacked.length >= 2) {
       const lowest = Math.min(...attacked.map((square) => fourPlayerPieceValue(state.board[square].type)));
       const choices = attacked.filter((square) => {
@@ -1972,7 +1988,7 @@ const executeMovement = (
   const originalController = moving.controller;
   if (enchantingEnemy) moving.controller = state.activeSeat;
   const boardBefore = structuredClone(state.board);
-  const result = moveDirect(state, from, to, ["air-lift", "pick-a-fight"].includes(abilityId));
+  const result = moveDirect(state, from, to, abilityId === "air-lift");
   if (!result) {
     if (enchantingEnemy) moving.controller = originalController;
     return;
@@ -2420,9 +2436,11 @@ const handleSquare = (state: FourPlayerState, square: Square) => {
     if (!state.legalTargets.includes(square)) return;
     const attackerSquare = findSquareById(state, state.pending.movedPieceId);
     if (!attackerSquare) return;
-    const attacked = fourPlayerPseudoTargets(state.board, attackerSquare, state.config, {
-      attacksOnly: true,
-    }).filter((target) => hostilePiece(state, state.board[target]));
+    const attacked = fourPlayerOrdinaryAttackedSquares(
+      state.board,
+      attackerSquare,
+      state.config,
+    ).filter((target) => hostilePiece(state, state.board[target]));
     const lowest = Math.min(...attacked.map((target) => fourPlayerPieceValue(state.board[target].type)));
     if (fourPlayerPieceValue(state.board[square].type) === lowest) captureAt(state, square);
     else moveDirect(state, attackerSquare, square);

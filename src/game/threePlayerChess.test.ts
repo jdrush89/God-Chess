@@ -5,6 +5,7 @@ import {
   threePlayerApplyMove,
   threePlayerCheckingSeats,
   threePlayerLegalMoves,
+  threePlayerOrdinaryAttackedCells,
   threePlayerPseudoTargets,
 } from "./threePlayerChess";
 import {
@@ -166,9 +167,47 @@ describe("three-player ordinary chess", () => {
       from: cell(9),
       to: cell(1),
     });
+
     expect(rejected).toBe(reducerState);
     expect(rejected.players.red.eliminated).toBe(false);
     expect(rejected.board[cell(1)]?.type).toBe("king");
+  });
+
+  it("keeps ordinary attacks independent of Charge and sliding blockers", () => {
+    const topology = getThreePlayerTopology("three-player");
+    const origin = topology.cellFromSourceIndex(10)!;
+    const knightTarget = topology.knightTargets(origin)[0];
+    const chargeOnlyTarget = topology.cells.find((cell) =>
+      cell !== origin &&
+      topology.paths(origin, cell, "rook").length > 0 &&
+      !topology.knightTargets(origin).includes(cell)
+    )!;
+    const state = stateFor("three-player");
+    state.board = {
+      [origin]: {
+        ...piece("charged-knight", "knight", "white"),
+        status: { chargeUntil: "god" },
+      },
+      [knightTarget]: piece("ordinary-target", "pawn", "red"),
+      [chargeOnlyTarget]: piece("charge-only-target", "rook", "red"),
+    };
+
+    expect(threePlayerOrdinaryAttackedCells(state, origin)).toContain(knightTarget);
+    expect(threePlayerOrdinaryAttackedCells(state, origin)).not.toContain(chargeOnlyTarget);
+
+    const rookLine = topology.cells.flatMap((from) =>
+      topology.cells.map((to) => ({
+        from,
+        to,
+        path: topology.paths(from, to, "rook")[0],
+      }))
+    ).find((candidate) => candidate.path?.cells.length > 1)!;
+    state.board = {
+      [rookLine.from]: piece("slider", "rook", "white"),
+      [rookLine.path.cells[0]]: piece("blocker", "pawn", "white"),
+      [rookLine.to]: piece("blocked-target", "queen", "red"),
+    };
+    expect(threePlayerOrdinaryAttackedCells(state, rookLine.from)).not.toContain(rookLine.to);
   });
 
   it("applies pawn blocking, double moves, en passant, and promotion metadata", () => {
