@@ -681,6 +681,30 @@ describe("four-player configuration and flow", () => {
     expect(state.upgradeQueue).toEqual(["north", "east", "west"]);
   });
 
+  it("advances the queue when a second-cycle upgrade reaches level 3", () => {
+    let state = createFourPlayerGame();
+    state.phase = "upgrade";
+    state.round = 1;
+    state.activeSeat = "north";
+    state.upgradeQueue = ["north", "east"];
+    state.players.north.gods = ["quetzacoatl"];
+    state.players.east.gods = ["ares"];
+
+    state = fourPlayerReducer(state, { type: "upgrade", abilityId: "flight" });
+    expect(state.players.north.upgrades.flight).toBe(2);
+    expect(state.activeSeat).toBe("east");
+    expect(state.upgradeQueue).toEqual(["east"]);
+
+    state.phase = "upgrade";
+    state.round = 2;
+    state.activeSeat = "north";
+    state.upgradeQueue = ["north", "east"];
+    state = fourPlayerReducer(state, { type: "upgrade", abilityId: "flight" });
+    expect(state.players.north.upgrades.flight).toBe(3);
+    expect(state.activeSeat).toBe("east");
+    expect(state.upgradeQueue).toEqual(["east"]);
+  });
+
   it("keeps opponent-next-turn effects through allied turns and expires them after a hostile turn", () => {
     const config = createDefaultFourPlayerConfig();
     config.mode = "teams";

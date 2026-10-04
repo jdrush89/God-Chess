@@ -55,6 +55,7 @@ import {
   type ThreePlayerState,
 } from "../game/threePlayerTypes";
 import { abilityLevel, GOD_BY_ID, GODS } from "../game/gods";
+import { randomItem } from "../game/random";
 import type { GodId } from "../game/types";
 import { ThreePlayerBoard } from "./ThreePlayerBoard";
 import { getThreePlayerTopology } from "../game/threePlayerTopology";
@@ -906,7 +907,7 @@ export function ThreePlayerGame({
         action.type === "draft",
     );
     if (!draftActions.length) return;
-    const action = draftActions[Math.floor(Math.random() * draftActions.length)];
+    const action = randomItem(draftActions);
     if (!action) return;
     autoDraftPendingRef.current = true;
     setAutoDraftPending(true);
@@ -927,12 +928,12 @@ export function ThreePlayerGame({
     aiRequestRevision.current = undefined;
     try {
       while (stateRef.current.phase === "draft") {
-        const action = availableThreePlayerActions(
+        const action = randomItem(availableThreePlayerActions(
           stateRef.current as ThreePlayerState,
-        ).find(
+        ).filter(
           (candidate): candidate is Extract<ThreePlayerAction, { type: "draft" }> =>
             candidate.type === "draft",
-        );
+        ));
         if (!action) break;
         dispatchAction(action, "human", true);
       }

@@ -39,6 +39,7 @@ beforeAll(() => {
 afterEach(() => {
   cleanup();
   window.localStorage.clear();
+  vi.restoreAllMocks();
 });
 
 const openPlayOption = (name: "Local" | "Load") => {
@@ -130,6 +131,7 @@ describe("four-player app integration", () => {
   });
 
   it("quick-drafts every remaining four-player pick through the reducer", async () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.75);
     const config = createDefaultFourPlayerConfig();
     config.seats.east.control = { kind: "ai", difficulty: 5 };
     config.seats.west.control = { kind: "ai", difficulty: 5 };
@@ -155,9 +157,10 @@ describe("four-player app integration", () => {
     fireEvent.click(screen.getByRole("button", { name: /claim ares/i }));
     let expected = fourPlayerReducer(initial, { type: "draft", godId: "ares" });
     while (expected.phase === "draft") {
+      const index = Math.floor(expected.draft.available.length * 0.75);
       expected = fourPlayerReducer(expected, {
         type: "draft",
-        godId: expected.draft.available[0],
+        godId: expected.draft.available[index],
       });
     }
 
@@ -572,6 +575,49 @@ describe("four-player app integration", () => {
     const aiSlither = screen.getByText("Slither").closest(".ability-card") as HTMLElement;
     expect(within(aiSlither).getByRole("button", { name: /^slither/i }).getAttribute("aria-disabled"))
       .toBe("true");
+  });
+
+  it("confirms a level 2 to 3 upgrade in the second cycle on a mobile viewport", async () => {
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 390,
+    });
+    window.dispatchEvent(new Event("resize"));
+    const state = completeFourPlayerDraft();
+    state.phase = "upgrade";
+    state.round = 2;
+    state.activeSeat = "north";
+    state.upgradeQueue = ["north", "east"];
+    state.players.north.upgrades.flight = 2;
+    const onPersist = vi.fn(async (_: FourPlayerState) => true);
+    render(
+      <FourPlayerGame
+        initialState={state}
+        undoPreferred={false}
+        onUndoPreferenceChange={vi.fn()}
+        onPersist={onPersist}
+        onQuit={vi.fn()}
+        onNewGame={vi.fn()}
+      />,
+    );
+
+    const slitherCard = screen.getByText("Slither").closest(".ability-card") as HTMLElement;
+    fireEvent.click(within(slitherCard).getByRole("button", { name: /^slither/i }));
+    const confirm = screen.getByRole("button", { name: /confirm slither.*lv 3/i });
+    expect((confirm as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(confirm);
+
+    expect(screen.getByText(/East seat/i)).toBeTruthy();
+    expect(
+      (screen.getByRole("button", { name: /select an ability to upgrade/i }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    await waitFor(() => {
+      const persisted = onPersist.mock.calls.at(-1)?.[0];
+      expect(persisted?.players.north.upgrades.flight).toBe(3);
+      expect(persisted?.activeSeat).toBe("east");
+      expect(persisted?.upgradeQueue).toEqual(["east"]);
+    });
   });
 
   it("disables back, cancellation, and ability switching after committed progress", () => {

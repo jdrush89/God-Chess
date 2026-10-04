@@ -221,6 +221,7 @@ beforeAll(() => {
 afterEach(() => {
   cleanup();
   window.localStorage.clear();
+  vi.restoreAllMocks();
 });
 
 beforeEach(() => {
@@ -762,12 +763,12 @@ describe("game startup", () => {
     expect(screen.getByRole("button", { name: /auto-pick random god/i })).toBeTruthy();
   });
 
-  it("quick-drafts the remaining two-player AI picks in canonical order", async () => {
+  it("randomly quick-drafts the remaining two-player picks without changing prior ownership", async () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.75);
     render(<App />);
     openPlayOption("Local");
     fireEvent.click(screen.getByRole("button", { name: /^2 player$/i }));
-    fireEvent.click(screen.getByRole("button", { name: /^divine ai challenge/i }));
-    fireEvent.click(screen.getByRole("button", { name: /challenge the ai/i }));
+    fireEvent.click(screen.getByRole("button", { name: /begin local duel/i }));
 
     const draftActions = document.querySelector(".draft-auto-actions") as HTMLElement;
     expect(within(draftActions).getAllByRole("button").map((button) =>
@@ -808,8 +809,12 @@ describe("game startup", () => {
     const remaining = GODS.map((god) => god.id).filter(
       (godId) => !chronological.slice(0, existingPickCount).includes(godId),
     );
+    const expectedRemaining: typeof remaining = [];
+    while (remaining.length && expectedRemaining.length < chronological.length - existingPickCount) {
+      expectedRemaining.push(remaining.splice(Math.floor(remaining.length * 0.75), 1)[0]);
+    }
     expect(chronological.slice(existingPickCount)).toEqual(
-      remaining.slice(0, chronological.length - existingPickCount),
+      expectedRemaining,
     );
     expect(new Set(drafted).size).toBe(6);
   });
