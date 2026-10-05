@@ -168,10 +168,10 @@ export const GODS: God[] = [
     accent: "#9b86c8",
     symbol: "D",
     abilities: [
-      ability("marked", "Marked", "Move a piece. This piece is marked for death and dies at the beginning of Death’s next turn. Gain 3 black orbs when it dies. You may choose to do nothing.", "move", [
-        "Death grants 3 black orbs.",
+      ability("marked", "Marked", "Move a piece. At the end of Death’s next action, the Mark kills this piece and grants 3 black orbs. If the piece is captured or dies from another effect first, gain no Mark reward. You may choose to do nothing.", "move", [
+        "The Mark grants 3 black orbs only if it kills the piece at the end of Death’s next action.",
         "If you choose to do nothing, gain 1 white orb.",
-        "You may choose to kill the moved piece at the end of your turn to gain 5 black orbs instead.",
+        "You may execute the moved piece immediately for 5 black orbs instead; it does not also grant the delayed 3.",
       ]),
       ability("resurrect", "Resurrect", "Revive a piece from your graveyard. Place the piece in an empty spot adjacent to one of your Bishops. Requires a Bishop to use.", "revive", [
         "Revive 1 piece.",

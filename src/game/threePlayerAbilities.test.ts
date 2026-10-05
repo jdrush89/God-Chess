@@ -224,6 +224,96 @@ describe("three-player God catalog", () => {
     expect(moved.notice).not.toMatch(/^Slither/);
   });
 
+  it("grants Marked rewards only when the Mark or immediate execution kills the piece", () => {
+    let captured = abilityState("kangus", 1);
+    captured = threePlayerReducer(captured, {
+      type: "select-god",
+      godId: "kangus",
+    });
+    captured = threePlayerReducer(captured, {
+      type: "select-ability",
+      abilityId: "rage",
+    });
+    const topology = getThreePlayerTopology(captured.config.boardVariant);
+    const rageCenter = captured.legalCells.find((cell) =>
+      captured.board[cell]?.owner === "white" &&
+      topology.kingNeighbors(cell).some((neighbor) => !captured.board[neighbor])
+    )!;
+    const capturedCell = topology.kingNeighbors(rageCenter).find((cell) =>
+      !captured.board[cell]
+    )!;
+    captured.board[capturedCell] = {
+      ...piece("captured-marked-pawn", "pawn", "red"),
+      status: {
+        markedForDeath: { owner: "white", round: captured.round },
+      },
+    };
+    const darkBeforeRage = captured.players.white.orbs.dark;
+    captured = threePlayerReducer(captured, {
+      type: "cell",
+      cell: rageCenter,
+    });
+    captured = threePlayerReducer(captured, {
+      type: "choice",
+      value: false,
+    });
+
+    expect(captured.players.white.orbs.dark).toBe(darkBeforeRage);
+    expect(captured.players.red.graveyard.at(-1)?.piece.id).toBe(
+      "captured-marked-pawn",
+    );
+
+    let delayed = abilityState("death", 1);
+    const delayedCell = Object.entries(delayed.board).find(([, candidate]) =>
+      candidate.owner === "red" && candidate.type !== "king"
+    )![0];
+    delayed.board[delayedCell].status.markedForDeath = {
+      owner: "white",
+      round: delayed.round,
+    };
+    delayed = threePlayerReducer(delayed, {
+      type: "select-god",
+      godId: "death",
+    });
+    delayed = threePlayerReducer(delayed, {
+      type: "select-ability",
+      abilityId: "marked",
+    });
+    delayed = threePlayerReducer(delayed, { type: "pass" });
+
+    expect(delayed.board[delayedCell]).toBeUndefined();
+    expect(delayed.players.white.orbs.dark).toBe(53);
+
+    let immediate = abilityState("death", 3);
+    const immediateCell = Object.entries(immediate.board).find(([, candidate]) =>
+      candidate.owner === "white" && candidate.type !== "king"
+    )![0];
+    immediate.board[immediateCell].status.markedForDeath = {
+      owner: "white",
+      round: immediate.round + 1,
+    };
+    immediate.selectedGod = "death";
+    immediate.selectedAbility = "marked";
+    immediate.pending = {
+      godId: "death",
+      abilityId: "marked",
+      step: "marked-choice",
+      movedPieceId: immediate.board[immediateCell].id,
+    };
+
+    expect(availableThreePlayerActions(immediate)).toEqual([
+      { type: "choice", value: true },
+      { type: "choice", value: false },
+    ]);
+    immediate = threePlayerReducer(immediate, {
+      type: "choice",
+      value: true,
+    });
+
+    expect(immediate.board[immediateCell]).toBeUndefined();
+    expect(immediate.players.white.orbs.dark).toBe(55);
+  });
+
   it("runs Enchant as hostile move then one ordinary controlled move", () => {
     let state = abilityState("teles", 1);
     state = threePlayerReducer(state, { type: "select-god", godId: "teles" });

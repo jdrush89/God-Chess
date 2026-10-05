@@ -85,6 +85,25 @@ const teamHexGame = (level: 1 | 2 | 3 = 1) => {
   return state;
 };
 
+const setMode = (
+  state: FourPlayerState,
+  mode: FourPlayerState["config"]["mode"],
+) => {
+  state.config.mode = mode;
+  if (mode === "teams") {
+    state.config.teams = {
+      north: "team-a",
+      east: "team-b",
+      south: "team-b",
+      west: "team-a",
+    };
+    for (const seat of ["north", "east", "south", "west"] as const) {
+      state.players[seat].team = state.config.teams[seat];
+    }
+  }
+  return state;
+};
+
 describe("four-player God abilities", () => {
   it("generalizes Quetzacoatl's Slither, Air Lift, and Air Strike", () => {
     let state = gameFor("quetzacoatl");
@@ -400,6 +419,55 @@ describe("four-player God abilities", () => {
     expect(result.players.south.orbs.light).toBe(1);
     expect(result.players.north.orbs.light).toBe(52);
   });
+
+  it.each(["ffa", "teams"] as const)(
+    "grants Marked rewards only when the Mark or immediate execution kills the piece in %s",
+    (mode) => {
+      let captured = setMode(gameFor("death"), mode);
+      captured.board.g8 = piece(captured, "rook", "north", "capture-mover");
+      captured.board.g9 = {
+        ...piece(captured, "pawn", "south", "captured-marked-pawn"),
+        status: {
+          markedForDeath: { owner: "north", round: captured.round },
+        },
+      };
+      captured = move(captured, "death", "marked", "g8", "g9");
+
+      expect(captured.players.north.orbs.dark).toBe(50);
+      expect(captured.players.south.graveyard.at(-1)?.piece.id).toBe(
+        "captured-marked-pawn",
+      );
+
+      let delayed = setMode(gameFor("death"), mode);
+      delayed.board.g9 = {
+        ...piece(delayed, "pawn", "south", "delayed-marked-pawn"),
+        status: {
+          markedForDeath: { owner: "north", round: delayed.round },
+        },
+      };
+      delayed = activate(delayed, "death", "marked");
+      delayed = fourPlayerReducer(delayed, { type: "pass" });
+
+      expect(delayed.board.g9).toBeUndefined();
+      expect(delayed.players.north.orbs.dark).toBe(53);
+
+      let immediate = setMode(gameFor("death", 3), mode);
+      immediate.board.g8 = piece(immediate, "rook", "north", "immediate-marked");
+      immediate = move(immediate, "death", "marked", "g8", "g9");
+
+      expect(availableFourPlayerActions(immediate)).toEqual([
+        { type: "choice", value: true },
+        { type: "choice", value: false },
+      ]);
+      immediate = fourPlayerReducer(immediate, {
+        type: "choice",
+        value: true,
+      });
+
+      expect(immediate.board.g9).toBeUndefined();
+      expect(immediate.players.north.orbs.dark).toBe(55);
+    },
+  );
 
   it("generalizes Leonidas's Royal Step, March Home, and Escort", () => {
     let state = gameFor("leonidas");

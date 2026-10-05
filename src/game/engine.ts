@@ -1493,7 +1493,7 @@ const resolveMoveEffect = (
         movedPieceId: state.board[to].id,
       };
       state.legalTargets = [];
-      state.notice = "Marked: execute the moved piece now for 5 black orbs, or let it die when Death next acts.";
+      state.notice = "Marked: execute the moved piece now for 5 black orbs, or leave it for the Mark to kill at the end of Death’s next action for 3. If it dies first, there is no Mark reward.";
       return "pending";
     }
   } else if (abilityId === "siphon") {

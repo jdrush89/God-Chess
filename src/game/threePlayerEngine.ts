@@ -2013,7 +2013,7 @@ const resolveMoveEffect = (
         step: "marked-choice",
         movedPieceId: state.board[to].id,
       };
-      state.notice = "Execute the marked piece now, or pass.";
+      state.notice = "Execute the marked piece now for 5 dark orbs, or leave it for the Mark to kill at the end of Death’s next action for 3. If it dies first, there is no Mark reward.";
       return "pending";
     }
   } else if (abilityId === "siphon") {
