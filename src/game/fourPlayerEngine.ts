@@ -960,6 +960,7 @@ const sourceIsAllowed = (state: FourPlayerState, square: Square) => {
   if (abilityId === "slither") return piece.controller === state.activeSeat && piece.type === "queen";
   if (abilityId === "military-funding") return piece.controller === state.activeSeat && piece.type === "pawn";
   if (abilityId === "charge") return piece.controller === state.activeSeat && piece.type === "knight";
+  if (abilityId === "mount") return piece.controller === state.activeSeat && piece.type === "knight";
   if (abilityId === "marked" && piece.type === "king") return false;
   return piece.controller === state.activeSeat;
 };
@@ -1067,6 +1068,7 @@ const sourceTargets = (state: FourPlayerState, square: Square): Square[] => {
     );
   }
   if (abilityId === "mount") {
+    if (piece.type !== "knight") return [];
     const riders = fourPlayerAdjacentSquares(square, false)
       .filter((target) => alliedPiece(state, state.board[target]));
     if (!riders.length) return [];
@@ -1944,6 +1946,13 @@ const executeMovement = (
   const abilityId = state.selectedAbility!;
   const moving = state.board[from];
   if (!moving) return;
+  if (
+    abilityId === "mount" &&
+    (
+      moving.type !== "knight" ||
+      !sourceTargets(state, from).includes(to)
+    )
+  ) return;
   if (state.pending?.step === "enchant-followup-move") {
     const result = moveDirect(state, from, to);
     if (!result) return;
@@ -2448,6 +2457,8 @@ const handleSquare = (state: FourPlayerState, square: Square) => {
     return;
   }
   if (state.pending?.step === "mount-rider" && state.pending.destination) {
+    const primary = state.board[state.pending.destination];
+    if (!primary || !alliedPiece(state, primary) || primary.type !== "knight") return;
     if (!state.legalTargets.includes(square) || !state.board[square]) return;
     const destination = state.pending.destination;
     state.pending = {
@@ -2464,6 +2475,8 @@ const handleSquare = (state: FourPlayerState, square: Square) => {
     state.pending.destination &&
     state.pending.movedPieceId
   ) {
+    const primary = state.board[state.pending.destination];
+    if (!primary || !alliedPiece(state, primary) || primary.type !== "knight") return;
     if (!state.legalTargets.includes(square)) return;
     const riderSquare = findSquareById(state, state.pending.movedPieceId);
     if (!riderSquare) return;
@@ -3148,6 +3161,12 @@ const reduceFourPlayerState = (
           finishTurn(next, abilityDescription(next, reward ? ": waited for 1 light orb" : ": waited"));
         }
       } else if (["slither", "mount-rider", "funding"].includes(next.pending?.step ?? "")) {
+        if (next.pending?.step === "mount-rider") {
+          const primary = next.pending.destination
+            ? next.board[next.pending.destination]
+            : undefined;
+          if (!primary || !alliedPiece(next, primary) || primary.type !== "knight") return state;
+        }
         finishTurn(next, abilityDescription(next, ": completed the movement"));
       } else if (next.pending?.step === "hex-target" && next.pending.selected?.length) {
         enterHexMovement(next);

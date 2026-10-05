@@ -112,6 +112,25 @@ describe("Divine AI", () => {
     )).toBe(false);
   });
 
+  it("enumerates Mount plans only from Knights", () => {
+    let state = createGame(2, { mode: "ai", aiDifficulty: 10 });
+    state.phase = "play";
+    state.activeColor = "black";
+    state.players.black.gods = ["chiron"];
+    state.players.white.gods = ["ares"];
+    state.players.black.orbs.white = 1;
+    state = gameReducer(state, { type: "select-god", godId: "chiron" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "mount" });
+
+    const plans = enumerateTurnPlans(state);
+    const mountPlans = plans.filter((plan) => plan.actions[0]?.type === "square");
+    expect(mountPlans.length).toBeGreaterThan(0);
+    expect(mountPlans.every((plan) => {
+      const source = plan.actions[0];
+      return source?.type === "square" && state.board[source.square]?.type === "knight";
+    })).toBe(true);
+  });
+
   it("strongly prefers a defended piece over the same piece left hanging", () => {
     const hanging = createGame(1);
     hanging.phase = "play";

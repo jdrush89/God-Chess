@@ -274,11 +274,11 @@ body::before {
 .game-page.puzzle-mode.has-last-action .game-layout {
   --board-size: clamp(220px, calc(100dvh - 403px), 790px);
 }
-@media (min-width: 1500px) {
+@media (min-width: 1280px) and (max-height: 900px), (min-width: 1500px) {
   .game-layout {
-    grid-template-columns: 260px minmax(0, 790px) 350px;
+    grid-template-columns: 240px minmax(0, 790px) 350px;
     gap: 24px;
-    width: min(1448px, calc(100% - 48px));
+    width: min(1428px, calc(100% - 48px));
   }
   .game-layout > .piece-info-column { display: block; }
   .piece-info-column .square-info-panel { position: sticky; top: 94px; max-height: calc(100dvh - 130px); }
@@ -416,18 +416,9 @@ body::before {
   .player-copy { min-width: 0; flex: 1 1 auto; overflow: hidden; }
   .player-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .player-orbs { gap: 8px; padding-left: 8px; }
-  .player-tools-toggle { display: grid; }
-  .player-tools-content {
-    position: absolute; z-index: 12; top: calc(100% + 8px); right: 0;
-    display: none; gap: 9px; padding: 9px;
-    border: 1px solid rgba(198,161,91,.35); background: #0f1117;
-    box-shadow: 0 16px 38px rgba(0,0,0,.45);
-  }
-  .player-tools.open .player-tools-content { display: flex; }
-  .player-bar:last-child .player-tools-content { top: auto; bottom: calc(100% + 8px); }
 }
 
-@container player-bar (max-width: 560px) {
+@container player-bar (max-width: 520px) {
   .player-avatar { display: none; }
   .player-copy { min-width: 0; flex: 1 1 auto; overflow: hidden; }
   .player-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1486,15 +1477,6 @@ span.move-target-dot {
   .player-orbs { gap: 8px; }
   .mini-pantheon { gap: 7px; }
   .mini-pantheon .god-sigil { width: 32px; height: 18px; }
-  .player-tools-toggle { display: grid; }
-  .player-tools-content {
-    position: absolute; z-index: 12; top: calc(100% + 8px); right: 0;
-    display: none; gap: 9px; padding: 9px;
-    border: 1px solid rgba(198,161,91,.35); background: #0f1117;
-    box-shadow: 0 16px 38px rgba(0,0,0,.45);
-  }
-  .player-tools.open .player-tools-content { display: flex; }
-  .player-bar:last-child .player-tools-content { top: auto; bottom: calc(100% + 8px); }
   .player-tools-content .mini-pantheon .god-sigil { width: 46px; height: 31px; }
   .turn-notice { padding: 8px 14px; justify-content: flex-start; }
   .turn-notice p { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -2241,12 +2223,13 @@ span.move-target-dot {
 .four-action-intro p { margin: 0; color: #85868d; font-size: 10px; line-height: 1.55; }
 .four-action-panel .god-list { display: grid; gap: 8px; padding: 10px; }
 .four-action-panel .god-row { height: 132px; min-height: 132px; margin: 0; aspect-ratio: auto; }
-.four-ability-list, .four-upgrade-list { display: grid; gap: 8px; padding: 10px; }
-.four-upgrade-list > section { min-width: 0; }
-.four-upgrade-list .ability-card { min-width: 0; }
-.four-upgrade-list .ability-footer { gap: 8px; flex-wrap: wrap; }
-.four-upgrade-list .ability-footer-meta { min-width: 0; flex-wrap: wrap; justify-content: flex-end; }
-.four-upgrade-list .level-selector { flex-wrap: wrap; }
+.four-ability-list, .four-upgrade-list, .classic-upgrade-list { display: grid; gap: 8px; padding: 10px; }
+.classic-upgrade-list { grid-template-columns: minmax(0, 1fr); }
+.four-upgrade-list > section, .classic-upgrade-list > section { min-width: 0; }
+.four-upgrade-list .ability-card, .classic-upgrade-list .ability-card { min-width: 0; }
+.four-upgrade-list .ability-footer, .classic-upgrade-list .ability-footer { gap: 8px; flex-wrap: wrap; }
+.four-upgrade-list .ability-footer-meta, .classic-upgrade-list .ability-footer-meta { min-width: 0; flex-wrap: wrap; justify-content: flex-end; }
+.four-upgrade-list .level-selector, .classic-upgrade-list .level-selector { flex-wrap: wrap; }
 .four-ability-card {
   width: 100%; min-width: 0; display: block; padding: 0; color: #bbb7ae; background: rgba(255,255,255,.018);
   border: 1px solid var(--line); text-align: left;

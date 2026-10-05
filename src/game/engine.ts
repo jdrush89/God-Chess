@@ -104,6 +104,45 @@ const abilityDescription = (state: GameState, detail: string) => {
   return `${colorName(state.activeColor)} used ${ability?.name ?? state.selectedAbility} with ${god.name}${detail}.`;
 };
 
+const mountPrimaryDetail = (
+  moving: Piece,
+  from: Square,
+  to: Square,
+  captured?: Piece,
+) =>
+  `${pieceName(moving)} ${from} -> ${to}${
+    captured ? `, capturing ${pieceName(captured)} on ${to}` : ""
+  }`;
+
+const mountDescription = (
+  state: GameState,
+  history: string[],
+  riderCount: number,
+) => abilityDescription(
+  state,
+  `: ${history.join("; ")}; ${riderCount} rider${riderCount === 1 ? "" : "s"}`,
+);
+
+const mountPrimaryIsValid = (state: GameState) => {
+  if (
+    state.pending?.abilityId !== "mount" ||
+    !["mount-rider", "mount-place"].includes(state.pending.step) ||
+    !state.pending.destination
+  ) return false;
+  const primary = state.board[state.pending.destination];
+  return primary?.controller === state.activeColor && primary.type === "knight";
+};
+
+const pendingMountHistory = (state: GameState) => {
+  if (state.pending?.mountHistory?.length) return state.pending.mountHistory;
+  const primary = state.pending?.destination
+    ? state.board[state.pending.destination]
+    : undefined;
+  return primary && state.pending?.source && state.pending.destination
+    ? [mountPrimaryDetail(primary, state.pending.source, state.pending.destination)]
+    : [];
+};
+
 export const createGame = (
   whitePlayer: 1 | 2 = Math.random() < 0.5 ? 1 : 2,
   options: {
@@ -714,6 +753,7 @@ const sourceIsAllowed = (state: GameState, square: Square) => {
   if (abilityId === "slither") return piece.controller === color && piece.type === "queen";
   if (abilityId === "military-funding") return piece.controller === color && piece.type === "pawn";
   if (abilityId === "charge") return piece.controller === color && piece.type === "knight";
+  if (abilityId === "mount") return piece.controller === color && piece.type === "knight";
   if (abilityId === "marked" && piece.type === "king") return false;
   return piece.controller === color;
 };
@@ -901,6 +941,7 @@ const sourceTargets = (state: GameState, square: Square) => {
     return constrainLure(legalTargets(state.board, square, { enPassant: state.enPassant, bananas: state.bananas }));
   }
   if (abilityId === "mount") {
+    if (piece.type !== "knight") return [];
     const riders = adjacentSquares(square, false)
       .filter((target) => state.board[target]?.controller === state.activeColor);
     if (!riders.length) return [];
@@ -1314,6 +1355,7 @@ const resolveMoveEffect = (
     if (moving.type === "knight") addOrbs(state, color, bonus, 0);
     if (captured) addOrbs(state, color, 0, level + 1);
   } else if (abilityId === "mount") {
+    if (moving.type !== "knight") return undefined;
     const riders = adjacentSquares(from, false)
       .filter((square) => state.board[square]?.controller === color);
     const destinations = adjacentSquares(to, false).filter((square) => !state.board[square]);
@@ -1325,6 +1367,7 @@ const resolveMoveEffect = (
         source: from,
         destination: to,
         selected: [],
+        mountHistory: [mountPrimaryDetail(moving, from, to, captured)],
       };
       state.legalTargets = riders;
       state.notice = `Mount: choose up to ${level} adjacent rider${level === 1 ? "" : "s"}, or pass to finish.`;
@@ -1532,6 +1575,13 @@ const executeMovement = (state: GameState, from: Square, to: Square) => {
   const abilityId = state.selectedAbility!;
   const moving = state.board[from];
   if (!moving) return;
+  if (
+    abilityId === "mount" &&
+    (
+      moving.type !== "knight" ||
+      !sourceTargets(state, from).includes(to)
+    )
+  ) return;
 
   if (state.pending?.step === "enchant-followup-move") {
     const result = moveDirect(state, from, to);
@@ -1668,6 +1718,17 @@ const executeMovement = (state: GameState, from: Square, to: Square) => {
 
   const pending = resolveMoveEffect(state, abilityId, result.from, result.to, moving, result.captured, boardBefore);
   if (pending === "pending") return;
+  if (abilityId === "mount") {
+    finishTurn(
+      state,
+      mountDescription(
+        state,
+        [mountPrimaryDetail(moving, result.from, result.to, result.captured)],
+        0,
+      ),
+    );
+    return;
+  }
   finishTurn(state, abilityDescription(state, `: ${pieceName(moving)} at ${from} -> ${result.to}`));
 };
 
@@ -2072,6 +2133,7 @@ const handleSquare = (state: GameState, square: Square) => {
     return;
   }
   if (state.pending?.step === "mount-rider" && state.pending.destination) {
+    if (!mountPrimaryIsValid(state)) return;
     if (!state.legalTargets.includes(square) || !state.board[square]) return;
     const knightDestination = state.pending.destination;
     state.pending = { ...state.pending, step: "mount-place", movedPieceId: state.board[square].id };
@@ -2105,10 +2167,15 @@ const handleSquare = (state: GameState, square: Square) => {
     return;
   }
   if (state.pending?.step === "mount-place" && state.pending.destination && state.pending.movedPieceId) {
+    if (!mountPrimaryIsValid(state)) return;
     if (!state.legalTargets.includes(square)) return;
     const riderSquare = findSquareById(state.board, state.pending.movedPieceId);
     if (!riderSquare) return;
     const rider = state.board[riderSquare];
+    const mountHistory = [
+      ...pendingMountHistory(state),
+      `${pieceName(rider)} ${riderSquare} -> ${square}`,
+    ];
     delete state.board[riderSquare];
     state.board[square] = { ...rider, hasMoved: true };
     const movedRiders = [...(state.pending.selected ?? []), rider.id];
@@ -2120,19 +2187,14 @@ const handleSquare = (state: GameState, square: Square) => {
       });
     const destinations = adjacentSquares(state.pending.destination, false).filter((target) => !state.board[target]);
     if (movedRiders.length >= level || !remainingRiders.length || !destinations.length) {
-      finishTurn(
-        state,
-        abilityDescription(
-          state,
-          `: moved with ${movedRiders.length} rider${movedRiders.length === 1 ? "" : "s"}`,
-        ),
-      );
+      finishTurn(state, mountDescription(state, mountHistory, movedRiders.length));
     } else {
       state.pending = {
         ...state.pending,
         step: "mount-rider",
         movedPieceId: undefined,
         selected: movedRiders,
+        mountHistory,
       };
       state.legalTargets = remainingRiders;
       state.notice = `Mount: choose another rider, or pass to finish (${movedRiders.length}/${level}).`;
@@ -2304,7 +2366,7 @@ const canPassAction = (state: GameState) =>
   state.selectedAbility === "construction" ||
   state.selectedAbility === "marked" ||
   state.pending?.step === "slither" ||
-  state.pending?.step === "mount-rider" ||
+  (state.pending?.step === "mount-rider" && mountPrimaryIsValid(state)) ||
   state.pending?.step === "funding" ||
   state.pending?.step === "march-companions" ||
   (state.pending?.step === "escort-companions" &&
@@ -2594,6 +2656,12 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
   ) return state;
   if (
     state.phase === "play" &&
+    state.pending?.abilityId === "mount" &&
+    ["mount-rider", "mount-place"].includes(state.pending.step) &&
+    !mountPrimaryIsValid(state)
+  ) return state;
+  if (
+    state.phase === "play" &&
     action.type === "pass" &&
     hasCommittedClassicAction(state) &&
     !canPassAction(state)
@@ -2796,7 +2864,14 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
     } else if (next.pending?.step === "slither") {
       finishTurn(next, abilityDescription(next, ": completed the movement"));
     } else if (next.pending?.step === "mount-rider") {
-      finishTurn(next, abilityDescription(next, ": completed the mounted movement"));
+      finishTurn(
+        next,
+        mountDescription(
+          next,
+          pendingMountHistory(next),
+          next.pending.selected?.length ?? 0,
+        ),
+      );
     } else if (next.pending?.step === "funding") {
       finishTurn(next, abilityDescription(next, ": completed the pawn movement"));
     } else if (next.pending?.step === "hex-target" && next.pending.selected?.length) {

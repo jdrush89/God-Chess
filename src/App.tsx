@@ -39,7 +39,12 @@ import {
 } from "lucide-react";
 import { allSquares, isInCheck } from "./game/chess";
 import { chooseAiPlan, isAiTurn } from "./game/ai";
-import { createGame, gameReducer, type GameAction } from "./game/engine";
+import {
+  createGame,
+  gameReducer,
+  hasCommittedClassicAction,
+  type GameAction,
+} from "./game/engine";
 import { createFourPlayerGame } from "./game/fourPlayerEngine";
 import {
   FOUR_PLAYER_SEATS,
@@ -572,7 +577,10 @@ function PlayerBar({
   const isActive = state.activeColor === color && state.phase !== "gameover";
   const [toolsOpen, setToolsOpen] = useState(false);
   return (
-    <section className={`player-bar ${color} ${isActive ? "active" : ""} ${toolsOpen ? "tools-open" : ""}`}>
+    <section
+      className={`player-bar ${color} ${isActive ? "active" : ""} ${toolsOpen ? "tools-open" : ""}`}
+      data-player-tools-layout="container-responsive"
+    >
       <div className={`player-avatar ${color}`}><Crown size={19} /></div>
       <div className="player-copy">
         <strong>{player.name}</strong>
@@ -598,10 +606,11 @@ function PlayerBar({
           onClick={() => setToolsOpen((open) => !open)}
           aria-label={`${toolsOpen ? "Close" : "Open"} ${player.name} controls`}
           aria-expanded={toolsOpen}
+          data-overflow-toggle
         >
           {toolsOpen ? <X size={16} /> : <Menu size={16} />}
         </button>
-        <div className="player-tools-content">
+        <div className="player-tools-content" data-inline-when-roomy>
           <button
             className={`graveyard-button ${graveyardArriving ? "arriving" : ""}`}
             onClick={() => {
@@ -784,10 +793,12 @@ function PendingAbilityChoices({
   state,
   dispatch,
   canPass,
+  committed,
 }: {
   state: GameState;
   dispatch: GameDispatch;
   canPass: boolean;
+  committed: boolean;
 }) {
   const player = state.players[state.activeColor];
   return (
@@ -900,7 +911,7 @@ function PendingAbilityChoices({
             Pass / finish
           </button>
         )}
-        {state.pending?.step !== "slither-orb" && (
+        {!committed && state.pending?.step !== "slither-orb" && (
           <button className="text-button" onClick={() => dispatch({ type: "cancel" })}>
             Cancel ability
           </button>
@@ -942,6 +953,7 @@ export function ActionPanel({
     player.orbs.white >= (ability.cost?.white ?? 0) && player.orbs.black >= (ability.cost?.black ?? 0);
   const hasQueen = Object.values(state.board)
     .some((piece) => piece.controller === state.activeColor && piece.type === "queen");
+  const committed = hasCommittedClassicAction(state);
   const canPass =
     (state.selectedAbility === "construction") ||
     state.selectedAbility === "marked" ||
@@ -1021,6 +1033,7 @@ export function ActionPanel({
             <div><span>{selectedGod.domain}</span><h3>{selectedGod.name}</h3><p>{selectedGod.epithet}</p></div>
             <button
               className="god-back-button"
+              disabled={!readOnly && committed}
               onClick={() => readOnly ? onCloseInspection() : dispatch({ type: "clear-god" })}
               aria-label={readOnly ? "Close god details" : "Choose a different god"}
               title={readOnly ? "Close god details" : "Choose a different god"}
@@ -1050,6 +1063,7 @@ export function ActionPanel({
             {selectedGod.abilities.map((item) => {
               const active = (!readOnly && state.selectedAbility === item.id) ||
                 presentation?.abilityId === item.id;
+              const unavailable = !canAfford(item) || (item.id === "lure" && !hasQueen);
               return (
                 <AbilityCard
                   ability={item}
@@ -1057,8 +1071,11 @@ export function ActionPanel({
                   previewLevel={godPreviewLevel}
                   active={active}
                   highlighted={presentation?.abilityId === item.id}
-                  selectable={!readOnly && canAfford(item) && (item.id !== "lure" || hasQueen)}
-                  disabled={presentedGodResting || (!readOnly && (!canAfford(item) || (item.id === "lure" && !hasQueen)))}
+                  selectable={!readOnly && !committed && !unavailable}
+                  disabled={presentedGodResting || (!readOnly && (
+                    (unavailable && !(committed && active)) ||
+                    (committed && !active)
+                  ))}
                   footerAction={!readOnly && item.id === "lure" && !hasQueen ? "REQUIRES QUEEN" : undefined}
                   onClick={() => {
                     if (!readOnly) dispatch({ type: "select-ability", abilityId: item.id });
@@ -1066,7 +1083,12 @@ export function ActionPanel({
                   key={item.id}
                 >
                   {!readOnly && active && state.selectedAbility && (
-                    <PendingAbilityChoices state={state} dispatch={dispatch} canPass={canPass} />
+                    <PendingAbilityChoices
+                      state={state}
+                      dispatch={dispatch}
+                      canPass={canPass}
+                      committed={committed}
+                    />
                   )}
                 </AbilityCard>
               );
@@ -1151,7 +1173,7 @@ function UpgradePanel({
             label="All abilities"
             className="god-level-selector"
           />
-          <div className="four-upgrade-list">
+          <div className="classic-upgrade-list" data-upgrade-layout="single-column">
             {activePlayer.gods.map((godId) => {
               const god = GOD_BY_ID[godId];
               return (
@@ -2580,7 +2602,7 @@ function GameScreen({
       )}
 
       <div className="game-layout">
-        <div className="piece-info-column">
+        <div className="piece-info-column" data-layout-area="piece-inspector">
           <SquareInfoPanel
             state={state}
             square={inspectedSquare}
@@ -2636,7 +2658,7 @@ function GameScreen({
               onCloseInspection={() => setInspectedGodId(undefined)}
             />
           )}
-          <div className="side-square-info">
+          <div className="side-square-info" data-layout-fallback="piece-inspector">
             <SquareInfoPanel
               state={state}
               square={inspectedSquare}

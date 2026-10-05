@@ -108,6 +108,7 @@ vi.mock("./account/cloudPuzzleProgress", () => ({
 }));
 
 import App, { ActionPanel, ChessBoard } from "./App";
+import { chooseAiPlan } from "./game/ai";
 import { createGame, gameReducer } from "./game/engine";
 import { GODS } from "./game/gods";
 import { createDefaultThreePlayerConfig } from "./game/threePlayerConfig";
@@ -694,6 +695,124 @@ describe("game startup", () => {
     expect(occupiedTarget?.querySelector(".move-target-dot")).toBeNull();
   });
 
+  it("renders Position Thirteen's occupied Escort destination as a legal target", () => {
+    const puzzle = PUZZLES.find((candidate) => candidate.id === "royal-landing")!;
+    let state = puzzle.createState();
+    for (const action of puzzle.solutionTurns[0]) state = gameReducer(state, action);
+    const response = chooseAiPlan(state, () => 0);
+    for (const action of response) state = gameReducer(state, action);
+    for (const action of puzzle.solutionTurns[1].slice(0, -1)) {
+      state = gameReducer(state, action);
+    }
+    const dispatch = vi.fn();
+    const { container } = render(
+      <ChessBoard
+        state={state}
+        dispatch={dispatch}
+        onInspectSquare={vi.fn()}
+      />,
+    );
+
+    const escortDestination = container.querySelector<HTMLElement>('[data-square="f6"]');
+    expect(escortDestination?.classList.contains("legal-destination")).toBe(true);
+    expect(escortDestination?.classList.contains("legal-occupied")).toBe(true);
+    expect(escortDestination?.querySelector(".move-target-dot")).toBeNull();
+
+    fireEvent.click(escortDestination!);
+    expect(dispatch).toHaveBeenCalledWith({ type: "square", square: "f6" });
+  });
+
+  it("keeps committed Rage active without exposing cancellation or ability switching", () => {
+    let state = createGame(1);
+    state.phase = "play";
+    state.players.white.gods = ["kangus"];
+    state.players.white.orbs.black = 3;
+    state.players.white.upgrades.rage = 2;
+    state = gameReducer(state, { type: "select-god", godId: "kangus" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "rage" });
+    state = gameReducer(state, { type: "square", square: "e2" });
+    expect(state.pending?.step).toBe("rage-choice");
+
+    const dispatch = vi.fn();
+    render(
+      <ActionPanel
+        state={state}
+        dispatch={dispatch}
+        onInspectGod={vi.fn()}
+        onCloseInspection={vi.fn()}
+      />,
+    );
+
+    const rageCard = screen.getByText("Rage").closest(".ability-card") as HTMLElement;
+    const goadCard = screen.getByText("Goad").closest(".ability-card") as HTMLElement;
+    expect(rageCard.classList.contains("active")).toBe(true);
+    expect(rageCard.classList.contains("disabled")).toBe(false);
+    expect(rageCard.querySelector(".ability-card-main")?.getAttribute("aria-disabled")).toBeNull();
+    expect(goadCard.classList.contains("disabled")).toBe(true);
+    expect((screen.getByRole("button", {
+      name: /choose a different god/i,
+    }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByRole("button", { name: /cancel ability/i })).toBeNull();
+
+    fireEvent.click(screen.getByText("Rage"));
+    expect(dispatch).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /spare allies/i }));
+    expect(dispatch).toHaveBeenCalledWith({ type: "rage-resolve", spareFriendly: true });
+  });
+
+  it("keeps the classic inspector in a distinct wide rail with a stacked fallback", () => {
+    const state = completeClassicDraft();
+    state.board.e2.status.hardened = "god";
+    window.localStorage.setItem(SAVE_KEY, JSON.stringify([
+      createSavedGame("classic-layout", state, []),
+    ]));
+
+    const { container } = render(<App />);
+    openPlayOption("Load");
+    fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
+    fireEvent.click(screen.getByRole("gridcell", { name: /e2, white pawn/i }));
+
+    const layout = container.querySelector(".game-layout");
+    const inspectorRail = layout?.querySelector(
+      ':scope > [data-layout-area="piece-inspector"]',
+    );
+    const stackedFallback = layout?.querySelector(
+      ':scope > .side-column [data-layout-fallback="piece-inspector"]',
+    );
+    expect(inspectorRail?.querySelector(".square-info-panel")).toBeTruthy();
+    expect(stackedFallback?.querySelector(".square-info-panel")).toBeTruthy();
+    expect(layout?.children[0]).toBe(inspectorRail);
+    expect(layout?.children[1]?.classList.contains("board-column")).toBe(true);
+    expect(layout?.children[2]?.classList.contains("side-column")).toBe(true);
+  });
+
+  it("uses player-bar container space to switch between inline Gods and overflow controls", () => {
+    const state = completeClassicDraft();
+    window.localStorage.setItem(SAVE_KEY, JSON.stringify([
+      createSavedGame("classic-player-bars", state, []),
+    ]));
+    const { container } = render(<App />);
+    openPlayOption("Load");
+    fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
+
+    const playerBars = [...container.querySelectorAll(".player-bar")];
+    expect(playerBars).toHaveLength(2);
+    for (const playerBar of playerBars) {
+      expect(playerBar.getAttribute("data-player-tools-layout")).toBe("container-responsive");
+      expect(playerBar.querySelectorAll("[data-overflow-toggle]")).toHaveLength(1);
+      expect(playerBar.querySelectorAll("[data-inline-when-roomy]")).toHaveLength(1);
+      expect(playerBar.querySelectorAll(".mini-pantheon")).toHaveLength(1);
+      expect(playerBar.querySelectorAll(".mini-pantheon button")).toHaveLength(3);
+    }
+
+    const firstToggle = playerBars[0].querySelector<HTMLButtonElement>("[data-overflow-toggle]")!;
+    fireEvent.click(firstToggle);
+    expect(firstToggle.getAttribute("aria-expanded")).toBe("true");
+    expect(playerBars[0].classList.contains("tools-open")).toBe(true);
+    expect(playerBars[0].querySelectorAll(".mini-pantheon")).toHaveLength(1);
+    expect(playerBars[0].querySelectorAll(".mini-pantheon button")).toHaveLength(3);
+  });
+
   it("highlights and applies Salem Hex to a hostile King", () => {
     let state = createGame(1);
     for (const godId of [
@@ -874,6 +993,11 @@ describe("game startup", () => {
     expect(airLiftCard).toBeTruthy();
     expect(within(airLiftCard as HTMLElement).getByLabelText("3 white orbs")).toBeTruthy();
     expect(document.querySelectorAll(".upgrade-panel .ability-card")).toHaveLength(9);
+    const upgradeList = document.querySelector(".classic-upgrade-list");
+    expect(upgradeList).toBeTruthy();
+    expect(upgradeList?.getAttribute("data-upgrade-layout")).toBe("single-column");
+    expect(upgradeList?.classList.contains("four-upgrade-list")).toBe(false);
+    expect(upgradeList?.querySelectorAll(":scope > section")).toHaveLength(3);
     expect(screen.getByText("DIVINE UPGRADE").closest(".panel-heading")).toBeTruthy();
     expect(screen.getByRole("heading", { name: /choose an ability to strengthen/i })).toBeTruthy();
     expect(screen.queryByText(/King may teleport within 4 spaces/i)).toBeNull();

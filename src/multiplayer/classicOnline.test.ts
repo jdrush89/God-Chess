@@ -31,6 +31,48 @@ class ClassicTransport implements MultiplayerTransport {
 }
 
 describe("classic online protocol compatibility", () => {
+  it("preserves completed Mount route history through state sync", () => {
+    let transport!: ClassicTransport;
+    const onStateSync = vi.fn();
+    new MultiplayerPeer({
+      onJoinAccepted: vi.fn(),
+      onLobbyState: vi.fn(),
+      onGameStart: vi.fn(),
+      onStateSync,
+      onUndoSettings: vi.fn(),
+      onRejected: vi.fn(),
+      onDisconnected: vi.fn(),
+      onError: vi.fn(),
+    }, (callbacks) => {
+      transport = new ClassicTransport(callbacks);
+      return transport;
+    });
+
+    let state = createGame(2);
+    state.phase = "play";
+    state.activeColor = "black";
+    state.players.black.gods = ["chiron"];
+    state.players.white.gods = ["ares"];
+    state.players.black.orbs.white = 1;
+    state = gameReducer(state, { type: "select-god", godId: "chiron" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "mount" });
+    state = gameReducer(state, { type: "square", square: "b8" });
+    state = gameReducer(state, { type: "square", square: "c6" });
+    state = gameReducer(state, { type: "square", square: "b7" });
+    state = gameReducer(state, { type: "square", square: "b6" });
+    const synced = JSON.parse(JSON.stringify(state));
+
+    transport.callbacks.onMessage("host-peer", createProtocolMessage(
+      "classic",
+      "host",
+      { type: "state_sync", state: synced },
+    ));
+
+    expect(onStateSync).toHaveBeenCalledWith(expect.objectContaining({
+      lastAction: "Black used Mount with Chiron: Knight b8 -> c6; Pawn b7 -> b6; 1 rider.",
+    }));
+  });
+
   it("keeps the existing join, turn, sync, and unanimous undo flow on versioned messages", async () => {
     let transport!: ClassicTransport;
     const factory: TransportFactory = (callbacks) => {

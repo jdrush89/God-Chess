@@ -323,32 +323,35 @@ describe("game flow", () => {
     });
   });
 
-  it("resolves Escort simultaneously before checking the King's final safety", () => {
+  it("allows Position Thirteen's King to Escort onto the carried rook's occupied square", () => {
     let state = createGame(1);
     state.phase = "play";
+    state.gameMode = "puzzle";
     state.players.white.gods = ["leonidas"];
     state.players.white.orbs.black = 1;
     state.board = {
-      a8: testPiece("king", "black", "black-king"),
-      e4: testPiece("king", "white", "white-king"),
-      f4: testPiece("rook", "white", "white-escort"),
-      g4: testPiece("rook", "black", "black-attacker"),
+      g7: testPiece("king", "black", "black-king"),
+      e5: testPiece("king", "white", "white-king"),
+      f6: testPiece("rook", "white", "white-escort"),
     };
+
+    expect(legalTargets(state.board, "e5")).not.toContain("f6");
 
     state = gameReducer(state, { type: "select-god", godId: "leonidas" });
     state = gameReducer(state, { type: "select-ability", abilityId: "escort" });
-    state = gameReducer(state, { type: "square", square: "e4" });
-    state = gameReducer(state, { type: "square", square: "f4" });
+    state = gameReducer(state, { type: "square", square: "e5" });
+    state = gameReducer(state, { type: "square", square: "f6" });
 
-    expect(state.legalTargets).toContain("f4");
+    expect(state.pending?.step).toBe("escort-move");
+    expect(state.legalTargets).toContain("f6");
 
-    state = gameReducer(state, { type: "square", square: "f4" });
+    state = gameReducer(state, { type: "square", square: "f6" });
 
-    expect(state.board.f4).toMatchObject({ id: "white-king", type: "king" });
-    expect(state.board.g4).toMatchObject({ id: "white-escort", type: "rook" });
-    expect(state.players.black.graveyard.at(-1)?.piece.id).toBe("black-attacker");
-    expect(isInCheck(state.board, "white", state.bananas)).toBe(false);
-    expect(state.activeColor).toBe("black");
+    expect(state.board.f6).toMatchObject({ id: "white-king", type: "king" });
+    expect(state.board.g7).toMatchObject({ id: "white-escort", type: "rook" });
+    expect(state.players.black.graveyard.at(-1)?.piece.id).toBe("black-king");
+    expect(state.phase).toBe("gameover");
+    expect(state.winner).toBe("white");
   });
 
   it("rejects an Escort destination when the completed formation leaves the King in check", () => {
@@ -1065,6 +1068,94 @@ describe("game flow", () => {
     expect(completed.board.c6?.type).toBe("knight");
     expect(completed.activeColor).toBe("white");
     expect(completed.pending).toBeUndefined();
+  });
+
+  it("only allows a Knight to begin or continue Mount", () => {
+    let state = createGame(1);
+    state.phase = "play";
+    state.activeColor = "white";
+    state.players.white.gods = ["chiron"];
+    state.players.black.gods = ["ares"];
+    state.players.white.orbs.white = 1;
+    state.board = {
+      f1: testPiece("king", "white", "white-king"),
+      b2: testPiece("pawn", "white", "white-pawn"),
+      b1: testPiece("rook", "white", "white-rider"),
+      h8: testPiece("king", "black", "black-king"),
+    };
+    state = gameReducer(state, { type: "select-god", godId: "chiron" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "mount" });
+
+    const rejectedSource = gameReducer(state, { type: "square", square: "b2" });
+    expect(rejectedSource.selectedSquare).toBeUndefined();
+    expect(rejectedSource.legalTargets).toEqual([]);
+
+    const forgedMove = structuredClone(state);
+    forgedMove.selectedSquare = "b2";
+    forgedMove.legalTargets = ["b3"];
+    const afterForgedMove = gameReducer(forgedMove, { type: "square", square: "b3" });
+    expect(afterForgedMove.board.b2?.id).toBe("white-pawn");
+    expect(afterForgedMove.board.b3).toBeUndefined();
+
+    const forgedPending = structuredClone(state);
+    forgedPending.board.c3 = forgedPending.board.b2;
+    delete forgedPending.board.b2;
+    forgedPending.pending = {
+      godId: "chiron",
+      abilityId: "mount",
+      step: "mount-rider",
+      source: "b2",
+      destination: "c3",
+      selected: [],
+    };
+    forgedPending.legalTargets = ["b1"];
+    expect(gameReducer(forgedPending, { type: "square", square: "b1" })).toBe(forgedPending);
+    expect(gameReducer(forgedPending, { type: "pass" })).toBe(forgedPending);
+  });
+
+  it("records exact Mount routes for zero, one, and multiple riders", () => {
+    const mountState = (level: 1 | 2 | 3 = 1) => {
+      let state = createGame(1);
+      state.phase = "play";
+      state.activeColor = "white";
+      state.players.white.gods = ["chiron"];
+      state.players.black.gods = ["ares"];
+      state.players.white.orbs.white = 1;
+      state.players.white.upgrades.mount = level;
+      state.board = {
+        f1: testPiece("king", "white", "white-king"),
+        b1: testPiece("knight", "white", "white-knight"),
+        a1: testPiece("rook", "white", "white-rook"),
+        b2: testPiece("bishop", "white", "white-bishop"),
+        c3: testPiece("pawn", "black", "black-pawn"),
+        h8: testPiece("king", "black", "black-king"),
+      };
+      state = gameReducer(state, { type: "select-god", godId: "chiron" });
+      state = gameReducer(state, { type: "select-ability", abilityId: "mount" });
+      state = gameReducer(state, { type: "square", square: "b1" });
+      return gameReducer(state, { type: "square", square: "c3" });
+    };
+
+    const noRiders = gameReducer(mountState(), { type: "pass" });
+    expect(noRiders.lastAction).toBe(
+      "White used Mount with Chiron: Knight b1 -> c3, capturing Pawn on c3; 0 riders.",
+    );
+
+    let oneRider = mountState();
+    oneRider = gameReducer(oneRider, { type: "square", square: "b2" });
+    oneRider = gameReducer(oneRider, { type: "square", square: "c2" });
+    expect(oneRider.lastAction).toBe(
+      "White used Mount with Chiron: Knight b1 -> c3, capturing Pawn on c3; Bishop b2 -> c2; 1 rider.",
+    );
+
+    let multipleRiders = mountState(2);
+    multipleRiders = gameReducer(multipleRiders, { type: "square", square: "b2" });
+    multipleRiders = gameReducer(multipleRiders, { type: "square", square: "c2" });
+    multipleRiders = gameReducer(multipleRiders, { type: "square", square: "a1" });
+    multipleRiders = gameReducer(multipleRiders, { type: "square", square: "b3" });
+    expect(multipleRiders.lastAction).toBe(
+      "White used Mount with Chiron: Knight b1 -> c3, capturing Pawn on c3; Bishop b2 -> c2; Rook a1 -> b3; 2 riders.",
+    );
   });
 
   it("uses Serpentine Step in Medusa's multi-move follow-up copy", () => {

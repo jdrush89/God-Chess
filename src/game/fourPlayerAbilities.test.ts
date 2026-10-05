@@ -172,6 +172,33 @@ describe("four-player God abilities", () => {
     expect(result.board.g10?.id).toBe("charger");
   });
 
+  it("rejects non-Knight Mount sources and stale non-Knight pending states", () => {
+    let state = gameFor("chiron");
+    state.board.g8 = piece(state, "pawn", "north", "forged-primary");
+    state.board.h8 = piece(state, "bishop", "north", "rider");
+    state = activate(state, "chiron", "mount");
+
+    const rejected = fourPlayerReducer(state, { type: "square", square: "g8" });
+    expect(rejected.selectedSquare).toBeUndefined();
+    expect(rejected.legalTargets).toEqual([]);
+
+    const forged = structuredClone(state);
+    forged.board.g9 = forged.board.g8;
+    delete forged.board.g8;
+    forged.pending = {
+      godId: "chiron",
+      abilityId: "mount",
+      step: "mount-rider",
+      source: "g8",
+      destination: "g9",
+      selected: [],
+    };
+    forged.legalTargets = ["h8"];
+
+    expect(fourPlayerReducer(forged, { type: "square", square: "h8" })).toEqual(forged);
+    expect(fourPlayerReducer(forged, { type: "pass" })).toEqual(forged);
+  });
+
   it("generalizes Anubis's Construction, Harden, and Monument", () => {
     let state = gameFor("anubis");
     state.board.g8 = piece(state, "rook", "north", "builder");

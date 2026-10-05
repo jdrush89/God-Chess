@@ -238,9 +238,30 @@ describe("puzzle mode", () => {
     const puzzle = PUZZLES.find((candidate) => candidate.id === "royal-landing")!;
     let state = puzzle.createState();
     expect(state.board.g8).toMatchObject({ type: "rook", controller: "black" });
-    expect(state.board.h8).toMatchObject({ type: "rook", controller: "black" });
+    expect(state.board.h8).toMatchObject({ type: "bishop", controller: "black" });
+    expect(state.board.b8).toMatchObject({
+      type: "queen",
+      controller: "black",
+      status: { movedThisTurn: true },
+    });
+    expect(state.board.f8).toMatchObject({
+      type: "bishop",
+      controller: "black",
+      status: { movedThisTurn: true },
+    });
+    expect(state.board.d7).toMatchObject({
+      type: "rook",
+      controller: "black",
+      status: { movedThisTurn: true },
+    });
+    expect(state.board.a8).toBeUndefined();
+    expect(state.board.c8).toBeUndefined();
+    expect(Object.values(state.board).filter(
+      (piece) => piece.controller === "black" && piece.type === "rook",
+    )).toHaveLength(2);
 
     for (const action of puzzle.solutionTurns[0]) state = gameReducer(state, action);
+    expect(state.board.e5).toMatchObject({ type: "king", controller: "white" });
     expect(kingSquare(state.board, "black")).toBe("g7");
     expect(legalTargets(state.board, "g7")).toEqual([]);
 
@@ -249,6 +270,44 @@ describe("puzzle mode", () => {
     for (const action of response) state = gameReducer(state, action);
     expect(kingSquare(state.board, "black")).toBe("g7");
     expect(legalTargets(state.board, "g7")).toEqual([]);
+  });
+
+  it("keeps Position Thirteen solvable through occupied-square Escort after every optimal response", () => {
+    const puzzle = PUZZLES.find((candidate) => candidate.id === "royal-landing")!;
+    let staged = puzzle.createState();
+    for (const action of puzzle.solutionTurns[0]) staged = gameReducer(staged, action);
+
+    const responses = enumerateTurnPlans(staged, "black");
+    expect(responses.length).toBeGreaterThan(0);
+    const bestScore = evaluateGameState(responses[0].state, "black");
+    const optimalResponses = responses.filter(
+      (response) => evaluateGameState(response.state, "black") === bestScore,
+    );
+    expect(optimalResponses.length).toBeGreaterThan(0);
+
+    for (const response of optimalResponses) {
+      let solved = response.state;
+      for (const action of puzzle.solutionTurns[1].slice(0, -1)) {
+        solved = gameReducer(solved, action);
+      }
+      expect(solved.pending?.step).toBe("escort-move");
+      expect(solved.board.f6).toMatchObject({
+        id: "white-escort",
+        type: "rook",
+        controller: "white",
+      });
+      expect(solved.legalTargets).toContain("f6");
+
+      solved = gameReducer(solved, puzzle.solutionTurns[1].at(-1)!);
+      expect(solved).toMatchObject({
+        phase: "gameover",
+        winner: "white",
+        puzzleFailed: false,
+        result: { kind: "winner", winner: "white", reason: "king-death" },
+      });
+      expect(solved.board.f6).toMatchObject({ type: "king", controller: "white" });
+      expect(solved.board.g7).toMatchObject({ id: "white-escort", type: "rook" });
+    }
   });
 
   it("keeps Position Eleven's King boxed in and solvable after every optimal response", () => {
