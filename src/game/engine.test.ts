@@ -486,6 +486,46 @@ describe("game flow", () => {
     });
   });
 
+  it("skips players with no legal upgrades and normalizes resumed upgrade queues", () => {
+    let state = createGame(1);
+    (["ares", "medusa", "midas", "death", "artemis", "chiron"] as const).forEach((godId) => {
+      state = gameReducer(state, { type: "draft", godId });
+    });
+    state.phase = "upgrade";
+    state.activeColor = "white";
+    state.upgradeQueue = ["white", "black"];
+    for (const godId of state.players.black.gods) {
+      for (const ability of GOD_BY_ID[godId].abilities) {
+        state.players.black.upgrades[ability.id] = 3;
+      }
+    }
+
+    state = gameReducer(state, { type: "upgrade", abilityId: "threaten" });
+    expect(state.phase).toBe("play");
+    expect(state.round).toBe(2);
+    expect(state.upgradeQueue).toEqual([]);
+
+    const resumed = structuredClone(state);
+    resumed.phase = "upgrade";
+    resumed.activeColor = "white";
+    resumed.upgradeQueue = ["white", "black"];
+    for (const godId of resumed.players.white.gods) {
+      for (const ability of GOD_BY_ID[godId].abilities) {
+        resumed.players.white.upgrades[ability.id] = 3;
+      }
+    }
+    const blackAbilityId = GOD_BY_ID[resumed.players.black.gods[0]].abilities[0].id;
+    delete resumed.players.black.upgrades[blackAbilityId];
+
+    const normalized = gameReducer(resumed, {
+      type: "load-game",
+      state: resumed,
+    });
+    expect(normalized.phase).toBe("upgrade");
+    expect(normalized.activeColor).toBe("black");
+    expect(normalized.upgradeQueue).toEqual(["black"]);
+  });
+
   it("allows Construction moves at any normal distance and rewards only one-square moves", () => {
     const newAnubisGame = () => {
       let game = createGame(1);

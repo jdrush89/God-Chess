@@ -124,7 +124,7 @@ vi.mock("./game/ai", async (importOriginal) => {
   };
 });
 
-import App, { ActionPanel, ChessBoard } from "./App";
+import App, { ActionPanel, ChessBoard, GameScreen } from "./App";
 import { chooseAiPlan } from "./game/ai";
 import {
   classicMoveFirstCandidates,
@@ -136,7 +136,7 @@ import { createDefaultThreePlayerConfig } from "./game/threePlayerConfig";
 import { createThreePlayerGame, threePlayerReducer } from "./game/threePlayerEngine";
 import { createThreePlayerStateEnvelope } from "./game/threePlayerSession";
 import { PUZZLES } from "./game/puzzles";
-import { createSavedGame } from "./saves";
+import { createSavedGame, prepareSavedState } from "./saves";
 
 const SAVE_KEY = "god-chess-saves-v2";
 const LEGACY_SAVE_KEY = "god-chess-save-v1";
@@ -288,6 +288,7 @@ afterEach(() => {
   window.localStorage.clear();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 beforeEach(() => {
@@ -1291,6 +1292,88 @@ describe("game startup", () => {
     fireEvent.click(levelThree);
     expect(levelThree.classList.contains("active")).toBe(false);
     expect(levelThree.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("clears an AI upgrade presentation lock when a prepared save replaces the live state", async () => {
+    let liveState = createGame(2, { mode: "ai" });
+    for (const godId of ["ares", "medusa", "midas", "death", "artemis", "chiron"] as const) {
+      liveState = gameReducer(liveState, { type: "draft", godId });
+    }
+    liveState.phase = "upgrade";
+    liveState.activeColor = "white";
+    liveState.upgradeQueue = ["white", "black"];
+    liveState = gameReducer(liveState, {
+      type: "preview-upgrade",
+      godId: "ares",
+      abilityId: "threaten",
+    });
+    liveState = gameReducer(liveState, { type: "upgrade", abilityId: "threaten" });
+    const dispatch = vi.fn();
+    const gameProps = {
+      dispatch,
+      onSaveAndQuit: vi.fn(),
+      onRestart: vi.fn(),
+      onRestartPuzzle: vi.fn(),
+      onNextPuzzle: vi.fn(),
+      opponentColor: "white" as const,
+      undoEnabled: false,
+      canUndo: false,
+      onUndo: vi.fn(),
+      onOpenSettings: vi.fn(),
+    };
+    const { container, rerender } = render(
+      <GameScreen state={liveState} {...gameProps} />,
+    );
+
+    await waitFor(() =>
+      expect(container.querySelector(".game-page")?.classList.contains("input-locked"))
+        .toBe(true)
+    );
+
+    const resumedState = prepareSavedState(liveState);
+    rerender(<GameScreen state={resumedState} {...gameProps} />);
+
+    await waitFor(() =>
+      expect(container.querySelector(".game-page")?.classList.contains("input-locked"))
+        .toBe(false)
+    );
+    fireEvent.click(screen.getByRole("button", { name: /use chiron/i }));
+    expect(screen.getByText("Gallop").closest(".ability-card")?.classList.contains("read-only"))
+      .toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: /^gallop/i }));
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "preview-upgrade",
+      godId: "chiron",
+      abilityId: "gallop",
+    });
+  });
+
+  it("autosaves the human-to-AI upgrade handoff without exposing the prior move", async () => {
+    vi.useFakeTimers();
+    let savedState = createGame(1, { mode: "ai" });
+    for (const godId of ["ares", "medusa", "midas", "death", "artemis", "chiron"] as const) {
+      savedState = gameReducer(savedState, { type: "draft", godId });
+    }
+    savedState.phase = "upgrade";
+    savedState.activeColor = "white";
+    savedState.upgradeQueue = ["white", "black"];
+    window.localStorage.setItem(SAVE_KEY, JSON.stringify([
+      createSavedGame("immediate-upgrade-save", savedState, []),
+    ]));
+
+    render(<App />);
+    openPlayOption("Load");
+    fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
+    fireEvent.click(screen.getByRole("button", { name: /use ares/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^threaten/i }));
+    fireEvent.click(screen.getByRole("button", { name: /confirm threaten/i }));
+    await act(async () => undefined);
+
+    const [stored] = JSON.parse(window.localStorage.getItem(SAVE_KEY) ?? "[]");
+    expect(stored.state.activeColor).toBe("black");
+    expect(stored.state.upgradeQueue).toEqual(["black"]);
+    expect(stored.state.presentation).toBeUndefined();
+    expect(stored.state.upgradePreview).toBeUndefined();
   });
 
   it("renders distinct artwork for each active piece marker", () => {
