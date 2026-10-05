@@ -76,6 +76,17 @@ const pendingState = (
 };
 
 describe("three-player persistence", () => {
+  it("retains canonical Hex ownership through state preparation", () => {
+    const state = createThreePlayerGame();
+    const cell = Object.keys(state.board)[0];
+    state.board[cell].status.hexedBy = "red";
+
+    const prepared = prepareThreePlayerState(structuredClone(state));
+
+    expect(prepared.board[cell].status.hexedBy).toBe("red");
+    expect(isThreePlayerState(prepared)).toBe(true);
+  });
+
   it("round-trips canonical states for every topology", () => {
     for (const boardVariant of [
       "three-player",

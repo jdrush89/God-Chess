@@ -67,6 +67,28 @@ const completeFourPlayerDraft = (
 };
 
 describe("four-player app integration", () => {
+  it("integrates the shared zoom viewport with the four-player board", () => {
+    const { container } = render(
+      <FourPlayerGame
+        initialState={completeFourPlayerDraft()}
+        undoPreferred={false}
+        onUndoPreferenceChange={vi.fn()}
+        onPersist={vi.fn(async () => false)}
+        onQuit={vi.fn()}
+        onNewGame={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("region", { name: "Four-player board" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
+    expect(screen.getByLabelText("Current board zoom").textContent).toBe("125%");
+    expect(container.querySelector(".four-board-zoom .board-zoom-content")
+      ?.getAttribute("style")).toContain("scale(1.25)");
+    expect(screen.getByRole("grid", {
+      name: "Four-player God Chess board",
+    })).toBeTruthy();
+  });
+
   it("offers four-player mode and validates that one seat remains Human", () => {
     const { container } = render(<App />);
     openPlayOption("Local");

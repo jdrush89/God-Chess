@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createThreePlayerGame } from "../game/threePlayerEngine";
 import { createDefaultThreePlayerConfig } from "../game/threePlayerConfig";
 import { getThreePlayerTopology } from "../game/threePlayerTopology";
@@ -183,6 +183,42 @@ describe("ThreePlayerBoard", () => {
     expect(container.querySelector(`[data-cell="${cell}"]`)?.parentElement
       ?.querySelector(".three-board-banana")).toBeTruthy();
   });
+
+  it.each(THREE_PLAYER_BOARD_VARIANTS)(
+    "renders an accessible Hex marker on controlled hostile pieces on %s",
+    (variant) => {
+      const config = createDefaultThreePlayerConfig();
+      config.boardVariant = variant;
+      const state = createThreePlayerGame(config);
+      const [cell, piece] = Object.entries(state.board).find(
+        ([, candidate]) => candidate.owner === "red",
+      )!;
+      piece.controller = "black";
+      piece.status.hexedBy = "white";
+      const onCell = vi.fn();
+      const onInspectCell = vi.fn();
+      const { container } = render(
+        <ThreePlayerBoard
+          state={state}
+          onCell={onCell}
+          onInspectCell={onInspectCell}
+        />,
+      );
+
+      const boardCell = screen.getByRole("gridcell", {
+        name: new RegExp(`${cell}.*controlled by black.*Hexed`, "i"),
+      });
+      const marker = container.querySelector(
+        `[data-cell="${cell}"] ~ [data-status="hexedBy"]`,
+      );
+      expect(marker?.getAttribute("aria-label")).toBe("Hexed by White");
+      expect(marker?.querySelector("title")?.textContent).toBe("Hexed by White");
+
+      fireEvent.click(boardCell);
+      expect(onInspectCell).toHaveBeenCalledWith(cell);
+      expect(onCell).toHaveBeenCalledWith(cell);
+    },
+  );
 
   it.each(["three-player", "three-circular"] as const)(
     "keeps every starting %s piece centered and scaled inside its canonical cell",

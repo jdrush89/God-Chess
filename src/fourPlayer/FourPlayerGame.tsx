@@ -36,6 +36,7 @@ import {
 } from "react";
 import { GameResultPresentation } from "../GameResultPresentation";
 import { MatchEscapeMenu } from "../MatchEscapeMenu";
+import { BoardViewport } from "../components/BoardViewport";
 import {
   recordActionTransition,
   recordDiagnostic,
@@ -613,44 +614,50 @@ function FourPlayerBoard({
     state.pending?.step === "enchant-followup-move"
   ) && !state.selectedSquare;
   return (
-    <div className="four-board-shell">
-      <div className="four-board-frame">
-        <div className="four-chess-board" role="grid" aria-label="Four-player God Chess board">
-          {cells.map(({ square, file, rank }) => {
-            if (!square) {
-              return <span className="four-board-outside" aria-hidden="true" key={`${file}-${rank}`} />;
-            }
-            const piece = state.board[square];
-            const selected = state.selectedSquare === square;
-            const legal = !previewing && state.legalTargets.includes(square);
-            const effectPreview = previewing && state.legalTargets.includes(square);
-            const banana = state.bananas.find((item) => item.square === square);
-            return (
-              <button
-                role="gridcell"
-                data-square={square}
-                aria-label={`${square}${piece ? `, ${state.players[piece.owner].name} ${piece.type}${piece.controller ? `, controlled by ${state.players[piece.controller].name}` : ", inert"}` : ""}${legal ? ", legal target" : ""}`}
-                className={`four-board-square ${(file + rank) % 2 ? "light" : "dark"} ${selected ? "selected" : ""} ${legal ? "legal" : ""} ${legal && piece ? "legal-occupied" : ""} ${legal && enchantSourceChoice ? "legal-source" : ""} ${legal && !enchantSourceChoice ? "legal-destination" : ""} ${effectPreview ? "effect-preview" : ""}`}
-                onClick={() => {
-                  onInspectSquare(square);
-                  dispatch({ type: "square", square });
-                }}
-                key={square}
-              >
-                {(file === 3 || file === 10) && <span className="rank-label">{rank + 1}</span>}
-                {(rank === 3 || rank === 10) && (
-                  <span className="file-label">{String.fromCharCode(97 + file)}</span>
-                )}
-                {legal && !piece && <span className="move-target-dot" aria-hidden="true" />}
-                {banana && <span className="banana" title="Banana peel">⌁</span>}
-                {captureEffects.has(square) && <span className="four-capture-effect"><Skull /></span>}
-                {piece && <PieceView piece={piece} state={state} square={square} />}
-              </button>
-            );
-          })}
+    <BoardViewport
+      className="four-board-zoom"
+      label="Four-player board"
+      resetKey="four-player"
+    >
+      <div className="four-board-shell">
+        <div className="four-board-frame">
+          <div className="four-chess-board" role="grid" aria-label="Four-player God Chess board">
+            {cells.map(({ square, file, rank }) => {
+              if (!square) {
+                return <span className="four-board-outside" aria-hidden="true" key={`${file}-${rank}`} />;
+              }
+              const piece = state.board[square];
+              const selected = state.selectedSquare === square;
+              const legal = !previewing && state.legalTargets.includes(square);
+              const effectPreview = previewing && state.legalTargets.includes(square);
+              const banana = state.bananas.find((item) => item.square === square);
+              return (
+                <button
+                  role="gridcell"
+                  data-square={square}
+                  aria-label={`${square}${piece ? `, ${state.players[piece.owner].name} ${piece.type}${piece.controller ? `, controlled by ${state.players[piece.controller].name}` : ", inert"}` : ""}${legal ? ", legal target" : ""}`}
+                  className={`four-board-square ${(file + rank) % 2 ? "light" : "dark"} ${selected ? "selected" : ""} ${legal ? "legal" : ""} ${legal && piece ? "legal-occupied" : ""} ${legal && enchantSourceChoice ? "legal-source" : ""} ${legal && !enchantSourceChoice ? "legal-destination" : ""} ${effectPreview ? "effect-preview" : ""}`}
+                  onClick={() => {
+                    onInspectSquare(square);
+                    dispatch({ type: "square", square });
+                  }}
+                  key={square}
+                >
+                  {(file === 3 || file === 10) && <span className="rank-label">{rank + 1}</span>}
+                  {(rank === 3 || rank === 10) && (
+                    <span className="file-label">{String.fromCharCode(97 + file)}</span>
+                  )}
+                  {legal && !piece && <span className="move-target-dot" aria-hidden="true" />}
+                  {banana && <span className="banana" title="Banana peel">⌁</span>}
+                  {captureEffects.has(square) && <span className="four-capture-effect"><Skull /></span>}
+                  {piece && <PieceView piece={piece} state={state} square={square} />}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
-    </div>
+    </BoardViewport>
   );
 }
 

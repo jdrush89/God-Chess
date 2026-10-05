@@ -444,6 +444,42 @@ body::before {
 }
 
 .board-shell { width: min(100%, var(--board-size)); aspect-ratio: 1; container-type: inline-size; }
+.board-zoom {
+  width: 100%; height: 100%; min-width: 0; min-height: 0;
+  display: flex; flex-direction: column;
+}
+.board-zoom-controls {
+  min-height: 38px; display: flex; align-items: center; justify-content: flex-end; gap: 5px;
+  padding: 5px 6px; color: #aaa69d; background: #0d0f14; border: 1px solid var(--line);
+  border-bottom: 0;
+}
+.board-zoom-controls button {
+  min-width: 31px; height: 28px; display: grid; place-items: center; padding: 0 8px;
+  color: #ddd7cb; background: #171a21; border: 1px solid #363941; cursor: pointer;
+  font-size: 16px; line-height: 1;
+}
+.board-zoom-controls button:hover:not(:disabled),
+.board-zoom-controls button:focus-visible {
+  color: #fff0bd; border-color: rgba(198,161,91,.72);
+}
+.board-zoom-controls button:focus-visible { outline: 2px solid #fff0bd; outline-offset: 2px; }
+.board-zoom-controls button:disabled { opacity: .35; cursor: not-allowed; }
+.board-zoom-controls .board-zoom-reset {
+  min-width: 52px; font-size: 8px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase;
+}
+.board-zoom-controls .board-zoom-value {
+  min-width: 44px; color: #d8c89f; font-size: 9px; font-variant-numeric: tabular-nums; text-align: center;
+}
+.board-zoom-viewport {
+  position: relative; flex: 1 1 auto; min-width: 0; min-height: 0; overflow: hidden;
+  overscroll-behavior: contain; touch-action: pan-y; cursor: default;
+}
+.board-zoom-viewport.zoomed { touch-action: none; cursor: grab; }
+.board-zoom-viewport.zoomed:active { cursor: grabbing; }
+.board-zoom-content {
+  width: 100%; height: 100%; min-width: 0; min-height: 0;
+  transform-origin: 0 0; will-change: transform;
+}
 .board-frame {
   padding: 11px; width: 100%; height: 100%;
   background: linear-gradient(135deg, #463a2b, #191b20 42%, #59462c);
@@ -1605,6 +1641,12 @@ span.move-target-dot {
   filter: drop-shadow(0 .08px .04px rgba(0,0,0,.7));
 }
 .three-board-piece.inert { opacity: .38; }
+.three-status-marker { pointer-events: none; }
+.three-status-marker polygon {
+  fill: #5b3a76; stroke: #e2c8f4; stroke-width: .045; vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 .04px .04px rgba(0,0,0,.7));
+}
+.three-status-marker circle { fill: #f2dcff; }
 .three-board-banana {
   font: .46px sans-serif;
   text-anchor: middle;
@@ -1715,6 +1757,8 @@ span.move-target-dot {
 .three-seat-summary small { color: #74767d; font-size: 7px; text-transform: uppercase; }
 .three-seat-summary > svg { color: var(--seat-color); }
 .three-player-resources { display: flex; flex-wrap: wrap; gap: 7px; font-size: 9px; }
+.three-player-resources .orb-count { gap: 4px; font-size: 9px; }
+.three-player-resources .orb { width: 10px; height: 10px; }
 .three-player-gods { min-width: 0; display: flex; flex-wrap: wrap; gap: 5px; }
 .three-player-gods span { width: 43px; height: 28px; overflow: hidden; border: 1px solid var(--line); }
 .three-player-gods span.resting { opacity: .36; filter: grayscale(1); }
@@ -1746,6 +1790,23 @@ span.move-target-dot {
   padding: 14px; overflow: hidden; border: 1px solid #705c39;
   background: radial-gradient(circle, #252932, #101218 72%);
   box-shadow: 0 24px 64px rgba(0,0,0,.38), inset 0 0 0 3px #0c0e13;
+}
+.three-board-zoom .board-zoom-viewport { border: 1px solid rgba(112,92,57,.45); }
+.three-square-info { margin-top: 8px; max-height: 240px; }
+.three-piece-info-symbol {
+  width: 43px; height: 43px; display: grid; place-items: center; flex: 0 0 auto;
+  color: var(--piece-color); font: 36px/1 Georgia, serif;
+  -webkit-text-stroke: 1px rgba(20,21,24,.78);
+  border: 1px solid rgba(255,255,255,.12); background: rgba(0,0,0,.2);
+  filter: drop-shadow(0 2px 1px rgba(0,0,0,.55));
+}
+.three-piece-details { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 12px; }
+.three-piece-details span {
+  padding: 4px 7px; color: #a9a49a; border: 1px solid var(--line);
+  font-size: 8px; text-transform: capitalize;
+}
+.three-piece-details [data-status="hexedBy"] {
+  color: #dfc5f1; border-color: #76558d; background: rgba(91,58,118,.2);
 }
 .three-history-strip {
   min-height: 38px; display: flex; align-items: center; gap: 8px; padding: 8px 11px;
@@ -2099,6 +2160,10 @@ span.move-target-dot {
 .four-board-column {
   grid-area: board; width: min(100%, var(--four-board-size)); min-width: 0; justify-self: center;
 }
+.four-board-zoom { height: auto; }
+.four-board-zoom .board-zoom-viewport {
+  flex: none; width: 100%; aspect-ratio: 1; border: 1px solid rgba(119,96,59,.7);
+}
 .four-board-shell { width: 100%; aspect-ratio: 1; container-type: inline-size; }
 .four-board-frame {
   width: 100%; height: 100%; padding: 8px;
@@ -2326,6 +2391,12 @@ span.move-target-dot {
     --four-board-size: 100%;
     width: 100%; margin-top: 0; gap: 8px;
   }
+  .board-zoom-controls {
+    min-height: 42px; position: relative; z-index: 2;
+    padding-inline: max(8px, env(safe-area-inset-right));
+  }
+  .board-zoom-controls button { min-width: 36px; height: 32px; }
+  .board-zoom-controls .board-zoom-reset { min-width: 58px; }
   .four-board-frame { padding: 3px; border-left: 0; border-right: 0; }
   .four-player-panel { border-left: 0; border-right: 0; }
   .four-ability-list, .four-upgrade-list { grid-template-columns: 1fr; }

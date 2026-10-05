@@ -10,15 +10,10 @@ import type {
   ThreePlayerPiece,
   ThreePlayerState,
 } from "../game/threePlayerTypes";
-
-const PIECES: Record<ThreePlayerPiece["type"], string> = {
-  king: "♚",
-  queen: "♛",
-  rook: "♜",
-  bishop: "♝",
-  knight: "♞",
-  pawn: "♟",
-};
+import {
+  THREE_PLAYER_PIECE_SYMBOLS,
+  threePlayerPieceStatusLabels,
+} from "./presentation";
 
 const RENDER_PADDING = 0.6;
 
@@ -51,6 +46,12 @@ const pieceName = (piece: ThreePlayerPiece) =>
     : piece.controller
       ? ""
       : ", inert"}`;
+
+const hexagonPoints = (cx: number, cy: number, radius: number) =>
+  Array.from({ length: 6 }, (_, index) => {
+    const angle = Math.PI / 6 + index * Math.PI / 3;
+    return `${cx + Math.cos(angle) * radius},${cy + Math.sin(angle) * radius}`;
+  }).join(" ");
 
 const annularSectorPath = (
   cx: number,
@@ -85,6 +86,7 @@ export interface ThreePlayerBoardProps {
   disabled?: boolean;
   preview?: boolean;
   onCell?: (cell: ThreePlayerCell) => void;
+  onInspectCell?: (cell: ThreePlayerCell) => void;
 }
 
 export function ThreePlayerBoard({
@@ -95,6 +97,7 @@ export function ThreePlayerBoard({
   disabled = false,
   preview = false,
   onCell,
+  onInspectCell,
 }: ThreePlayerBoardProps) {
   const topology = useMemo(
     () => getThreePlayerTopology(state.config.boardVariant),
@@ -132,6 +135,7 @@ export function ThreePlayerBoard({
         const isEffectPreview = previewingEffect && isLegal;
         const isMoveTarget = isLegal && !isEffectPreview;
         const isSelected = descriptor.id === selectedCell;
+        const statusLabels = piece ? threePlayerPieceStatusLabels(piece) : [];
         const visualClass = descriptor.geometricClass === 2 &&
           threePlayerHasAlternatingNeutralCells(variant)
           ? "neutral"
@@ -154,6 +158,7 @@ export function ThreePlayerBoard({
         const label = [
           descriptor.id,
           piece ? pieceName(piece) : undefined,
+          statusLabels.length ? statusLabels.join(", ") : undefined,
           banana ? `banana placed by ${banana.owner}` : undefined,
         ].filter(Boolean).join(", ");
         const shared = {
@@ -161,6 +166,11 @@ export function ThreePlayerBoard({
           "data-cell": descriptor.id,
         };
         const renderShape = descriptor.render.shape;
+        const fontSize = pieceFontSize(descriptor, variant);
+        const hexedBy = piece?.status.hexedBy;
+        const markerRadius = fontSize * 0.16;
+        const markerX = descriptor.render.x + fontSize * 0.38;
+        const markerY = descriptor.render.y - fontSize * 0.36;
         const shape = renderShape.kind === "annular-sector"
           ? (
             <path
@@ -187,16 +197,20 @@ export function ThreePlayerBoard({
             role={preview ? undefined : "gridcell"}
             aria-label={preview ? undefined : label}
             aria-disabled={disabled || (!isLegal && !piece)}
-            tabIndex={preview || disabled ? undefined : 0}
-            onClick={() => !preview && !disabled && onCell?.(descriptor.id)}
+            tabIndex={preview || (disabled && !onInspectCell) ? undefined : 0}
+            onClick={() => {
+              if (preview) return;
+              onInspectCell?.(descriptor.id);
+              if (!disabled) onCell?.(descriptor.id);
+            }}
             onKeyDown={(event) => {
               if (
                 !preview &&
-                !disabled &&
                 (event.key === "Enter" || event.key === " ")
               ) {
                 event.preventDefault();
-                onCell?.(descriptor.id);
+                onInspectCell?.(descriptor.id);
+                if (!disabled) onCell?.(descriptor.id);
               }
             }}
             key={descriptor.id}
@@ -219,12 +233,24 @@ export function ThreePlayerBoard({
                 style={{
                   "--piece-color":
                     state.players[piece.controller ?? piece.owner].displayColor,
-                  fontSize: pieceFontSize(descriptor, variant),
+                  fontSize,
                 } as React.CSSProperties}
                 aria-hidden="true"
               >
-                {PIECES[piece.type]}
+                {THREE_PLAYER_PIECE_SYMBOLS[piece.type]}
               </text>
+            )}
+            {piece && hexedBy && !preview && (
+              <g
+                className="three-status-marker"
+                data-status="hexedBy"
+                role="img"
+                aria-label={`Hexed by ${state.players[hexedBy].name}`}
+              >
+                <title>{`Hexed by ${state.players[hexedBy].name}`}</title>
+                <polygon points={hexagonPoints(markerX, markerY, markerRadius)} />
+                <circle cx={markerX} cy={markerY} r={markerRadius * 0.25} />
+              </g>
             )}
             {banana && !preview && (
               <text
