@@ -14,7 +14,10 @@ import type {
   ThreePlayerAction,
   ThreePlayerState,
 } from "../game/threePlayerTypes";
-import { THREE_PLAYER_SEATS } from "../game/threePlayerTypes";
+import {
+  THREE_PLAYER_BOARD_VARIANTS,
+  THREE_PLAYER_SEATS,
+} from "../game/threePlayerTypes";
 import {
   ThreePlayerGame,
   type ThreePlayerOnlineSession,
@@ -123,6 +126,81 @@ const installDeterministicAiWorker = () => {
 };
 
 describe("ThreePlayerGame", () => {
+  it.each(THREE_PLAYER_BOARD_VARIANTS)(
+    "integrates zoom controls with the %s board",
+    (boardVariant) => {
+      const config = createDefaultThreePlayerConfig();
+      config.boardVariant = boardVariant;
+      const { container } = renderGame(completeDraft(createThreePlayerGame(config)));
+
+      expect(screen.getByRole("region", { name: "Three-player board" })).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
+      expect(screen.getByLabelText("Current board zoom").textContent).toBe("125%");
+      expect(container.querySelector(".three-board-zoom .board-zoom-content")
+        ?.getAttribute("style")).toContain("scale(1.25)");
+      expect(screen.getByRole("grid", {
+        name: new RegExp(boardVariant),
+      })).toBeTruthy();
+    },
+  );
+
+  it.each(THREE_PLAYER_BOARD_VARIANTS)(
+    "keeps light and dark orb values visibly associated on the %s board",
+    (boardVariant) => {
+      const config = createDefaultThreePlayerConfig();
+      config.boardVariant = boardVariant;
+      const state = completeDraft(createThreePlayerGame(config));
+      for (const seat of THREE_PLAYER_SEATS) {
+        state.players[seat].orbs = { light: 2, dark: 7 };
+      }
+      state.completedTurns.red = 1;
+      const { container } = renderGame(state);
+
+      for (const seat of THREE_PLAYER_SEATS) {
+        const panel = container.querySelector(`.three-player-panel.seat-${seat}`) as HTMLElement;
+        const light = within(panel).getByLabelText("2 light orbs");
+        const dark = within(panel).getByLabelText("7 dark orbs");
+        expect(light.querySelector(".orb.white")).toBeTruthy();
+        expect(light.querySelector("strong")?.textContent).toBe("2");
+        expect(dark.querySelector(".orb.black")).toBeTruthy();
+        expect(dark.querySelector("strong")?.textContent).toBe("7");
+      }
+      expect(screen.getByText(/Red · dark affinity/i)).toBeTruthy();
+    },
+  );
+
+  it("opens and closes occupied-cell inspection without selecting a hostile piece", () => {
+    const state = completeDraft();
+    const [cell, piece] = Object.entries(state.board).find(
+      ([, candidate]) => candidate.owner === "red",
+    )!;
+    piece.controller = "black";
+    piece.status.hexedBy = "white";
+    piece.status.frozen = 1;
+    piece.status.hardened = 1;
+    const { container } = renderGame(state);
+
+    fireEvent.click(screen.getByRole("gridcell", {
+      name: new RegExp(`${cell}.*controlled by black.*Hexed`, "i"),
+    }));
+
+    const details = screen.getByRole("region", { name: "Piece details" });
+    expect(within(details).getByRole("heading", {
+      name: new RegExp(piece.type, "i"),
+    })).toBeTruthy();
+    expect(within(details).getByText(/Controlled by Black; originally owned by Red/i))
+      .toBeTruthy();
+    expect(within(details).getByText("Hexed by White")).toBeTruthy();
+    expect(within(details).getByText("Stone")).toBeTruthy();
+    expect(within(details).getByText("Hardened")).toBeTruthy();
+    expect(container.querySelector(`[data-cell="${cell}"].selected`)).toBeNull();
+
+    fireEvent.click(within(details).getByRole("button", {
+      name: "Close piece details",
+    }));
+    expect(screen.queryByRole("region", { name: "Piece details" })).toBeNull();
+  });
+
   it("auto-picks one deterministic available God for the local Human seat", () => {
     vi.spyOn(Math, "random").mockReturnValue(0.5);
     const { container } = renderGame(createThreePlayerGame());

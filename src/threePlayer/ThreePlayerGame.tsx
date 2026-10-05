@@ -21,6 +21,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { GameResultPresentation } from "../GameResultPresentation";
 import { MatchEscapeMenu } from "../MatchEscapeMenu";
+import { BoardViewport } from "../components/BoardViewport";
 import {
   GodPortrait,
   PlayerAbilityCard,
@@ -46,11 +47,14 @@ import {
 import type { ThreePlayerUndoStatus } from "../multiplayer/types";
 import {
   threePlayerOwnerAffinity,
+  threePlayerPieceAffinity,
 } from "../game/threePlayerConfig";
 import {
   THREE_PLAYER_SEATS,
   type ThreePlayerAction,
   type ThreePlayerCell,
+  type ThreePlayerPiece,
+  type ThreePlayerPieceStatus,
   type ThreePlayerSeat,
   type ThreePlayerState,
 } from "../game/threePlayerTypes";
@@ -64,6 +68,11 @@ import {
   THREE_PLAYER_SEAT_LABELS,
   THREE_PLAYER_VARIANTS,
 } from "./setupConfig";
+import {
+  THREE_PLAYER_PIECE_NAMES,
+  THREE_PLAYER_PIECE_SYMBOLS,
+  THREE_PLAYER_STATUS_LABELS,
+} from "./presentation";
 
 type UiAction = ThreePlayerAction | ({ type: string } & Record<string, unknown>);
 type UiState = Omit<
@@ -184,6 +193,22 @@ const safeInCheck = (state: UiState, seat: ThreePlayerSeat) => {
   } catch {
     return false;
   }
+};
+
+const statusOwner = (
+  piece: ThreePlayerPiece,
+  key: keyof ThreePlayerPieceStatus,
+): ThreePlayerSeat | undefined => {
+  if (key === "frozen") return piece.status.frozenBy;
+  if (key === "poisoned") return piece.status.poisonedBy;
+  if (key === "luredBy") return piece.status.luredBy;
+  if (key === "hexedBy") return piece.status.hexedBy;
+  if (key === "prepared" && typeof piece.status.prepared === "object") {
+    return piece.status.prepared.owner;
+  }
+  if (key === "ritual") return piece.status.ritual?.owner;
+  if (key === "markedForDeath") return piece.status.markedForDeath?.owner;
+  return undefined;
 };
 
 function DraftGodPortrait({
@@ -572,8 +597,14 @@ function PlayerPanel({
         {checked ? <Shield aria-label="In check" /> : player.eliminated ? <Skull /> : <Crown />}
       </button>
       <div className="three-player-resources">
-        <span aria-label={`${player.orbs.light} light orbs`}>◯ {player.orbs.light}</span>
-        <span aria-label={`${player.orbs.dark} dark orbs`}>● {player.orbs.dark}</span>
+        <span className="orb-count" aria-label={`${player.orbs.light} light orbs`}>
+          <i className="orb white" aria-hidden="true" />
+          <strong>{player.orbs.light}</strong>
+        </span>
+        <span className="orb-count" aria-label={`${player.orbs.dark} dark orbs`}>
+          <i className="orb black" aria-hidden="true" />
+          <strong>{player.orbs.dark}</strong>
+        </span>
         {takeover > 0 && <span className="takeover-count">↪ {takeover}</span>}
       </div>
       <div className="three-player-gods">
@@ -592,6 +623,70 @@ function PlayerPanel({
         {player.eliminated ? " · Eliminated" : checked ? " · Check" : ""}
       </small>
     </article>
+  );
+}
+
+function ThreePlayerPieceInfo({
+  state,
+  cell,
+  onClose,
+}: {
+  state: UiState;
+  cell?: ThreePlayerCell;
+  onClose: () => void;
+}) {
+  if (!cell) return null;
+  const piece = state.board[cell];
+  if (!piece) return null;
+  const owner = state.players[piece.owner];
+  const controller = piece.controller ? state.players[piece.controller] : undefined;
+  const statuses = THREE_PLAYER_STATUS_LABELS
+    .filter(({ key }) => Boolean(piece.status[key]))
+    .map(({ key, label }) => {
+      const seat = statusOwner(piece, key);
+      return {
+        key,
+        label: seat ? `${label} by ${state.players[seat].name}` : label,
+      };
+    });
+  return (
+    <section className="square-info-panel three-square-info" aria-label="Piece details">
+      <button
+        className="square-info-close"
+        onClick={onClose}
+        aria-label="Close piece details"
+      >
+        <X size={15} />
+      </button>
+      <div className="square-info-heading">
+        <span
+          className="three-piece-info-symbol"
+          style={{
+            "--piece-color": state.players[piece.controller ?? piece.owner].displayColor,
+          } as React.CSSProperties}
+          aria-hidden="true"
+        >
+          {THREE_PLAYER_PIECE_SYMBOLS[piece.type]}
+        </span>
+        <div>
+          <small>{cell.toUpperCase()} · {owner.name}</small>
+          <h3>{THREE_PLAYER_PIECE_NAMES[piece.type]}</h3>
+          <p>
+            {controller
+              ? piece.controller === piece.owner
+                ? `Controlled by ${controller.name}`
+                : `Controlled by ${controller.name}; originally owned by ${owner.name}`
+              : "Inert and capturable"}
+          </p>
+        </div>
+      </div>
+      <div className="three-piece-details">
+        <span>{threePlayerPieceAffinity(state as ThreePlayerState, piece)} affinity</span>
+        {statuses.map((status) => (
+          <span data-status={status.key} key={status.key}>{status.label}</span>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -782,6 +877,7 @@ export function ThreePlayerGame({
   const stateRef = useRef(state);
   stateRef.current = state;
   const [localSelectedCell, setLocalSelectedCell] = useState<ThreePlayerCell>();
+  const [inspectedCell, setInspectedCell] = useState<ThreePlayerCell>();
   const [previewLevel, setPreviewLevel] = useState<number>();
   const [inspectedGod, setInspectedGod] = useState<GodId>();
   const [selectedUpgradeAbility, setSelectedUpgradeAbility] = useState<string>();
@@ -1382,15 +1478,29 @@ export function ThreePlayerGame({
             </div>
           )}
           <div className="three-board-frame">
-            <ThreePlayerBoard
-              state={state as ThreePlayerState}
-              selectedCell={selectedCell}
-              legalCells={legalCells}
-              pathCells={pathCells(state)}
-              disabled={inputDisabled}
-              onCell={selectCell}
-            />
+            <BoardViewport
+              className="three-board-zoom"
+              label="Three-player board"
+              resetKey={state.config.boardVariant}
+            >
+              <ThreePlayerBoard
+                state={state as ThreePlayerState}
+                selectedCell={selectedCell}
+                legalCells={legalCells}
+                pathCells={pathCells(state)}
+                disabled={inputDisabled}
+                onCell={selectCell}
+                onInspectCell={(cell) => {
+                  setInspectedCell(state.board[cell] ? cell : undefined);
+                }}
+              />
+            </BoardViewport>
           </div>
+          <ThreePlayerPieceInfo
+            state={state}
+            cell={inspectedCell}
+            onClose={() => setInspectedCell(undefined)}
+          />
           <div className="three-history-strip">
             <History size={15} />
             <span>{state.lastAction ?? state.history.at(-1) ?? "The pantheons are ready."}</span>
