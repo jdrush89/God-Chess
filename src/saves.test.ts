@@ -16,6 +16,57 @@ import {
 } from "./saves";
 
 describe("saved-game variants", () => {
+  it("round-trips completed Mount route history", () => {
+    let state = createGame(2);
+    state.phase = "play";
+    state.activeColor = "black";
+    state.players.black.gods = ["chiron"];
+    state.players.white.gods = ["ares"];
+    state.players.black.orbs.white = 1;
+    state = gameReducer(state, { type: "select-god", godId: "chiron" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "mount" });
+    state = gameReducer(state, { type: "square", square: "b8" });
+    state = gameReducer(state, { type: "square", square: "c6" });
+    state = gameReducer(state, { type: "square", square: "b7" });
+    state = gameReducer(state, { type: "square", square: "b6" });
+
+    const normalized = normalizeSavedGame(JSON.parse(JSON.stringify(
+      createSavedGame("mount-history", state, []),
+    )));
+    expect(normalized?.state.lastAction).toBe(
+      "Black used Mount with Chiron: Knight b8 -> c6; Pawn b7 -> b6; 1 rider.",
+    );
+  });
+
+  it("round-trips in-progress Mount route metadata", () => {
+    let state = createGame(2);
+    state.phase = "play";
+    state.activeColor = "black";
+    state.players.black.gods = ["chiron"];
+    state.players.white.gods = ["ares"];
+    state.players.black.orbs.white = 1;
+    state.players.black.upgrades.mount = 2;
+    state = gameReducer(state, { type: "select-god", godId: "chiron" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "mount" });
+    state = gameReducer(state, { type: "square", square: "b8" });
+    state = gameReducer(state, { type: "square", square: "c6" });
+    state = gameReducer(state, { type: "square", square: "b7" });
+    state = gameReducer(state, { type: "square", square: "b6" });
+
+    const normalized = normalizeSavedGame(JSON.parse(JSON.stringify(
+      createSavedGame("mount-pending", state, []),
+    )));
+    expect(normalized?.state.pending).toMatchObject({
+      abilityId: "mount",
+      step: "mount-rider",
+      selected: [state.board.b6?.id],
+      mountHistory: [
+        "Knight b8 -> c6",
+        "Pawn b7 -> b6",
+      ],
+    });
+  });
+
   it("normalizes a strict four-player state and matching undo snapshots", () => {
     const state = fourPlayerReducer(createFourPlayerGame(), {
       type: "draft",

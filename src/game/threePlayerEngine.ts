@@ -1172,6 +1172,9 @@ const sourceIsAllowed = (state: ThreePlayerState, cell: string) => {
   if (abilityId === "charge") {
     return piece.controller === state.activeSeat && piece.type === "knight";
   }
+  if (abilityId === "mount") {
+    return piece.controller === state.activeSeat && piece.type === "knight";
+  }
   if (abilityId === "marked" && piece.type === "king") return false;
   return piece.controller === state.activeSeat;
 };
@@ -1382,6 +1385,25 @@ const sourceTargets = (state: ThreePlayerState, cell: string): string[] => {
       state,
       cell,
       threePlayerLegalTargets(state, cell, { forceType: "rook" }),
+    );
+  }
+  if (abilityId === "mount") {
+    if (piece.type !== "knight") return [];
+    const riders = threePlayerOrthogonalCells(state, cell)
+      .filter((target) => alliedPiece(state, state.board[target]));
+    if (!riders.length) return [];
+    return constrainLure(
+      state,
+      cell,
+      threePlayerLegalTargets(state, cell).filter((target) => {
+        const simulated = clone(state);
+        simulated.board = threePlayerApplyMove(
+          simulated,
+          { from: cell, to: target },
+        ).board;
+        return threePlayerOrthogonalCells(simulated, target)
+          .some((landing) => !simulated.board[landing]);
+      }),
     );
   }
   if (abilityId === "slither") {
@@ -2227,6 +2249,13 @@ const executeMovement = (
   const abilityId = state.selectedAbility!;
   const moving = state.board[from];
   if (!moving) return;
+  if (
+    abilityId === "mount" &&
+    (
+      moving.type !== "knight" ||
+      !sourceTargets(state, from).includes(to)
+    )
+  ) return;
   const enchantFollowup = state.pending?.step === "enchant-followup-move" ||
     state.pending?.selected?.includes("__enchant-followup-move");
   if (enchantFollowup) {
@@ -2964,6 +2993,8 @@ const handleCell = (state: ThreePlayerState, cell: string) => {
     state.pending?.step === "mount-rider" &&
     state.pending.destination
   ) {
+    const primary = state.board[state.pending.destination];
+    if (!primary || !alliedPiece(state, primary) || primary.type !== "knight") return;
     if (!state.legalCells!.includes(cell) || !state.board[cell]) return;
     const destination = state.pending.destination;
     const placements = threePlayerOrthogonalCells(
@@ -2993,6 +3024,10 @@ const handleCell = (state: ThreePlayerState, cell: string) => {
     state.pending.movedPieceId &&
     state.legalCells!.includes(cell)
   ) {
+    const primary = state.pending.destination
+      ? state.board[state.pending.destination]
+      : undefined;
+    if (!primary || !alliedPiece(state, primary) || primary.type !== "knight") return;
     const riderCell = findCellById(state, state.pending.movedPieceId);
     if (!riderCell) return;
     const rider = state.board[riderCell];
@@ -3270,6 +3305,12 @@ const handlePass = (state: ThreePlayerState) => {
       state.pending?.step ?? "",
     )
   ) {
+    if (state.pending?.step === "mount-rider") {
+      const primary = state.pending.destination
+        ? state.board[state.pending.destination]
+        : undefined;
+      if (!primary || !alliedPiece(state, primary) || primary.type !== "knight") return;
+    }
     finishDivineTurn(state, abilityDescription(state));
     return;
   }

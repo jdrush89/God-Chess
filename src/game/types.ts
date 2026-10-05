@@ -128,6 +128,7 @@ export interface PendingAction {
   selected?: Square[];
   movedPieceId?: string;
   movesRemaining?: number;
+  mountHistory?: string[];
 }
 
 export interface OrbAnimation {

@@ -810,6 +810,43 @@ describe("three-player God catalog", () => {
     expect(finished.completedTurns.white).toBe(1);
   });
 
+  it("rejects non-Knight Mount sources and stale non-Knight pending states", () => {
+    let state = abilityState("chiron", 1);
+    state = threePlayerReducer(state, { type: "select-god", godId: "chiron" });
+    state = threePlayerReducer(state, { type: "select-ability", abilityId: "mount" });
+    const pawnCell = Object.entries(state.board).find(([, candidate]) =>
+      candidate.controller === "white" && candidate.type === "pawn"
+    )![0];
+
+    const rejected = threePlayerReducer(state, { type: "cell", cell: pawnCell });
+    expect(rejected.selectedCell).toBeUndefined();
+    expect(rejected.legalCells).toEqual([]);
+
+    const topology = getThreePlayerTopology(state.config.boardVariant);
+    const destination = topology.cells.find((cell) =>
+      topology.orthogonalNeighbors(cell).length > 0
+    )!;
+    const rider = topology.orthogonalNeighbors(destination)[0];
+    const forged = structuredClone(state);
+    forged.board = {
+      [destination]: piece("forged-primary", "pawn", "white"),
+      [rider]: piece("forged-rider", "bishop", "white"),
+    };
+    addSafeWhiteKing(forged, new Set([destination, rider]));
+    forged.pending = {
+      godId: "chiron",
+      abilityId: "mount",
+      step: "mount-rider",
+      source: pawnCell,
+      destination,
+      selected: [],
+    };
+    forged.legalCells = [rider];
+
+    expect(threePlayerReducer(forged, { type: "cell", cell: rider })).toEqual(forged);
+    expect(threePlayerReducer(forged, { type: "pass" })).toEqual(forged);
+  });
+
   it("does not offer a second Resurrection without a legal placement", () => {
     let state = abilityState("death", 2);
     const topology = getThreePlayerTopology(state.config.boardVariant);

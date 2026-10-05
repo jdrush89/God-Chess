@@ -623,10 +623,8 @@ const royalLanding = (playerName?: string) => {
     ["h2", piece("white-pawn-h", "pawn", "white")],
     ["g7", piece("black-king", "king", "black")],
     ["g8", piece("black-rook-g", "rook", "black")],
-    ["h8", piece("black-rook-h", "rook", "black")],
+    ["h8", piece("black-bishop-h", "bishop", "black")],
     ["b8", piece("black-queen", "queen", "black")],
-    ["a8", piece("black-rook-a", "rook", "black")],
-    ["c8", piece("black-bishop-c", "bishop", "black")],
     ["f8", piece("black-bishop-f", "bishop", "black")],
     ["d7", piece("black-rook-d", "rook", "black")],
     ["a7", piece("black-pawn-a", "pawn", "black")],
@@ -642,6 +640,9 @@ const royalLanding = (playerName?: string) => {
     leverage: 2,
   };
   enableBestDefense(state);
+  for (const square of ["b8", "d7", "f8"]) {
+    state.board[square].status.movedThisTurn = true;
+  }
   return state;
 };
 
@@ -1001,21 +1002,21 @@ export const PUZZLES: PuzzleDefinition[] = [
     difficulty: "medium",
     objective: "Capture the black King in two divine turns.",
     hint: "Bring your King beside the formation; the crowded back rank and pawn wall leave the opposing King nowhere to go.",
-    solutionSummary: "Air Lift the white King to e6, then Escort the rook from f6 onto the King at g7.",
+    solutionSummary: "Air Lift the white King to e5, then Escort onto the rook at f6 so it lands on the King at g7.",
     playerTurns: 2,
     solutionTurns: [
       [
         { type: "select-god", godId: "quetzacoatl" },
         { type: "select-ability", abilityId: "air-lift" },
         { type: "square", square: "b1" },
-        { type: "square", square: "e6" },
+        { type: "square", square: "e5" },
       ],
       [
         { type: "select-god", godId: "leonidas" },
         { type: "select-ability", abilityId: "escort" },
-        { type: "square", square: "e6" },
+        { type: "square", square: "e5" },
         { type: "square", square: "f6" },
-        { type: "square", square: "f7" },
+        { type: "square", square: "f6" },
       ],
     ],
     createState: royalLanding,

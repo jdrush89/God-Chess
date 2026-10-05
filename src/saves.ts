@@ -293,6 +293,7 @@ const isPending = (value: unknown): value is PendingAction => {
       "selected",
       "movedPieceId",
       "movesRemaining",
+      "mountHistory",
     ]) ||
     !isGodId(value.godId) ||
     typeof value.abilityId !== "string" ||
@@ -307,12 +308,24 @@ const isPending = (value: unknown): value is PendingAction => {
       value.selected === undefined ||
       (
         Array.isArray(value.selected) &&
-        value.selected.every(isSquare) &&
+        value.selected.every((entry) =>
+          value.abilityId === "mount"
+            ? typeof entry === "string" && entry.length > 0
+            : isSquare(entry)
+        ) &&
         isUnique(value.selected)
       )
     ) &&
     (value.movedPieceId === undefined || typeof value.movedPieceId === "string") &&
-    (value.movesRemaining === undefined || isInteger(value.movesRemaining))
+    (value.movesRemaining === undefined || isInteger(value.movesRemaining)) &&
+    (
+      value.mountHistory === undefined ||
+      (
+        value.abilityId === "mount" &&
+        Array.isArray(value.mountHistory) &&
+        value.mountHistory.every((entry) => typeof entry === "string")
+      )
+    )
   );
   if (!fieldsAreValid) return false;
   if (value.step === "enchant-enemy-move") {
