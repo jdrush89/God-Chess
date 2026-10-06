@@ -18,7 +18,17 @@ export type PuzzleId =
   | "cleared-lane"
   | "royal-landing"
   | "skyward-charge"
-  | "provoked-fury";
+  | "provoked-fury"
+  | "queens-compass"
+  | "hexed-reserve"
+  | "golden-fuse"
+  | "resonant-foundation"
+  | "threatened-turncoat"
+  | "architects-bargain"
+  | "sung-execution"
+  | "opened-throne"
+  | "pinned-serpent"
+  | "hexed-provocation";
 export type GodId =
   | "quetzacoatl"
   | "chiron"

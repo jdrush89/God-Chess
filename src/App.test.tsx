@@ -774,6 +774,19 @@ describe("game startup", () => {
     expect(container.querySelector(".puzzle-complete-badge svg")).toBeTruthy();
   });
 
+  it("lists ten three-turn Hard puzzles in the difficulty browser", () => {
+    render(<App />);
+    openPlayOption("Puzzles");
+
+    expect(screen.getByRole("button", { name: /^hard.*0 of 10 completed/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^hard/i }));
+
+    expect(screen.getByRole("heading", { name: /hard puzzles/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /puzzle 16.*position sixteen/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /puzzle 25.*position twenty-five/i })).toBeTruthy();
+    expect(screen.getAllByText(/win in three divine turns/i)).toHaveLength(10);
+  });
+
   it("waits for the captured King animation before showing puzzle victory", async () => {
     const puzzle = PUZZLES[0];
     let solvedState = puzzle.createState("Solver");

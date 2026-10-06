@@ -851,7 +851,7 @@ span.move-target-dot {
   max-width: 620px; margin: 0 auto clamp(24px, 5vw, 44px); color: #85868d; font-size: 11px; line-height: 1.6;
 }
 .puzzle-difficulty-grid {
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; max-width: 780px; margin: 0 auto;
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; max-width: 1080px; margin: 0 auto;
 }
 .puzzle-difficulty-card {
   min-height: 260px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;

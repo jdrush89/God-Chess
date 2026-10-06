@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 import readme from "../../README.md?raw";
 import { chooseAiPlan, enumerateTurnPlans, evaluateGameState, isAiTurn } from "./ai";
 import { kingSquare, legalTargets } from "./chess";
-import { availableClassicActions, gameReducer } from "./engine";
+import {
+  availableClassicActions,
+  classicPlanStateSignature,
+  gameReducer,
+  type GameAction,
+} from "./engine";
 import { GOD_BY_ID, GODS } from "./gods";
 import {
   PUZZLE_GOD_INDEX,
@@ -10,24 +15,230 @@ import {
   PUZZLE_GOD_USAGE_BY_ID,
   PUZZLES,
 } from "./puzzles";
+import type { GameState, PieceType } from "./types";
+
+const HARD_PUZZLES = PUZZLES.filter((puzzle) => puzzle.difficulty === "hard");
+
+const applyActions = (state: GameState, actions: GameAction[]) =>
+  actions.reduce(gameReducer, state);
+
+const isWhitePuzzleWin = (state: GameState) =>
+  state.phase === "gameover" &&
+  state.winner === "white" &&
+  Boolean(kingSquare(state.board, "white")) &&
+  !kingSquare(state.board, "black");
+
+const uniqueTurnPlans = (state: GameState) => {
+  const byState = new Map<string, ReturnType<typeof enumerateTurnPlans>[number]>();
+  for (const plan of enumerateTurnPlans(state)) {
+    const key = classicPlanStateSignature(plan.state);
+    if (!byState.has(key)) byState.set(key, plan);
+  }
+  return [...byState.values()];
+};
+
+const canonicalAction = (action: GameAction) => JSON.stringify(action);
+
+const canonicalTurnKey = (turn: GameAction[]) => {
+  const ability = turn.find(
+    (action): action is Extract<GameAction, { type: "select-ability" }> =>
+      action.type === "select-ability",
+  )?.abilityId;
+  const squares = turn.filter(
+    (action): action is Extract<GameAction, { type: "square" }> =>
+      action.type === "square",
+  );
+  if (ability === "hex" && squares.length >= 5) {
+    return JSON.stringify([
+      ...turn.slice(0, 2).map(canonicalAction),
+      ...squares.slice(0, 3).map((action) => action.square).sort(),
+      ...squares.slice(3).map(canonicalAction),
+    ]);
+  }
+  if (ability === "monument" && squares.length >= 2) {
+    return JSON.stringify([
+      ...turn.slice(0, 2).map(canonicalAction),
+      ...squares.slice(0, -1).map((action) => action.square).sort(),
+      canonicalAction(squares.at(-1)!),
+    ]);
+  }
+  return JSON.stringify(turn.map(canonicalAction));
+};
+
+const countDistinctWinningLines = (
+  state: GameState,
+  requiredTurns: GameAction[][],
+) => {
+  const winningKeys = new Set<string>();
+  const seen = new Set<string>();
+
+  const search = (
+    current: GameState,
+    turnsRemaining: number,
+    prefix: GameAction[][],
+  ) => {
+    if (winningKeys.size > 3) return;
+    const searchKey = `${turnsRemaining}:${classicPlanStateSignature(current)}`;
+    if (seen.has(searchKey)) return;
+    seen.add(searchKey);
+
+    const turnIndex = requiredTurns.length - turnsRemaining;
+    const requiredGod = requiredTurns[turnIndex].find(
+      (action): action is Extract<GameAction, { type: "select-god" }> =>
+        action.type === "select-god",
+    )?.godId;
+    const requiredAbility = requiredTurns[turnIndex].find(
+      (action): action is Extract<GameAction, { type: "select-ability" }> =>
+        action.type === "select-ability",
+    )?.abilityId;
+
+    for (const plan of uniqueTurnPlans(current).filter((candidate) =>
+      candidate.actions.some(
+        (action) => action.type === "select-god" && action.godId === requiredGod,
+      ) &&
+      candidate.actions.some(
+        (action) =>
+          action.type === "select-ability" &&
+          action.abilityId === requiredAbility,
+      )
+    )) {
+      const line = [...prefix, plan.actions];
+      if (isWhitePuzzleWin(plan.state)) {
+        if (turnsRemaining === 1) {
+          winningKeys.add(JSON.stringify(line.map(canonicalTurnKey)));
+        }
+        if (winningKeys.size > 3) return;
+        continue;
+      }
+      if (turnsRemaining <= 1 || plan.state.phase === "gameover") continue;
+      const aiActions = chooseAiPlan(plan.state, () => 0);
+      if (!aiActions.length) continue;
+      const afterAi = applyActions(plan.state, aiActions);
+      if (afterAi.phase === "gameover" || afterAi.activeColor !== "white") continue;
+      search(afterAi, turnsRemaining - 1, line);
+      if (winningKeys.size > 3) return;
+    }
+  };
+
+  search(state, requiredTurns.length, []);
+  return winningKeys.size;
+};
 
 describe("puzzle mode", () => {
-  it("includes five one-turn and ten two-turn positions", () => {
+  it("includes five Easy, ten Medium, and ten Hard positions", () => {
     expect(PUZZLES.filter((puzzle) => puzzle.playerTurns === 1)).toHaveLength(5);
     expect(PUZZLES.filter((puzzle) => puzzle.playerTurns === 2)).toHaveLength(10);
+    expect(PUZZLES.filter((puzzle) => puzzle.playerTurns === 3)).toHaveLength(10);
     expect(PUZZLES.filter((puzzle) => puzzle.difficulty === "easy")).toHaveLength(5);
     expect(PUZZLES.filter((puzzle) => puzzle.difficulty === "medium")).toHaveLength(10);
+    expect(HARD_PUZZLES).toHaveLength(10);
+    expect(HARD_PUZZLES.every((puzzle) => puzzle.playerTurns === 3)).toBe(true);
   });
 
-  it("starts every puzzle without unexplained Stone Gaze freezes", () => {
-    const frozenPieces = PUZZLES.flatMap((puzzle) =>
-      Object.entries(puzzle.createState().board)
-        .filter(([, piece]) => piece.status.frozen || piece.status.frozenBy)
-        .map(([square, piece]) => `${puzzle.id}:${square}:${piece.id}`)
-    );
+  it("reserves sequencing freezes for Hard positions", () => {
+    const frozenPieces = PUZZLES.filter((puzzle) => puzzle.difficulty !== "hard")
+      .flatMap((puzzle) =>
+        Object.entries(puzzle.createState().board)
+          .filter(([, piece]) => piece.status.frozen || piece.status.frozenBy)
+          .map(([square, piece]) => `${puzzle.id}:${square}:${piece.id}`)
+      );
 
     expect(frozenPieces).toEqual([]);
+    for (const puzzle of HARD_PUZZLES) {
+      const sequenced = Object.values(puzzle.createState().board)
+        .filter((piece) => piece.status.frozen || piece.status.frozenBy);
+      expect(sequenced.length).toBeGreaterThan(0);
+      expect(sequenced.every((piece) =>
+        typeof piece.status.frozen === "number" &&
+        piece.status.frozen >= 1 &&
+        Boolean(piece.status.frozenBy)
+      )).toBe(true);
+    }
   });
+
+  it("gives every Hard position a unique board and documented move sequence", () => {
+    const boardSignatures = HARD_PUZZLES.map((puzzle) =>
+      Object.entries(puzzle.createState().board)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([square, piece]) =>
+          `${square}:${piece.type}:${piece.color}:${piece.controller}`
+        )
+        .join("|")
+    );
+    const solutionSignatures = HARD_PUZZLES.map((puzzle) =>
+      JSON.stringify(puzzle.solutionTurns)
+    );
+
+    expect(new Set(boardSignatures).size).toBe(HARD_PUZZLES.length);
+    expect(new Set(solutionSignatures).size).toBe(HARD_PUZZLES.length);
+  });
+
+  it.each(HARD_PUZZLES)("$title keeps realistic non-pawn material limits", (puzzle) => {
+    const state = puzzle.createState();
+    const limits: Partial<Record<PieceType, number>> = {
+      king: 1,
+      queen: 1,
+      rook: 2,
+      bishop: 2,
+      knight: 2,
+    };
+    for (const color of ["white", "black"] as const) {
+      for (const [type, limit] of Object.entries(limits) as Array<[PieceType, number]>) {
+        expect(
+          Object.values(state.board).filter(
+            (piece) => piece.color === color && piece.type === type,
+          ).length,
+        ).toBeLessThanOrEqual(limit);
+      }
+    }
+  });
+
+  it.each(HARD_PUZZLES)("$title hides its line among upgraded decoy abilities", (puzzle) => {
+    const state = puzzle.createState();
+    const requiredAbilities = new Set(
+      puzzle.solutionTurns.flatMap((turn) =>
+        turn.flatMap((action) =>
+          action.type === "select-ability" ? [action.abilityId] : []
+        )
+      ),
+    );
+    const upgraded = Object.entries(state.players.white.upgrades)
+      .filter(([, level]) => level > 1)
+      .map(([abilityId]) => abilityId);
+
+    expect(upgraded.length).toBeGreaterThanOrEqual(6);
+    expect(upgraded.filter((abilityId) => !requiredAbilities.has(abilityId)).length)
+      .toBeGreaterThanOrEqual(4);
+  });
+
+  it.each(HARD_PUZZLES)(
+    "$title cannot be won before the third player turn",
+    (puzzle) => {
+      const initial = puzzle.createState("Solver");
+      expect(uniqueTurnPlans(initial).filter((plan) => isWhitePuzzleWin(plan.state)))
+        .toHaveLength(0);
+
+      let afterFirst = applyActions(initial, puzzle.solutionTurns[0]);
+      expect(isWhitePuzzleWin(afterFirst)).toBe(false);
+      afterFirst = applyActions(afterFirst, chooseAiPlan(afterFirst, () => 0));
+      expect(uniqueTurnPlans(afterFirst).filter((plan) => isWhitePuzzleWin(plan.state)))
+        .toHaveLength(0);
+    },
+    30_000,
+  );
+
+  it.each(HARD_PUZZLES)(
+    "$title has at most three distinct winning variants through its required God sequence",
+    (puzzle) => {
+      const solutions = countDistinctWinningLines(
+        puzzle.createState("Solver"),
+        puzzle.solutionTurns,
+      );
+      expect(solutions).toBeGreaterThan(0);
+      expect(solutions).toBeLessThanOrEqual(3);
+    },
+    60_000,
+  );
 
   it("ends Position Nine immediately when Monument completes a mating construction", () => {
     const puzzle = PUZZLES.find((candidate) => candidate.id === "rising-monument")!;
