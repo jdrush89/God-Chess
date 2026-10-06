@@ -168,8 +168,8 @@ export const GODS: God[] = [
     accent: "#9b86c8",
     symbol: "D",
     abilities: [
-      ability("marked", "Marked", "Move a piece. At the end of Death’s next action, the Mark kills this piece and grants 3 black orbs. If the piece is captured or dies from another effect first, gain no Mark reward. You may choose to do nothing.", "move", [
-        "The Mark grants 3 black orbs only if it kills the piece at the end of Death’s next action.",
+      ability("marked", "Marked", "Move a piece. At the end of Death’s next action, the Mark kills this piece and grants 3 black orbs. If the piece is captured or dies from another effect first, gain no Mark reward. A King cannot be killed by the Mark and grants no reward when it clears. You may choose to do nothing.", "move", [
+        "The Mark grants 3 black orbs only if it kills a non-King piece at the end of Death’s next action.",
         "If you choose to do nothing, gain 1 white orb.",
         "You may execute the moved piece immediately for 5 black orbs instead; it does not also grant the delayed 3.",
       ]),

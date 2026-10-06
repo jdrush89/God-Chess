@@ -212,6 +212,38 @@ describe("three-player move-first contracts", () => {
     }
   });
 
+  it("preserves a move-first Marked King without previewing or offering a reward", () => {
+    const state = playableState("death", 3);
+    const originalSource = Object.entries(state.board).find(([, candidate]) =>
+      candidate.owner === "white" && candidate.type === "king"
+    )![0];
+    const king = state.board[originalSource];
+    delete state.board[originalSource];
+    const source = getThreePlayerTopology(state.config.boardVariant).cells.find((cell) => {
+      if (state.board[cell]) return false;
+      state.board[cell] = king;
+      const valid = !threePlayerIsInCheck(state, "white") &&
+        threePlayerMoveFirstTargets(state, cell).length > 0;
+      delete state.board[cell];
+      return valid;
+    })!;
+    state.board[source] = king;
+    const destination = threePlayerMoveFirstTargets(state, source)[0];
+    const move = { from: source, to: destination };
+    const candidate = threePlayerMoveFirstCandidates(state, move)
+      .find(({ godId }) => godId === "death")!;
+
+    expect(candidate.immediateOrbDelta).toEqual({ light: 0, dark: 0 });
+    expect(candidate.conditionalOutcome).toContain(
+      "cannot be killed by the Mark",
+    );
+
+    const moved = moveFirst(state, "death", move);
+    expect(moved.board[destination]?.status.markedForDeath).toBeDefined();
+    expect(moved.pending?.step).not.toBe("marked-choice");
+    expect(moved.players.white.orbs.dark).toBe(50);
+  });
+
   it("uses each snake piece's owner affinity with mixed controllers and Red alternation", () => {
     const state = playableState("quetzacoatl", 3, "triad");
     state.activeSeat = "red";

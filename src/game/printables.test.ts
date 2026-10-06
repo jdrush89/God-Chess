@@ -38,6 +38,9 @@ describe("printable God boards", () => {
     expect(marked.summary).toContain(
       "If the piece is captured or dies from another effect first, gain no Mark reward.",
     );
+    expect(marked.summary).toContain(
+      "A King cannot be killed by the Mark and grants no reward when it clears.",
+    );
     expect(marked.details[2]).toContain(
       "it does not also grant the delayed 3",
     );

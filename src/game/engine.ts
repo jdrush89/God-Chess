@@ -1485,7 +1485,7 @@ const resolveMoveEffect = (
     return "pending";
   } else if (abilityId === "marked") {
     state.board[to].status.markedForDeath = { owner: color, round: state.round + 1 };
-    if (level >= 3) {
+    if (level >= 3 && state.board[to].type !== "king") {
       state.pending = {
         godId: state.selectedGod!,
         abilityId,
@@ -2615,6 +2615,7 @@ const moveFirstConditionalOutcome = (
   level: number,
   requiresPreMoveChoice: boolean,
   followUpStep?: string,
+  movingKing = false,
 ) => {
   if (abilityId === "ritual-sacrifice") {
     return level >= 3
@@ -2624,9 +2625,12 @@ const moveFirstConditionalOutcome = (
         : "This Goad grants 0 now. If this piece is captured on the opponent's next turn, gain 3 light and 3 dark orbs.";
   }
   if (abilityId === "marked") {
+    if (movingKing) {
+      return "The King is Marked but cannot be killed by the Mark. It grants 0 now and no reward when the Mark clears.";
+    }
     return level >= 3
       ? "The moved piece grants 0 now. It is Marked; later gain 3 dark when Death claims it, or execute it now for 5 dark."
-      : "The moved piece grants 0 now. It is Marked; gain 3 dark orbs when Death claims it.";
+      : "The moved piece grants 0 now. It is Marked; gain 3 dark orbs only if the Mark later kills it.";
   }
   if (abilityId === "barter") {
     if (followUpStep !== "barter-choice") return undefined;
@@ -2754,6 +2758,7 @@ export const classicMoveFirstCandidates = (
           level,
           requiresPreMoveChoice,
           pending?.step,
+          state.board[move.from]?.type === "king",
         ),
         valid,
         requiresPreMoveChoice,

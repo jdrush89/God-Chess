@@ -284,6 +284,28 @@ describe("three-player God catalog", () => {
     expect(delayed.board[delayedCell]).toBeUndefined();
     expect(delayed.players.white.orbs.dark).toBe(53);
 
+    let markedKing = abilityState("death", 1);
+    const markedKingCell = Object.entries(markedKing.board).find(([, candidate]) =>
+      candidate.owner === "red" && candidate.type === "king"
+    )![0];
+    markedKing.board[markedKingCell].status.markedForDeath = {
+      owner: "white",
+      round: markedKing.round,
+    };
+    markedKing = threePlayerReducer(markedKing, {
+      type: "select-god",
+      godId: "death",
+    });
+    markedKing = threePlayerReducer(markedKing, {
+      type: "select-ability",
+      abilityId: "marked",
+    });
+    markedKing = threePlayerReducer(markedKing, { type: "pass" });
+
+    expect(markedKing.board[markedKingCell]?.type).toBe("king");
+    expect(markedKing.board[markedKingCell]?.status.markedForDeath).toBeUndefined();
+    expect(markedKing.players.white.orbs.dark).toBe(50);
+
     let immediate = abilityState("death", 3);
     const immediateCell = Object.entries(immediate.board).find(([, candidate]) =>
       candidate.owner === "white" && candidate.type !== "king"
