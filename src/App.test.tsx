@@ -2,6 +2,7 @@
 
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import type { GameAction } from "./game/engine";
 import type { ThreePlayerOnlineState } from "./multiplayer/useThreePlayerOnlineGame";
 
 const threeOnlineHarness = vi.hoisted(() => ({
@@ -33,6 +34,11 @@ const cloudSaveHarness = vi.hoisted(() => ({
   load: vi.fn(),
   upsert: vi.fn(async () => undefined),
   remove: vi.fn(async () => undefined),
+}));
+
+const aiHarness = vi.hoisted(() => ({
+  plan: undefined as GameAction[] | undefined,
+  calls: 0,
 }));
 
 vi.mock("./multiplayer/useThreePlayerOnlineGame", async () => {
@@ -107,6 +113,17 @@ vi.mock("./account/cloudPuzzleProgress", () => ({
   upsertCloudCompletedPuzzles: vi.fn(async () => undefined),
 }));
 
+vi.mock("./game/ai", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./game/ai")>();
+  return {
+    ...actual,
+    chooseAiPlan: (...args: Parameters<typeof actual.chooseAiPlan>) => {
+      aiHarness.calls += 1;
+      return aiHarness.plan ?? actual.chooseAiPlan(...args);
+    },
+  };
+});
+
 import App, { ActionPanel, ChessBoard } from "./App";
 import { chooseAiPlan } from "./game/ai";
 import { createGame, gameReducer } from "./game/engine";
@@ -119,6 +136,37 @@ import { createSavedGame } from "./saves";
 
 const SAVE_KEY = "god-chess-saves-v2";
 const LEGACY_SAVE_KEY = "god-chess-save-v1";
+
+interface ClassicAiWorkerRequest {
+  requestId: number;
+  state: ReturnType<typeof createGame>;
+}
+
+interface ClassicAiWorkerResponse {
+  requestId: number;
+  actions: GameAction[];
+}
+
+class FakeClassicAiWorker {
+  static instances: FakeClassicAiWorker[] = [];
+  onmessage: ((event: MessageEvent<ClassicAiWorkerResponse>) => void) | null = null;
+  onerror: ((event: ErrorEvent) => void) | null = null;
+  onmessageerror: ((event: MessageEvent) => void) | null = null;
+  message?: ClassicAiWorkerRequest;
+  terminated = false;
+
+  constructor() {
+    FakeClassicAiWorker.instances.push(this);
+  }
+
+  postMessage(message: ClassicAiWorkerRequest) {
+    this.message = message;
+  }
+
+  terminate() {
+    this.terminated = true;
+  }
+}
 
 const completeClassicDraft = () => {
   let state = createGame(1);
@@ -145,6 +193,18 @@ const openPlayOption = (name: "Local" | "Online" | "Puzzles" | "Load") => {
   fireEvent.click(screen.getByRole("button", {
     name: new RegExp(`^${name}$`, "i"),
   }));
+};
+
+const commitMissedPuzzleMove = () => {
+  const { container } = render(<App />);
+  openPlayOption("Puzzles");
+  fireEvent.click(screen.getByRole("button", { name: /^easy/i }));
+  fireEvent.click(screen.getByRole("button", { name: /puzzle 1/i }));
+  fireEvent.click(screen.getByTitle("Use Chiron"));
+  fireEvent.click(screen.getByRole("button", { name: /Charge/ }));
+  fireEvent.click(container.querySelector('[data-square="e2"]')!);
+  fireEvent.click(container.querySelector('[data-square="e3"]')!);
+  return container;
 };
 
 const activeThreeOnlineState = (
@@ -223,6 +283,7 @@ afterEach(() => {
   cleanup();
   window.localStorage.clear();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 beforeEach(() => {
@@ -245,6 +306,9 @@ beforeEach(() => {
   };
   threeOnlineHarness.setState = undefined;
   threeOnlineHarness.disconnects = 0;
+  aiHarness.plan = undefined;
+  aiHarness.calls = 0;
+  FakeClassicAiWorker.instances = [];
 });
 
 describe("game startup", () => {
@@ -583,6 +647,114 @@ describe("game startup", () => {
     expect(screen.getAllByText(/capture the black king in one divine turn/i)).toHaveLength(2);
     expect(screen.getByRole("gridcell", { name: "e2, white knight" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /save & quit/i })).toBeNull();
+  });
+
+  it("paints a committed puzzle move before AI planning and ignores a stale worker result after restart", async () => {
+    vi.stubGlobal("Worker", FakeClassicAiWorker);
+    const persist = vi.spyOn(Storage.prototype, "setItem");
+
+    const container = commitMissedPuzzleMove();
+
+    expect(container.querySelector('[data-square="e3"]')?.textContent).toContain("♘");
+    await waitFor(() => {
+      expect(FakeClassicAiWorker.instances).toHaveLength(1);
+    });
+    expect(FakeClassicAiWorker.instances[0].message?.state.activeColor).toBe("black");
+    expect(persist.mock.calls.some(([key]) =>
+      key === SAVE_KEY || key === LEGACY_SAVE_KEY
+    )).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: /Restart/ }));
+    const staleWorker = FakeClassicAiWorker.instances[0];
+    const staleRequestId = staleWorker.message!.requestId;
+    expect(staleWorker.terminated).toBe(true);
+    staleWorker.onmessage?.({
+      data: {
+        requestId: staleRequestId,
+        actions: [{ type: "select-god", godId: "chiron" }],
+      },
+    } as MessageEvent<ClassicAiWorkerResponse>);
+
+    await waitFor(() => {
+      expect(container.querySelector('[data-square="e2"]')?.textContent).toContain("♘");
+    });
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 1200));
+    });
+    expect(screen.queryByText(/Chiron answers/i)).toBeNull();
+  });
+
+  it("falls back exactly once when the classic AI worker constructor throws", async () => {
+    aiHarness.plan = [];
+    class ThrowingWorker {
+      constructor() {
+        throw new Error("Worker blocked");
+      }
+    }
+    vi.stubGlobal("Worker", ThrowingWorker);
+
+    commitMissedPuzzleMove();
+
+    await waitFor(() => {
+      expect(aiHarness.calls).toBe(1);
+    });
+    expect((await screen.findAllByText(
+      /Black was stalemated/i,
+      {},
+      { timeout: 2500 },
+    )).length).toBeGreaterThan(0);
+  });
+
+  it("falls back once after an asynchronous worker error and ignores a late result", async () => {
+    aiHarness.plan = [];
+    vi.stubGlobal("Worker", FakeClassicAiWorker);
+    commitMissedPuzzleMove();
+    await waitFor(() => {
+      expect(FakeClassicAiWorker.instances).toHaveLength(1);
+    });
+    const worker = FakeClassicAiWorker.instances[0];
+
+    act(() => {
+      worker.onerror?.({
+        type: "error",
+        preventDefault: vi.fn(),
+      } as unknown as ErrorEvent);
+      worker.onmessage?.({
+        data: {
+          requestId: worker.message!.requestId,
+          actions: [{ type: "select-god", godId: "chiron" }],
+        },
+      } as MessageEvent<ClassicAiWorkerResponse>);
+    });
+
+    expect(aiHarness.calls).toBe(1);
+    expect((await screen.findAllByText(
+      /Black was stalemated/i,
+      {},
+      { timeout: 2500 },
+    )).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Chiron answers/i)).toBeNull();
+  });
+
+  it("adjudicates an empty puzzle AI plan instead of leaving the turn locked", async () => {
+    vi.stubGlobal("Worker", FakeClassicAiWorker);
+    commitMissedPuzzleMove();
+    await waitFor(() => {
+      expect(FakeClassicAiWorker.instances).toHaveLength(1);
+    });
+    const worker = FakeClassicAiWorker.instances[0];
+
+    act(() => {
+      worker.onmessage?.({
+        data: {
+          requestId: worker.message!.requestId,
+          actions: [],
+        },
+      } as unknown as MessageEvent<ClassicAiWorkerResponse>);
+    });
+
+    expect((await screen.findAllByText(/Black was stalemated/i)).length)
+      .toBeGreaterThan(0);
   });
 
   it("marks locally completed puzzles in the difficulty browser", () => {
