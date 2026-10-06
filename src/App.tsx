@@ -2179,6 +2179,11 @@ function PuzzleSelectScreen({
                   title: "Medium",
                   description: "Build a winning line across two divine turns.",
                 },
+                {
+                  id: "hard",
+                  title: "Hard",
+                  description: "Build a winning line across three divine turns.",
+                },
               ] as const).map((option) => {
                 const puzzles = PUZZLES.filter((puzzle) => puzzle.difficulty === option.id);
                 const completed = puzzles.filter((puzzle) => completedPuzzles.has(puzzle.id)).length;
@@ -2199,7 +2204,7 @@ function PuzzleSelectScreen({
           </>
         ) : (
           <>
-            <h1>{difficulty === "easy" ? "Easy" : "Medium"} puzzles</h1>
+            <h1>{difficulty === "easy" ? "Easy" : difficulty === "medium" ? "Medium" : "Hard"} puzzles</h1>
             <p className="puzzle-select-intro">
               {progressLoading
                 ? "Loading completion history..."
@@ -2223,7 +2228,9 @@ function PuzzleSelectScreen({
                     )}
                     <span>PUZZLE {index + 1}</span>
                     <strong>{puzzle.title}</strong>
-                    <small>Win in {puzzle.playerTurns === 1 ? "one" : "two"} divine turn{puzzle.playerTurns === 1 ? "" : "s"}</small>
+                    <small>
+                      Win in {puzzle.playerTurns === 1 ? "one" : puzzle.playerTurns === 2 ? "two" : "three"} divine turn{puzzle.playerTurns === 1 ? "" : "s"}
+                    </small>
                   </button>
                 );
               })}

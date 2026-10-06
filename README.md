@@ -192,12 +192,13 @@ mode chooser.
 ## Puzzle mode
 
 Puzzle mode has a dedicated difficulty browser with five Easy positions won in
-one divine turn and ten Medium positions won across two player turns. The
-puzzle cards do not reveal the intended god or ability. Each position includes
-an optional hint, restart and next-puzzle controls, and level 10 Divine AI
-responses between player turns. Completion check marks are stored in local
-storage while signed out and in the player's account while signed in; puzzle
-positions themselves are not added to local or cloud saves.
+one divine turn, ten Medium positions won across two player turns, and ten Hard
+positions won across three player turns. The puzzle cards do not reveal the
+intended god or ability. Each position includes an optional hint, restart and
+next-puzzle controls, and level 10 Divine AI responses between player turns.
+Completion check marks are stored in local storage while signed out and in the
+player's account while signed in; puzzle positions themselves are not added to
+local or cloud saves.
 
 ### Puzzle god index
 
@@ -223,6 +224,16 @@ must update this documentation.
 | Position Thirteen | Quetzacoatl, Leonidas, Midas | Ares, Chiron, Anubis | Quetzacoatl (air-lift); Leonidas (escort) |
 | Position Fourteen | Quetzacoatl, Kangus Kong, Medusa | Ares, Chiron, Anubis | Quetzacoatl (flight); Kangus Kong (rage) |
 | Position Fifteen | Ares, Chiron, Salem | Artemis, Anubis, Medusa | Ares (pick-a-fight); Chiron (charge) |
+| Position Sixteen | Medusa, Teles, Chiron | Ares, Chiron, Midas | Medusa (captivate); Teles (enchant); Chiron (charge) |
+| Position Seventeen | Salem, Midas, Death | Ares, Chiron, Anubis | Salem (hex); Midas (leverage); Death (resurrect) |
+| Position Eighteen | Midas, Chiron, Kangus Kong | Ares, Anubis, Salem | Midas (barter); Chiron (mount); Kangus Kong (rage) |
+| Position Nineteen | Teles, Anubis, Quetzacoatl | Ares, Chiron, Salem | Teles (resonance); Anubis (monument); Quetzacoatl (air-strike) |
+| Position Twenty | Ares, Midas, Chiron | Artemis, Anubis, Salem | Ares (threaten); Midas (leverage); Chiron (charge) |
+| Position Twenty-One | Anubis, Midas, Quetzacoatl | Ares, Chiron, Salem | Anubis (construction); Midas (leverage); Quetzacoatl (air-strike) |
+| Position Twenty-Two | Teles, Death, Chiron | Ares, Anubis, Salem | Teles (resonance); Death (marked); Chiron (charge) |
+| Position Twenty-Three | Anubis, Quetzacoatl, Leonidas | Ares, Chiron, Salem | Anubis (construction); Quetzacoatl (air-lift); Leonidas (escort) |
+| Position Twenty-Four | Medusa, Quetzacoatl, Kangus Kong | Ares, Chiron, Anubis | Medusa (captivate); Quetzacoatl (flight); Kangus Kong (rage) |
+| Position Twenty-Five | Salem, Ares, Chiron | Artemis, Anubis, Medusa | Salem (hex); Ares (pick-a-fight); Chiron (charge) |
 
 ## Accounts and cloud saves
 
