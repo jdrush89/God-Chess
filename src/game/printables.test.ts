@@ -31,5 +31,18 @@ describe("printable God boards", () => {
     )!;
     expect(pickAFight.kind).toBe("move");
     expect(pickAFight.summary).toContain("ordinarily legal empty space");
+
+    const marked = GOD_BY_ID.death.abilities.find(
+      (ability) => ability.id === "marked",
+    )!;
+    expect(marked.summary).toContain(
+      "If the piece is captured or dies from another effect first, gain no Mark reward.",
+    );
+    expect(marked.summary).toContain(
+      "A King cannot be killed by the Mark and grants no reward when it clears.",
+    );
+    expect(marked.details[2]).toContain(
+      "it does not also grant the delayed 3",
+    );
   });
 });

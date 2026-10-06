@@ -722,6 +722,50 @@ describe("game flow", () => {
     expect(state.players.white.orbs.black).toBe(3);
   });
 
+  it("does not grant a Mark reward when the marked piece is captured first", () => {
+    let state = createGame(1);
+    (["death", "ares", "midas", "chiron", "artemis", "teles"] as const).forEach((godId) => {
+      state = gameReducer(state, { type: "draft", godId });
+    });
+    state.board.d3 = {
+      ...state.board.d7,
+      id: "captured-marked-pawn",
+      status: { markedForDeath: { owner: "white", round: state.round } },
+    };
+    delete state.board.d7;
+
+    state = gameReducer(state, { type: "select-god", godId: "death" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "marked" });
+    state = gameReducer(state, { type: "square", square: "e2" });
+    state = gameReducer(state, { type: "square", square: "d3" });
+
+    expect(state.board.d3?.id).toBe("white-pawn-4");
+    expect(state.players.black.graveyard.at(-1)?.piece.id).toBe("captured-marked-pawn");
+    expect(state.players.white.orbs.black).toBe(0);
+  });
+
+  it("grants exactly 5 black orbs for immediate level-3 Marked execution", () => {
+    let state = createGame(1);
+    (["death", "ares", "midas", "chiron", "artemis", "teles"] as const).forEach((godId) => {
+      state = gameReducer(state, { type: "draft", godId });
+    });
+    state.players.white.upgrades.marked = 3;
+
+    state = gameReducer(state, { type: "select-god", godId: "death" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "marked" });
+    state = gameReducer(state, { type: "square", square: "e2" });
+    state = gameReducer(state, { type: "square", square: "e4" });
+
+    expect(availableClassicActions(state)).toEqual([
+      { type: "marked-execute" },
+      { type: "pass" },
+    ]);
+    state = gameReducer(state, { type: "marked-execute" });
+
+    expect(state.board.e4).toBeUndefined();
+    expect(state.players.white.orbs.black).toBe(5);
+  });
+
   it("chooses the Monument rook square after selecting every sacrificed pawn", () => {
     let state = createGame(1);
     (["anubis", "ares", "midas", "chiron", "artemis", "teles"] as const).forEach((godId) => {

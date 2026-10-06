@@ -995,9 +995,12 @@ const resolveMarkedForDeath = (state: ThreePlayerState) => {
   for (const [cell, piece] of Object.entries(state.board)) {
     if (
       piece.status.markedForDeath?.owner !== state.activeSeat ||
-      piece.status.markedForDeath.round > state.round ||
-      piece.type === "king"
+      piece.status.markedForDeath.round > state.round
     ) continue;
+    if (piece.type === "king") {
+      delete piece.status.markedForDeath;
+      continue;
+    }
     delete state.board[cell];
     capturePiece(state, piece, state.activeSeat);
     addOrbs(state, state.activeSeat, 0, 3, cell);
@@ -2006,14 +2009,14 @@ const resolveMoveEffect = (
       owner: state.activeSeat,
       round: state.round + 1,
     };
-    if (level >= 3) {
+    if (level >= 3 && state.board[to].type !== "king") {
       state.pending = {
         godId: state.selectedGod!,
         abilityId,
         step: "marked-choice",
         movedPieceId: state.board[to].id,
       };
-      state.notice = "Execute the marked piece now, or pass.";
+      state.notice = "Execute the marked piece now for 5 dark orbs, or leave it for the Mark to kill at the end of Death’s next action for 3. If it dies first, there is no Mark reward.";
       return "pending";
     }
   } else if (abilityId === "siphon") {
@@ -3619,6 +3622,7 @@ const threePlayerMoveFirstConditionalOutcome = (
   level: number,
   requiresPreMoveChoice: boolean,
   followUpStep?: string,
+  movingKing = false,
 ) => {
   if (abilityId === "ritual-sacrifice") {
     return level >= 3
@@ -3628,9 +3632,12 @@ const threePlayerMoveFirstConditionalOutcome = (
         : "This Goad grants 0 now. If this piece is captured before the next hostile turn ends, gain 3 light and 3 dark orbs.";
   }
   if (abilityId === "marked") {
+    if (movingKing) {
+      return "The King is Marked but cannot be killed by the Mark. It grants 0 now and no reward when the Mark clears.";
+    }
     return level >= 3
       ? "The moved piece grants 0 now. It is Marked; later gain 3 dark when Death claims it, or execute it now for 5 dark."
-      : "The moved piece grants 0 now. It is Marked; gain 3 dark orbs when Death claims it.";
+      : "The moved piece grants 0 now. It is Marked; gain 3 dark orbs only if the Mark later kills it.";
   }
   if (abilityId === "barter" && followUpStep?.startsWith("barter-")) {
     return level >= 3
@@ -3762,6 +3769,7 @@ export const threePlayerMoveFirstCandidates = (
           level,
           requiresPreMoveChoice,
           pending?.step,
+          state.board[move.from]?.type === "king",
         ),
         valid,
         requiresPreMoveChoice,

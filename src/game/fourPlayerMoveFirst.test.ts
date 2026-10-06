@@ -398,12 +398,21 @@ describe("four-player move-first contracts", () => {
       a7: piece(marked, "west-king", "king", "west"),
     };
     const destination = fourPlayerMoveFirstTargets(marked, "g8")[0];
+    const candidate = fourPlayerMoveFirstCandidates(marked, {
+      from: "g8",
+      to: destination,
+    }).find(({ godId }) => godId === "death")!;
+    expect(candidate.immediateOrbDelta).toEqual({ light: 0, dark: 0 });
+    expect(candidate.conditionalOutcome).toContain(
+      "cannot be killed by the Mark",
+    );
     const moved = moveFirst(marked, "death", {
       from: "g8",
       to: destination,
     });
     expect(moved.board[destination]?.type).toBe("king");
     expect(moved.board[destination]?.status.markedForDeath).toBeDefined();
+    expect(moved.pending?.step).not.toBe("marked-choice");
     const finished = fourPlayerReducer(moved, { type: "pass" });
     expect(finished.board[destination]?.type).toBe("king");
 

@@ -330,7 +330,9 @@ const pieceMarkerDetails = (piece: Piece, state: GameState) => {
   if (piece.status.markedForDeath) {
     markers.push({
       name: "Marked for Death",
-      description: `Dies when ${colorLabel(piece.status.markedForDeath.owner)} next calls Death, granting that player 3 black orbs.`,
+      description: piece.type === "king"
+        ? `The Mark cannot kill a King. It clears at the end of ${colorLabel(piece.status.markedForDeath.owner)}’s next Death action without granting a reward.`
+        : `If still alive at the end of ${colorLabel(piece.status.markedForDeath.owner)}’s next Death action, the Mark kills it and grants that player 3 black orbs. If it dies first, there is no Mark reward.`,
     });
   }
   if (piece.status.hired) {

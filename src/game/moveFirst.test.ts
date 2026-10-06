@@ -158,6 +158,29 @@ describe("classic move-first contracts", () => {
       .conditionalOutcome).toContain("Marked");
   });
 
+  it("preserves a move-first Marked King without previewing or offering a reward", () => {
+    const state = playableState("death", 3);
+    state.board = {
+      d4: piece("king", "white", "white-king"),
+      h8: piece("king", "black", "black-king"),
+    };
+    const destination = classicMoveFirstTargets(state, "d4")[0];
+    const candidate = classicMoveFirstCandidates(state, {
+      from: "d4",
+      to: destination,
+    }).find(({ godId }) => godId === "death")!;
+
+    expect(candidate.immediateOrbDelta).toEqual({ white: 0, black: 0 });
+    expect(candidate.conditionalOutcome).toContain(
+      "cannot be killed by the Mark",
+    );
+
+    const moved = moveFirst(state, "death", "d4", destination);
+    expect(moved.board[destination]?.status.markedForDeath).toBeDefined();
+    expect(moved.pending?.step).not.toBe("marked-choice");
+    expect(moved.players.white.orbs.black).toBe(0);
+  });
+
   it("excludes resting Gods from the canonical chooser order", () => {
     const state = playableState("anubis");
     state.players.white.gods = ["death", "anubis", "kangus"];
