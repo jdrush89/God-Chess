@@ -168,4 +168,67 @@ describe("classic online protocol compatibility", () => {
     expect(onGameStart).not.toHaveBeenCalled();
     expect(onStateSync).not.toHaveBeenCalled();
   });
+
+  it("rejects forged move-first actor metadata and accepts the exact guest turn", async () => {
+    let transport!: ClassicTransport;
+    let state = createGame(2, {
+      mode: "online",
+      hostName: "Host",
+      guestName: "Guest",
+    });
+    state.phase = "play";
+    state.players.white.gods = ["anubis"];
+    state.players.black.gods = ["ares"];
+    const host = new MultiplayerHost("Host", {
+      getState: () => state,
+      applyRemoteAction: (action) => {
+        state = gameReducer(state, action);
+        return state;
+      },
+      applyUndo: vi.fn(),
+      canUndo: () => false,
+      onGuestJoined: vi.fn(),
+      onGuestLeft: vi.fn(),
+      onUndoSettings: vi.fn(),
+      onError: vi.fn(),
+    }, (callbacks) => {
+      transport = new ClassicTransport(callbacks);
+      return transport;
+    });
+    await host.start();
+    transport.callbacks.onMessage("guest-peer", createProtocolMessage(
+      "classic",
+      "peer",
+      { type: "join_request", playerName: "Guest" },
+    ));
+    host.startGame(state);
+
+    const action = {
+      type: "commit-move-first" as const,
+      godId: "anubis" as const,
+      abilityId: "construction",
+      move: { from: "e2", to: "e4" },
+      expectedActor: "white" as const,
+      expectedTurn: state.turn,
+    };
+    transport.callbacks.onMessage("guest-peer", createProtocolMessage(
+      "classic",
+      "peer",
+      {
+        type: "game_action",
+        action: { ...action, expectedActor: "black" },
+      },
+    ));
+    expect(state.board.e2).toBeDefined();
+    expect(state.board.e4).toBeUndefined();
+
+    transport.callbacks.onMessage("guest-peer", createProtocolMessage(
+      "classic",
+      "peer",
+      { type: "game_action", action },
+    ));
+    expect(state.board.e2).toBeUndefined();
+    expect(state.board.e4).toBeDefined();
+    expect(state.activeColor).toBe("black");
+  });
 });

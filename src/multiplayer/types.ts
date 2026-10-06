@@ -321,6 +321,33 @@ const normalizeGameAction = (value: unknown): GameAction | undefined => {
           isAbilityId(value.abilityId)
         ? { type: value.type, abilityId: value.abilityId }
         : undefined;
+    case "commit-move-first":
+      return hasExactKeys(value, [
+          "type",
+          "godId",
+          "abilityId",
+          "move",
+          "expectedActor",
+          "expectedTurn",
+        ]) &&
+          isGodId(value.godId) &&
+          isAbilityId(value.abilityId) &&
+          isRecord(value.move) &&
+          hasExactKeys(value.move, ["from", "to"]) &&
+          isClassicSquare(value.move.from) &&
+          isClassicSquare(value.move.to) &&
+          isColor(value.expectedActor) &&
+          isRevision(value.expectedTurn) &&
+          value.expectedTurn >= 1
+        ? {
+          type: "commit-move-first",
+          godId: value.godId,
+          abilityId: value.abilityId,
+          move: { from: value.move.from, to: value.move.to },
+          expectedActor: value.expectedActor,
+          expectedTurn: value.expectedTurn,
+        }
+        : undefined;
     case "square":
       return hasExactKeys(value, ["type", "square"]) &&
           isClassicSquare(value.square)

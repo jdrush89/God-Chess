@@ -129,6 +129,35 @@ export interface PendingAction {
   movedPieceId?: string;
   movesRemaining?: number;
   mountHistory?: string[];
+  queuedMove?: QueuedClassicMove;
+}
+
+export interface QueuedClassicMove {
+  from: Square;
+  to: Square;
+  actor: Color;
+  turn: number;
+  pieceId: string;
+}
+
+export interface ClassicMoveFirstMove {
+  from: Square;
+  to: Square;
+}
+
+export interface ClassicMoveFirstCandidate {
+  godId: GodId;
+  abilityId: string;
+  move: ClassicMoveFirstMove;
+  immediateOrbDelta: Record<OrbColor, number>;
+  conditionalOutcome?: string;
+  valid: boolean;
+  requiresPreMoveChoice: boolean;
+  followUp?: {
+    step: string;
+    label: string;
+  };
+  error?: string;
 }
 
 export interface OrbAnimation {

@@ -126,7 +126,11 @@ vi.mock("./game/ai", async (importOriginal) => {
 
 import App, { ActionPanel, ChessBoard } from "./App";
 import { chooseAiPlan } from "./game/ai";
-import { createGame, gameReducer } from "./game/engine";
+import {
+  classicMoveFirstCandidates,
+  createGame,
+  gameReducer,
+} from "./game/engine";
 import { GODS } from "./game/gods";
 import { createDefaultThreePlayerConfig } from "./game/threePlayerConfig";
 import { createThreePlayerGame, threePlayerReducer } from "./game/threePlayerEngine";
@@ -867,6 +871,101 @@ describe("game startup", () => {
     expect(emptyTarget?.querySelector(".move-target-dot")).toBeTruthy();
     expect(occupiedTarget?.classList.contains("legal-occupied")).toBe(true);
     expect(occupiedTarget?.querySelector(".move-target-dot")).toBeNull();
+  });
+
+  it("renders provisional move-first board state without dispatching an engine move", () => {
+    const state = completeClassicDraft();
+    const dispatch = vi.fn();
+    const onMoveFirstSquare = vi.fn();
+    const { container } = render(
+      <ChessBoard
+        state={state}
+        dispatch={dispatch}
+        onInspectSquare={vi.fn()}
+        moveFirstDraft={{ source: "e2", destination: "e4" }}
+        moveFirstTargets={["e3", "e4"]}
+        onMoveFirstSquare={onMoveFirstSquare}
+      />,
+    );
+
+    expect(container.querySelector('[data-square="e2"].provisional-source')).toBeTruthy();
+    expect(container.querySelector('[data-square="e4"].provisional-destination')).toBeTruthy();
+    expect(screen.getByRole("gridcell", {
+      name: /e4, provisional move destination, not committed/i,
+    })).toBeTruthy();
+    fireEvent.click(container.querySelector('[data-square="e4"]')!);
+    expect(onMoveFirstSquare).toHaveBeenCalledWith("e4");
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it("shows full first-ability cards with explicit light and dark previews", () => {
+    const state = completeClassicDraft();
+    const candidates = classicMoveFirstCandidates(state, {
+      from: "e2",
+      to: "e4",
+    });
+    const commit = vi.fn();
+    render(
+      <ActionPanel
+        state={state}
+        dispatch={vi.fn()}
+        onInspectGod={vi.fn()}
+        onCloseInspection={vi.fn()}
+        moveFirstDraft={{ source: "e2", destination: "e4" }}
+        moveFirstCandidates={candidates}
+        onCancelMoveFirst={vi.fn()}
+        onCommitMoveFirst={commit}
+      />,
+    );
+
+    expect(screen.getByText(/not committed/i)).toBeTruthy();
+    expect(screen.getByText("Slither").classList.contains("ability-card-title")).toBe(true);
+    expect(screen.getAllByText(/Light 0/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Dark 0/i).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByText("Slither"));
+    expect(commit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        godId: "quetzacoatl",
+        abilityId: "flight",
+        move: { from: "e2", to: "e4" },
+      }),
+    );
+  });
+
+  it("cancels, reselects, and commits a local move-first draft as one divine action", () => {
+    const state = completeClassicDraft();
+    window.localStorage.setItem(SAVE_KEY, JSON.stringify([
+      createSavedGame("move-first-ui", state, []),
+    ]));
+
+    const { container } = render(<App />);
+    openPlayOption("Load");
+    fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
+
+    fireEvent.click(container.querySelector('[data-square="e2"]')!);
+    expect(container.querySelector('[data-square="e2"].provisional-source')).toBeTruthy();
+    fireEvent.click(container.querySelector('[data-square="e2"]')!);
+    expect(container.querySelector(".provisional-source")).toBeNull();
+    fireEvent.click(container.querySelector('[data-square="e2"]')!);
+    fireEvent.click(container.querySelector('[data-square="g1"]')!);
+    expect(container.querySelector('[data-square="g1"].provisional-source')).toBeTruthy();
+    expect(container.querySelector('[data-square="e2"].provisional-source')).toBeNull();
+    fireEvent.click(container.querySelector('[data-square="f3"]')!);
+    expect(container.querySelector('[data-square="f3"].provisional-destination')).toBeTruthy();
+    expect(container.querySelector('[data-square="g1"] [data-piece-id]')).toBeTruthy();
+    expect(container.querySelector('[data-square="f3"] [data-piece-id]')).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /back \/ cancel/i }));
+    expect(container.querySelector(".provisional-source")).toBeNull();
+    expect(container.querySelector(".provisional-destination")).toBeNull();
+
+    fireEvent.click(container.querySelector('[data-square="g1"]')!);
+    fireEvent.click(container.querySelector('[data-square="f3"]')!);
+    fireEvent.click(screen.getByText("Slither"));
+
+    expect(container.querySelector('[data-square="g1"] [data-piece-id]')).toBeNull();
+    expect(container.querySelector('[data-square="f3"] [data-piece-id]')).toBeTruthy();
+    expect(screen.getByText(/black to act/i)).toBeTruthy();
   });
 
   it("renders Position Thirteen's occupied Escort destination as a legal target", () => {
