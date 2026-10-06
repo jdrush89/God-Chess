@@ -55,6 +55,11 @@ export type GameAction =
   | { type: "cancel" }
   | { type: "preview-upgrade"; godId?: GodId; abilityId?: string }
   | { type: "upgrade"; abilityId: string }
+  | {
+    type: "adjudicate-no-turn";
+    activeColor: Color;
+    turn: number;
+  }
   | { type: "new-game"; mode: GameMode; aiDifficulty: number }
   | { type: "restart" };
 
@@ -2586,21 +2591,8 @@ const clearTurnSelection = (state: GameState) => {
   state.legalTargets = [];
 };
 
-const resolveClassicTurnStart = (state: GameState) => {
-  if (
-    completeTurnSearchDepth > 0 ||
-    classicTurnResolutionSuppressed > 0 ||
-    (
-      state.gameMode === "puzzle" &&
-      !isInCheck(state.board, state.activeColor, state.bananas)
-    ) ||
-    state.phase !== "play" ||
-    state.result ||
-    state.selectedGod ||
-    state.selectedAbility
-  ) return;
+const adjudicateClassicNoTurn = (state: GameState) => {
   const color = state.activeColor;
-  if (hasCompleteClassicTurn(state)) return;
   const king = kingSquare(state.board, color);
   if (!king) return;
   clearTurnSelection(state);
@@ -2621,6 +2613,23 @@ const resolveClassicTurnStart = (state: GameState) => {
     state.lastAction = message;
     state.notice = message;
   }
+};
+
+const resolveClassicTurnStart = (state: GameState) => {
+  if (
+    completeTurnSearchDepth > 0 ||
+    classicTurnResolutionSuppressed > 0 ||
+    (
+      state.gameMode === "puzzle" &&
+      !isInCheck(state.board, state.activeColor, state.bananas)
+    ) ||
+    state.phase !== "play" ||
+    state.result ||
+    state.selectedGod ||
+    state.selectedAbility
+  ) return;
+  if (hasCompleteClassicTurn(state)) return;
+  adjudicateClassicNoTurn(state);
 };
 
 const beganClassicPlayTurn = (previous: GameState, next: GameState) =>
@@ -2664,6 +2673,23 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
     }
     resolveClassicTurnStart(loaded);
     return loaded;
+  }
+  if (action.type === "adjudicate-no-turn") {
+    if (
+      state.phase !== "play" ||
+      (state.gameMode !== "ai" && state.gameMode !== "puzzle") ||
+      state.aiColor !== state.activeColor ||
+      state.activeColor !== action.activeColor ||
+      state.turn !== action.turn ||
+      state.selectedGod ||
+      state.selectedAbility ||
+      state.selectedSquare ||
+      state.pending ||
+      state.legalTargets.length
+    ) return state;
+    const next = cloneState(state);
+    adjudicateClassicNoTurn(next);
+    return next;
   }
   if (
     state.phase === "play" &&

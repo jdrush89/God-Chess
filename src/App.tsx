@@ -3232,11 +3232,28 @@ export default function App() {
       const requestId = aiRequestId.current + 1;
       aiRequestId.current = requestId;
       const requestedState = state;
+      let worker: Worker | undefined;
+      let planningTimer: number | undefined;
+      let secondFrame: number | undefined;
+      let settled = false;
+      let fallbackStarted = false;
       const acceptPlan = (actions: GameAction[]) => {
         if (
+          settled ||
           aiRequestId.current !== requestId ||
           stateRef.current !== requestedState
         ) return;
+        settled = true;
+        worker?.terminate();
+        worker = undefined;
+        if (!actions.length && requestedState.phase === "play") {
+          dispatch({
+            type: "adjudicate-no-turn",
+            activeColor: requestedState.activeColor,
+            turn: requestedState.turn,
+          });
+          return;
+        }
         aiPlan.current = actions;
         aiNoPlanState.current = actions.length ? undefined : requestedState;
         recordDiagnostic({
@@ -3247,9 +3264,33 @@ export default function App() {
         });
         setAiPlanReady((value) => value + 1);
       };
-      let worker: Worker | undefined;
-      let planningTimer: number | undefined;
-      let secondFrame: number | undefined;
+      const fallbackToMainThread = (error: unknown) => {
+        if (
+          settled ||
+          fallbackStarted ||
+          aiRequestId.current !== requestId ||
+          stateRef.current !== requestedState
+        ) return;
+        fallbackStarted = true;
+        worker?.terminate();
+        worker = undefined;
+        const message = error instanceof Error
+          ? error.message
+          : error &&
+              typeof error === "object" &&
+              "message" in error
+            ? String(error.message)
+            : error instanceof Event
+              ? error.type
+              : String(error);
+        recordDiagnostic({
+          category: "error",
+          event: "classic-worker-error",
+          context: { variant: "classic", mode: requestedState.gameMode },
+          data: { message },
+        });
+        acceptPlan(chooseAiPlan(requestedState));
+      };
       const firstFrame = window.requestAnimationFrame(() => {
         secondFrame = window.requestAnimationFrame(() => {
           planningTimer = window.setTimeout(() => {
@@ -3267,32 +3308,29 @@ export default function App() {
               acceptPlan(chooseAiPlan(requestedState));
               return;
             }
-            worker = new Worker(
-              new URL("./game/ai.worker.ts", import.meta.url),
-              { type: "module" },
-            );
-            worker.onmessage = (
-              event: MessageEvent<ClassicAiWorkerResponse>,
-            ) => {
-              if (event.data.requestId === requestId) {
-                acceptPlan(event.data.actions);
-              }
-            };
-            worker.onerror = (event) => {
-              if (aiRequestId.current !== requestId) return;
-              recordDiagnostic({
-                category: "error",
-                event: "classic-worker-error",
-                context: { variant: "classic", mode: requestedState.gameMode },
-                data: {
-                  message: event.message,
-                  filename: event.filename,
-                  line: event.lineno,
-                  column: event.colno,
-                },
-              });
-            };
-            worker.postMessage({ requestId, state: requestedState });
+            try {
+              worker = new Worker(
+                new URL("./game/ai.worker.ts", import.meta.url),
+                { type: "module" },
+              );
+              worker.onmessage = (
+                event: MessageEvent<ClassicAiWorkerResponse>,
+              ) => {
+                if (event.data.requestId === requestId) {
+                  acceptPlan(event.data.actions);
+                }
+              };
+              worker.onerror = (event) => {
+                event.preventDefault();
+                fallbackToMainThread(event);
+              };
+              worker.onmessageerror = (event) => {
+                fallbackToMainThread(event);
+              };
+              worker.postMessage({ requestId, state: requestedState });
+            } catch (error) {
+              fallbackToMainThread(error);
+            }
           }, 0);
         });
       });

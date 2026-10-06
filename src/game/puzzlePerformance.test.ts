@@ -56,4 +56,27 @@ describe("puzzle interactive performance", () => {
 
     expect(searchHarness.hasCompleteTurn).toHaveBeenCalledTimes(1);
   });
+
+  it("adjudicates an already-proven safe puzzle no-plan as stalemate", () => {
+    const state = createPuzzleGame("centaurs-lance");
+    state.activeColor = "black";
+    state.board = {
+      a1: state.board.b1!,
+      h8: state.board.e8!,
+    };
+
+    const next = gameReducer(state, {
+      type: "adjudicate-no-turn",
+      activeColor: "black",
+      turn: state.turn,
+    });
+
+    expect(next).toMatchObject({
+      phase: "gameover",
+      winner: undefined,
+      result: { kind: "draw", reason: "stalemate" },
+      lastAction: "Black was stalemated. The match is a draw.",
+    });
+    expect(searchHarness.hasCompleteTurn).not.toHaveBeenCalled();
+  });
 });
