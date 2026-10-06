@@ -519,6 +519,36 @@ const resolveMarkedForDeath = (state: GameState) => {
   }
 };
 
+const hasUpgradeableAbility = (state: GameState, color: Color) =>
+  state.players[color].gods.some((godId) =>
+    GOD_BY_ID[godId].abilities.some((ability) =>
+      (state.players[color].upgrades[ability.id] ?? 1) < 3
+    )
+  );
+
+const startNextRound = (state: GameState) => {
+  state.phase = "play";
+  state.round += 1;
+  state.rested = [];
+  state.upgradeQueue = [];
+  state.activeColor = "white";
+  state.turn += 1;
+  state.notice = `Round ${state.round}. White to act.`;
+  resolveStartOfTurn(state);
+};
+
+const advanceUpgradeQueue = (state: GameState) => {
+  state.upgradeQueue = state.upgradeQueue.filter((color) =>
+    hasUpgradeableAbility(state, color)
+  );
+  if (!state.upgradeQueue.length) {
+    startNextRound(state);
+    return;
+  }
+  state.activeColor = state.upgradeQueue[0];
+  state.notice = `${colorName(state.activeColor)} upgrades one ability.`;
+};
+
 const finishTurn = (state: GameState, description: string) => {
   if (state.selectedGod === "death") resolveMarkedForDeath(state);
   const actingGod = state.selectedGod;
@@ -566,8 +596,10 @@ const finishTurn = (state: GameState, description: string) => {
   if (drafted.length === 6 && drafted.every((god) => state.rested.includes(god))) {
     state.phase = "upgrade";
     state.upgradeQueue = ["white", "black"];
-    state.activeColor = "white";
-    state.notice = "The gods awaken. White upgrades one ability.";
+    advanceUpgradeQueue(state);
+    if (state.phase === "upgrade") {
+      state.notice = `The gods awaken. ${colorName(state.activeColor)} upgrades one ability.`;
+    }
     return;
   }
 
@@ -2414,18 +2446,7 @@ const upgradeAbility = (state: GameState, abilityId: string) => {
   present(state, { kind: "upgrade", godId, abilityId });
   state.upgradePreview = undefined;
   state.upgradeQueue.shift();
-  if (state.upgradeQueue.length) {
-    state.activeColor = state.upgradeQueue[0];
-    state.notice = `${colorName(state.activeColor)} upgrades one ability.`;
-  } else {
-    state.phase = "play";
-    state.round += 1;
-    state.rested = [];
-    state.activeColor = "white";
-    state.turn += 1;
-    state.notice = `Round ${state.round}. White to act.`;
-    resolveStartOfTurn(state);
-  }
+  advanceUpgradeQueue(state);
 };
 
 const canPassAction = (state: GameState) =>
@@ -2913,6 +2934,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
         reason: "king-death",
       };
     }
+    if (loaded.phase === "upgrade") advanceUpgradeQueue(loaded);
     resolveClassicTurnStart(loaded);
     return loaded;
   }

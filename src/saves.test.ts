@@ -147,6 +147,28 @@ describe("saved-game variants", () => {
     expect(normalized && !isFourPlayerSavedGame(normalized)).toBe(true);
   });
 
+  it("persists the human upgrade handoff without transient AI presentation state", () => {
+    let state = createGame(2, { mode: "ai" });
+    for (const godId of ["ares", "medusa", "midas", "death", "artemis", "chiron"] as const) {
+      state = gameReducer(state, { type: "draft", godId });
+    }
+    state.phase = "upgrade";
+    state.activeColor = "white";
+    state.upgradeQueue = ["white", "black"];
+    state = gameReducer(state, {
+      type: "preview-upgrade",
+      godId: "ares",
+      abilityId: "threaten",
+    });
+    state = gameReducer(state, { type: "upgrade", abilityId: "threaten" });
+
+    const saved = createSavedGame("ai-upgrade-handoff", state, []);
+    expect(saved.state.activeColor).toBe("black");
+    expect(saved.state.upgradeQueue).toEqual(["black"]);
+    expect(saved.state.presentation).toBeUndefined();
+    expect(saved.state.upgradePreview).toBeUndefined();
+  });
+
   it("round-trips Hex status on hostile Kings in every saved-game variant", () => {
     const classic = createGame(1);
     const classicKing = Object.values(classic.board).find((piece) =>

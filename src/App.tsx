@@ -1239,7 +1239,15 @@ function UpgradePanel({
   useEffect(() => {
     setGodPreviewLevel(undefined);
     setSelectedAbilityId(undefined);
-  }, [presentedGodId, state.activeColor]);
+  }, [
+    presentedGodId,
+    state.activeColor,
+    state.phase,
+    state.round,
+    state.upgradeQueue[0],
+    state.upgradePreview?.godId,
+    state.upgradePreview?.abilityId,
+  ]);
 
   const presentedAbilityId = presentation?.abilityId ??
     (state.upgradePreview?.godId === presentedGodId ? state.upgradePreview?.abilityId : undefined) ??
@@ -2261,7 +2269,7 @@ function GraveyardModal({
   );
 }
 
-function GameScreen({
+export function GameScreen({
   state,
   dispatch,
   onSaveAndQuit,
@@ -2425,7 +2433,10 @@ function GameScreen({
 
   useEffect(() => {
     const event = state.presentation;
-    if (!event || event.color !== opponentColor) return;
+    if (!event || event.color !== opponentColor) {
+      setOpponentPresentation(undefined);
+      return;
+    }
     setInspectedGodId(undefined);
     setOpponentPresentation(event);
     const duration = event.kind === "upgrade"
@@ -3382,8 +3393,7 @@ export default function App() {
       state.gameMode === "online" ||
       state.gameMode === "puzzle"
     ) return;
-    const timer = window.setTimeout(() => void saveCurrentGame(), 120);
-    return () => window.clearTimeout(timer);
+    void saveCurrentGame();
   }, [
     fourPlayerSession,
     threeOnlineActive,
