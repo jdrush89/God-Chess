@@ -167,6 +167,13 @@ const isPiece = (value: unknown): value is FourPlayerPiece => {
   );
 };
 
+const moveFirstBoardIdentity = (board: Record<string, FourPlayerPiece>) =>
+  JSON.stringify(
+    Object.entries(board)
+      .map(([square, piece]) => [square, piece.id] as const)
+      .sort(([first], [second]) => first.localeCompare(second)),
+  );
+
 const isSeatArray = (value: unknown, expectedLength?: number): value is Seat[] =>
   Array.isArray(value) &&
   (expectedLength === undefined || value.length === expectedLength) &&
@@ -218,7 +225,22 @@ const isPending = (value: unknown) => {
     (value.selected === undefined || isStringArray(value.selected)) &&
     (value.movedPieceId === undefined || typeof value.movedPieceId === "string") &&
     (value.movesRemaining === undefined || Number.isInteger(value.movesRemaining)) &&
-    (value.targetSeat === undefined || isSeat(value.targetSeat))
+    (value.targetSeat === undefined || isSeat(value.targetSeat)) &&
+    (
+      value.queuedMove === undefined ||
+      (
+        isRecord(value.queuedMove) &&
+        isSquare(value.queuedMove.from) &&
+        isSquare(value.queuedMove.to) &&
+        isSeat(value.queuedMove.actor) &&
+        isInteger(value.queuedMove.turn, 1) &&
+        isInteger(value.queuedMove.round, 1) &&
+        typeof value.queuedMove.boardIdentity === "string" &&
+        Boolean(value.queuedMove.boardIdentity) &&
+        typeof value.queuedMove.pieceId === "string" &&
+        Boolean(value.queuedMove.pieceId)
+      )
+    )
   );
   if (!fieldsAreValid) return false;
   if (value.step === "enchant-enemy-move") {
@@ -231,6 +253,9 @@ const isPending = (value: unknown) => {
       isSquare(value.source) &&
       isSquare(value.destination) &&
       typeof value.movedPieceId === "string";
+  }
+  if (value.queuedMove !== undefined) {
+    return value.abilityId === "hex" && value.step === "hex-target";
   }
   return value.abilityId !== "enchant";
 };
@@ -384,6 +409,17 @@ export const isFourPlayerState = (value: unknown): value is FourPlayerState => {
       )
     )
   ) return false;
+  const pending = value.pending as FourPlayerState["pending"];
+  if (pending?.queuedMove) {
+    const queued = pending.queuedMove;
+    if (
+      queued.actor !== value.activeSeat ||
+      queued.turn !== value.turn ||
+      queued.round !== value.round ||
+      queued.boardIdentity !== moveFirstBoardIdentity(board) ||
+      board[queued.from]?.id !== queued.pieceId
+    ) return false;
+  }
 
   if (value.enPassant !== undefined) {
     if (

@@ -3,7 +3,12 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import App from "../App";
-import { createFourPlayerGame, fourPlayerReducer } from "../game/fourPlayerEngine";
+import {
+  createFourPlayerGame,
+  fourPlayerMoveFirstSources,
+  fourPlayerMoveFirstTargets,
+  fourPlayerReducer,
+} from "../game/fourPlayerEngine";
 import { GODS } from "../game/gods";
 import { createSavedGame } from "../saves";
 import { FourPlayerGame } from "./FourPlayerGame";
@@ -87,6 +92,94 @@ describe("four-player app integration", () => {
     expect(screen.getByRole("grid", {
       name: "Four-player God Chess board",
     })).toBeTruthy();
+  });
+
+  it("keeps four-player move-first selection provisional, cancelable, and inspectable", () => {
+    const state = completeFourPlayerDraft();
+    const sources = fourPlayerMoveFirstSources(state);
+    const source = sources[0];
+    const reselectedSource = sources[1];
+    const destination = fourPlayerMoveFirstTargets(state, reselectedSource)[0];
+    const pieceId = state.board[reselectedSource].id;
+    const { container } = render(
+      <FourPlayerGame
+        initialState={state}
+        undoPreferred={false}
+        onUndoPreferenceChange={vi.fn()}
+        onPersist={vi.fn(async () => false)}
+        onQuit={vi.fn()}
+        onNewGame={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(container.querySelector(`[data-square="${source}"]`)!);
+    expect(container.querySelector(`[data-square="${source}"]`)
+      ?.classList.contains("provisional-source")).toBe(true);
+    expect(screen.getByRole("heading", {
+      name: new RegExp(state.board[source].type, "i"),
+    })).toBeTruthy();
+
+    fireEvent.click(container.querySelector(`[data-square="${reselectedSource}"]`)!);
+    expect(container.querySelector(`[data-square="${source}"]`)
+      ?.classList.contains("provisional-source")).toBe(false);
+    expect(container.querySelector(`[data-square="${reselectedSource}"]`)
+      ?.classList.contains("provisional-source")).toBe(true);
+
+    fireEvent.click(container.querySelector(`[data-square="${destination}"]`)!);
+    expect(container.querySelector(`[data-square="${destination}"]`)
+      ?.classList.contains("provisional-destination")).toBe(true);
+    expect(screen.getByText(/not committed/i)).toBeTruthy();
+    expect(container.querySelector(`[data-piece-id="${pieceId}"]`)
+      ?.closest("[data-square]")?.getAttribute("data-square")).toBe(reselectedSource);
+    expect(container.querySelectorAll(".four-move-first-card")).toHaveLength(3);
+
+    fireEvent.click(screen.getByRole("button", { name: /back \/ cancel/i }));
+    expect(container.querySelector(".provisional-source")).toBeNull();
+    expect(container.querySelector(".provisional-destination")).toBeNull();
+    expect(container.querySelector(`[data-piece-id="${pieceId}"]`)
+      ?.closest("[data-square]")?.getAttribute("data-square")).toBe(reselectedSource);
+  });
+
+  it("commits one canonical four-player move-first action online", () => {
+    const state = completeFourPlayerDraft(createFourPlayerOnlineConfig());
+    const source = fourPlayerMoveFirstSources(state)[0];
+    const destination = fourPlayerMoveFirstTargets(state, source)[0];
+    const onAction = vi.fn();
+    const { container } = render(
+      <FourPlayerGame
+        initialState={state}
+        undoPreferred={false}
+        onUndoPreferenceChange={vi.fn()}
+        onPersist={vi.fn(async () => false)}
+        onQuit={vi.fn()}
+        onNewGame={vi.fn()}
+        onlineSession={{
+          roomCode: "ABCDE",
+          role: "host",
+          participantSeat: state.activeSeat,
+          status: "playing",
+          awaitingSync: false,
+          undoConsent: false,
+          undoAvailable: false,
+          onAction,
+          onUndo: vi.fn(),
+          onUndoConsentChange: vi.fn(),
+        }}
+      />,
+    );
+
+    fireEvent.click(container.querySelector(`[data-square="${source}"]`)!);
+    fireEvent.click(container.querySelector(`[data-square="${destination}"]`)!);
+    fireEvent.click(container.querySelector(".four-move-first-card button")!);
+
+    expect(onAction).toHaveBeenCalledTimes(1);
+    expect(onAction).toHaveBeenCalledWith(expect.objectContaining({
+      type: "commit-move-first",
+      expectedSeat: state.activeSeat,
+      expectedTurn: state.turn,
+      expectedRound: state.round,
+      move: { from: source, to: destination },
+    }));
   });
 
   it("offers four-player mode and validates that one seat remains Human", () => {

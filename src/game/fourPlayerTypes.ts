@@ -1,4 +1,10 @@
-import type { GodId, PieceType, Square } from "./types";
+import type {
+  GodId,
+  MoveFirstCandidate,
+  MoveFirstMove,
+  PieceType,
+  Square,
+} from "./types";
 
 export const FOUR_PLAYER_SEATS = ["north", "east", "south", "west"] as const;
 export type Seat = (typeof FOUR_PLAYER_SEATS)[number];
@@ -124,6 +130,17 @@ export interface FourPlayerPendingAction {
   movedPieceId?: string;
   movesRemaining?: number;
   targetSeat?: Seat;
+  queuedMove?: FourPlayerQueuedMove;
+}
+
+export interface FourPlayerQueuedMove {
+  from: Square;
+  to: Square;
+  actor: Seat;
+  turn: number;
+  round: number;
+  boardIdentity: string;
+  pieceId: string;
 }
 
 export interface FourPlayerWinner {
@@ -181,6 +198,12 @@ export interface FourPlayerMove {
   promotion?: PieceType;
 }
 
+export type FourPlayerMoveFirstMove = MoveFirstMove<Square>;
+export type FourPlayerMoveFirstCandidate = MoveFirstCandidate<
+  FourPlayerMoveFirstMove,
+  OrbAffinity
+>;
+
 export type FourPlayerAction =
   | { type: "draft"; godId: GodId }
   | { type: "select-god"; godId: GodId }
@@ -196,5 +219,15 @@ export type FourPlayerAction =
   | { type: "pass" }
   | { type: "cancel" }
   | { type: "upgrade"; abilityId: string }
+  | {
+    type: "commit-move-first";
+    godId: GodId;
+    abilityId: string;
+    move: FourPlayerMoveFirstMove;
+    expectedSeat: Seat;
+    expectedTurn: number;
+    expectedRound: number;
+    expectedBoardIdentity: string;
+  }
   | { type: "load"; state: FourPlayerState }
   | { type: "restart" };

@@ -48,6 +48,11 @@ import {
 import { fourPlayerSquareAt } from "../game/fourPlayerChess";
 import { seatsAreAllies } from "../game/fourPlayerConfig";
 import {
+  canStartFourPlayerMoveFirst,
+  fourPlayerMoveFirstBoardIdentity,
+  fourPlayerMoveFirstCandidates,
+  fourPlayerMoveFirstSources,
+  fourPlayerMoveFirstTargets,
   fourPlayerReducer,
   hasCommittedFourPlayerAction,
 } from "../game/fourPlayerEngine";
@@ -55,6 +60,7 @@ import { prepareFourPlayerState } from "../game/fourPlayerPersistence";
 import {
   FOUR_PLAYER_SEATS,
   type FourPlayerAction,
+  type FourPlayerMoveFirstCandidate,
   type FourPlayerOrbAnimation,
   type FourPlayerPiece,
   type FourPlayerState,
@@ -71,6 +77,11 @@ import {
 import { AbilityRules, LevelSelector } from "../UpgradePreview";
 
 type FourPlayerDispatch = (action: FourPlayerAction) => void;
+
+interface FourPlayerMoveFirstDraft {
+  source: Square;
+  destination?: Square;
+}
 
 const PIECES: Record<OrbAffinity, Record<PieceType, string>> = {
   light: {
@@ -589,14 +600,20 @@ function FourPlayerPanel({
 
 function FourPlayerBoard({
   state,
-  dispatch,
+  onSquare,
   onInspectSquare,
   captureEffects,
+  legalTargets = state.legalTargets,
+  provisionalSource,
+  provisionalDestination,
 }: {
   state: FourPlayerState;
-  dispatch: FourPlayerDispatch;
+  onSquare: (square: Square) => void;
   onInspectSquare: (square: Square) => void;
   captureEffects: Set<Square>;
+  legalTargets?: Square[];
+  provisionalSource?: Square;
+  provisionalDestination?: Square;
 }) {
   const cells = useMemo(() => {
     const result: Array<{ square?: Square; file: number; rank: number }> = [];
@@ -628,18 +645,20 @@ function FourPlayerBoard({
               }
               const piece = state.board[square];
               const selected = state.selectedSquare === square;
-              const legal = !previewing && state.legalTargets.includes(square);
+              const legal = !previewing && legalTargets.includes(square);
               const effectPreview = previewing && state.legalTargets.includes(square);
+              const isProvisionalSource = provisionalSource === square;
+              const isProvisionalDestination = provisionalDestination === square;
               const banana = state.bananas.find((item) => item.square === square);
               return (
                 <button
                   role="gridcell"
                   data-square={square}
-                  aria-label={`${square}${piece ? `, ${state.players[piece.owner].name} ${piece.type}${piece.controller ? `, controlled by ${state.players[piece.controller].name}` : ", inert"}` : ""}${legal ? ", legal target" : ""}`}
-                  className={`four-board-square ${(file + rank) % 2 ? "light" : "dark"} ${selected ? "selected" : ""} ${legal ? "legal" : ""} ${legal && piece ? "legal-occupied" : ""} ${legal && enchantSourceChoice ? "legal-source" : ""} ${legal && !enchantSourceChoice ? "legal-destination" : ""} ${effectPreview ? "effect-preview" : ""}`}
+                  aria-label={`${square}${piece ? `, ${state.players[piece.owner].name} ${piece.type}${piece.controller ? `, controlled by ${state.players[piece.controller].name}` : ", inert"}` : ""}${legal ? ", legal target" : ""}${isProvisionalSource ? ", provisional move source" : ""}${isProvisionalDestination ? ", provisional move destination, not committed" : ""}`}
+                  className={`four-board-square ${(file + rank) % 2 ? "light" : "dark"} ${selected ? "selected" : ""} ${legal ? "legal" : ""} ${legal && piece ? "legal-occupied" : ""} ${legal && enchantSourceChoice ? "legal-source" : ""} ${legal && !enchantSourceChoice ? "legal-destination" : ""} ${effectPreview ? "effect-preview" : ""} ${isProvisionalSource ? "provisional-source" : ""} ${isProvisionalDestination ? "provisional-destination" : ""}`}
                   onClick={() => {
                     onInspectSquare(square);
-                    dispatch({ type: "square", square });
+                    onSquare(square);
                   }}
                   key={square}
                 >
@@ -716,6 +735,92 @@ function AbilityCard({
       </button>
       {children && <div className="four-ability-pending">{children}</div>}
     </article>
+  );
+}
+
+function FourPlayerMoveFirstChooser({
+  state,
+  draft,
+  candidates,
+  onCancel,
+  onCommit,
+}: {
+  state: FourPlayerState;
+  draft: FourPlayerMoveFirstDraft;
+  candidates: FourPlayerMoveFirstCandidate[];
+  onCancel: () => void;
+  onCommit: (candidate: FourPlayerMoveFirstCandidate) => void;
+}) {
+  if (!draft.destination) {
+    return (
+      <div className="move-first-prompt four-move-first-prompt" role="status">
+        <strong>Ordinary move selected from {draft.source}</strong>
+        <p>Choose a highlighted destination. The board has not changed.</p>
+        <button className="secondary-button" onClick={onCancel}>
+          Back / cancel
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="move-first-chooser four-move-first-chooser">
+      <div className="move-first-heading" role="status" aria-live="polite">
+        <span>PROVISIONAL MOVE</span>
+        <strong>{draft.source} → {draft.destination}</strong>
+        <p>Not committed. Choose which God’s first ability applies this move.</p>
+        <button className="secondary-button" onClick={onCancel}>
+          <ArrowLeft size={15} /> Back / cancel
+        </button>
+      </div>
+      <div className="four-move-first-list">
+        {candidates.map((candidate) => {
+          const god = GOD_BY_ID[candidate.godId];
+          const ability = god.abilities[0];
+          const level = abilityLevel(
+            state.players[state.activeSeat].upgrades,
+            ability.id,
+          );
+          return (
+            <article
+              className={`four-move-first-card ${candidate.valid ? "" : "invalid"}`}
+              style={{ "--accent": god.accent } as React.CSSProperties}
+              key={candidate.godId}
+            >
+              <button
+                disabled={!candidate.valid}
+                onClick={() => onCommit(candidate)}
+                aria-label={`${god.name} ${ability.name}: ${candidate.immediateOrbDelta.light} light orbs now and ${candidate.immediateOrbDelta.dark} dark orbs now`}
+              >
+                <div className="four-move-first-title">
+                  <GodPortrait godId={god.id} />
+                  <span>
+                    <small>{god.name} · FIRST ABILITY · LEVEL {level}</small>
+                    <strong>{ability.name}</strong>
+                  </span>
+                </div>
+                <p>{ability.summary}</p>
+                {level >= 2 && ability.details[1] && (
+                  <p><b>Lv 2:</b> {ability.details[1]}</p>
+                )}
+                {level >= 3 && ability.details[2] && (
+                  <p><b>Lv 3:</b> {ability.details[2]}</p>
+                )}
+                <div className="move-first-reward">
+                  <span>IMMEDIATE ORBS</span>
+                  <div>
+                    <b><i className="orb white" /> Light {candidate.immediateOrbDelta.light}</b>
+                    <b><i className="orb black" /> Dark {candidate.immediateOrbDelta.dark}</b>
+                  </div>
+                  {candidate.conditionalOutcome && <p>{candidate.conditionalOutcome}</p>}
+                  {candidate.followUp && <small>{candidate.followUp.label}</small>}
+                  {candidate.error && <p className="move-first-error">{candidate.error}</p>}
+                </div>
+              </button>
+            </article>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -962,6 +1067,10 @@ function FourActionPanel({
   state,
   dispatch,
   inputDisabled,
+  moveFirstDraft,
+  moveFirstCandidates,
+  onCancelMoveFirst,
+  onCommitMoveFirst,
   inspectedGod,
   onInspectGod,
   onCloseInspection,
@@ -969,6 +1078,10 @@ function FourActionPanel({
   state: FourPlayerState;
   dispatch: FourPlayerDispatch;
   inputDisabled: boolean;
+  moveFirstDraft?: FourPlayerMoveFirstDraft;
+  moveFirstCandidates: FourPlayerMoveFirstCandidate[];
+  onCancelMoveFirst: () => void;
+  onCommitMoveFirst: (candidate: FourPlayerMoveFirstCandidate) => void;
   inspectedGod?: { godId: GodId; seat: Seat };
   onInspectGod: (godId: GodId, seat: Seat) => void;
   onCloseInspection: () => void;
@@ -1086,6 +1199,24 @@ function FourActionPanel({
               : "Select an ability to upgrade"}
           </button>
         </div>
+      </aside>
+    );
+  }
+
+  if (moveFirstDraft) {
+    return (
+      <aside className="four-action-panel">
+        <div className="panel-heading">
+          <span>DIVINE ACTION</span>
+          <small>ROUND {state.round}</small>
+        </div>
+        <FourPlayerMoveFirstChooser
+          state={state}
+          draft={moveFirstDraft}
+          candidates={moveFirstCandidates}
+          onCancel={onCancelMoveFirst}
+          onCommit={onCommitMoveFirst}
+        />
       </aside>
     );
   }
@@ -1477,6 +1608,8 @@ export function FourPlayerGame({
   const [undoDepth, setUndoDepth] = useState(undoStack.current.length);
   const [animating, setAnimating] = useState(false);
   const [captureEffects, setCaptureEffects] = useState<Set<Square>>(() => new Set());
+  const [moveFirstDraft, setMoveFirstDraft] =
+    useState<FourPlayerMoveFirstDraft>();
   const [inspectedSquare, setInspectedSquare] = useState<Square>();
   const [inspectedGod, setInspectedGod] = useState<{ godId: GodId; seat: Seat }>();
   const [graveyardSeat, setGraveyardSeat] = useState<Seat>();
@@ -1509,12 +1642,36 @@ export function FourPlayerGame({
   const updateUndoDepth = () => setUndoDepth(undoStack.current.length);
   const receiveState = (next: FourPlayerState) => {
     const loaded = fourPlayerReducer(next, { type: "load", state: next });
+    setMoveFirstDraft(undefined);
     stateRef.current = loaded;
     baseDispatch({ type: "load", state: loaded });
   };
   useEffect(() => {
     if (onlineSession) receiveState(prepareFourPlayerState(initialState));
   }, [initialState, onlineSession?.roomCode]);
+  useEffect(() => {
+    const activeControl = state.players[state.activeSeat].control;
+    const authorized = onlineSession
+      ? onlineSession.status === "playing" &&
+        !onlineSession.awaitingSync &&
+        onlineSession.participantSeat === state.activeSeat
+      : activeControl.kind === "human";
+    if (!authorized || !canStartFourPlayerMoveFirst(state)) {
+      setMoveFirstDraft(undefined);
+    }
+  }, [
+    state.activeSeat,
+    state.phase,
+    state.turn,
+    state.round,
+    state.selectedGod,
+    state.selectedAbility,
+    state.selectedSquare,
+    state.pending,
+    onlineSession?.participantSeat,
+    onlineSession?.status,
+    onlineSession?.awaitingSync,
+  ]);
   useEffect(() => {
     setResultOpen(state.phase === "gameover");
   }, [state]);
@@ -1931,6 +2088,7 @@ export function FourPlayerGame({
       !state.rested.includes(godId) &&
       canAct
     ) {
+      setMoveFirstDraft(undefined);
       setInspectedGod(undefined);
       humanDispatch({ type: "select-god", godId });
       return;
@@ -1997,6 +2155,53 @@ export function FourPlayerGame({
         onlineSession.awaitingSync ||
         onlineSession.participantSeat !== state.activeSeat
       : activePlayer.control.kind !== "human");
+  const moveFirstEnabled =
+    !actionInputDisabled && canStartFourPlayerMoveFirst(state);
+  const moveFirstSources = new Set(
+    moveFirstEnabled ? fourPlayerMoveFirstSources(state) : [],
+  );
+  const moveFirstTargets = moveFirstDraft && moveFirstEnabled
+    ? fourPlayerMoveFirstTargets(state, moveFirstDraft.source)
+    : [];
+  const moveFirstCandidates =
+    moveFirstDraft?.destination && moveFirstEnabled
+      ? fourPlayerMoveFirstCandidates(state, {
+        from: moveFirstDraft.source,
+        to: moveFirstDraft.destination,
+      })
+      : [];
+  const selectBoardSquare = (square: Square) => {
+    if (actionInputDisabled) return;
+    if (moveFirstEnabled) {
+      setInspectedGod(undefined);
+      setMoveFirstDraft((current) => {
+        if (!current) {
+          return moveFirstSources.has(square) ? { source: square } : undefined;
+        }
+        if (square === current.source) return undefined;
+        if (moveFirstTargets.includes(square)) {
+          return { source: current.source, destination: square };
+        }
+        return moveFirstSources.has(square) ? { source: square } : current;
+      });
+      return;
+    }
+    humanDispatch({ type: "square", square });
+  };
+  const commitMoveFirst = (candidate: FourPlayerMoveFirstCandidate) => {
+    if (!candidate.valid) return;
+    setMoveFirstDraft(undefined);
+    humanDispatch({
+      type: "commit-move-first",
+      godId: candidate.godId,
+      abilityId: candidate.abilityId,
+      move: candidate.move,
+      expectedSeat: state.activeSeat,
+      expectedTurn: state.turn,
+      expectedRound: state.round,
+      expectedBoardIdentity: fourPlayerMoveFirstBoardIdentity(state),
+    });
+  };
   const winnerName = state.winner?.team
     ? teamName(state.winner.team)
     : state.winner?.seat
@@ -2080,9 +2285,12 @@ export function FourPlayerGame({
         <section className="four-board-column">
           <FourPlayerBoard
             state={state}
-            dispatch={humanDispatch}
+            onSquare={selectBoardSquare}
             onInspectSquare={setInspectedSquare}
             captureEffects={captureEffects}
+            legalTargets={moveFirstDraft ? moveFirstTargets : state.legalTargets}
+            provisionalSource={moveFirstDraft?.source}
+            provisionalDestination={moveFirstDraft?.destination}
           />
           <SquareInfo
             state={state}
@@ -2112,6 +2320,10 @@ export function FourPlayerGame({
           state={state}
           dispatch={humanDispatch}
           inputDisabled={actionInputDisabled}
+          moveFirstDraft={moveFirstDraft}
+          moveFirstCandidates={moveFirstCandidates}
+          onCancelMoveFirst={() => setMoveFirstDraft(undefined)}
+          onCommitMoveFirst={commitMoveFirst}
           inspectedGod={inspectedGod}
           onInspectGod={(godId, seat) => setInspectedGod({ godId, seat })}
           onCloseInspection={() => setInspectedGod(undefined)}

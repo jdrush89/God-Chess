@@ -35,6 +35,8 @@ import {
   FOUR_PLAYER_SEATS,
   type FourPlayerAction,
   type FourPlayerConfig,
+  type FourPlayerMoveFirstCandidate,
+  type FourPlayerMoveFirstMove,
   type FourPlayerPiece,
   type FourPlayerState,
   type OrbAffinity,
@@ -57,6 +59,9 @@ const emptyKingAttackRecency = (): NonNullable<FourPlayerState["kingAttackRecenc
 });
 
 const activePlayer = (state: FourPlayerState) => state.players[state.activeSeat];
+const FOUR_PLAYER_FIRST_ABILITY_IDS = new Set(
+  GODS.map((god) => god.abilities[0].id),
+);
 const currentLevel = (state: FourPlayerState, abilityId: string) =>
   abilityLevel(activePlayer(state).upgrades, abilityId);
 const levelFor = (state: FourPlayerState, seat: Seat, abilityId: string) =>
@@ -131,6 +136,7 @@ const COMMITTED_PENDING_STEPS = new Set([
 export const hasCommittedFourPlayerAction = (state: FourPlayerState) => {
   const pending = state.pending;
   if (!pending) return false;
+  if (pending.queuedMove) return true;
   if (COMMITTED_PENDING_STEPS.has(pending.step)) return true;
   if (
     ["grave", "revive-place"].includes(pending.step) &&
@@ -944,6 +950,9 @@ const sourceIsAllowed = (state: FourPlayerState, square: Square) => {
     );
   }
   if (abilityId !== "enchant" && compelled.length && !compelled.includes(square)) return false;
+  if (FOUR_PLAYER_FIRST_ABILITY_IDS.has(abilityId)) {
+    return piece.controller === state.activeSeat;
+  }
   if (abilityId === "enchant") {
     return hostilePiece(state, piece) && allowedEnchantTypes(level).includes(piece.type);
   }
@@ -982,6 +991,30 @@ const ordinaryMoveTargets = (state: FourPlayerState, square: Square) => {
     ])];
   }
   return constrainLure(state, square, targets);
+};
+
+const firstAbilityNormalMoveTargets = (
+  state: FourPlayerState,
+  square: Square,
+) => {
+  const piece = state.board[square];
+  if (
+    !piece ||
+    piece.controller !== state.activeSeat ||
+    piece.status.gazing ||
+    piece.status.frozen ||
+    piece.status.movedThisTurn
+  ) return [];
+  const compelled = compelledLuredSources(state);
+  if (compelled.length && !compelled.includes(square)) return [];
+  return constrainLure(
+    state,
+    square,
+    fourPlayerLegalTargets(state.board, square, state.config, {
+      enPassant: state.enPassant,
+      bananas: state.bananas,
+    }),
+  );
 };
 
 const enchantFollowupSources = (state: FourPlayerState) =>
@@ -1026,6 +1059,9 @@ const sourceTargets = (state: FourPlayerState, square: Square): Square[] => {
   const level = currentLevel(state, abilityId);
   const piece = state.board[square];
   if (!piece) return [];
+  if (FOUR_PLAYER_FIRST_ABILITY_IDS.has(abilityId)) {
+    return firstAbilityNormalMoveTargets(state, square);
+  }
   if (state.pending?.step === "enchant-followup-move") {
     return ordinaryMoveTargets(state, square);
   }
@@ -2089,6 +2125,55 @@ const executeMovement = (
   );
 };
 
+export const fourPlayerMoveFirstBoardIdentity = (
+  state: FourPlayerState,
+) => JSON.stringify(
+  Object.entries(state.board)
+    .map(([square, piece]) => [square, piece.id] as const)
+    .sort(([first], [second]) => first.localeCompare(second)),
+);
+
+const executeCanonicalMoveFirstMove = (
+  state: FourPlayerState,
+  move: FourPlayerMoveFirstMove,
+) => {
+  if (
+    state.pending?.step !== "source" ||
+    !firstAbilityNormalMoveTargets(state, move.from).includes(move.to)
+  ) return false;
+  state.pending.source = move.from;
+  state.selectedSquare = move.from;
+  state.legalTargets = firstAbilityNormalMoveTargets(state, move.from);
+  executeMovement(state, move.from, move.to);
+  return true;
+};
+
+const completeQueuedHexMove = (state: FourPlayerState) => {
+  const queued = state.pending?.queuedMove;
+  if (!queued) {
+    enterHexMovement(state);
+    return;
+  }
+  delete state.pending!.queuedMove;
+  state.pending!.step = "source";
+  state.selectedSquare = undefined;
+  state.legalTargets = [];
+  if (
+    queued.actor !== state.activeSeat ||
+    queued.turn !== state.turn ||
+    queued.round !== state.round ||
+    queued.boardIdentity !== fourPlayerMoveFirstBoardIdentity(state) ||
+    state.board[queued.from]?.id !== queued.pieceId ||
+    !firstAbilityNormalMoveTargets(state, queued.from).includes(queued.to) ||
+    !executeCanonicalMoveFirstMove(state, queued)
+  ) {
+    state.selectedSquare = undefined;
+    state.legalTargets = movableSourceSquares(state);
+    state.notice =
+      "The queued provisional move is no longer legal. Choose a piece to move.";
+  }
+};
+
 const resolveRage = (
   state: FourPlayerState,
   center: Square,
@@ -2532,7 +2617,7 @@ const handleSquare = (state: FourPlayerState, square: Square) => {
     const selected = [...(state.pending.selected ?? []), state.board[square].id];
     if (selected.length >= currentLevel(state, "hex")) {
       state.pending = { ...state.pending, selected };
-      enterHexMovement(state);
+      completeQueuedHexMove(state);
     } else {
       state.pending = { ...state.pending, selected };
       state.legalTargets = state.legalTargets.filter((target) => target !== square);
@@ -2632,6 +2717,189 @@ const selectGod = (state: FourPlayerState, godId: GodId) => {
   state.godTurns[state.activeSeat][godId] =
     (state.godTurns[state.activeSeat][godId] ?? 0) + 1;
   state.notice = `${GOD_BY_ID[godId].name} answers. Choose an ability.`;
+};
+
+export const canStartFourPlayerMoveFirst = (state: FourPlayerState) =>
+  state.phase === "play" &&
+  !state.winner &&
+  !state.drawReason &&
+  !state.selectedGod &&
+  !state.selectedAbility &&
+  !state.selectedSquare &&
+  !state.pending &&
+  state.legalTargets.length === 0 &&
+  state.legalSeats.length === 0;
+
+export const fourPlayerMoveFirstTargets = (
+  state: FourPlayerState,
+  source: Square,
+) => canStartFourPlayerMoveFirst(state)
+  ? firstAbilityNormalMoveTargets(state, source)
+  : [];
+
+export const fourPlayerMoveFirstSources = (state: FourPlayerState) =>
+  canStartFourPlayerMoveFirst(state)
+    ? Object.keys(state.board).filter(
+      (square) => firstAbilityNormalMoveTargets(state, square).length > 0,
+    )
+    : [];
+
+const fourPlayerMoveFirstConditionalOutcome = (
+  abilityId: string,
+  level: number,
+  requiresPreMoveChoice: boolean,
+  followUpStep?: string,
+) => {
+  if (abilityId === "ritual-sacrifice") {
+    return level >= 3
+      ? "This Goad grants 0 now. If this piece is captured before Kangus next acts, gain 4 light and 4 dark orbs."
+      : level >= 2
+        ? "This Goad grants 0 now. If this piece is captured before Kangus next acts, gain 3 light and 3 dark orbs."
+        : "This Goad grants 0 now. If this piece is captured before the next hostile turn ends, gain 3 light and 3 dark orbs.";
+  }
+  if (abilityId === "marked") {
+    return level >= 3
+      ? "The moved piece grants 0 now. It is Marked; later gain 3 dark when Death claims it, or execute it now for 5 dark."
+      : "The moved piece grants 0 now. It is Marked; gain 3 dark orbs when Death claims it.";
+  }
+  if (abilityId === "barter" && followUpStep?.startsWith("barter-")) {
+    return level >= 3
+      ? "If adjacent to a hostile piece, you may trade 1 orb to take up to 3 of the opposite affinity."
+      : level >= 2
+        ? "If adjacent to a hostile piece, you may trade 1 orb to take up to 2 of the opposite affinity and gain 1 matching the landing square."
+        : "If adjacent to a hostile piece, you may trade 1 orb to take up to 2 of the opposite affinity.";
+  }
+  if (abilityId === "hex" && requiresPreMoveChoice) {
+    return "Choose Hex target(s) first; the queued move will execute only if it remains legal.";
+  }
+  return undefined;
+};
+
+const fourPlayerMoveFirstFollowUpLabel = (step: string) => {
+  if (step === "slither-orb") return "Choose one extra orb.";
+  if (step.startsWith("barter-")) return "Choose whether and with whom to trade.";
+  if (step === "marked-choice") {
+    return "Choose whether to execute the Marked piece.";
+  }
+  if (step === "hex-target") {
+    return "Choose Hex target(s), then the move executes automatically.";
+  }
+  return "Complete the ability's canonical follow-up.";
+};
+
+const applyFourPlayerMoveFirstCommit = (
+  state: FourPlayerState,
+  action: Extract<FourPlayerAction, { type: "commit-move-first" }>,
+) => {
+  if (
+    !canStartFourPlayerMoveFirst(state) ||
+    state.activeSeat !== action.expectedSeat ||
+    state.turn !== action.expectedTurn ||
+    state.round !== action.expectedRound ||
+    fourPlayerMoveFirstBoardIdentity(state) !== action.expectedBoardIdentity
+  ) return false;
+  const god = GOD_BY_ID[action.godId];
+  if (
+    !god ||
+    god.abilities[0].id !== action.abilityId ||
+    !activePlayer(state).gods.includes(action.godId) ||
+    state.rested.includes(action.godId) ||
+    !firstAbilityNormalMoveTargets(state, action.move.from).includes(
+      action.move.to,
+    )
+  ) return false;
+  const pieceId = state.board[action.move.from]?.id;
+  if (!pieceId) return false;
+
+  selectGod(state, action.godId);
+  activateAbility(state, action.abilityId);
+  if (
+    state.selectedGod !== action.godId ||
+    state.selectedAbility !== action.abilityId ||
+    !state.pending
+  ) return false;
+  if (state.pending.step === "hex-target") {
+    state.pending.queuedMove = {
+      ...action.move,
+      actor: action.expectedSeat,
+      turn: action.expectedTurn,
+      round: action.expectedRound,
+      boardIdentity: action.expectedBoardIdentity,
+      pieceId,
+    };
+    state.notice =
+      `${state.notice} The ${action.move.from} -> ${action.move.to} move is queued and has not changed the board.`;
+    return true;
+  }
+  return executeCanonicalMoveFirstMove(state, action.move);
+};
+
+export const fourPlayerMoveFirstCandidates = (
+  state: FourPlayerState,
+  move: FourPlayerMoveFirstMove,
+): FourPlayerMoveFirstCandidate[] => {
+  if (!fourPlayerMoveFirstTargets(state, move.from).includes(move.to)) return [];
+  const seat = state.activeSeat;
+  const before = state.players[seat].orbs;
+  return GODS
+    .filter((god) =>
+      state.players[seat].gods.includes(god.id) &&
+      !state.rested.includes(god.id)
+    )
+    .map((god) => {
+      const ability = god.abilities[0];
+      const action: Extract<
+        FourPlayerAction,
+        { type: "commit-move-first" }
+      > = {
+        type: "commit-move-first",
+        godId: god.id,
+        abilityId: ability.id,
+        move,
+        expectedSeat: seat,
+        expectedTurn: state.turn,
+        expectedRound: state.round,
+        expectedBoardIdentity: fourPlayerMoveFirstBoardIdentity(state),
+      };
+      const next = reduceFourPlayerState(state, action, false);
+      const valid = next !== state;
+      const pending = valid &&
+          next.activeSeat === seat &&
+          next.turn === state.turn &&
+          next.pending?.abilityId === ability.id
+        ? next.pending
+        : undefined;
+      const requiresPreMoveChoice = pending?.step === "hex-target" &&
+        Boolean(pending.queuedMove);
+      const after = next.players[seat].orbs;
+      const level = abilityLevel(state.players[seat].upgrades, ability.id);
+      return {
+        godId: god.id,
+        abilityId: ability.id,
+        move,
+        immediateOrbDelta: {
+          light: valid ? after.light - before.light : 0,
+          dark: valid ? after.dark - before.dark : 0,
+        },
+        conditionalOutcome: fourPlayerMoveFirstConditionalOutcome(
+          ability.id,
+          level,
+          requiresPreMoveChoice,
+          pending?.step,
+        ),
+        valid,
+        requiresPreMoveChoice,
+        followUp: pending && pending.step !== "source"
+          ? {
+            step: pending.step,
+            label: fourPlayerMoveFirstFollowUpLabel(pending.step),
+          }
+          : undefined,
+        error: valid
+          ? undefined
+          : "This move is no longer valid for that ability.",
+      };
+    });
 };
 
 const draftGod = (state: FourPlayerState, godId: GodId) => {
@@ -2990,6 +3258,8 @@ const reduceFourPlayerState = (
   const animationSource =
     action.type === "square"
       ? action.square
+      : action.type === "commit-move-first"
+        ? action.move.to
       : state.pending?.destination ?? state.pending?.source ?? state.selectedSquare;
   const next = clone(state);
   next.orbAnimations ??= [];
@@ -2997,6 +3267,11 @@ const reduceFourPlayerState = (
     Math.max(0, ...next.orbAnimations.map((event) => event.id)) + 1;
   if (action.type === "draft" && next.phase === "draft") {
     draftGod(next, action.godId);
+  } else if (
+    action.type === "commit-move-first" &&
+    next.phase === "play"
+  ) {
+    if (!applyFourPlayerMoveFirstCommit(next, action)) return state;
   } else if (
     action.type === "select-god" &&
     next.phase === "play" &&
@@ -3169,7 +3444,7 @@ const reduceFourPlayerState = (
         }
         finishTurn(next, abilityDescription(next, ": completed the movement"));
       } else if (next.pending?.step === "hex-target" && next.pending.selected?.length) {
-        enterHexMovement(next);
+        completeQueuedHexMove(next);
       } else if (next.pending?.step === "march-companions" && next.pending.source) {
         executeMarchHome(next, next.pending.source, next.pending.selected ?? []);
       } else if (
