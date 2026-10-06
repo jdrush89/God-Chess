@@ -140,16 +140,19 @@ export interface QueuedClassicMove {
   pieceId: string;
 }
 
-export interface ClassicMoveFirstMove {
-  from: Square;
-  to: Square;
+export interface MoveFirstMove<Cell extends string = string> {
+  from: Cell;
+  to: Cell;
 }
 
-export interface ClassicMoveFirstCandidate {
+export interface MoveFirstCandidate<
+  Move extends MoveFirstMove = MoveFirstMove,
+  Orb extends string = OrbColor,
+> {
   godId: GodId;
   abilityId: string;
-  move: ClassicMoveFirstMove;
-  immediateOrbDelta: Record<OrbColor, number>;
+  move: Move;
+  immediateOrbDelta: Record<Orb, number>;
   conditionalOutcome?: string;
   valid: boolean;
   requiresPreMoveChoice: boolean;
@@ -159,6 +162,12 @@ export interface ClassicMoveFirstCandidate {
   };
   error?: string;
 }
+
+export type ClassicMoveFirstMove = MoveFirstMove<Square>;
+export type ClassicMoveFirstCandidate = MoveFirstCandidate<
+  ClassicMoveFirstMove,
+  OrbColor
+>;
 
 export interface OrbAnimation {
   id: number;

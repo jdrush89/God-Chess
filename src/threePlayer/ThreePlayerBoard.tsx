@@ -144,6 +144,8 @@ export interface ThreePlayerBoardProps {
     "config" | "board" | "players" | "bananas" | "pending" | "turn"
   >;
   selectedCell?: ThreePlayerCell;
+  provisionalSource?: ThreePlayerCell;
+  provisionalDestination?: ThreePlayerCell;
   legalCells?: readonly ThreePlayerCell[];
   pathCells?: readonly ThreePlayerCell[];
   disabled?: boolean;
@@ -155,6 +157,8 @@ export interface ThreePlayerBoardProps {
 export function ThreePlayerBoard({
   state,
   selectedCell,
+  provisionalSource,
+  provisionalDestination,
   legalCells = [],
   pathCells = [],
   disabled = false,
@@ -198,6 +202,8 @@ export function ThreePlayerBoard({
         const isEffectPreview = previewingEffect && isLegal;
         const isMoveTarget = isLegal && !isEffectPreview;
         const isSelected = descriptor.id === selectedCell;
+        const isProvisionalSource = descriptor.id === provisionalSource;
+        const isProvisionalDestination = descriptor.id === provisionalDestination;
         const statusLabels = piece ? threePlayerPieceStatusLabels(piece) : [];
         const visualClass = descriptor.geometricClass === 2 &&
           threePlayerHasAlternatingNeutralCells(variant)
@@ -216,6 +222,8 @@ export function ThreePlayerBoard({
           isMoveTarget && !enchantSourceChoice ? "legal-destination" : "",
           isEffectPreview ? "effect-preview" : "",
           isSelected ? "selected" : "",
+          isProvisionalSource ? "provisional-source" : "",
+          isProvisionalDestination ? "provisional-destination" : "",
           path.has(descriptor.id) ? "path" : "",
         ].filter(Boolean).join(" ");
         const label = [
@@ -223,6 +231,10 @@ export function ThreePlayerBoard({
           piece ? pieceName(piece) : undefined,
           statusLabels.length ? statusLabels.join(", ") : undefined,
           banana ? `banana placed by ${banana.owner}` : undefined,
+          isProvisionalSource ? "provisional move source" : undefined,
+          isProvisionalDestination
+            ? "provisional move destination, not committed"
+            : undefined,
         ].filter(Boolean).join(", ");
         const shared = {
           className: cellClass,

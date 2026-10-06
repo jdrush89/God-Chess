@@ -728,6 +728,9 @@ span.move-target-dot {
   width: 100%; display: flex; align-items: center; justify-content: center; gap: 7px;
 }
 .move-first-chooser, .move-first-ability-list { min-width: 0; }
+@media (max-width: 430px) {
+  body:has(.three-game-page .move-first-chooser) { min-width: 0; }
+}
 .move-first-reward { padding: 12px 14px; }
 .move-first-reward > span {
   color: #767880; font-size: 8px; font-weight: 700; letter-spacing: .14em;
@@ -1653,6 +1656,12 @@ span.move-target-dot {
 .three-board-cell.dark { fill: #514e4c; }
 .three-board-cell.neutral { fill: #777a80; }
 .three-board-cell.selected { stroke: #f5d98e; stroke-width: .18; filter: brightness(1.14); }
+.three-board-cell.provisional-source {
+  stroke: #6fbde0; stroke-width: .24; filter: brightness(1.18);
+}
+.three-board-cell.provisional-destination {
+  stroke: #ebc571; stroke-width: .24; filter: brightness(1.2);
+}
 .three-board-cell.legal-occupied { stroke: #a23f38; stroke-width: .2; }
 .three-board-cell.legal-source { stroke: #418ba8; stroke-width: .24; filter: brightness(1.22); }
 .three-board-cell.effect-preview {

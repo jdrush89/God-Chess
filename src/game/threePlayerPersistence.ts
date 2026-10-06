@@ -1,4 +1,5 @@
 import { validateThreePlayerConfig } from "./threePlayerConfig";
+import { threePlayerLegalTargets } from "./threePlayerChess";
 import { threePlayerPathIdBelongsToVariant } from "./threePlayerDivineGeometry";
 import { getThreePlayerTopology } from "./threePlayerTopology";
 import {
@@ -90,7 +91,11 @@ const PENDING_STEP_RULES: Readonly<Record<string, PendingStepRule>> = {
     abilities: ["monument"],
     required: ["selected"],
   },
-  "hex-target": { abilities: ["hex"], required: ["selected"] },
+  "hex-target": {
+    abilities: ["hex"],
+    required: ["selected"],
+    optional: ["queuedMove"],
+  },
   "march-companions": {
     abilities: ["march-home"],
     required: ["source", "selected"],
@@ -425,6 +430,86 @@ const expectedPieceController = (
     successor = eliminatedBy;
   }
   return takeover ? successor : null;
+};
+
+const isCanonicalQueuedMove = (
+  state: ThreePlayerState,
+  value: unknown,
+) => {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, [
+      "from",
+      "to",
+      "actor",
+      "turn",
+      "revision",
+      "pieceId",
+    ]) ||
+    typeof value.from !== "string" ||
+    typeof value.to !== "string" ||
+    !isSeat(value.actor) ||
+    !isInteger(value.turn, 1) ||
+    !isInteger(value.revision) ||
+    typeof value.pieceId !== "string" ||
+    state.activeSeat !== value.actor ||
+    state.turn !== value.turn ||
+    value.revision > state.revision ||
+    state.revision !== value.revision + 1 +
+      (state.pending?.selected?.length ?? 0)
+  ) return false;
+  const from = value.from;
+  const to = value.to;
+  const topology = getThreePlayerTopology(state.config.boardVariant);
+  const piece = state.board[from];
+  if (
+    !topology.cellSet.has(from) ||
+    !topology.cellSet.has(to) ||
+    piece?.id !== value.pieceId ||
+    piece.controller !== value.actor ||
+    piece.status.movedThisTurn ||
+    !threePlayerLegalTargets(state, from).includes(to)
+  ) return false;
+
+  const compelled = Object.entries(state.board).filter(([source, candidate]) => {
+    if (
+      candidate.controller !== state.activeSeat ||
+      !candidate.status.luredBy
+    ) return false;
+    const queens = Object.entries(state.board)
+      .filter(([, queen]) =>
+        queen.controller === candidate.status.luredBy &&
+        queen.type === "queen"
+      )
+      .map(([cell]) => cell);
+    if (!queens.length) return false;
+    const current = Math.min(...queens.map((queen) =>
+      topology.distance(source, queen) ?? Number.POSITIVE_INFINITY
+    ));
+    return threePlayerLegalTargets(state, source).some((target) =>
+      Math.min(...queens.map((queen) =>
+        topology.distance(target, queen) ?? Number.POSITIVE_INFINITY
+      )) < current
+    );
+  }).map(([source]) => source);
+  if (compelled.length && !compelled.includes(value.from)) return false;
+  const lurer = piece.status.luredBy;
+  if (!lurer) return true;
+  const queens = Object.entries(state.board)
+    .filter(([, queen]) =>
+      queen.controller === lurer && queen.type === "queen"
+    )
+    .map(([cell]) => cell);
+  if (!queens.length) return true;
+  const current = Math.min(...queens.map((queen) =>
+    topology.distance(from, queen) ?? Number.POSITIVE_INFINITY
+  ));
+  const closer = threePlayerLegalTargets(state, from).filter((target) =>
+    Math.min(...queens.map((queen) =>
+      topology.distance(target, queen) ?? Number.POSITIVE_INFINITY
+    )) < current
+  );
+  return !closer.length || closer.includes(to);
 };
 
 const isThreePlayerStateVersion = (value: unknown): boolean => {
@@ -820,7 +905,17 @@ const isThreePlayerStateVersion = (value: unknown): boolean => {
             pending.movesRemaining < -1
           )
         ) ||
-        (pending.targetSeat !== undefined && !isSeat(pending.targetSeat))
+        (pending.targetSeat !== undefined && !isSeat(pending.targetSeat)) ||
+        (
+          pending.queuedMove !== undefined &&
+          (
+            pending.step !== "hex-target" ||
+            !isCanonicalQueuedMove(
+              value as unknown as ThreePlayerState,
+              pending.queuedMove,
+            )
+          )
+        )
       ) return false;
       if (
         syntheticGod

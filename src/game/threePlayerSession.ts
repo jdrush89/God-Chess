@@ -193,6 +193,42 @@ export const normalizeThreePlayerAction = (
       ...(value.promotion ? { promotion: value.promotion } : {}),
     };
   }
+  if (value.type === "commit-move-first") {
+    if (
+      !hasExactKeys(value, [
+        "type",
+        "godId",
+        "abilityId",
+        "move",
+        "expectedSeat",
+        "expectedTurn",
+        "expectedRevision",
+      ]) ||
+      !isGodId(value.godId) ||
+      !isAbilityId(value.abilityId) ||
+      !isSeat(value.expectedSeat) ||
+      !isRevision(value.expectedTurn) ||
+      value.expectedTurn < 1 ||
+      !isRevision(value.expectedRevision) ||
+      !isRecord(value.move) ||
+      !hasExactKeys(value.move, ["from", "to"]) ||
+      !isCell(value.move.from) ||
+      !isCell(value.move.to) ||
+      cellVariant(value.move.from) !== cellVariant(value.move.to)
+    ) return undefined;
+    return {
+      type: "commit-move-first",
+      godId: value.godId,
+      abilityId: value.abilityId,
+      move: {
+        from: value.move.from,
+        to: value.move.to,
+      },
+      expectedSeat: value.expectedSeat,
+      expectedTurn: value.expectedTurn as number,
+      expectedRevision: value.expectedRevision as number,
+    };
+  }
   if (value.type === "load") {
     if (!hasExactKeys(value, ["type", "state"])) return undefined;
     try {
@@ -211,6 +247,10 @@ const actionMatchesVariant = (
   const topology = getThreePlayerTopology(state.config.boardVariant);
   if (action.type === "move") {
     return topology.cellSet.has(action.from) && topology.cellSet.has(action.to);
+  }
+  if (action.type === "commit-move-first") {
+    return topology.cellSet.has(action.move.from) &&
+      topology.cellSet.has(action.move.to);
   }
   if (action.type === "cell") return topology.cellSet.has(action.cell);
   if (action.type === "path") {
@@ -283,6 +323,12 @@ export const canParticipantSubmitThreePlayerAction = (
     control.kind !== "online" ||
     control.participantId !== participantId
   ) return false;
+  if (action.type === "commit-move-first") {
+    return action.expectedSeat === seat &&
+      action.expectedTurn === state.turn &&
+      action.expectedRevision === state.revision &&
+      threePlayerReducer(state, action) !== state;
+  }
   if (!availableThreePlayerActions(state).some(
     (available) => JSON.stringify(available) === JSON.stringify(action),
   )) return false;

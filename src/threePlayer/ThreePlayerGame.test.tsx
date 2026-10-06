@@ -5,6 +5,8 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   availableThreePlayerActions,
   createThreePlayerGame,
+  threePlayerMoveFirstSources,
+  threePlayerMoveFirstTargets,
   threePlayerReducer,
 } from "../game/threePlayerEngine";
 import { createDefaultThreePlayerConfig } from "../game/threePlayerConfig";
@@ -126,6 +128,160 @@ const installDeterministicAiWorker = () => {
 };
 
 describe("ThreePlayerGame", () => {
+  it.each(THREE_PLAYER_BOARD_VARIANTS)(
+    "renders the provisional move-first chooser on %s without mutating the board",
+    (boardVariant) => {
+      const config = createDefaultThreePlayerConfig();
+      config.boardVariant = boardVariant;
+      const state = completeDraft(createThreePlayerGame(config));
+      state.rested = ["kangus"];
+      const from = threePlayerMoveFirstSources(state)[0];
+      const to = threePlayerMoveFirstTargets(state, from)[0];
+      const pieceId = state.board[from].id;
+      const { container } = renderGame(state);
+      const source = container.querySelector(`[data-cell="${from}"]`)!;
+      const destination = container.querySelector(`[data-cell="${to}"]`)!;
+
+      fireEvent.click(source);
+      expect(source.classList.contains("provisional-source")).toBe(true);
+      expect(screen.getByText(
+        new RegExp(`Ordinary move selected from ${from}`, "i"),
+      )).toBeTruthy();
+      fireEvent.click(destination);
+
+      expect(destination.classList.contains("provisional-destination"))
+        .toBe(true);
+      expect(screen.getByText("PROVISIONAL MOVE")).toBeTruthy();
+      expect(container.querySelectorAll(
+        ".move-first-ability-list .ability-card",
+      )).toHaveLength(2);
+      expect(screen.getByLabelText(
+        /Quetzacoatl Slither: \d+ light orbs now and \d+ dark orbs now/i,
+      )).toBeTruthy();
+      expect(screen.getByLabelText(
+        /Death Marked: \d+ light orbs now and \d+ dark orbs now/i,
+      )).toBeTruthy();
+      expect(screen.queryByText("Air Lift")).toBeNull();
+      expect(screen.queryByText("Resurrect")).toBeNull();
+      expect(state.board[from].id).toBe(pieceId);
+      expect(state.board[to]?.id).not.toBe(pieceId);
+
+      fireEvent.click(screen.getByRole("button", { name: /back \/ cancel/i }));
+      expect(screen.queryByText("PROVISIONAL MOVE")).toBeNull();
+      expect(container.querySelector(".god-list")).toBeTruthy();
+    },
+  );
+
+  it("suppresses the board tap after a zoomed drag", () => {
+    const state = completeDraft();
+    const from = threePlayerMoveFirstSources(state)[0];
+    const { container } = renderGame(state);
+    fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
+    const viewport = container.querySelector(
+      ".three-board-zoom .board-zoom-viewport",
+    )!;
+    const source = container.querySelector(`[data-cell="${from}"]`)!;
+
+    fireEvent.pointerDown(viewport, {
+      pointerId: 1,
+      pointerType: "mouse",
+      button: 0,
+      clientX: 20,
+      clientY: 20,
+    });
+    fireEvent.pointerMove(viewport, {
+      pointerId: 1,
+      pointerType: "mouse",
+      clientX: 40,
+      clientY: 40,
+    });
+    fireEvent.pointerUp(viewport, {
+      pointerId: 1,
+      pointerType: "mouse",
+      clientX: 40,
+      clientY: 40,
+    });
+    fireEvent.click(source);
+
+    expect(screen.queryByText(/Ordinary move selected from/i)).toBeNull();
+    expect(source.classList.contains("provisional-source")).toBe(false);
+  });
+
+  it("keeps online provisional selection local until commit", () => {
+    const config = createDefaultThreePlayerConfig();
+    config.seats.white.control = {
+      kind: "online",
+      participantId: "white-player",
+      local: true,
+    };
+    const state = completeDraft(createThreePlayerGame(config));
+    const from = threePlayerMoveFirstSources(state)[0];
+    const to = threePlayerMoveFirstTargets(state, from)[0];
+    const onAction = vi.fn();
+    const onlineSession: ThreePlayerOnlineSession = {
+      roomCode: "ABC123",
+      role: "peer",
+      participantSeat: "white",
+      status: "playing",
+      awaitingSync: false,
+      undoAvailable: false,
+      onAction,
+      onUndoRequest: vi.fn(),
+      onUndoVote: vi.fn(),
+    };
+    const { container } = render(
+      <ThreePlayerGame
+        initialState={state}
+        onlineSession={onlineSession}
+        onQuit={() => undefined}
+        onNewGame={() => undefined}
+      />,
+    );
+
+    fireEvent.click(container.querySelector(`[data-cell="${from}"]`)!);
+    fireEvent.click(container.querySelector(`[data-cell="${to}"]`)!);
+    expect(onAction).not.toHaveBeenCalled();
+
+    fireEvent.click(container.querySelector(
+      ".move-first-ability-list .ability-card-main",
+    )!);
+    expect(onAction).toHaveBeenCalledTimes(1);
+    expect(onAction).toHaveBeenCalledWith(expect.objectContaining({
+      type: "commit-move-first",
+      expectedSeat: "white",
+      expectedTurn: state.turn,
+      expectedRevision: state.revision,
+      move: { from, to },
+    }));
+  });
+
+  it("records one completed move-first action and undoes it as one boundary", () => {
+    const state = completeDraft();
+    state.players.white.gods = ["anubis", "kangus", "death"];
+    const from = threePlayerMoveFirstSources(state)[0];
+    const to = threePlayerMoveFirstTargets(state, from)[0];
+    const pieceId = state.board[from].id;
+    const { container } = renderGame(state);
+
+    fireEvent.click(container.querySelector(`[data-cell="${from}"]`)!);
+    fireEvent.click(container.querySelector(`[data-cell="${to}"]`)!);
+    fireEvent.click(screen.getByText("Construction").closest(
+      ".ability-card-main",
+    )!);
+
+    expect(container.querySelector(`[data-cell="${to}"]`)
+      ?.parentElement?.querySelector(".three-board-piece")).toBeTruthy();
+    expect(screen.getByText(/used Construction with Anubis/i)).toBeTruthy();
+    const undo = screen.getByRole("button", { name: "Undo" });
+    expect((undo as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(undo);
+
+    expect(state.board[from].id).toBe(pieceId);
+    expect(container.querySelector(`[data-cell="${from}"]`)
+      ?.parentElement?.querySelector(".three-board-piece")).toBeTruthy();
+    expect(screen.queryByText(/used Construction with Anubis/i)).toBeNull();
+  });
+
   it.each(THREE_PLAYER_BOARD_VARIANTS)(
     "integrates zoom controls with the %s board",
     (boardVariant) => {

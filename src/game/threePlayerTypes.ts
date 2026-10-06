@@ -1,4 +1,9 @@
-import type { GodId, PieceType } from "./types";
+import type {
+  GodId,
+  MoveFirstCandidate,
+  MoveFirstMove,
+  PieceType,
+} from "./types";
 
 export const THREE_PLAYER_SEATS = ["white", "red", "black"] as const;
 export type ThreePlayerSeat = (typeof THREE_PLAYER_SEATS)[number];
@@ -156,6 +161,16 @@ export interface ThreePlayerPendingAction {
   movedPieceId?: string;
   movesRemaining?: number;
   targetSeat?: ThreePlayerSeat;
+  queuedMove?: ThreePlayerQueuedMove;
+}
+
+export interface ThreePlayerQueuedMove {
+  from: ThreePlayerCell;
+  to: ThreePlayerCell;
+  actor: ThreePlayerSeat;
+  turn: number;
+  revision: number;
+  pieceId: string;
 }
 
 export type ThreePlayerResult =
@@ -229,6 +244,12 @@ export interface ThreePlayerMove {
   promotion?: ThreePlayerPromotion;
 }
 
+export type ThreePlayerMoveFirstMove = MoveFirstMove<ThreePlayerCell>;
+export type ThreePlayerMoveFirstCandidate = MoveFirstCandidate<
+  ThreePlayerMoveFirstMove,
+  ThreePlayerOrbAffinity
+>;
+
 export type ThreePlayerAction =
   | { type: "draft"; godId: GodId }
   | { type: "select-god"; godId: GodId }
@@ -245,6 +266,15 @@ export type ThreePlayerAction =
   | { type: "pass" }
   | { type: "cancel" }
   | { type: "upgrade"; abilityId: string }
+  | {
+    type: "commit-move-first";
+    godId: GodId;
+    abilityId: string;
+    move: ThreePlayerMoveFirstMove;
+    expectedSeat: ThreePlayerSeat;
+    expectedTurn: number;
+    expectedRevision: number;
+  }
   | { type: "move"; from: ThreePlayerCell; to: ThreePlayerCell; promotion?: ThreePlayerPromotion }
   | { type: "load"; state: ThreePlayerState }
   | { type: "restart" };

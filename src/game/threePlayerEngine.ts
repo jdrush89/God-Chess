@@ -47,6 +47,8 @@ import {
   type ThreePlayerConfig,
   type ThreePlayerPiece,
   type ThreePlayerOrbAffinity,
+  type ThreePlayerMoveFirstCandidate,
+  type ThreePlayerMoveFirstMove,
   type ThreePlayerSeat,
   type ThreePlayerState,
 } from "./threePlayerTypes";
@@ -56,6 +58,9 @@ import { qualifyingSnake } from "./slither";
 import type { GodId, PieceType } from "./types";
 
 const clone = <T>(value: T): T => structuredClone(value);
+const THREE_PLAYER_FIRST_ABILITY_IDS = new Set(
+  GODS.map((god) => god.abilities[0].id),
+);
 
 const ensureLayer2 = (state: ThreePlayerState) => {
   state.schemaVersion = 2;
@@ -1146,6 +1151,9 @@ const sourceIsAllowed = (state: ThreePlayerState, cell: string) => {
     compelled.length &&
     !compelled.includes(cell)
   ) return false;
+  if (THREE_PLAYER_FIRST_ABILITY_IDS.has(abilityId)) {
+    return piece.controller === state.activeSeat;
+  }
   if (abilityId === "enchant") {
     return hostilePiece(state, piece) &&
       allowedEnchantTypes(level).includes(piece.type);
@@ -1175,8 +1183,22 @@ const sourceIsAllowed = (state: ThreePlayerState, cell: string) => {
   if (abilityId === "mount") {
     return piece.controller === state.activeSeat && piece.type === "knight";
   }
-  if (abilityId === "marked" && piece.type === "king") return false;
   return piece.controller === state.activeSeat;
+};
+
+const firstAbilityNormalMoveTargets = (
+  state: ThreePlayerState,
+  cell: string,
+) => {
+  const piece = state.board[cell];
+  if (
+    !piece ||
+    piece.controller !== state.activeSeat ||
+    piece.status.movedThisTurn
+  ) return [];
+  const compelled = compelledLuredSources(state);
+  if (compelled.length && !compelled.includes(cell)) return [];
+  return constrainLure(state, cell, threePlayerLegalTargets(state, cell));
 };
 
 const ordinaryMoveTargets = (
@@ -1356,6 +1378,9 @@ const sourceTargets = (state: ThreePlayerState, cell: string): string[] => {
   const level = currentLevel(state, abilityId);
   const piece = state.board[cell];
   if (!piece) return [];
+  if (THREE_PLAYER_FIRST_ABILITY_IDS.has(abilityId)) {
+    return firstAbilityNormalMoveTargets(state, cell);
+  }
   if (state.pending?.step === "enchant-followup-move") {
     return ordinaryMoveTargets(state, cell);
   }
@@ -2716,6 +2741,7 @@ const exactMovementPaths = (
   if (
     piece.type === "knight" &&
     piece.status.chargeUntil &&
+    !THREE_PLAYER_FIRST_ABILITY_IDS.has(state.selectedAbility) &&
     ![
       "air-lift",
       "charge",
@@ -2793,6 +2819,61 @@ const exactMovementPaths = (
   return paths.filter((path, index) =>
     paths.findIndex((candidate) => candidate.traceId === path.traceId) === index
   );
+};
+
+const executeCanonicalMoveFirstMove = (
+  state: ThreePlayerState,
+  move: ThreePlayerMoveFirstMove,
+) => {
+  const pieceId = state.board[move.from]?.id;
+  if (
+    !pieceId ||
+    state.pending?.step !== "source" ||
+    !firstAbilityNormalMoveTargets(state, move.from).includes(move.to)
+  ) return false;
+  state.pending.source = move.from;
+  state.selectedCell = move.from;
+  state.legalCells = firstAbilityNormalMoveTargets(state, move.from);
+  const paths = exactMovementPaths(state, move.from, move.to);
+  if (paths.length > 1) {
+    state.pending = {
+      ...state.pending,
+      step: "path-choice",
+      destination: move.to,
+    };
+    state.legalPaths = paths.map((path) => path.traceId);
+    state.legalCells = [];
+    state.notice = "Choose the route for the provisional move.";
+    return true;
+  }
+  state.selectedPath = paths[0]?.traceId;
+  executeMovement(state, move.from, move.to);
+  return true;
+};
+
+const completeQueuedHexMove = (state: ThreePlayerState) => {
+  const queued = state.pending?.queuedMove;
+  if (!queued) {
+    if (state.pending) state.pending.step = "source";
+    state.legalCells = [];
+    state.notice = "The hexes are set. Choose a piece to move.";
+    return;
+  }
+  delete state.pending!.queuedMove;
+  state.pending!.step = "source";
+  state.legalCells = [];
+  if (
+    queued.actor !== state.activeSeat ||
+    queued.turn !== state.turn ||
+    state.board[queued.from]?.id !== queued.pieceId ||
+    !firstAbilityNormalMoveTargets(state, queued.from).includes(queued.to) ||
+    !executeCanonicalMoveFirstMove(state, queued)
+  ) {
+    state.selectedCell = undefined;
+    state.selectedPath = undefined;
+    state.legalPaths = [];
+    state.notice = "The queued provisional move is no longer legal. Choose a piece to move.";
+  }
 };
 
 const handleCell = (state: ThreePlayerState, cell: string) => {
@@ -3099,9 +3180,7 @@ const handleCell = (state: ThreePlayerState, cell: string) => {
     ];
     state.pending.selected = selected;
     if (selected.length >= currentLevel(state, "hex")) {
-      state.pending.step = "source";
-      state.legalCells = [];
-      state.notice = "The hexes are set. Choose a piece to move.";
+      completeQueuedHexMove(state);
     } else {
       state.legalCells = state.legalCells!.filter(
         (candidate) => candidate !== cell,
@@ -3292,8 +3371,7 @@ const handlePass = (state: ThreePlayerState) => {
     state.pending?.step === "hex-target" &&
     state.pending.selected?.length
   ) {
-    state.pending.step = "source";
-    state.legalCells = [];
+    completeQueuedHexMove(state);
     return;
   }
   if (state.pending?.step === "barter-orb") {
@@ -3510,6 +3588,196 @@ const canPassAction = (state: ThreePlayerState) =>
     Boolean(state.pending.selected?.length)
   );
 
+export const canStartThreePlayerMoveFirst = (state: ThreePlayerState) =>
+  state.phase === "play" &&
+  !state.result &&
+  !state.selectedGod &&
+  !state.selectedAbility &&
+  !state.selectedCell &&
+  !state.selectedPath &&
+  !state.pending &&
+  state.legalCells.length === 0 &&
+  state.legalSeats.length === 0 &&
+  state.legalPaths.length === 0;
+
+export const threePlayerMoveFirstTargets = (
+  state: ThreePlayerState,
+  source: string,
+) => canStartThreePlayerMoveFirst(state)
+  ? firstAbilityNormalMoveTargets(state, source)
+  : [];
+
+export const threePlayerMoveFirstSources = (state: ThreePlayerState) =>
+  canStartThreePlayerMoveFirst(state)
+    ? Object.keys(state.board).filter(
+      (cell) => firstAbilityNormalMoveTargets(state, cell).length > 0,
+    )
+    : [];
+
+const threePlayerMoveFirstConditionalOutcome = (
+  abilityId: string,
+  level: number,
+  requiresPreMoveChoice: boolean,
+  followUpStep?: string,
+) => {
+  if (abilityId === "ritual-sacrifice") {
+    return level >= 3
+      ? "This Goad grants 0 now. If this piece is captured before Kangus next acts, gain 4 light and 4 dark orbs."
+      : level >= 2
+        ? "This Goad grants 0 now. If this piece is captured before Kangus next acts, gain 3 light and 3 dark orbs."
+        : "This Goad grants 0 now. If this piece is captured before the next hostile turn ends, gain 3 light and 3 dark orbs.";
+  }
+  if (abilityId === "marked") {
+    return level >= 3
+      ? "The moved piece grants 0 now. It is Marked; later gain 3 dark when Death claims it, or execute it now for 5 dark."
+      : "The moved piece grants 0 now. It is Marked; gain 3 dark orbs when Death claims it.";
+  }
+  if (abilityId === "barter" && followUpStep?.startsWith("barter-")) {
+    return level >= 3
+      ? "If adjacent to a hostile piece, you may trade 1 orb to take up to 3 of the opposite affinity."
+      : level >= 2
+        ? "If adjacent to a hostile piece, you may trade 1 orb to take up to 2 of the opposite affinity and gain 1 matching the landing cell."
+        : "If adjacent to a hostile piece, you may trade 1 orb to take up to 2 of the opposite affinity.";
+  }
+  if (abilityId === "hex" && requiresPreMoveChoice) {
+    return "Choose Hex target(s) first; the queued move will execute only if it remains legal.";
+  }
+  return undefined;
+};
+
+const threePlayerMoveFirstFollowUpLabel = (step: string) => {
+  if (step === "slither-orb") return "Choose one extra orb.";
+  if (step.startsWith("barter-")) return "Choose whether and with whom to trade.";
+  if (step === "marked-choice") return "Choose whether to execute the Marked piece.";
+  if (step === "hex-target") return "Choose Hex target(s), then the move executes automatically.";
+  if (step === "path-choice") return "Choose the canonical route for this destination.";
+  return "Complete the ability's canonical follow-up.";
+};
+
+const applyThreePlayerMoveFirstCommit = (
+  state: ThreePlayerState,
+  action: Extract<ThreePlayerAction, { type: "commit-move-first" }>,
+) => {
+  if (
+    !canStartThreePlayerMoveFirst(state) ||
+    state.activeSeat !== action.expectedSeat ||
+    state.turn !== action.expectedTurn ||
+    state.revision !== action.expectedRevision
+  ) return false;
+  const god = GOD_BY_ID[action.godId];
+  if (
+    !god ||
+    god.abilities[0].id !== action.abilityId ||
+    !activePlayer(state).gods.includes(action.godId) ||
+    state.rested.includes(action.godId) ||
+    !firstAbilityNormalMoveTargets(state, action.move.from).includes(
+      action.move.to,
+    )
+  ) return false;
+  const pieceId = state.board[action.move.from]?.id;
+  if (!pieceId) return false;
+
+  selectGod(state, action.godId);
+  activateAbility(state, action.abilityId);
+  if (
+    state.selectedGod !== action.godId ||
+    state.selectedAbility !== action.abilityId ||
+    !state.pending
+  ) return false;
+  if (state.pending.step === "hex-target") {
+    state.pending.queuedMove = {
+      ...action.move,
+      actor: action.expectedSeat,
+      turn: action.expectedTurn,
+      revision: action.expectedRevision,
+      pieceId,
+    };
+    state.notice = `${state.notice} The ${action.move.from} -> ${action.move.to} move is queued and has not changed the board.`;
+    return true;
+  }
+  return executeCanonicalMoveFirstMove(state, action.move);
+};
+
+const withoutThreePlayerTurnResolution = <T>(run: () => T) => {
+  completeTurnSearchDepth += 1;
+  try {
+    return run();
+  } finally {
+    completeTurnSearchDepth -= 1;
+  }
+};
+
+export const threePlayerMoveFirstCandidates = (
+  state: ThreePlayerState,
+  move: ThreePlayerMoveFirstMove,
+): ThreePlayerMoveFirstCandidate[] => {
+  if (!threePlayerMoveFirstTargets(state, move.from).includes(move.to)) {
+    return [];
+  }
+  const seat = state.activeSeat;
+  const before = state.players[seat].orbs;
+  return GODS
+    .filter((god) =>
+      state.players[seat].gods.includes(god.id) &&
+      !state.rested.includes(god.id)
+    )
+    .map((god) => {
+      const ability = god.abilities[0];
+      const action: Extract<
+        ThreePlayerAction,
+        { type: "commit-move-first" }
+      > = {
+        type: "commit-move-first",
+        godId: god.id,
+        abilityId: ability.id,
+        move,
+        expectedSeat: seat,
+        expectedTurn: state.turn,
+        expectedRevision: state.revision,
+      };
+      const next = withoutThreePlayerTurnResolution(
+        () => threePlayerReducer(state, action),
+      );
+      const valid = next !== state;
+      const pending = valid &&
+          next.activeSeat === seat &&
+          next.turn === state.turn &&
+          next.pending?.abilityId === ability.id
+        ? next.pending
+        : undefined;
+      const requiresPreMoveChoice = pending?.step === "hex-target" &&
+        Boolean(pending.queuedMove);
+      const after = next.players[seat].orbs;
+      const level = abilityLevel(state.players[seat].upgrades, ability.id);
+      return {
+        godId: god.id,
+        abilityId: ability.id,
+        move,
+        immediateOrbDelta: {
+          light: valid ? after.light - before.light : 0,
+          dark: valid ? after.dark - before.dark : 0,
+        },
+        conditionalOutcome: threePlayerMoveFirstConditionalOutcome(
+          ability.id,
+          level,
+          requiresPreMoveChoice,
+          pending?.step,
+        ),
+        valid,
+        requiresPreMoveChoice,
+        followUp: pending && pending.step !== "source"
+          ? {
+            step: pending.step,
+            label: threePlayerMoveFirstFollowUpLabel(pending.step),
+          }
+          : undefined,
+        error: valid
+          ? undefined
+          : "This move is no longer valid for that ability.",
+      };
+    });
+};
+
 export const availableThreePlayerActions = (
   input: ThreePlayerState,
 ): ThreePlayerAction[] => {
@@ -3668,6 +3936,11 @@ export const threePlayerReducer = (
   const actorTurns = state.completedTurns[actor];
   if (action.type === "draft" && next.phase === "draft") {
     reduceDraft(next, action.godId);
+  } else if (
+    action.type === "commit-move-first" &&
+    next.phase === "play"
+  ) {
+    if (!applyThreePlayerMoveFirstCommit(next, action)) return state;
   } else if (action.type === "move" && next.phase === "play") {
     reduceMove(next, action);
   } else if (action.type === "upgrade" && next.phase === "upgrade") {

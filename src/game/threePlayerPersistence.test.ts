@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { createDefaultThreePlayerConfig } from "./threePlayerConfig";
 import {
   createThreePlayerGame,
+  threePlayerMoveFirstSources,
+  threePlayerMoveFirstTargets,
   threePlayerReducer,
 } from "./threePlayerEngine";
 import {
@@ -85,6 +87,40 @@ describe("three-player persistence", () => {
 
     expect(prepared.board[cell].status.hexedBy).toBe("red");
     expect(isThreePlayerState(prepared)).toBe(true);
+  });
+
+  it("persists only canonical queued Hex move-first state", () => {
+    let state = finishDraft();
+    state.players.white.gods = ["salem", "quetzacoatl", "chiron"];
+    state.players.red.gods = ["anubis", "teles", "artemis"];
+    state.players.black.gods = ["kangus", "death", "leonidas"];
+    state.draft.unused = ["medusa", "midas", "ares"];
+    const from = threePlayerMoveFirstSources(state)[0];
+    const to = threePlayerMoveFirstTargets(state, from)[0];
+    const queued = threePlayerReducer(state, {
+      type: "commit-move-first",
+      godId: "salem",
+      abilityId: "hex",
+      move: { from, to },
+      expectedSeat: "white",
+      expectedTurn: state.turn,
+      expectedRevision: state.revision,
+    });
+
+    expect(prepareThreePlayerState(structuredClone(queued))).toEqual(queued);
+    expect(threePlayerReducer(queued, {
+      type: "load",
+      state: structuredClone(queued),
+    }).pending?.queuedMove).toEqual(queued.pending?.queuedMove);
+    const badPiece = structuredClone(queued);
+    badPiece.pending!.queuedMove!.pieceId = "forged-piece";
+    expect(isThreePlayerState(badPiece)).toBe(false);
+    const stale = structuredClone(queued);
+    stale.pending!.queuedMove!.revision += 1;
+    expect(isThreePlayerState(stale)).toBe(false);
+    const mutated = structuredClone(queued);
+    mutated.pending!.queuedMove!.to = "not-a-cell";
+    expect(isThreePlayerState(mutated)).toBe(false);
   });
 
   it("round-trips canonical states for every topology", () => {
