@@ -164,7 +164,7 @@ describe("chess movement", () => {
       .toThrow(/cannot capture a King/);
   });
 
-  it("does not let Marked select a King for delayed or immediate execution", () => {
+  it("lets Marked move a King while keeping King-death rules intact", () => {
     let state = createGame(1);
     (["death", "chiron", "teles", "midas", "ares", "artemis"] as const)
       .forEach((godId) => {
@@ -172,6 +172,10 @@ describe("chess movement", () => {
       });
     state.players.white.orbs.black = 10;
     state.players.white.upgrades.marked = 3;
+    state.board = {
+      d4: testPiece("king", "white", "white-king"),
+      h8: testPiece("king", "black", "black-king"),
+    };
 
     state = gameReducer(state, { type: "select-god", godId: "death" });
     state = gameReducer(state, {
@@ -179,7 +183,8 @@ describe("chess movement", () => {
       abilityId: "marked",
     });
 
-    expect(state.legalTargets).not.toContain("e1");
+    state = gameReducer(state, { type: "square", square: "d4" });
+    expect(state.legalTargets).toContain("d5");
   });
 });
 

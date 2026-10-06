@@ -19,6 +19,10 @@ body { margin: 0; min-width: 320px; min-height: 100vh; overflow-x: hidden; }
 button { font: inherit; }
 button:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; }
 
+@media (max-width: 319px) {
+  body { min-width: 0; }
+}
+
 body::before {
   content: "";
   position: fixed;
@@ -499,6 +503,16 @@ body::before {
   border: 2px solid rgba(118,181,204,.9);
   box-shadow: inset 0 0 16px rgba(71,145,174,.32), 0 0 10px rgba(95,169,197,.28);
 }
+.board-square.provisional-source::after {
+  content: ""; position: absolute; inset: 0; z-index: 2;
+  background: rgba(67,132,164,.2);
+  box-shadow: inset 0 0 0 4px rgba(111,190,224,.92);
+}
+.board-square.provisional-destination::after {
+  content: ""; position: absolute; inset: 0; z-index: 2;
+  background: rgba(207,166,77,.22);
+  box-shadow: inset 0 0 0 4px rgba(235,197,113,.96);
+}
 .effect-preview-icon {
   position: absolute; z-index: 5; top: 4px; left: 4px; width: 15px; height: 15px; display: grid; place-items: center;
   color: #dff7ff; background: #315f73; border: 1px solid rgba(220,247,255,.72); border-radius: 3px;
@@ -700,6 +714,44 @@ span.move-target-dot {
 .ability-pending .action-buttons { flex-wrap: wrap; padding-top: 2px; }
 .ability-pending .action-buttons > button { min-width: 0; }
 .ability-pending .grave-picker { border-top: 0; padding-top: 4px; }
+.move-first-prompt, .move-first-heading {
+  padding: 22px 18px; border-bottom: 1px solid var(--line);
+  background: linear-gradient(145deg, rgba(80,150,181,.09), rgba(198,161,91,.05));
+}
+.move-first-prompt strong, .move-first-heading strong {
+  display: block; color: #eee9df; font: 600 16px "Cinzel";
+}
+.move-first-prompt p, .move-first-heading p {
+  margin: 8px 0 14px; color: #aaa69d; font-size: 11px; line-height: 1.55;
+}
+.move-first-heading > span {
+  display: block; margin-bottom: 7px; color: #7fb5ca;
+  font-size: 8px; font-weight: 700; letter-spacing: .18em;
+}
+.move-first-heading .secondary-button {
+  width: 100%; display: flex; align-items: center; justify-content: center; gap: 7px;
+}
+.move-first-chooser, .move-first-ability-list { min-width: 0; }
+@media (max-width: 430px) {
+  body:has(.three-game-page .move-first-chooser) { min-width: 0; }
+}
+.move-first-reward { padding: 12px 14px; }
+.move-first-reward > span {
+  color: #767880; font-size: 8px; font-weight: 700; letter-spacing: .14em;
+}
+.move-first-reward > div {
+  display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 8px;
+}
+.move-first-reward b {
+  display: inline-flex; align-items: center; gap: 6px; color: #e7e1d6;
+  font-size: 11px; font-weight: 600;
+}
+.move-first-reward .orb { width: 13px; height: 13px; }
+.move-first-reward p, .move-first-reward small {
+  display: block; margin: 9px 0 0; color: #a7a39b; font-size: 10px; line-height: 1.5;
+}
+.move-first-reward small { color: #d3bd87; }
+.move-first-reward .move-first-error { color: #d98b7b; }
 .ability-topline { display: flex; align-items: center; justify-content: space-between; }
 .ability-topline strong { font: 600 12px "Cinzel"; }
 .level-pips { display: flex; gap: 3px; }
@@ -1482,6 +1534,9 @@ span.move-target-dot {
   .turn-notice p { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .god-list { grid-template-columns: 1fr; }
   .action-panel { border-left: 0; border-right: 0; }
+  .move-first-heading, .move-first-prompt { padding: 18px 14px; }
+  .move-first-ability-list { padding: 8px; }
+  .move-first-reward > div { justify-content: space-between; gap: 8px; }
   .rules-modal, .gameover-modal, .save-game-modal, .start-game-modal, .settings-modal, .account-modal { padding: 28px 18px; }
   .start-game-header > span { display: none; }
   .start-game-content { justify-content: flex-start; padding: 28px 12px 36px; }
@@ -1605,6 +1660,12 @@ span.move-target-dot {
 .three-board-cell.dark { fill: #514e4c; }
 .three-board-cell.neutral { fill: #777a80; }
 .three-board-cell.selected { stroke: #f5d98e; stroke-width: .18; filter: brightness(1.14); }
+.three-board-cell.provisional-source {
+  stroke: #6fbde0; stroke-width: .24; filter: brightness(1.18);
+}
+.three-board-cell.provisional-destination {
+  stroke: #ebc571; stroke-width: .24; filter: brightness(1.2);
+}
 .three-board-cell.legal-occupied { stroke: #a23f38; stroke-width: .2; }
 .three-board-cell.legal-source { stroke: #418ba8; stroke-width: .24; filter: brightness(1.22); }
 .three-board-cell.effect-preview {
@@ -2181,6 +2242,16 @@ span.move-target-dot {
   border: max(1px, .55cqi) solid rgba(65,139,168,.92);
   box-shadow: inset 0 0 9px rgba(65,139,168,.3);
 }
+.four-board-square.provisional-source::after {
+  content: ""; position: absolute; inset: 0; z-index: 2;
+  background: rgba(67,132,164,.2);
+  box-shadow: inset 0 0 0 max(2px, .65cqi) rgba(111,190,224,.92);
+}
+.four-board-square.provisional-destination::after {
+  content: ""; position: absolute; inset: 0; z-index: 2;
+  background: rgba(207,166,77,.22);
+  box-shadow: inset 0 0 0 max(2px, .65cqi) rgba(235,197,113,.96);
+}
 .four-chess-piece {
   position: relative; z-index: 3; display: inline-grid; place-items: center;
   color: var(--piece-color); font: clamp(11px, 5.4cqi, 37px)/1 Georgia, serif;
@@ -2250,6 +2321,45 @@ span.move-target-dot {
   margin: 0; padding: 10px 12px; color: #aaa69d; line-height: 1.5;
   overflow-wrap: anywhere;
 }
+.four-move-first-chooser { min-width: 0; }
+.four-move-first-list {
+  min-width: 0; display: grid; gap: 10px; padding: 10px;
+}
+.four-move-first-card {
+  min-width: 0; border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--line));
+  background: rgba(255,255,255,.018);
+}
+.four-move-first-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 72%, #fff);
+  background: color-mix(in srgb, var(--accent) 7%, #151820);
+}
+.four-move-first-card.invalid { opacity: .5; }
+.four-move-first-card > button {
+  width: 100%; min-width: 0; display: grid; gap: 12px; padding: 16px;
+  color: #c8c4bb; background: transparent; border: 0; text-align: left; cursor: pointer;
+}
+.four-move-first-card > button:disabled { cursor: not-allowed; }
+.four-move-first-title {
+  min-width: 0; display: grid; grid-template-columns: 52px minmax(0, 1fr);
+  align-items: center; gap: 12px;
+}
+.four-move-first-title .god-portrait { width: 52px; height: 52px; object-fit: cover; }
+.four-move-first-title span { min-width: 0; }
+.four-move-first-title small {
+  display: block; margin-bottom: 4px; color: #85878e; font-size: 10px;
+  letter-spacing: .08em; overflow-wrap: anywhere;
+}
+.four-move-first-title strong {
+  display: block; color: #f0eadf; font: 600 18px "Cinzel"; overflow-wrap: anywhere;
+}
+.four-move-first-card > button > p {
+  margin: 0; color: #aaa79f; font-size: 16px; line-height: 1.5; overflow-wrap: anywhere;
+}
+.four-move-first-card > button > p b { color: #d8c28e; }
+.four-move-first-card .move-first-reward { padding: 12px 0 0; border-top: 1px solid var(--line); }
+.four-move-first-card .move-first-reward b { font-size: 14px; }
+.four-move-first-card .move-first-reward p,
+.four-move-first-card .move-first-reward small { font-size: 13px; }
 .four-ability-card-main > div { display: flex; gap: 8px; align-items: center; }
 .four-ability-card .orb-count { font-size: 9px; }
 .four-ability-card .orb { width: 9px; height: 9px; }

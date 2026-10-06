@@ -65,6 +65,8 @@ const isSquare = (value: unknown): value is Square =>
   typeof value === "string" && VALID_SQUARES.has(value);
 const isOrbAffinity = (value: unknown): value is OrbAffinity =>
   value === "light" || value === "dark";
+const isPositiveInteger = (value: unknown): value is number =>
+  typeof value === "number" && Number.isInteger(value) && value >= 1;
 
 export const normalizeFourPlayerAction = (
   value: unknown,
@@ -87,6 +89,38 @@ export const normalizeFourPlayerAction = (
       return hasExactKeys(value, ["type", "abilityId"]) &&
           isAbilityId(value.abilityId)
         ? { type: value.type, abilityId: value.abilityId }
+        : undefined;
+    case "commit-move-first":
+      return hasExactKeys(value, [
+          "type",
+          "godId",
+          "abilityId",
+          "move",
+          "expectedSeat",
+          "expectedTurn",
+          "expectedRound",
+          "expectedBoardIdentity",
+        ]) &&
+          isGodId(value.godId) &&
+          isAbilityId(value.abilityId) &&
+          isRecord(value.move) &&
+          hasExactKeys(value.move, ["from", "to"]) &&
+          isSquare(value.move.from) &&
+          isSquare(value.move.to) &&
+          isSeat(value.expectedSeat) &&
+          isPositiveInteger(value.expectedTurn) &&
+          isPositiveInteger(value.expectedRound) &&
+          isNonEmptyString(value.expectedBoardIdentity)
+        ? {
+          type: "commit-move-first",
+          godId: value.godId,
+          abilityId: value.abilityId,
+          move: { from: value.move.from, to: value.move.to },
+          expectedSeat: value.expectedSeat,
+          expectedTurn: value.expectedTurn,
+          expectedRound: value.expectedRound,
+          expectedBoardIdentity: value.expectedBoardIdentity,
+        }
         : undefined;
     case "square":
       return hasExactKeys(value, ["type", "square"]) && isSquare(value.square)

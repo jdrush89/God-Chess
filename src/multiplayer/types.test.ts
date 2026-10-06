@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createGame } from "../game/engine";
+import { createGame, gameReducer } from "../game/engine";
 import { createFourPlayerGame } from "../game/fourPlayerEngine";
 import { createFourPlayerStateEnvelope } from "../game/fourPlayerSession";
 import { createFourPlayerOnlineConfig } from "./fourPlayerRoom";
@@ -122,6 +122,83 @@ describe("versioned multiplayer protocol", () => {
       action: { type: "orb", orb: "black" },
     });
     expect(normalizeProtocolMessage(message)).toEqual(message);
+  });
+
+  it("round-trips only fully bound classic move-first commits", () => {
+    const action = {
+      type: "commit-move-first" as const,
+      godId: "anubis" as const,
+      abilityId: "construction",
+      move: { from: "e2", to: "e4" },
+      expectedActor: "white" as const,
+      expectedTurn: 1,
+    };
+    const message = createProtocolMessage("classic", "peer", {
+      type: "game_action",
+      action,
+    });
+    expect(normalizeProtocolMessage(message)).toEqual(message);
+    expect(normalizeProtocolMessage({
+      ...message,
+      payload: {
+        type: "game_action",
+        action: {
+          ...action,
+          expectedTurn: 0,
+        },
+      },
+    })).toBeUndefined();
+  });
+
+  it("round-trips reconnect state with a validated queued Hex move", () => {
+    let state = createGame(1, { mode: "online" });
+    for (const godId of [
+      "salem",
+      "ares",
+      "midas",
+      "anubis",
+      "kangus",
+      "death",
+    ] as const) {
+      state = gameReducer(state, { type: "draft", godId });
+    }
+    state.players.white.upgrades.hex = 2;
+    state = gameReducer(state, {
+      type: "commit-move-first",
+      godId: "salem",
+      abilityId: "hex",
+      move: { from: "e2", to: "e4" },
+      expectedActor: "white",
+      expectedTurn: state.turn,
+    });
+    const message = createProtocolMessage("classic", "host", {
+      type: "state_sync",
+      state,
+    });
+    expect(normalizeProtocolMessage(message)).toMatchObject({
+      payload: {
+        type: "state_sync",
+        state: {
+          pending: {
+            abilityId: "hex",
+            step: "hex-target",
+            queuedMove: {
+              from: "e2",
+              to: "e4",
+              actor: "white",
+              turn: state.turn,
+              pieceId: state.board.e2.id,
+            },
+          },
+        },
+      },
+    });
+
+    const forged = structuredClone(message);
+    if (forged.payload.type === "state_sync") {
+      forged.payload.state.pending!.queuedMove!.actor = "black";
+    }
+    expect(normalizeProtocolMessage(forged)).toBeUndefined();
   });
 
   it("round-trips online snapshots with hostile Kings carrying Hex status", () => {

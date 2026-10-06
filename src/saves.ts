@@ -294,6 +294,7 @@ const isPending = (value: unknown): value is PendingAction => {
       "movedPieceId",
       "movesRemaining",
       "mountHistory",
+      "queuedMove",
     ]) ||
     !isGodId(value.godId) ||
     typeof value.abilityId !== "string" ||
@@ -309,7 +310,7 @@ const isPending = (value: unknown): value is PendingAction => {
       (
         Array.isArray(value.selected) &&
         value.selected.every((entry) =>
-          value.abilityId === "mount"
+          value.abilityId === "mount" || value.abilityId === "hex"
             ? typeof entry === "string" && entry.length > 0
             : isSquare(entry)
         ) &&
@@ -324,6 +325,19 @@ const isPending = (value: unknown): value is PendingAction => {
         value.abilityId === "mount" &&
         Array.isArray(value.mountHistory) &&
         value.mountHistory.every((entry) => typeof entry === "string")
+      )
+    ) &&
+    (
+      value.queuedMove === undefined ||
+      (
+        isRecord(value.queuedMove) &&
+        hasOnlyKeys(value.queuedMove, ["from", "to", "actor", "turn", "pieceId"]) &&
+        isSquare(value.queuedMove.from) &&
+        isSquare(value.queuedMove.to) &&
+        isColor(value.queuedMove.actor) &&
+        isInteger(value.queuedMove.turn, 1) &&
+        typeof value.queuedMove.pieceId === "string" &&
+        Boolean(value.queuedMove.pieceId)
       )
     )
   );
@@ -590,6 +604,20 @@ export const isTwoPlayerGameState = (state: unknown): state is GameState => {
       )
     )
   ) return false;
+  if (state.pending?.queuedMove) {
+    const queued = state.pending.queuedMove;
+    const board = state.board as unknown as GameState["board"];
+    if (
+      state.pending.abilityId !== "hex" ||
+      state.pending.step !== "hex-target" ||
+      state.selectedGod !== "salem" ||
+      state.selectedAbility !== "hex" ||
+      queued.actor !== state.activeColor ||
+      queued.turn !== state.turn ||
+      board[queued.from]?.id !== queued.pieceId ||
+      board[queued.from]?.controller !== queued.actor
+    ) return false;
+  }
 
   const allPieceIds = [...boardPieceIds];
   for (const color of COLORS) {

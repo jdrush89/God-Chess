@@ -147,6 +147,35 @@ describe("ThreePlayerBoard", () => {
     expect(container.querySelector(`[data-cell="${target}"]`)?.classList.contains("path")).toBe(true);
   });
 
+  it("announces and distinguishes provisional move-first endpoints", () => {
+    const state = createThreePlayerGame();
+    const source = Object.keys(state.board)[0];
+    const destination = getThreePlayerTopology(
+      state.config.boardVariant,
+    ).cells.find((cell) => !state.board[cell])!;
+    const { container } = render(
+      <ThreePlayerBoard
+        state={state}
+        provisionalSource={source}
+        provisionalDestination={destination}
+      />,
+    );
+
+    expect(screen.getByRole("gridcell", {
+      name: new RegExp(`${source}.*provisional move source`, "i"),
+    })).toBeTruthy();
+    expect(screen.getByRole("gridcell", {
+      name: new RegExp(
+        `${destination}.*provisional move destination, not committed`,
+        "i",
+      ),
+    })).toBeTruthy();
+    expect(container.querySelector(`[data-cell="${source}"]`)
+      ?.classList.contains("provisional-source")).toBe(true);
+    expect(container.querySelector(`[data-cell="${destination}"]`)
+      ?.classList.contains("provisional-destination")).toBe(true);
+  });
+
   it.each(THREE_PLAYER_BOARD_VARIANTS)(
     "renders centered empty-target dots and occupied capture markers on %s",
     (variant) => {

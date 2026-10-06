@@ -22,6 +22,8 @@ import { abilityLevel, GOD_BY_ID, GODS } from "./gods";
 import { hasCompleteTurn } from "./completeTurnSearch";
 import { qualifyingSnake } from "./slither";
 import type {
+  ClassicMoveFirstCandidate,
+  ClassicMoveFirstMove,
   Color,
   GameMode,
   GameState,
@@ -41,6 +43,14 @@ export type GameAction =
   | { type: "select-god"; godId: GodId }
   | { type: "clear-god" }
   | { type: "select-ability"; abilityId: string }
+  | {
+    type: "commit-move-first";
+    godId: GodId;
+    abilityId: string;
+    move: ClassicMoveFirstMove;
+    expectedActor: Color;
+    expectedTurn: number;
+  }
   | { type: "confirm-ability" }
   | { type: "square"; square: Square }
   | { type: "grave"; pieceId: string }
@@ -241,6 +251,10 @@ export const createGame = (
 };
 
 const cloneState = (state: GameState): GameState => structuredClone(state);
+
+const FIRST_ABILITY_IDS = new Set(
+  GODS.map((god) => god.abilities[0].id),
+);
 
 const currentLevel = (state: GameState, abilityId: string) =>
   abilityLevel(state.players[state.activeColor].upgrades, abilityId);
@@ -759,7 +773,6 @@ const sourceIsAllowed = (state: GameState, square: Square) => {
   if (abilityId === "military-funding") return piece.controller === color && piece.type === "pawn";
   if (abilityId === "charge") return piece.controller === color && piece.type === "knight";
   if (abilityId === "mount") return piece.controller === color && piece.type === "knight";
-  if (abilityId === "marked" && piece.type === "king") return false;
   return piece.controller === color;
 };
 
@@ -777,20 +790,19 @@ interface EscortPlan {
 
 const ordinaryMoveTargets = (state: GameState, square: Square) => {
   const piece = state.board[square];
-  if (!piece || piece.controller !== state.activeColor) return [];
+  if (
+    !piece ||
+    piece.controller !== state.activeColor ||
+    piece.status.gazing ||
+    piece.status.frozen ||
+    piece.status.hardened ||
+    piece.status.movedThisTurn
+  ) return [];
   let targets = legalTargets(state.board, square, {
     enPassant: state.enPassant,
     bananas: state.bananas,
+    allowKingCapture: allowsPuzzleKingCapture(state),
   });
-  if (piece.type === "knight" && piece.status.chargeUntil) {
-    targets = [...new Set([
-      ...targets,
-      ...legalTargets(state.board, square, {
-        forceType: "rook",
-        bananas: state.bananas,
-      }),
-    ])];
-  }
   if (!piece.status.luredBy) return targets;
   const queen = Object.entries(state.board).find(
     ([, target]) => target.controller === piece.status.luredBy && target.type === "queen",
@@ -798,6 +810,15 @@ const ordinaryMoveTargets = (state: GameState, square: Square) => {
   if (!queen) return targets;
   const closer = targets.filter((target) => distance(target, queen) < distance(square, queen));
   return closer.length ? closer : targets;
+};
+
+const firstAbilityNormalMoveTargets = (
+  state: GameState,
+  square: Square,
+) => {
+  const compelled = compelledLuredSquares(state);
+  if (compelled.length && !compelled.includes(square)) return [];
+  return ordinaryMoveTargets(state, square);
 };
 
 const enchantFollowupSources = (state: GameState) =>
@@ -924,6 +945,9 @@ const sourceTargets = (state: GameState, square: Square) => {
   if (state.pending?.step === "enchant-followup-move") {
     return ordinaryMoveTargets(state, square);
   }
+  if (FIRST_ABILITY_IDS.has(abilityId)) {
+    return ordinaryMoveTargets(state, square);
+  }
   if (piece.status.hardened && currentLevelForOwner(state, piece.controller, "harden") >= 3) {
     const board = structuredClone(state.board);
     delete board[square].status.hardened;
@@ -941,9 +965,6 @@ const sourceTargets = (state: GameState, square: Square) => {
       bananas: state.bananas,
       allowKingCapture: allowsPuzzleKingCapture(state),
     }));
-  }
-  if (abilityId === "construction") {
-    return constrainLure(legalTargets(state.board, square, { enPassant: state.enPassant, bananas: state.bananas }));
   }
   if (abilityId === "mount") {
     if (piece.type !== "knight") return [];
@@ -1676,6 +1697,7 @@ const executeMovement = (state: GameState, from: Square, to: Square) => {
       destination: result.to,
       movedPieceId: moving.id,
     };
+
     state.selectedSquare = undefined;
     state.legalTargets = enchantFollowupSources(state);
     if (!state.legalTargets.length) {
@@ -1735,6 +1757,43 @@ const executeMovement = (state: GameState, from: Square, to: Square) => {
     return;
   }
   finishTurn(state, abilityDescription(state, `: ${pieceName(moving)} at ${from} -> ${result.to}`));
+};
+
+const queuedMoveIsStillLegal = (state: GameState) => {
+  const queued = state.pending?.queuedMove;
+  if (
+    !queued ||
+    queued.actor !== state.activeColor ||
+    queued.turn !== state.turn ||
+    state.board[queued.from]?.id !== queued.pieceId
+  ) return false;
+  return firstAbilityNormalMoveTargets(state, queued.from).includes(queued.to);
+};
+
+const executeQueuedMove = (state: GameState) => {
+  const queued = state.pending?.queuedMove;
+  if (!queued) return false;
+  if (!queuedMoveIsStillLegal(state)) {
+    state.pending = {
+      ...state.pending!,
+      step: "source",
+      queuedMove: undefined,
+    };
+    state.selectedSquare = undefined;
+    state.legalTargets = [];
+    state.notice = "The queued move is no longer legal. Choose a legal piece and destination.";
+    return false;
+  }
+  state.pending = {
+    ...state.pending!,
+    step: "source",
+    source: queued.from,
+    queuedMove: undefined,
+  };
+  state.selectedSquare = queued.from;
+  state.legalTargets = firstAbilityNormalMoveTargets(state, queued.from);
+  executeMovement(state, queued.from, queued.to);
+  return true;
 };
 
 const executeMarchHome = (state: GameState, kingSquare: Square, companionSquares: Square[]) => {
@@ -2213,10 +2272,12 @@ const handleSquare = (state: GameState, square: Square) => {
     const selected = [...(state.pending.selected ?? []), state.board[square].id];
     const capacity = currentLevel(state, "hex");
     if (selected.length >= capacity) {
+      const hadQueuedMove = Boolean(state.pending.queuedMove);
       state.pending = { ...state.pending, step: "source", selected };
       state.selectedSquare = undefined;
       state.legalTargets = [];
-      state.notice = "The hexes are set. Choose a piece to move.";
+      if (hadQueuedMove) executeQueuedMove(state);
+      else state.notice = "The hexes are set. Choose a piece to move.";
     } else {
       state.pending = { ...state.pending, selected };
       state.legalTargets = state.legalTargets.filter((target) => target !== square);
@@ -2505,6 +2566,187 @@ export const availableClassicActions = (state: GameState): GameAction[] => {
   return actions;
 };
 
+export const canStartClassicMoveFirst = (state: GameState) =>
+  state.phase === "play" &&
+  !state.result &&
+  !state.selectedGod &&
+  !state.selectedAbility &&
+  !state.selectedSquare &&
+  !state.pending &&
+  state.legalTargets.length === 0;
+
+export const classicMoveFirstTargets = (
+  state: GameState,
+  source: Square,
+) => canStartClassicMoveFirst(state)
+  ? firstAbilityNormalMoveTargets(state, source)
+  : [];
+
+export const classicMoveFirstSources = (state: GameState) =>
+  canStartClassicMoveFirst(state)
+    ? Object.keys(state.board).filter(
+      (square) => firstAbilityNormalMoveTargets(state, square).length > 0,
+    )
+    : [];
+
+const moveFirstConditionalOutcome = (
+  abilityId: string,
+  level: number,
+  requiresPreMoveChoice: boolean,
+  followUpStep?: string,
+) => {
+  if (abilityId === "ritual-sacrifice") {
+    return level >= 3
+      ? "This Goad grants 0 now. If this piece is captured before Kangus next acts, gain 4 light and 4 dark orbs."
+      : level >= 2
+        ? "This Goad grants 0 now. If this piece is captured before Kangus next acts, gain 3 light and 3 dark orbs."
+        : "This Goad grants 0 now. If this piece is captured on the opponent's next turn, gain 3 light and 3 dark orbs.";
+  }
+  if (abilityId === "marked") {
+    return level >= 3
+      ? "The moved piece grants 0 now. It is Marked; later gain 3 dark when Death claims it, or execute it now for 5 dark."
+      : "The moved piece grants 0 now. It is Marked; gain 3 dark orbs when Death claims it.";
+  }
+  if (abilityId === "barter") {
+    if (followUpStep !== "barter-choice") return undefined;
+    return level >= 3
+      ? "If adjacent to an enemy, you may trade 1 orb to take up to 3 of the opposite color."
+      : level >= 2
+        ? "If adjacent to an enemy, you may trade 1 orb to take up to 2 of the opposite color and gain 1 matching the landing square."
+        : "If adjacent to an enemy, you may trade 1 orb to take up to 2 of the opposite color.";
+  }
+  if (abilityId === "hex" && requiresPreMoveChoice) {
+    return "Choose Hex target(s) first; the queued move will execute only if it remains legal.";
+  }
+  return undefined;
+};
+
+const moveFirstFollowUpLabel = (step: string) => {
+  if (step === "slither-orb") return "Choose one extra orb.";
+  if (step === "barter-choice") return "Choose whether to trade.";
+  if (step === "marked-choice") return "Choose whether to execute the Marked piece.";
+  if (step === "hex-target") return "Choose Hex target(s), then the move executes automatically.";
+  return "Complete the ability's canonical follow-up.";
+};
+
+const applyMoveFirstCommit = (
+  state: GameState,
+  action: Extract<GameAction, { type: "commit-move-first" }>,
+) => {
+  if (
+    !canStartClassicMoveFirst(state) ||
+    state.activeColor !== action.expectedActor ||
+    state.turn !== action.expectedTurn
+  ) return false;
+  const god = GOD_BY_ID[action.godId];
+  if (
+    !god ||
+    god.abilities[0].id !== action.abilityId ||
+    !state.players[state.activeColor].gods.includes(action.godId) ||
+    state.rested.includes(action.godId) ||
+    !firstAbilityNormalMoveTargets(state, action.move.from).includes(action.move.to)
+  ) return false;
+  const pieceId = state.board[action.move.from]?.id;
+  if (!pieceId) return false;
+
+  selectGod(state, action.godId);
+  if (state.selectedGod === action.godId) {
+    present(state, { kind: "god", godId: action.godId });
+  }
+  activateAbility(state, action.abilityId);
+  if (
+    state.selectedGod !== action.godId ||
+    state.selectedAbility !== action.abilityId ||
+    !state.pending
+  ) return false;
+  present(state, {
+    kind: "ability",
+    godId: action.godId,
+    abilityId: action.abilityId,
+  });
+  if (state.pending.step === "hex-target") {
+    state.pending.queuedMove = {
+      ...action.move,
+      actor: action.expectedActor,
+      turn: action.expectedTurn,
+      pieceId,
+    };
+    state.notice = `${state.notice} Your ${action.move.from} -> ${action.move.to} move is queued and not committed yet.`;
+    return true;
+  }
+  if (
+    state.pending.step !== "source" ||
+    state.board[action.move.from]?.id !== pieceId ||
+    !sourceIsAllowed(state, action.move.from) ||
+    !sourceTargets(state, action.move.from).includes(action.move.to)
+  ) return false;
+  state.pending.source = action.move.from;
+  state.selectedSquare = action.move.from;
+  state.legalTargets = sourceTargets(state, action.move.from);
+  executeMovement(state, action.move.from, action.move.to);
+  return true;
+};
+
+export const classicMoveFirstCandidates = (
+  state: GameState,
+  move: ClassicMoveFirstMove,
+): ClassicMoveFirstCandidate[] => {
+  if (!classicMoveFirstTargets(state, move.from).includes(move.to)) return [];
+  const before = state.players[state.activeColor].orbs;
+  return GODS
+    .filter((god) =>
+      state.players[state.activeColor].gods.includes(god.id) &&
+      !state.rested.includes(god.id)
+    )
+    .map((god) => {
+      const ability = god.abilities[0];
+      const action: Extract<GameAction, { type: "commit-move-first" }> = {
+        type: "commit-move-first",
+        godId: god.id,
+        abilityId: ability.id,
+        move,
+        expectedActor: state.activeColor,
+        expectedTurn: state.turn,
+      };
+      const next = withoutClassicTurnResolution(() => gameReducer(state, action));
+      const valid = next !== state;
+      const pending = valid &&
+          next.activeColor === state.activeColor &&
+          next.turn === state.turn &&
+          next.pending?.abilityId === ability.id
+        ? next.pending
+        : undefined;
+      const requiresPreMoveChoice = pending?.step === "hex-target" &&
+        Boolean(pending.queuedMove);
+      const after = next.players[state.activeColor].orbs;
+      const level = currentLevelForOwner(state, state.activeColor, ability.id);
+      return {
+        godId: god.id,
+        abilityId: ability.id,
+        move,
+        immediateOrbDelta: {
+          white: valid ? after.white - before.white : 0,
+          black: valid ? after.black - before.black : 0,
+        },
+        conditionalOutcome: moveFirstConditionalOutcome(
+          ability.id,
+          level,
+          requiresPreMoveChoice,
+          pending?.step,
+        ),
+        valid,
+        requiresPreMoveChoice,
+        followUp: pending && pending.step !== "source"
+          ? {
+            step: pending.step,
+            label: moveFirstFollowUpLabel(pending.step),
+          }
+          : undefined,
+        error: valid ? undefined : "This move is no longer valid for that ability.",
+      };
+    });
+};
+
 export const classicPlanStateSignature = (state: GameState) => JSON.stringify({
   phase: state.phase,
   activeColor: state.activeColor,
@@ -2715,6 +2957,8 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
   const animationSource =
     action.type === "square"
       ? action.square
+      : action.type === "commit-move-first"
+        ? action.move.to
       : action.type === "barter" || action.type === "siphon" || action.type === "orb"
         ? state.pending?.destination
         : action.type === "marked-execute" && state.pending?.movedPieceId
@@ -2728,6 +2972,9 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
   next.nextPresentationId ??= 1;
   if (action.type === "draft" && next.phase === "draft") draftGod(next, action.godId);
   else if (action.type === "auto-draft" && next.phase === "draft") draftGod(next, action.godId);
+  else if (action.type === "commit-move-first" && next.phase === "play") {
+    if (!applyMoveFirstCommit(next, action)) return state;
+  }
   else if (action.type === "select-god" && next.phase === "play") {
     if (hasCommittedClassicAction(next)) return state;
     selectGod(next, action.godId);
@@ -2917,9 +3164,11 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
     } else if (next.pending?.step === "funding") {
       finishTurn(next, abilityDescription(next, ": completed the pawn movement"));
     } else if (next.pending?.step === "hex-target" && next.pending.selected?.length) {
+      const hadQueuedMove = Boolean(next.pending.queuedMove);
       next.pending.step = "source";
       next.legalTargets = [];
-      next.notice = "The hexes are set. Choose a piece to move.";
+      if (hadQueuedMove) executeQueuedMove(next);
+      else next.notice = "The hexes are set. Choose a piece to move.";
     } else if (next.pending?.step === "march-companions" && next.pending.source) {
       executeMarchHome(next, next.pending.source, next.pending.selected ?? []);
     } else if (

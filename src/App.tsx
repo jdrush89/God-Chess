@@ -44,6 +44,10 @@ import {
   type ClassicAiWorkerResponse,
 } from "./game/ai";
 import {
+  canStartClassicMoveFirst,
+  classicMoveFirstCandidates,
+  classicMoveFirstSources,
+  classicMoveFirstTargets,
   createGame,
   gameReducer,
   hasCommittedClassicAction,
@@ -63,7 +67,7 @@ import {
   type PuzzleDifficulty,
 } from "./game/puzzles";
 import { randomItem } from "./game/random";
-import type { Ability, ActionPresentation, CaptureAnimation, Color, GameMode, GameState, GodId, OrbAnimation, OrbColor, Piece, PuzzleId, Square } from "./game/types";
+import type { Ability, ActionPresentation, CaptureAnimation, ClassicMoveFirstCandidate, ClassicMoveFirstMove, Color, GameMode, GameState, GodId, OrbAnimation, OrbColor, Piece, PuzzleId, Square } from "./game/types";
 import { AccountModal } from "./account/AccountModal";
 import { deleteCloudSavedGame, loadCloudSavedGames, upsertCloudSavedGame } from "./account/cloudSaves";
 import {
@@ -130,6 +134,10 @@ import { SetupNavigationShell } from "./SetupNavigationShell";
 import { AbilityRules, LevelSelector } from "./UpgradePreview";
 
 type GameDispatch = (action: GameAction) => void;
+type MoveFirstDraft = {
+  source: Square;
+  destination?: Square;
+};
 type StartCategory = "local" | "online";
 type PlayerCount = 2 | 3 | 4;
 
@@ -678,10 +686,16 @@ export function ChessBoard({
   state,
   dispatch,
   onInspectSquare,
+  moveFirstDraft,
+  moveFirstTargets = [],
+  onMoveFirstSquare,
 }: {
   state: GameState;
   dispatch: GameDispatch;
   onInspectSquare: (square: Square) => void;
+  moveFirstDraft?: MoveFirstDraft;
+  moveFirstTargets?: Square[];
+  onMoveFirstSquare?: (square: Square) => void;
 }) {
   const displaySquares = useMemo(() => [...allSquares].sort((a, b) => Number(b[1]) - Number(a[1]) || a.localeCompare(b)), []);
   const previewingEffect = state.pending?.step === "confirm-stone-gaze" ||
@@ -698,19 +712,25 @@ export function ChessBoard({
             const [file, rank] = [square[0], square[1]];
             const piece = state.board[square];
             const selected = state.selectedSquare === square;
+            const provisionalSource = moveFirstDraft?.source === square;
+            const provisionalDestination = moveFirstDraft?.destination === square;
             const effectPreview = previewingEffect && state.legalTargets.includes(square);
-            const legal = !previewingEffect && state.legalTargets.includes(square);
+            const legal = !previewingEffect && (
+              state.legalTargets.includes(square) ||
+              moveFirstTargets.includes(square)
+            );
             const banana = state.bananas.find((item) => item.square === square);
             return (
               <button
                 role="gridcell"
-                aria-label={`${square}${piece ? `, ${piece.color} ${piece.type}` : ""}${effectPreview ? ", affected by selected ability" : ""}`}
+                aria-label={`${square}${piece ? `, ${piece.color} ${piece.type}` : ""}${effectPreview ? ", affected by selected ability" : ""}${provisionalSource ? ", provisional move source" : ""}${provisionalDestination ? ", provisional move destination, not committed" : ""}`}
                 data-square={square}
-                className={`board-square ${(file.charCodeAt(0) + Number(rank)) % 2 ? "light" : "dark"} ${selected ? "selected" : ""} ${legal ? "legal" : ""} ${legal && piece ? "legal-occupied" : ""} ${legal && enchantSourceChoice ? "legal-source" : ""} ${legal && !enchantSourceChoice ? "legal-destination" : ""} ${effectPreview ? "effect-preview" : ""}`}
+                className={`board-square ${(file.charCodeAt(0) + Number(rank)) % 2 ? "light" : "dark"} ${selected ? "selected" : ""} ${provisionalSource ? "provisional-source" : ""} ${provisionalDestination ? "provisional-destination" : ""} ${legal ? "legal" : ""} ${legal && piece ? "legal-occupied" : ""} ${legal && enchantSourceChoice ? "legal-source" : ""} ${legal && !enchantSourceChoice ? "legal-destination" : ""} ${effectPreview ? "effect-preview" : ""}`}
                 key={square}
                 onClick={() => {
                   onInspectSquare(square);
-                  dispatch({ type: "square", square });
+                  if (onMoveFirstSquare) onMoveFirstSquare(square);
+                  else dispatch({ type: "square", square });
                 }}
               >
                 {file === "a" && <span className="rank-label">{rank}</span>}
@@ -727,6 +747,77 @@ export function ChessBoard({
             );
           })}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function MoveFirstChooser({
+  state,
+  draft,
+  candidates,
+  onCancel,
+  onCommit,
+}: {
+  state: GameState;
+  draft: MoveFirstDraft;
+  candidates: ClassicMoveFirstCandidate[];
+  onCancel: () => void;
+  onCommit: (candidate: ClassicMoveFirstCandidate) => void;
+}) {
+  if (!draft.destination) {
+    return (
+      <div className="move-first-prompt" role="status">
+        <strong>Ordinary move selected from {draft.source}</strong>
+        <p>Choose a highlighted destination. The board has not changed.</p>
+        <button className="secondary-button" onClick={onCancel}>Back / cancel</button>
+      </div>
+    );
+  }
+  return (
+    <div className="move-first-chooser">
+      <div className="move-first-heading" role="status" aria-live="polite">
+        <span>PROVISIONAL MOVE</span>
+        <strong>{draft.source} → {draft.destination}</strong>
+        <p>Not committed. Choose which God’s first ability applies this move.</p>
+        <button className="secondary-button" onClick={onCancel}>
+          <ArrowLeft size={15} /> Back / cancel
+        </button>
+      </div>
+      <div className="ability-list move-first-ability-list">
+        {candidates.map((candidate) => {
+          const god = GOD_BY_ID[candidate.godId];
+          const ability = god.abilities[0];
+          const level = abilityLevel(
+            state.players[state.activeColor].upgrades,
+            ability.id,
+          );
+          return (
+            <AbilityCard
+              ability={ability}
+              level={level}
+              active={false}
+              selectable={candidate.valid}
+              disabled={!candidate.valid}
+              showCost={false}
+              footerLabel={god.name}
+              footerAction={candidate.requiresPreMoveChoice ? "PRE-MOVE CHOICE" : "COMMIT MOVE"}
+              onClick={() => onCommit(candidate)}
+              key={candidate.godId}
+            >
+              <div className="move-first-reward" aria-label={`${god.name} ${ability.name}: ${candidate.immediateOrbDelta.white} light orbs now and ${candidate.immediateOrbDelta.black} dark orbs now`}>
+                <span>IMMEDIATE ORBS</span>
+                <div>
+                  <b><i className="orb white" /> Light {candidate.immediateOrbDelta.white}</b>
+                  <b><i className="orb black" /> Dark {candidate.immediateOrbDelta.black}</b>
+                </div>
+                {candidate.conditionalOutcome && <p>{candidate.conditionalOutcome}</p>}
+                {candidate.followUp && <small>{candidate.followUp.label}</small>}
+                {candidate.error && <p className="move-first-error">{candidate.error}</p>}
+              </div>
+            </AbilityCard>
+          );
+        })}
       </div>
     </div>
   );
@@ -932,6 +1023,10 @@ export function ActionPanel({
   presentation,
   onInspectGod,
   onCloseInspection,
+  moveFirstDraft,
+  moveFirstCandidates,
+  onCancelMoveFirst,
+  onCommitMoveFirst,
 }: {
   state: GameState;
   dispatch: GameDispatch;
@@ -939,6 +1034,10 @@ export function ActionPanel({
   presentation?: ActionPresentation;
   onInspectGod: (godId: GodId) => void;
   onCloseInspection: () => void;
+  moveFirstDraft?: MoveFirstDraft;
+  moveFirstCandidates?: ClassicMoveFirstCandidate[];
+  onCancelMoveFirst?: () => void;
+  onCommitMoveFirst?: (candidate: ClassicMoveFirstCandidate) => void;
 }) {
   const player = state.players[state.activeColor];
   const presentedGodId = inspectedGodId ?? presentation?.godId ?? state.selectedGod;
@@ -996,6 +1095,14 @@ export function ActionPanel({
             </button>
           </div>
         </>
+      ) : moveFirstDraft && !readOnly && onCancelMoveFirst && onCommitMoveFirst ? (
+        <MoveFirstChooser
+          state={state}
+          draft={moveFirstDraft}
+          candidates={moveFirstCandidates ?? []}
+          onCancel={onCancelMoveFirst}
+          onCommit={onCommitMoveFirst}
+        />
       ) : !selectedGod ? (
         <>
           <div className="god-list">
@@ -2190,6 +2297,7 @@ function GameScreen({
   const [puzzleHintOpen, setPuzzleHintOpen] = useState(false);
   const [inspectedGodId, setInspectedGodId] = useState<GodId>();
   const [inspectedSquare, setInspectedSquare] = useState<Square>();
+  const [moveFirstDraft, setMoveFirstDraft] = useState<MoveFirstDraft>();
   const [graveyardColor, setGraveyardColor] = useState<Color>();
   const gameFinished = !state.puzzleId && state.phase === "gameover";
   const [resultOpen, setResultOpen] = useState(gameFinished);
@@ -2253,6 +2361,30 @@ function GameScreen({
     .map(([square, piece]) => `${piece.id}:${square}`)
     .sort()
     .join(",");
+  const moveFirstEnabled =
+    !inputDisabled &&
+    !gameFinished &&
+    !opponentPresentation &&
+    canStartClassicMoveFirst(state);
+  const moveFirstSources = useMemo(
+    () => new Set(moveFirstEnabled ? classicMoveFirstSources(state) : []),
+    [moveFirstEnabled, state],
+  );
+  const moveFirstTargets = useMemo(
+    () => moveFirstDraft && moveFirstEnabled
+      ? classicMoveFirstTargets(state, moveFirstDraft.source)
+      : [],
+    [moveFirstDraft, moveFirstEnabled, state],
+  );
+  const moveFirstAbilityCandidates = useMemo(
+    () => moveFirstDraft?.destination && moveFirstEnabled
+      ? classicMoveFirstCandidates(state, {
+        from: moveFirstDraft.source,
+        to: moveFirstDraft.destination,
+      })
+      : [],
+    [moveFirstDraft, moveFirstEnabled, state],
+  );
 
   useEffect(() => () => {
     animationTimers.current.forEach((timer) => window.clearTimeout(timer));
@@ -2261,6 +2393,16 @@ function GameScreen({
   useEffect(() => {
     if (state.phase === "upgrade") setInspectedGodId(undefined);
   }, [state.activeColor, state.phase]);
+
+  useEffect(() => {
+    if (!moveFirstEnabled) setMoveFirstDraft(undefined);
+  }, [
+    moveFirstEnabled,
+    state.activeColor,
+    state.board,
+    state.phase,
+    state.turn,
+  ]);
 
   useEffect(() => {
     setPuzzleHintOpen(false);
@@ -2500,6 +2642,11 @@ function GameScreen({
     state.players.black.graveyard.length,
   ]);
 
+  const gameDispatch: GameDispatch = (action) => {
+    if (gameFinished) return;
+    setMoveFirstDraft(undefined);
+    dispatch(action);
+  };
   const handleGodClick = (godId: GodId, color: Color) => {
     if (gameFinished) {
       setInspectedGodId(godId);
@@ -2511,14 +2658,37 @@ function GameScreen({
     }
     if (color === state.activeColor && !state.rested.includes(godId)) {
       setInspectedGodId(undefined);
-      dispatch({ type: "select-god", godId });
+      gameDispatch({ type: "select-god", godId });
       return;
     }
     setInspectedGodId(godId);
   };
-  const gameDispatch: GameDispatch = (action) => {
-    if (gameFinished) return;
-    dispatch(action);
+  const handleMoveFirstSquare = (square: Square) => {
+    if (!moveFirstEnabled) return;
+    setInspectedGodId(undefined);
+    setOpponentPresentation(undefined);
+    setMoveFirstDraft((current) => {
+      if (!current) {
+        return moveFirstSources.has(square) ? { source: square } : undefined;
+      }
+      if (square === current.source) return undefined;
+      if (moveFirstTargets.includes(square)) {
+        return { source: current.source, destination: square };
+      }
+      return moveFirstSources.has(square) ? { source: square } : current;
+    });
+  };
+  const commitMoveFirst = (candidate: ClassicMoveFirstCandidate) => {
+    if (!candidate.valid) return;
+    setMoveFirstDraft(undefined);
+    dispatch({
+      type: "commit-move-first",
+      godId: candidate.godId,
+      abilityId: candidate.abilityId,
+      move: candidate.move,
+      expectedActor: state.activeColor,
+      expectedTurn: state.turn,
+    });
   };
   return (
     <main className={`game-page ${puzzle ? "puzzle-mode" : ""} ${state.lastAction ? "has-last-action" : ""} ${gameFinished ? "finished-view" : ""} ${inputDisabled || opponentPresentation ? "input-locked" : ""}`}>
@@ -2628,6 +2798,9 @@ function GameScreen({
             state={state}
             dispatch={gameDispatch}
             onInspectSquare={setInspectedSquare}
+            moveFirstDraft={moveFirstDraft}
+            moveFirstTargets={moveFirstDraft ? moveFirstTargets : []}
+            onMoveFirstSquare={moveFirstEnabled ? handleMoveFirstSquare : undefined}
           />
           <PlayerBar
             state={state}
@@ -2660,6 +2833,10 @@ function GameScreen({
               presentation={opponentPresentation}
               onInspectGod={setInspectedGodId}
               onCloseInspection={() => setInspectedGodId(undefined)}
+              moveFirstDraft={moveFirstDraft}
+              moveFirstCandidates={moveFirstAbilityCandidates}
+              onCancelMoveFirst={() => setMoveFirstDraft(undefined)}
+              onCommitMoveFirst={commitMoveFirst}
             />
           )}
           <div className="side-square-info" data-layout-fallback="piece-inspector">

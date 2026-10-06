@@ -3,6 +3,8 @@ import { createDefaultThreePlayerConfig } from "./threePlayerConfig";
 import {
   availableThreePlayerActions,
   createThreePlayerGame,
+  threePlayerMoveFirstSources,
+  threePlayerMoveFirstTargets,
   threePlayerReducer,
 } from "./threePlayerEngine";
 import { threePlayerLegalMoves } from "./threePlayerChess";
@@ -183,6 +185,71 @@ describe("three-player session boundaries", () => {
       "white",
       availableThreePlayerActions(state)[0],
     )).toBe(true);
+  });
+
+  it("normalizes and authorizes only exact committed move-first actions", () => {
+    const config = createDefaultThreePlayerConfig();
+    config.seats.white.control = {
+      kind: "online",
+      participantId: "white-player",
+    };
+    let state = createThreePlayerGame(config);
+    for (const god of GODS.slice(0, 9)) {
+      state = threePlayerReducer(state, { type: "draft", godId: god.id });
+    }
+    const from = threePlayerMoveFirstSources(state)[0];
+    const to = threePlayerMoveFirstTargets(state, from)[0];
+    const action = {
+      type: "commit-move-first",
+      godId: "quetzacoatl",
+      abilityId: "flight",
+      move: { from, to },
+      expectedSeat: "white",
+      expectedTurn: state.turn,
+      expectedRevision: state.revision,
+    } as const;
+
+    expect(normalizeThreePlayerAction(action)).toEqual(action);
+    expect(normalizeThreePlayerAction({
+      ...action,
+      move: { ...action.move, extra: true },
+    })).toBeUndefined();
+    expect(canParticipantSubmitThreePlayerAction(
+      state,
+      "white-player",
+      "white",
+      action,
+    )).toBe(true);
+    expect(canParticipantSubmitThreePlayerAction(
+      state,
+      "white-player",
+      "white",
+      { ...action, expectedRevision: state.revision + 1 },
+    )).toBe(false);
+    expect(canParticipantSubmitThreePlayerAction(
+      state,
+      "white-player",
+      "white",
+      { ...action, abilityId: "gallop" },
+    )).toBe(false);
+    const resting = structuredClone(state);
+    resting.rested = ["quetzacoatl"];
+    expect(canParticipantSubmitThreePlayerAction(
+      resting,
+      "white-player",
+      "white",
+      action,
+    )).toBe(false);
+
+    const applied = applyAuthorizedThreePlayerAction(state, {
+      revision: state.revision,
+      actionId: "move-first-1",
+      participantId: "white-player",
+      seat: "white",
+      action,
+    }, state.revision);
+    expect(applied.lastActionId).toBe("move-first-1");
+    expect(applied.state.board[to]?.id).toBe(state.board[from].id);
   });
 
   it("normalizes revisioned snapshots and requires unanimous undo consent", () => {

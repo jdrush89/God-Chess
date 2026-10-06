@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { createDefaultFourPlayerConfig } from "./fourPlayerConfig";
-import { createFourPlayerGame } from "./fourPlayerEngine";
+import {
+  createFourPlayerGame,
+  fourPlayerMoveFirstBoardIdentity,
+  fourPlayerMoveFirstSources,
+  fourPlayerMoveFirstTargets,
+} from "./fourPlayerEngine";
 import {
   applyAuthorizedFourPlayerAction,
   approveFourPlayerUndo,
@@ -31,6 +36,14 @@ const onlineGame = () => {
 describe("four-player layer-three session seams", () => {
   it("strictly validates every decoded action variant and envelope field", () => {
     const state = onlineGame();
+    const moveSource = fourPlayerMoveFirstSources({
+      ...state,
+      phase: "play",
+    })[0];
+    const moveTarget = fourPlayerMoveFirstTargets({
+      ...state,
+      phase: "play",
+    }, moveSource)[0];
     const validActions: FourPlayerAction[] = [
       { type: "draft", godId: "ares" },
       { type: "select-god", godId: "ares" },
@@ -47,6 +60,16 @@ describe("four-player layer-three session seams", () => {
       { type: "pass" },
       { type: "cancel" },
       { type: "upgrade", abilityId: "threaten" },
+      {
+        type: "commit-move-first",
+        godId: "ares",
+        abilityId: "threaten",
+        move: { from: moveSource, to: moveTarget },
+        expectedSeat: "north",
+        expectedTurn: state.turn,
+        expectedRound: state.round,
+        expectedBoardIdentity: fourPlayerMoveFirstBoardIdentity(state),
+      },
       { type: "load", state },
       { type: "restart" },
     ];
@@ -64,6 +87,16 @@ describe("four-player layer-three session seams", () => {
       { type: "square", square: "z99" },
       { type: "draft", godId: "unknown" },
       { type: "select-ability", abilityId: "unknown" },
+      {
+        type: "commit-move-first",
+        godId: "ares",
+        abilityId: "threaten",
+        move: { from: "g14", to: "z99" },
+        expectedSeat: "north",
+        expectedTurn: 1,
+        expectedRound: 1,
+        expectedBoardIdentity: "board",
+      },
       { type: "grave", pieceId: "" },
       { type: "load", state: {} },
       { type: "unknown" },
@@ -108,6 +141,51 @@ describe("four-player layer-three session seams", () => {
       seat: "east",
       action: { type: "draft", godId: "ares" },
     }, 4)).toThrow(/not authorized/i);
+  });
+
+  it("authorizes one canonical move-first commit and rejects forged bindings", () => {
+    const state = onlineGame();
+    state.phase = "play";
+    state.players.north.gods = ["anubis"];
+    state.players.north.orbs = { light: 20, dark: 20 };
+    const from = fourPlayerMoveFirstSources(state)[0];
+    const to = fourPlayerMoveFirstTargets(state, from)[0];
+    const action: FourPlayerAction = {
+      type: "commit-move-first",
+      godId: "anubis",
+      abilityId: "construction",
+      move: { from, to },
+      expectedSeat: "north",
+      expectedTurn: state.turn,
+      expectedRound: state.round,
+      expectedBoardIdentity: fourPlayerMoveFirstBoardIdentity(state),
+    };
+    const envelope = {
+      revision: 8,
+      actionId: "move-first-1",
+      participantId: "host",
+      seat: "north",
+      action,
+    };
+    const applied = applyAuthorizedFourPlayerAction(state, envelope, 8);
+    expect(applied.revision).toBe(9);
+    expect(applied.state.history[0]).toMatch(/Construction.*Anubis/i);
+
+    expect(() => applyAuthorizedFourPlayerAction(state, {
+      ...envelope,
+      actionId: "forged-seat",
+      action: { ...action, expectedSeat: "east" },
+    }, 8)).toThrow(/not authorized/i);
+    expect(() => applyAuthorizedFourPlayerAction(state, {
+      ...envelope,
+      revision: 7,
+      actionId: "stale",
+    }, 8)).toThrow(/revision/i);
+    expect(() => applyAuthorizedFourPlayerAction(state, {
+      ...envelope,
+      participantId: "spectator",
+      actionId: "spectator",
+    }, 8)).toThrow(/not authorized/i);
   });
 
   it("normalizes strict revisioned state snapshots", () => {

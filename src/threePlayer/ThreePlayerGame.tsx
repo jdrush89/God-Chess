@@ -42,6 +42,10 @@ import {
 } from "../game/threePlayerDivineGeometry";
 import {
   availableThreePlayerActions,
+  canStartThreePlayerMoveFirst,
+  threePlayerMoveFirstCandidates,
+  threePlayerMoveFirstSources,
+  threePlayerMoveFirstTargets,
   threePlayerReducer,
 } from "../game/threePlayerEngine";
 import type { ThreePlayerUndoStatus } from "../multiplayer/types";
@@ -53,6 +57,7 @@ import {
   THREE_PLAYER_SEATS,
   type ThreePlayerAction,
   type ThreePlayerCell,
+  type ThreePlayerMoveFirstCandidate,
   type ThreePlayerPiece,
   type ThreePlayerPieceStatus,
   type ThreePlayerSeat,
@@ -75,6 +80,10 @@ import {
 } from "./presentation";
 
 type UiAction = ThreePlayerAction | ({ type: string } & Record<string, unknown>);
+interface MoveFirstDraft {
+  source: ThreePlayerCell;
+  destination?: ThreePlayerCell;
+}
 type UiState = Omit<
   ThreePlayerState,
   "phase" | "legalPaths" | "pending" | "bananas"
@@ -830,6 +839,84 @@ function ThreePlayerUndoOverlay({
   );
 }
 
+function ThreePlayerMoveFirstChooser({
+  state,
+  draft,
+  candidates,
+  onCancel,
+  onCommit,
+}: {
+  state: ThreePlayerState;
+  draft: MoveFirstDraft;
+  candidates: ThreePlayerMoveFirstCandidate[];
+  onCancel: () => void;
+  onCommit: (candidate: ThreePlayerMoveFirstCandidate) => void;
+}) {
+  if (!draft.destination) {
+    return (
+      <div className="move-first-prompt" role="status">
+        <strong>Ordinary move selected from {draft.source}</strong>
+        <p>Choose a highlighted destination. The board has not changed.</p>
+        <button className="secondary-button" onClick={onCancel}>
+          Back / cancel
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="move-first-chooser">
+      <div className="move-first-heading" role="status" aria-live="polite">
+        <span>PROVISIONAL MOVE</span>
+        <strong>{draft.source} → {draft.destination}</strong>
+        <p>Not committed. Choose which God’s first ability applies this move.</p>
+        <button className="secondary-button" onClick={onCancel}>
+          <ArrowLeft size={15} /> Back / cancel
+        </button>
+      </div>
+      <div className="ability-list move-first-ability-list">
+        {candidates.map((candidate) => {
+          const god = GOD_BY_ID[candidate.godId];
+          const ability = god.abilities[0];
+          const level = abilityLevel(
+            state.players[state.activeSeat].upgrades,
+            ability.id,
+          );
+          return (
+            <PlayerAbilityCard
+              ability={ability}
+              level={level}
+              active={false}
+              selectable={candidate.valid}
+              disabled={!candidate.valid}
+              showCost={false}
+              footerLabel={god.name}
+              footerAction={candidate.requiresPreMoveChoice
+                ? "PRE-MOVE CHOICE"
+                : "COMMIT MOVE"}
+              onClick={() => onCommit(candidate)}
+              key={candidate.godId}
+            >
+              <div
+                className="move-first-reward"
+                aria-label={`${god.name} ${ability.name}: ${candidate.immediateOrbDelta.light} light orbs now and ${candidate.immediateOrbDelta.dark} dark orbs now`}
+              >
+                <span>IMMEDIATE ORBS</span>
+                <div>
+                  <b><i className="orb white" /> Light {candidate.immediateOrbDelta.light}</b>
+                  <b><i className="orb black" /> Dark {candidate.immediateOrbDelta.dark}</b>
+                </div>
+                {candidate.conditionalOutcome && <p>{candidate.conditionalOutcome}</p>}
+                {candidate.followUp && <small>{candidate.followUp.label}</small>}
+                {candidate.error && <p className="move-first-error">{candidate.error}</p>}
+              </div>
+            </PlayerAbilityCard>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export interface ThreePlayerOnlineSession {
   roomCode: string;
   role: "host" | "peer";
@@ -877,6 +964,7 @@ export function ThreePlayerGame({
   const stateRef = useRef(state);
   stateRef.current = state;
   const [localSelectedCell, setLocalSelectedCell] = useState<ThreePlayerCell>();
+  const [moveFirstDraft, setMoveFirstDraft] = useState<MoveFirstDraft>();
   const [inspectedCell, setInspectedCell] = useState<ThreePlayerCell>();
   const [previewLevel, setPreviewLevel] = useState<number>();
   const [inspectedGod, setInspectedGod] = useState<GodId>();
@@ -924,6 +1012,34 @@ export function ThreePlayerGame({
     : state.phase === "gameover" ||
       isThreePlayerAiTurn(state as ThreePlayerState));
   const selectedCell = state.selectedCell ?? localSelectedCell;
+  const moveFirstEnabled = !inputDisabled &&
+    canStartThreePlayerMoveFirst(state as ThreePlayerState);
+  const moveFirstSources = useMemo(
+    () => new Set(
+      moveFirstEnabled
+        ? threePlayerMoveFirstSources(state as ThreePlayerState)
+        : [],
+    ),
+    [moveFirstEnabled, state],
+  );
+  const moveFirstTargets = useMemo(
+    () => moveFirstDraft && moveFirstEnabled
+      ? threePlayerMoveFirstTargets(
+        state as ThreePlayerState,
+        moveFirstDraft.source,
+      )
+      : [],
+    [moveFirstDraft, moveFirstEnabled, state],
+  );
+  const moveFirstAbilityCandidates = useMemo(
+    () => moveFirstDraft?.destination && moveFirstEnabled
+      ? threePlayerMoveFirstCandidates(state as ThreePlayerState, {
+        from: moveFirstDraft.source,
+        to: moveFirstDraft.destination,
+      })
+      : [],
+    [moveFirstDraft, moveFirstEnabled, state],
+  );
   const moveActions = actions.filter((action) => action.type === "move");
   const legalCells = state.legalCells?.length
     ? state.legalCells
@@ -935,6 +1051,8 @@ export function ThreePlayerGame({
         .filter((action) => action.type === "cell")
         .map(actionCell)
         .filter((cell): cell is string => Boolean(cell))
+    : moveFirstDraft
+      ? moveFirstTargets
     : selectedCell
       ? moveActions
         .filter((action) => actionValue<string>(action, "from") === selectedCell)
@@ -949,6 +1067,7 @@ export function ThreePlayerGame({
   ) => {
     const current = stateRef.current;
     if (source === "human" && inputDisabled && !bypassInputLock) return;
+    setMoveFirstDraft(undefined);
     if (onlineSession) {
       if (source === "human") {
         recordDiagnostic({
@@ -1064,9 +1183,19 @@ export function ThreePlayerGame({
     stateRef.current = loaded;
     setState(loaded);
     setLocalSelectedCell(undefined);
+    setMoveFirstDraft(undefined);
     aiPlan.current = [];
     aiRequestRevision.current = undefined;
   }, [initialState, onlineSession?.roomCode]);
+
+  useEffect(() => {
+    if (!moveFirstEnabled) setMoveFirstDraft(undefined);
+  }, [
+    moveFirstEnabled,
+    state.activeSeat,
+    state.phase,
+    state.revision,
+  ]);
 
   useEffect(() => {
     setResultOpen(state.phase === "gameover");
@@ -1210,6 +1339,20 @@ export function ThreePlayerGame({
 
   const selectCell = (cell: ThreePlayerCell) => {
     if (inputDisabled) return;
+    if (moveFirstEnabled) {
+      setInspectedGod(undefined);
+      setMoveFirstDraft((current) => {
+        if (!current) {
+          return moveFirstSources.has(cell) ? { source: cell } : undefined;
+        }
+        if (cell === current.source) return undefined;
+        if (moveFirstTargets.includes(cell)) {
+          return { source: current.source, destination: cell };
+        }
+        return moveFirstSources.has(cell) ? { source: cell } : current;
+      });
+      return;
+    }
     const primitive = actions.find(
       (action) => action.type === "cell" && actionCell(action) === cell,
     );
@@ -1233,6 +1376,19 @@ export function ThreePlayerGame({
     else setLocalSelectedCell(undefined);
   };
 
+  const commitMoveFirst = (candidate: ThreePlayerMoveFirstCandidate) => {
+    if (!candidate.valid) return;
+    dispatchAction({
+      type: "commit-move-first",
+      godId: candidate.godId,
+      abilityId: candidate.abilityId,
+      move: candidate.move,
+      expectedSeat: state.activeSeat,
+      expectedTurn: state.turn,
+      expectedRevision: state.revision,
+    });
+  };
+
   const undo = () => {
     if (onlineSession) {
       if (
@@ -1251,6 +1407,7 @@ export function ThreePlayerGame({
     chainStart.current = undefined;
     aiPlan.current = [];
     setLocalSelectedCell(undefined);
+    setMoveFirstDraft(undefined);
     stateRef.current = clone(snapshot);
     const restored = clone(snapshot);
     setState(restored);
@@ -1486,6 +1643,8 @@ export function ThreePlayerGame({
               <ThreePlayerBoard
                 state={state as ThreePlayerState}
                 selectedCell={selectedCell}
+                provisionalSource={moveFirstDraft?.source}
+                provisionalDestination={moveFirstDraft?.destination}
                 legalCells={legalCells}
                 pathCells={pathCells(state)}
                 disabled={inputDisabled}
@@ -1579,6 +1738,14 @@ export function ThreePlayerGame({
                 </button>
               </div>
             </>
+          ) : moveFirstDraft ? (
+            <ThreePlayerMoveFirstChooser
+              state={state as ThreePlayerState}
+              draft={moveFirstDraft}
+              candidates={moveFirstAbilityCandidates}
+              onCancel={() => setMoveFirstDraft(undefined)}
+              onCommit={commitMoveFirst}
+            />
           ) : !selectedGodDefinition ? (
             <>
               <div className="panel-empty">

@@ -129,7 +129,45 @@ export interface PendingAction {
   movedPieceId?: string;
   movesRemaining?: number;
   mountHistory?: string[];
+  queuedMove?: QueuedClassicMove;
 }
+
+export interface QueuedClassicMove {
+  from: Square;
+  to: Square;
+  actor: Color;
+  turn: number;
+  pieceId: string;
+}
+
+export interface MoveFirstMove<Cell extends string = string> {
+  from: Cell;
+  to: Cell;
+}
+
+export interface MoveFirstCandidate<
+  Move extends MoveFirstMove = MoveFirstMove,
+  Orb extends string = OrbColor,
+> {
+  godId: GodId;
+  abilityId: string;
+  move: Move;
+  immediateOrbDelta: Record<Orb, number>;
+  conditionalOutcome?: string;
+  valid: boolean;
+  requiresPreMoveChoice: boolean;
+  followUp?: {
+    step: string;
+    label: string;
+  };
+  error?: string;
+}
+
+export type ClassicMoveFirstMove = MoveFirstMove<Square>;
+export type ClassicMoveFirstCandidate = MoveFirstCandidate<
+  ClassicMoveFirstMove,
+  OrbColor
+>;
 
 export interface OrbAnimation {
   id: number;
