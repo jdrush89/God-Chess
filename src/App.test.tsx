@@ -634,6 +634,8 @@ describe("game startup", () => {
 
     const resurrectCard = screen.getByText("Resurrect").closest(".ability-card");
     expect(resurrectCard).toBeTruthy();
+    expect(within(resurrectCard as HTMLElement).getByText("Resurrect")
+      .classList.contains("ability-card-title")).toBe(true);
     expect(within(resurrectCard as HTMLElement).getByText(/choose a piece from your graveyard/i)).toBeTruthy();
     expect(within(resurrectCard as HTMLElement).getByText("YOUR GRAVEYARD")).toBeTruthy();
     expect((resurrectCard as HTMLElement).querySelector(".grave-picker")).toBeTruthy();
@@ -991,6 +993,8 @@ describe("game startup", () => {
 
     const airLiftCard = screen.getByText("Air Lift").closest(".ability-card");
     expect(airLiftCard).toBeTruthy();
+    expect(within(airLiftCard as HTMLElement).getByText("Air Lift")
+      .classList.contains("ability-card-title")).toBe(true);
     expect(within(airLiftCard as HTMLElement).getByLabelText("3 white orbs")).toBeTruthy();
     expect(document.querySelectorAll(".upgrade-panel .ability-card")).toHaveLength(9);
     const upgradeList = document.querySelector(".classic-upgrade-list");

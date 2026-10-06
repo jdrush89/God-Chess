@@ -16,13 +16,31 @@ import {
 } from "./presentation";
 
 const RENDER_PADDING = 0.6;
+const ENLARGED_PIECE_VARIANTS = new Set<ThreePlayerBoardVariant>([
+  "three-hexagonal",
+  "triad",
+]);
+const ENLARGED_PIECE_SCALE = 1.8;
+const ENLARGED_PIECE_INRADIUS_LIMIT = 1.42;
 
 const distance = (
   [ax, ay]: readonly [number, number],
   [bx, by]: readonly [number, number],
 ) => Math.hypot(ax - bx, ay - by);
 
-const pieceFontSize = (
+const polygonInradius = (
+  center: readonly [number, number],
+  points: readonly (readonly [number, number])[],
+) => Math.min(...points.map((point, index) => {
+  const next = points[(index + 1) % points.length];
+  const edgeLength = distance(point, next);
+  return Math.abs(
+    (next[0] - point[0]) * (point[1] - center[1]) -
+      (point[0] - center[0]) * (next[1] - point[1]),
+  ) / edgeLength;
+}));
+
+const basePieceFontSize = (
   descriptor: ThreePlayerTopology["cellDescriptors"][number],
   variant: ThreePlayerBoardVariant,
 ) => {
@@ -38,6 +56,51 @@ const pieceFontSize = (
     distance(point, shape.points[(index + 1) % shape.points.length])
   );
   return Math.min(0.76, Math.min(...edges) * 0.68);
+};
+
+const pieceFontSize = (
+  descriptor: ThreePlayerTopology["cellDescriptors"][number],
+  variant: ThreePlayerBoardVariant,
+) => {
+  const baseSize = basePieceFontSize(descriptor, variant);
+  if (!ENLARGED_PIECE_VARIANTS.has(variant)) return baseSize;
+  const shape = descriptor.render.shape;
+  if (shape.kind !== "polygon") return baseSize;
+  const inradius = polygonInradius(
+    [descriptor.render.x, descriptor.render.y],
+    shape.points,
+  );
+  return Math.min(
+    baseSize * ENLARGED_PIECE_SCALE,
+    inradius * ENLARGED_PIECE_INRADIUS_LIMIT,
+  );
+};
+
+const statusMarkerGeometry = (
+  descriptor: ThreePlayerTopology["cellDescriptors"][number],
+  variant: ThreePlayerBoardVariant,
+  fontSize: number,
+) => {
+  const shape = descriptor.render.shape;
+  if (ENLARGED_PIECE_VARIANTS.has(variant) && shape.kind === "polygon") {
+    const edges = shape.points.map((point, index) =>
+      distance(point, shape.points[(index + 1) % shape.points.length])
+    );
+    const inradius = polygonInradius(
+      [descriptor.render.x, descriptor.render.y],
+      shape.points,
+    );
+    return {
+      radius: Math.min(...edges) * 0.1,
+      x: descriptor.render.x + inradius * 0.58,
+      y: descriptor.render.y - inradius * 0.63,
+    };
+  }
+  return {
+    radius: fontSize * 0.16,
+    x: descriptor.render.x + fontSize * 0.38,
+    y: descriptor.render.y - fontSize * 0.36,
+  };
 };
 
 const pieceName = (piece: ThreePlayerPiece) =>
@@ -168,9 +231,7 @@ export function ThreePlayerBoard({
         const renderShape = descriptor.render.shape;
         const fontSize = pieceFontSize(descriptor, variant);
         const hexedBy = piece?.status.hexedBy;
-        const markerRadius = fontSize * 0.16;
-        const markerX = descriptor.render.x + fontSize * 0.38;
-        const markerY = descriptor.render.y - fontSize * 0.36;
+        const marker = statusMarkerGeometry(descriptor, variant, fontSize);
         const shape = renderShape.kind === "annular-sector"
           ? (
             <path
@@ -221,7 +282,7 @@ export function ThreePlayerBoard({
                 className="move-target-dot"
                 cx={descriptor.render.x}
                 cy={descriptor.render.y}
-                r={pieceFontSize(descriptor, variant) * 0.14}
+                r={basePieceFontSize(descriptor, variant) * 0.14}
                 aria-hidden="true"
               />
             )}
@@ -248,8 +309,8 @@ export function ThreePlayerBoard({
                 aria-label={`Hexed by ${state.players[hexedBy].name}`}
               >
                 <title>{`Hexed by ${state.players[hexedBy].name}`}</title>
-                <polygon points={hexagonPoints(markerX, markerY, markerRadius)} />
-                <circle cx={markerX} cy={markerY} r={markerRadius * 0.25} />
+                <polygon points={hexagonPoints(marker.x, marker.y, marker.radius)} />
+                <circle cx={marker.x} cy={marker.y} r={marker.radius * 0.25} />
               </g>
             )}
             {banana && !preview && (

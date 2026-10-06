@@ -729,8 +729,25 @@ describe("ThreePlayerGame", () => {
     expect(container.querySelectorAll(".ability-list > .ability-card")).toHaveLength(
       god.abilities.length,
     );
+    expect(container.querySelectorAll(".ability-list .ability-card-title")).toHaveLength(
+      god.abilities.length,
+    );
     expect(container.querySelector(".three-pantheon-list")).toBeNull();
     expect(container.querySelector(".three-ability-card")).toBeNull();
+  });
+
+  it("uses shared typography hooks for three-player upgrade cards", () => {
+    const state = completeDraft();
+    state.phase = "upgrade";
+    state.activeSeat = "white";
+    state.upgradeQueue = ["white", "red", "black"];
+    const { container } = renderGame(state);
+
+    const cards = container.querySelectorAll(".three-upgrade-list .ability-card");
+    expect(cards.length).toBeGreaterThan(0);
+    expect(container.querySelectorAll(
+      ".three-upgrade-list .ability-card > .ability-card-main .ability-card-title",
+    )).toHaveLength(cards.length);
   });
 
   it("inspects resting Gods read-only without bypassing action authorization", () => {

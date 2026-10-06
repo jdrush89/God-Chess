@@ -698,7 +698,7 @@ function AbilityCard({
         onClick={onClick}
       >
         <span>
-          <strong>{ability.name}</strong>
+          <strong className="ability-card-title">{ability.name}</strong>
           <small>Level {level}</small>
         </span>
         <p>{ability.summary}</p>
@@ -752,7 +752,7 @@ function UpgradeAbilityCard({
         }}
       >
         <div className="ability-topline">
-          <strong>{ability.name}</strong>
+          <strong className="ability-card-title">{ability.name}</strong>
           <span className="level-pips">
             {[1, 2, 3].map((item) => <i className={item <= level ? "filled" : ""} key={item} />)}
           </span>

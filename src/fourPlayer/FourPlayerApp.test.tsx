@@ -500,6 +500,8 @@ describe("four-player app integration", () => {
     expect(screen.queryByText(/1 orb per piece in the snake/i)).toBeNull();
 
     const slitherCard = within(panel).getByText("Slither").closest(".ability-card") as HTMLElement;
+    expect(within(slitherCard).getByText("Slither")
+      .classList.contains("ability-card-title")).toBe(true);
     fireEvent.click(within(slitherCard).getByRole("button", { name: /^slither/i }));
     expect(slitherCard.classList.contains("active")).toBe(true);
     const confirm = within(panel).getByRole("button", { name: /confirm slither.*lv 2/i });
@@ -730,6 +732,8 @@ describe("four-player app integration", () => {
     const fundingCard = screen.getByRole("button", { name: /military funding/i })
       .closest(".four-ability-card");
     expect(fundingCard).toBeTruthy();
+    expect(within(fundingCard as HTMLElement).getByText("Military Funding")
+      .classList.contains("ability-card-title")).toBe(true);
     expect(within(fundingCard as HTMLElement).getByText("Move another pawn or finish.")).toBeTruthy();
     expect(within(fundingCard as HTMLElement).getByRole("button", { name: /pass \/ finish/i }))
       .toBeTruthy();
