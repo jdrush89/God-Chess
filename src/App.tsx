@@ -38,7 +38,11 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { allSquares, isInCheck } from "./game/chess";
-import { chooseAiPlan, isAiTurn } from "./game/ai";
+import {
+  chooseAiPlan,
+  isAiTurn,
+  type ClassicAiWorkerResponse,
+} from "./game/ai";
 import {
   createGame,
   gameReducer,
@@ -2818,6 +2822,9 @@ export default function App() {
   const stateRef = useRef(state);
   stateRef.current = state;
   const aiPlan = useRef<GameAction[]>([]);
+  const aiNoPlanState = useRef<GameState | undefined>(undefined);
+  const aiRequestId = useRef(0);
+  const [aiPlanReady, setAiPlanReady] = useState(0);
   const quickDraftPending = useRef(false);
   const undoStack = useRef<GameState[]>([]);
   const undoDepthRef = useRef(0);
@@ -3216,31 +3223,100 @@ export default function App() {
       !isAiTurn(state)
     ) {
       aiPlan.current = [];
+      aiNoPlanState.current = undefined;
+      aiRequestId.current += 1;
       return;
     }
+    if (aiNoPlanState.current === state) return;
     if (!aiPlan.current.length) {
-      recordDiagnostic({
-        category: "ai",
-        event: "classic-plan-start",
-        context: { variant: "classic", mode: state.gameMode },
-        data: { phase: state.phase, activeColor: state.activeColor, turn: state.turn },
+      const requestId = aiRequestId.current + 1;
+      aiRequestId.current = requestId;
+      const requestedState = state;
+      const acceptPlan = (actions: GameAction[]) => {
+        if (
+          aiRequestId.current !== requestId ||
+          stateRef.current !== requestedState
+        ) return;
+        aiPlan.current = actions;
+        aiNoPlanState.current = actions.length ? undefined : requestedState;
+        recordDiagnostic({
+          category: "ai",
+          event: "classic-plan-result",
+          context: { variant: "classic", mode: requestedState.gameMode },
+          data: { actions },
+        });
+        setAiPlanReady((value) => value + 1);
+      };
+      let worker: Worker | undefined;
+      let planningTimer: number | undefined;
+      let secondFrame: number | undefined;
+      const firstFrame = window.requestAnimationFrame(() => {
+        secondFrame = window.requestAnimationFrame(() => {
+          planningTimer = window.setTimeout(() => {
+            recordDiagnostic({
+              category: "ai",
+              event: "classic-plan-start",
+              context: { variant: "classic", mode: requestedState.gameMode },
+              data: {
+                phase: requestedState.phase,
+                activeColor: requestedState.activeColor,
+                turn: requestedState.turn,
+              },
+            });
+            if (typeof Worker === "undefined") {
+              acceptPlan(chooseAiPlan(requestedState));
+              return;
+            }
+            worker = new Worker(
+              new URL("./game/ai.worker.ts", import.meta.url),
+              { type: "module" },
+            );
+            worker.onmessage = (
+              event: MessageEvent<ClassicAiWorkerResponse>,
+            ) => {
+              if (event.data.requestId === requestId) {
+                acceptPlan(event.data.actions);
+              }
+            };
+            worker.onerror = (event) => {
+              if (aiRequestId.current !== requestId) return;
+              recordDiagnostic({
+                category: "error",
+                event: "classic-worker-error",
+                context: { variant: "classic", mode: requestedState.gameMode },
+                data: {
+                  message: event.message,
+                  filename: event.filename,
+                  line: event.lineno,
+                  column: event.colno,
+                },
+              });
+            };
+            worker.postMessage({ requestId, state: requestedState });
+          }, 0);
+        });
       });
-      aiPlan.current = chooseAiPlan(state);
-      recordDiagnostic({
-        category: "ai",
-        event: "classic-plan-result",
-        context: { variant: "classic", mode: state.gameMode },
-        data: { actions: aiPlan.current },
-      });
+      return () => {
+        aiRequestId.current += 1;
+        window.cancelAnimationFrame(firstFrame);
+        if (secondFrame !== undefined) {
+          window.cancelAnimationFrame(secondFrame);
+        }
+        if (planningTimer !== undefined) {
+          window.clearTimeout(planningTimer);
+        }
+        worker?.terminate();
+      };
     }
     const action = aiPlan.current[0];
     if (!action) return;
     const timer = window.setTimeout(() => {
+      if (stateRef.current !== state) return;
       aiPlan.current = aiPlan.current.slice(1);
       dispatch(action);
     }, aiActionDelay(action));
     return () => window.clearTimeout(timer);
-  }, [fourPlayerSession, threePlayerSession, startView, state]);
+  }, [aiPlanReady, fourPlayerSession, threePlayerSession, startView, state]);
 
   useEffect(() => {
     if (online.started) setStartView("none");

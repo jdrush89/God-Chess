@@ -223,6 +223,7 @@ afterEach(() => {
   cleanup();
   window.localStorage.clear();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 beforeEach(() => {
@@ -583,6 +584,77 @@ describe("game startup", () => {
     expect(screen.getAllByText(/capture the black king in one divine turn/i)).toHaveLength(2);
     expect(screen.getByRole("gridcell", { name: "e2, white knight" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /save & quit/i })).toBeNull();
+  });
+
+  it("paints a committed puzzle move before AI planning and ignores a stale worker result after restart", async () => {
+    class FakeWorker {
+      static instances: FakeWorker[] = [];
+      onmessage: ((event: MessageEvent<{
+        requestId: number;
+        actions: Array<{ type: string; godId?: string }>;
+      }>) => void) | null = null;
+      onerror: ((event: ErrorEvent) => void) | null = null;
+      message?: {
+        requestId: number;
+        state: ReturnType<typeof createGame>;
+      };
+      terminated = false;
+
+      constructor() {
+        FakeWorker.instances.push(this);
+      }
+
+      postMessage(message: FakeWorker["message"]) {
+        this.message = message;
+      }
+
+      terminate() {
+        this.terminated = true;
+      }
+    }
+    vi.stubGlobal("Worker", FakeWorker);
+
+    const { container } = render(<App />);
+    openPlayOption("Puzzles");
+    fireEvent.click(screen.getByRole("button", { name: /^easy/i }));
+    fireEvent.click(screen.getByRole("button", { name: /puzzle 1/i }));
+    fireEvent.click(screen.getByTitle("Use Chiron"));
+    fireEvent.click(screen.getByRole("button", { name: /Charge/ }));
+    fireEvent.click(container.querySelector('[data-square="e2"]')!);
+    const persist = vi.spyOn(Storage.prototype, "setItem");
+
+    fireEvent.click(container.querySelector('[data-square="e3"]')!);
+
+    expect(container.querySelector('[data-square="e3"]')?.textContent).toContain("♘");
+    await waitFor(() => {
+      expect(FakeWorker.instances).toHaveLength(1);
+    });
+    expect(FakeWorker.instances[0].message?.state.activeColor).toBe("black");
+    expect(persist.mock.calls.some(([key]) =>
+      key === SAVE_KEY || key === LEGACY_SAVE_KEY
+    )).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: /Restart/ }));
+    const staleWorker = FakeWorker.instances[0];
+    const staleRequestId = staleWorker.message!.requestId;
+    expect(staleWorker.terminated).toBe(true);
+    staleWorker.onmessage?.({
+      data: {
+        requestId: staleRequestId,
+        actions: [{ type: "select-god", godId: "chiron" }],
+      },
+    } as MessageEvent<{
+      requestId: number;
+      actions: Array<{ type: string; godId?: string }>;
+    }>);
+
+    await waitFor(() => {
+      expect(container.querySelector('[data-square="e2"]')?.textContent).toContain("♘");
+    });
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 1200));
+    });
+    expect(screen.queryByText(/Chiron answers/i)).toBeNull();
   });
 
   it("marks locally completed puzzles in the difficulty browser", () => {

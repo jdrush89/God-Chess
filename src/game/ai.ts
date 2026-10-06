@@ -3,8 +3,8 @@ import { enumerateCompleteTurnPlans } from "./completeTurnSearch";
 import {
   availableClassicActions,
   classicPlanStateSignature,
-  gameReducer,
   isCompleteClassicTurn,
+  simulateClassicAction,
   type GameAction,
 } from "./engine";
 import { GOD_BY_ID } from "./gods";
@@ -18,6 +18,16 @@ interface SearchNode {
 
 export interface AiTurnPlan {
   state: GameState;
+  actions: GameAction[];
+}
+
+export interface ClassicAiWorkerRequest {
+  requestId: number;
+  state: GameState;
+}
+
+export interface ClassicAiWorkerResponse {
+  requestId: number;
   actions: GameAction[];
 }
 
@@ -183,7 +193,7 @@ export const enumerateTurnPlans = (state: GameState, color: Color = state.active
     for (const node of frontier) {
       const actions = availableClassicActions(node.state).slice(0, MAX_ACTIONS_PER_NODE);
       for (const action of actions) {
-        const next = gameReducer(node.state, action);
+        const next = simulateClassicAction(node.state, action);
         const beforeSignature = classicPlanStateSignature(node.state);
         const signature = classicPlanStateSignature(next);
         if (signature === beforeSignature || seen.has(signature)) continue;
@@ -238,8 +248,8 @@ const hasWinningAirStrikeTurn = (state: GameState, color: Color) => {
   );
 
   return gods.some((godId) => {
-    let selected = gameReducer(turn, { type: "select-god", godId });
-    selected = gameReducer(selected, {
+    let selected = simulateClassicAction(turn, { type: "select-god", godId });
+    selected = simulateClassicAction(selected, {
       type: "select-ability",
       abilityId: "air-strike",
     });
@@ -247,7 +257,7 @@ const hasWinningAirStrikeTurn = (state: GameState, color: Color) => {
     return enumerateCompleteTurnPlans({
       state: selected,
       availableActions: availableClassicActions,
-      reduce: gameReducer,
+      reduce: simulateClassicAction,
       signature: classicPlanStateSignature,
       isComplete: isCompleteClassicTurn,
       acceptComplete: (_initial, next) =>
@@ -284,6 +294,7 @@ const bestTacticalDefense = (
       .filter((piece) => piece.controller === enemy)
       .map((piece) => piece.id),
   );
+  const candidateLimit = state.gameMode === "puzzle" ? 3 : 32;
   const candidates = plans
     .map((plan, index) => {
       const king = Object.entries(plan.state.board).find(
@@ -304,7 +315,7 @@ const bestTacticalDefense = (
       };
     })
     .sort((a, b) => b.priority - a.priority || a.index - b.index)
-    .slice(0, 32);
+    .slice(0, candidateLimit);
 
   for (const { plan } of candidates) {
     if (!hasImmediateWinningTurn(plan.state, enemy)) return plan;

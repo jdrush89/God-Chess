@@ -2541,6 +2541,16 @@ export const isCompleteClassicTurn = (
 };
 
 let completeTurnSearchDepth = 0;
+let classicTurnResolutionSuppressed = 0;
+
+const withoutClassicTurnResolution = <T,>(run: () => T) => {
+  classicTurnResolutionSuppressed += 1;
+  try {
+    return run();
+  } finally {
+    classicTurnResolutionSuppressed -= 1;
+  }
+};
 
 export const hasCompleteClassicTurn = (state: GameState) => {
   if (completeTurnSearchDepth > 0) return true;
@@ -2550,7 +2560,8 @@ export const hasCompleteClassicTurn = (state: GameState) => {
     return hasCompleteTurn({
       state,
       availableActions: availableClassicActions,
-      reduce: gameReducer,
+      reduce: (candidate, action) =>
+        withoutClassicTurnResolution(() => gameReducer(candidate, action)),
       signature: classicPlanStateSignature,
       isComplete: isCompleteClassicTurn,
       acceptComplete: (_initial, next) =>
@@ -2578,6 +2589,11 @@ const clearTurnSelection = (state: GameState) => {
 const resolveClassicTurnStart = (state: GameState) => {
   if (
     completeTurnSearchDepth > 0 ||
+    classicTurnResolutionSuppressed > 0 ||
+    (
+      state.gameMode === "puzzle" &&
+      !isInCheck(state.board, state.activeColor, state.bananas)
+    ) ||
     state.phase !== "play" ||
     state.result ||
     state.selectedGod ||
@@ -2931,3 +2947,8 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
   if (beganClassicPlayTurn(state, next)) resolveClassicTurnStart(next);
   return next;
 };
+
+export const simulateClassicAction = (
+  state: GameState,
+  action: GameAction,
+) => withoutClassicTurnResolution(() => gameReducer(state, action));
