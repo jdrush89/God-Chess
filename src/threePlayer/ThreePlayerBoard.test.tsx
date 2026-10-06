@@ -10,6 +10,56 @@ import { ThreePlayerBoard } from "./ThreePlayerBoard";
 
 afterEach(cleanup);
 
+const distance = (
+  [ax, ay]: readonly [number, number],
+  [bx, by]: readonly [number, number],
+) => Math.hypot(ax - bx, ay - by);
+
+const legacyPieceFontSize = (
+  descriptor: ReturnType<typeof getThreePlayerTopology>["cellDescriptors"][number],
+  variant: (typeof THREE_PLAYER_BOARD_VARIANTS)[number],
+) => {
+  if (variant === "three-player") return 0.64;
+  const shape = descriptor.render.shape;
+  if (shape.kind === "annular-sector") {
+    const radial = shape.outerRadius - shape.innerRadius;
+    const angular = 2 * ((shape.innerRadius + shape.outerRadius) / 2) *
+      Math.sin((shape.endAngle - shape.startAngle) / 2);
+    return Math.min(0.76, radial * 0.72, angular * 0.72);
+  }
+  const edges = shape.points.map((point, index) =>
+    distance(point, shape.points[(index + 1) % shape.points.length])
+  );
+  return Math.min(0.76, Math.min(...edges) * 0.68);
+};
+
+const pointInPolygon = (
+  [x, y]: readonly [number, number],
+  polygon: readonly (readonly [number, number])[],
+) => {
+  let inside = false;
+  for (let index = 0, previous = polygon.length - 1; index < polygon.length; previous = index++) {
+    const [xi, yi] = polygon[index];
+    const [xj, yj] = polygon[previous];
+    if (
+      ((yi > y) !== (yj > y)) &&
+      x < (xj - xi) * (y - yi) / (yj - yi) + xi
+    ) inside = !inside;
+  }
+  return inside;
+};
+
+const polygonInradius = (
+  center: readonly [number, number],
+  polygon: readonly (readonly [number, number])[],
+) => Math.min(...polygon.map((point, index) => {
+  const next = polygon[(index + 1) % polygon.length];
+  return Math.abs(
+    (next[0] - point[0]) * (point[1] - center[1]) -
+      (point[0] - center[0]) * (next[1] - point[1]),
+  ) / distance(point, next);
+}));
+
 describe("ThreePlayerBoard", () => {
   it.each(THREE_PLAYER_BOARD_VARIANTS)(
     "renders every %s topology cell inside a padded accessible SVG",
@@ -121,6 +171,10 @@ describe("ThreePlayerBoard", () => {
       expect(marker?.getAttribute("cy")).toBe(
         String(topology.cellById.get(empty)!.render.y),
       );
+      expect(Number(marker?.getAttribute("r"))).toBeCloseTo(
+        legacyPieceFontSize(topology.cellById.get(empty)!, variant) * 0.14,
+        8,
+      );
       expect(occupiedCell.classList.contains("legal-occupied")).toBe(true);
       expect(occupiedCell.parentElement?.querySelector(".move-target-dot")).toBeNull();
     },
@@ -220,8 +274,8 @@ describe("ThreePlayerBoard", () => {
     },
   );
 
-  it.each(["three-player", "three-circular"] as const)(
-    "keeps every starting %s piece centered and scaled inside its canonical cell",
+  it.each(THREE_PLAYER_BOARD_VARIANTS)(
+    "keeps %s piece sizing variant-specific and geometry-aware",
     (variant) => {
       const config = createDefaultThreePlayerConfig();
       config.boardVariant = variant;
@@ -230,7 +284,7 @@ describe("ThreePlayerBoard", () => {
       const { container } = render(<ThreePlayerBoard state={state} />);
 
       const pieces = [...container.querySelectorAll<SVGTextElement>(".three-board-piece")];
-      expect(pieces).toHaveLength(48);
+      expect(pieces).toHaveLength(topology.initialPlacements.length);
       for (const piece of pieces) {
         const cell = piece.parentElement?.querySelector<SVGElement>("[data-cell]")
           ?.getAttribute("data-cell");
@@ -239,8 +293,72 @@ describe("ThreePlayerBoard", () => {
         expect(Number(piece.getAttribute("x"))).toBeCloseTo(descriptor.render.x, 8);
         expect(Number(piece.getAttribute("y"))).toBeCloseTo(descriptor.render.y, 8);
         const fontSize = Number.parseFloat(piece.style.fontSize);
-        expect(fontSize).toBeGreaterThan(0.2);
-        expect(fontSize).toBeLessThanOrEqual(0.76);
+        const legacySize = legacyPieceFontSize(descriptor, variant);
+        if (variant === "three-hexagonal" || variant === "triad") {
+          expect(fontSize).toBeCloseTo(legacySize * 1.8, 8);
+          expect(fontSize).toBeCloseTo(1.224, 8);
+          const shape = descriptor.render.shape;
+          expect(shape.kind).toBe("polygon");
+          if (shape.kind === "polygon") {
+            expect(fontSize).toBeLessThanOrEqual(
+              polygonInradius(
+                [descriptor.render.x, descriptor.render.y],
+                shape.points,
+              ) * 1.42,
+            );
+          }
+        } else {
+          expect(fontSize).toBeCloseTo(legacySize, 8);
+        }
+      }
+
+      if (variant === "three-hexagonal" || variant === "triad") {
+        for (const type of ["king", "queen", "rook"] as const) {
+          const cells = topology.initialPlacements
+            .filter((placement) => placement.type === type)
+            .map((placement) => placement.cell);
+          expect(cells.length).toBeGreaterThan(0);
+          for (const cell of cells) {
+            const group = container.querySelector(`[data-cell="${cell}"]`)!.parentElement!;
+            expect(Number.parseFloat(
+              group.querySelector<SVGTextElement>(".three-board-piece")!.style.fontSize,
+            )).toBeCloseTo(1.224, 8);
+          }
+        }
+      }
+    },
+  );
+
+  it.each(["three-hexagonal", "triad"] as const)(
+    "keeps enlarged %s Hex status markers inside their cells",
+    (variant) => {
+      const config = createDefaultThreePlayerConfig();
+      config.boardVariant = variant;
+      const state = createThreePlayerGame(config);
+      const topology = getThreePlayerTopology(variant);
+      const placements = topology.initialPlacements.filter(
+        ({ type }) => type === "king" || type === "queen" || type === "rook",
+      );
+      for (const { cell } of placements) {
+        state.board[cell].status.hexedBy = "white";
+      }
+
+      const { container } = render(<ThreePlayerBoard state={state} />);
+      for (const { cell } of placements) {
+        const descriptor = topology.cellById.get(cell)!;
+        const shape = descriptor.render.shape;
+        expect(shape.kind).toBe("polygon");
+        const marker = container.querySelector(`[data-cell="${cell}"]`)!
+          .parentElement!.querySelector<SVGPolygonElement>(
+            '[data-status="hexedBy"] polygon',
+          )!;
+        const markerPoints = marker.getAttribute("points")!.split(" ").map((point) =>
+          point.split(",").map(Number) as [number, number]
+        );
+        if (shape.kind === "polygon") {
+          expect(markerPoints.every((point) => pointInPolygon(point, shape.points)))
+            .toBe(true);
+        }
       }
     },
   );

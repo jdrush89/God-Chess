@@ -2295,6 +2295,78 @@ span.move-target-dot {
 .four-panel-god-heading strong { color: #fff; font: 600 14px "Cinzel"; }
 .four-panel-god-heading small { color: #d6c59f; font-size: 8px; text-transform: uppercase; }
 
+/* Shared ability-card readability */
+.ability-card, .four-ability-card {
+  font-size: medium;
+  line-height: 1.5;
+}
+.ability-card :where(button, p, span, small, em, b, strong, label):not(.ability-card-title),
+.four-ability-card :where(button, p, span, small, em, b, strong, label):not(.ability-card-title) {
+  font-size: inherit;
+  line-height: inherit;
+}
+.ability-card .ability-card-title,
+.four-ability-card .ability-card-title {
+  font-size: large;
+  line-height: 1.25;
+}
+.ability-topline,
+.four-ability-card-main > span {
+  align-items: flex-start;
+  gap: .75em;
+  flex-wrap: wrap;
+}
+.ability-rules > p { line-height: inherit; }
+.ability-footer {
+  gap: .75em;
+  flex-wrap: wrap;
+}
+.ability-footer-meta,
+.ability-cost,
+.ability-card .level-selector,
+.four-ability-card .level-selector {
+  gap: .5em;
+  flex-wrap: wrap;
+}
+.ability-card .level-selector button,
+.four-ability-card .level-selector button {
+  min-height: 2em;
+  padding-inline: .65em;
+}
+.ability-card .level-selector button i,
+.four-ability-card .level-selector button i {
+  width: .65em;
+  height: .65em;
+}
+.ability-card .level-pips { gap: .25em; }
+.ability-card .level-pips i {
+  width: 1.15em;
+  height: .24em;
+}
+.ability-card .orb, .four-ability-card .orb {
+  width: 1em;
+  height: 1em;
+}
+.ability-card :where(.chess-piece, .four-chess-piece),
+.four-ability-card :where(.chess-piece, .four-chess-piece) {
+  font-size: 2em;
+  line-height: 1;
+}
+.ability-card :where(.action-buttons, .grave-picker, .three-generic-actions),
+.four-ability-card :where(.four-choice-buttons, .four-action-buttons, .four-seat-target-list, .four-grave-choice) {
+  gap: .75em;
+}
+.ability-card :where(.action-buttons, .grave-picker, .three-generic-actions) button,
+.four-ability-card :where(.four-choice-buttons, .four-action-buttons, .four-seat-target-list, .four-grave-choice) button {
+  min-height: 2.75em;
+}
+.four-ability-card-main { gap: .65em; }
+.four-ability-card-main > div { gap: .5em; flex-wrap: wrap; }
+.four-ability-card .four-seat-target-list i {
+  width: .75em;
+  height: .75em;
+}
+
 @media (max-width: 1320px) {
   .four-game-layout {
     grid-template-columns: 190px minmax(430px, 720px) 190px;
