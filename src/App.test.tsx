@@ -934,6 +934,7 @@ describe("game startup", () => {
 
     expect(screen.getByText(/not committed/i)).toBeTruthy();
     expect(screen.getByText("Slither").classList.contains("ability-card-title")).toBe(true);
+    expect(screen.queryByText("GENERATES")).toBeNull();
     expect(screen.getAllByText(/Light 0/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Dark 0/i).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByText("Slither"));

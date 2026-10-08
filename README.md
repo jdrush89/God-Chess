@@ -227,7 +227,7 @@ must update this documentation.
 | Position Sixteen | Medusa, Teles, Chiron | Ares, Chiron, Midas | Medusa (captivate); Teles (enchant); Chiron (charge) |
 | Position Seventeen | Salem, Midas, Death | Ares, Chiron, Anubis | Salem (hex); Midas (leverage); Death (resurrect) |
 | Position Eighteen | Midas, Chiron, Kangus Kong | Ares, Anubis, Salem | Midas (barter); Chiron (mount); Kangus Kong (rage) |
-| Position Nineteen | Teles, Anubis, Quetzacoatl | Ares, Chiron, Salem | Teles (resonance); Anubis (monument); Quetzacoatl (air-strike) |
+| Position Nineteen | Teles, Anubis, Quetzacoatl | Ares, Chiron, Salem | Teles (resonance); Anubis (construction); Quetzacoatl (air-strike) |
 | Position Twenty | Ares, Midas, Chiron | Artemis, Anubis, Salem | Ares (threaten); Midas (leverage); Chiron (charge) |
 | Position Twenty-One | Anubis, Midas, Quetzacoatl | Ares, Chiron, Salem | Anubis (construction); Midas (leverage); Quetzacoatl (air-strike) |
 | Position Twenty-Two | Teles, Death, Chiron | Ares, Anubis, Salem | Teles (resonance); Death (marked); Chiron (charge) |

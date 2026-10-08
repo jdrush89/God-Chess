@@ -198,32 +198,12 @@ const forceOpeningReply = (state: GameState, replySquare: Square) => {
   }
 };
 
-const freezeHardPuzzleDecoys = (
-  state: GameState,
-  movableWhiteIds: string[],
-  movableBlackIds: string[],
-) => {
-  const whiteIds = new Set(movableWhiteIds);
-  const blackIds = new Set(movableBlackIds);
-  for (const current of Object.values(state.board)) {
-    const movable = current.controller === "white"
-      ? whiteIds.has(current.id)
-      : blackIds.has(current.id);
-    if (movable) continue;
-    current.status.frozen = 4;
-    current.status.frozenBy = current.controller === "white" ? "black" : "white";
+const reserveOpeningSource = (state: GameState, sourceSquare: Square) => {
+  for (const [square, current] of Object.entries(state.board)) {
+    if (current.controller !== "white") continue;
+    if (square === sourceSquare) delete current.status.movedThisTurn;
+    else current.status.movedThisTurn = true;
   }
-};
-
-const freezeUntilPlayerTurn = (
-  state: GameState,
-  square: Square,
-  playerTurns: 1 | 2,
-) => {
-  const current = state.board[square];
-  if (!current) throw new Error(`Cannot freeze missing puzzle piece on ${square}.`);
-  current.status.frozen = playerTurns;
-  current.status.frozenBy = current.controller === "white" ? "black" : "white";
 };
 
 const centaursLance = (playerName?: string) => {
@@ -812,40 +792,21 @@ const queensCompass = (playerName?: string) => {
   );
   state.board = board(
     ["g1", piece("white-king", "king", "white")],
-    ["b3", piece("white-queen", "queen", "white")],
     ["e2", piece("white-charge-knight", "knight", "white")],
-    ["e4", piece("white-blocker-bishop", "bishop", "white")],
-    ["a2", piece("white-pawn-a2", "pawn", "white")],
-    ["a3", piece("white-pawn-a3", "pawn", "white")],
-    ["b2", piece("white-pawn-b2", "pawn", "white")],
-    ["b4", piece("white-pawn-b4", "pawn", "white")],
-    ["c2", piece("white-pawn-c2", "pawn", "white")],
-    ["c3", piece("white-pawn-c3", "pawn", "white")],
-    ["c4", piece("white-pawn-c4", "pawn", "white")],
-    ["c6", piece("white-pawn-c6", "pawn", "white")],
-    ["d2", piece("white-pawn-d2", "pawn", "white")],
-    ["d3", piece("white-pawn-d3", "pawn", "white")],
-    ["d5", piece("black-opening-blocker-d5", "pawn", "black")],
-    ["d6", piece("white-pawn-d6", "pawn", "white")],
-    ["f2", piece("white-pawn-f2", "pawn", "white")],
-    ["f3", piece("white-pawn-f3", "pawn", "white")],
-    ["f6", piece("white-pawn-f6", "pawn", "white")],
-    ["g3", piece("white-pawn-g3", "pawn", "white")],
-    ["g5", piece("white-pawn-g5", "pawn", "white")],
-    ["g6", piece("white-pawn-g6", "pawn", "white")],
-    ["h2", piece("white-pawn-h2", "pawn", "white")],
-    ["h5", piece("black-second-reply-blocker", "pawn", "black")],
-    ["h7", piece("black-second-reply-pawn", "pawn", "black")],
+    ["c4", piece("white-enchant-blocker-knight", "knight", "white")],
+    ["h2", piece("white-captivate-pawn", "pawn", "white")],
+    ["c6", piece("white-cage-pawn-c6", "pawn", "white")],
+    ["d6", piece("white-cage-pawn-d6", "pawn", "white")],
+    ["g6", piece("white-cage-pawn-g6", "pawn", "white")],
+    ["c7", piece("white-cage-pawn-c7", "pawn", "white")],
+    ["g7", piece("white-cage-pawn-g7", "pawn", "white")],
     ["e8", piece("black-king", "king", "black")],
-    ["a8", piece("black-queen", "queen", "black")],
-    ["e6", piece("black-enchanted-bishop", "bishop", "black")],
-    ["d7", piece("black-opening-blocker-d7", "pawn", "black")],
-    ["f5", piece("white-enchant-blocker-f5", "pawn", "white")],
-    ["f7", piece("white-opening-bait-f7", "pawn", "white")],
+    ["e6", piece("black-enchanted-pawn", "pawn", "black")],
+    ["a7", piece("black-response-pawn", "pawn", "black")],
   );
   state.players.black.gods = ["ares", "chiron", "midas"];
   state.players.black.orbs = { white: 0, black: 0 };
-  state.players.white.orbs.black = 5;
+  state.players.white.orbs.black = 8;
   state.players.white.upgrades = {
     captivate: 3,
     slither: 2,
@@ -856,14 +817,8 @@ const queensCompass = (playerName?: string) => {
     gallop: 2,
     mount: 2,
   };
-  forceOpeningReply(state, "e6");
-  freezeHardPuzzleDecoys(
-    state,
-    ["white-queen", "white-blocker-bishop", "white-charge-knight"],
-    ["black-enchanted-bishop", "black-second-reply-pawn"],
-  );
-  freezeUntilPlayerTurn(state, "e4", 1);
-  freezeUntilPlayerTurn(state, "e2", 2);
+  reserveOpeningSource(state, "h2");
+  forceOpeningReply(state, "a7");
   return state;
 };
 
@@ -875,9 +830,22 @@ const hexedReserve = (playerName?: string) => {
     ["salem", "midas", "death"],
     playerName,
   );
-  relocatePiece(state, "a7", "h6");
-  relocatePiece(state, "a3", "f8");
-  state.board.h6 = piece("white-hex-anchor", "pawn", "white");
+  state.board = board(
+    ["c1", piece("white-king", "king", "white")],
+    ["f6", piece("white-hiring-rook", "rook", "white")],
+    ["e7", piece("white-recruiter-knight", "knight", "white")],
+    ["f7", piece("white-cage-pawn-f7", "pawn", "white")],
+    ["g6", piece("white-cage-pawn-g6", "pawn", "white")],
+    ["b7", piece("black-response-pawn", "pawn", "black")],
+    ["b8", piece("black-hex-pawn-b8", "pawn", "black")],
+    ["d8", piece("black-hex-pawn-d8", "pawn", "black")],
+    ["h7", piece("black-bishop", "bishop", "black")],
+    ["h8", piece("black-king", "king", "black")],
+  );
+  state.players.white.graveyard = [{
+    piece: piece("white-reserve-queen", "queen", "white"),
+    capturedOnTurn: 0,
+  }];
   forceOpeningReply(state, "b7");
   state.players.white.orbs.black = 1;
   state.players.white.upgrades = {
@@ -891,11 +859,7 @@ const hexedReserve = (playerName?: string) => {
     resurrect: 3,
     siphon: 2,
   };
-  freezeHardPuzzleDecoys(
-    state,
-    ["white-hiring-rook", "white-hex-anchor"],
-    ["black-pawn-b"],
-  );
+  reserveOpeningSource(state, "f6");
   return state;
 };
 
@@ -907,10 +871,19 @@ const goldenFuse = (playerName?: string) => {
     ["midas", "chiron", "kangus"],
     playerName,
   );
-  relocatePiece(state, "a7", "h4");
-  relocatePiece(state, "a3", "f6");
-  state.board.f3 = piece("white-decoy-pawn-f3", "pawn", "white");
-  state.board.f8 = piece("white-rage-bishop", "bishop", "white");
+  state.board = board(
+    ["a1", piece("white-king", "king", "white")],
+    ["g6", piece("white-cage-rook", "rook", "white")],
+    ["e7", piece("white-mount", "knight", "white")],
+    ["f5", piece("white-cage-bishop", "bishop", "white")],
+    ["c8", piece("white-mount-blocker-bishop", "bishop", "white")],
+    ["f7", piece("white-rider", "rook", "white")],
+    ["c2", piece("white-barter-pawn", "pawn", "white")],
+    ["a4", piece("black-response-pawn", "pawn", "black")],
+    ["b4", piece("black-barter-pawn", "pawn", "black")],
+    ["f8", piece("black-rider-blocker-rook", "rook", "black")],
+    ["h8", piece("black-king", "king", "black")],
+  );
   state.players.white.orbs.black = 0;
   state.players.white.upgrades = {
     barter: 3,
@@ -924,13 +897,8 @@ const goldenFuse = (playerName?: string) => {
     rage: 1,
   };
   state.players.black.orbs.black = 3;
-  freezeHardPuzzleDecoys(
-    state,
-    ["white-pawn-g", "white-mount", "white-rider"],
-    ["black-response-pawn"],
-  );
-  freezeUntilPlayerTurn(state, "e7", 1);
-  freezeUntilPlayerTurn(state, "f7", 1);
+  reserveOpeningSource(state, "c2");
+  forceOpeningReply(state, "a4");
   return state;
 };
 
@@ -942,44 +910,41 @@ const resonantFoundation = (playerName?: string) => {
     ["teles", "anubis", "quetzacoatl"],
     playerName,
   );
-  relocatePiece(state, "a3", "c1");
-  relocatePiece(state, "b7", "a4");
-  relocatePiece(state, "c7", "b3");
-  relocatePiece(state, "d7", "b4");
-  state.board.a7 = piece("black-opening-pawn", "pawn", "black");
-  for (const square of ["a1", "b2", "c1", "c2", "c3", "d1", "f5", "h1", "h2"] as Square[]) {
-    delete state.board[square];
-  }
-  state.board.a2 = piece("white-resonance-rook", "rook", "white");
-  state.board.f5 = piece("white-air-strike-screen", "queen", "white");
-  state.board.g2 = piece("white-passenger", "bishop", "white");
-  state.players.white.orbs.black = 3;
+  state.board = board(
+    ["e1", piece("white-king", "king", "white")],
+    ["a2", piece("white-resonance-queen", "queen", "white")],
+    ["a1", piece("white-queen-blocker-a1", "knight", "white")],
+    ["b1", piece("white-queen-blocker-b1", "pawn", "white")],
+    ["b2", piece("white-queen-blocker-b2", "pawn", "white")],
+    ["b3", piece("white-queen-blocker-b3", "pawn", "white")],
+    ["g1", piece("white-rook-blocker-g1", "pawn", "white")],
+    ["h1", piece("white-cage-rook", "rook", "white")],
+    ["h2", piece("white-rook-blocker-h2", "pawn", "white")],
+    ["h8", piece("white-construction-knight", "knight", "white")],
+    ["a8", piece("white-carrier", "rook", "white")],
+    ["b8", piece("white-passenger", "bishop", "white")],
+    ["e6", piece("white-cage-pawn-e6", "pawn", "white")],
+    ["f6", piece("white-cage-pawn-f6", "pawn", "white")],
+    ["f5", piece("white-cage-bishop", "bishop", "white")],
+    ["e7", piece("white-cage-pawn-e7", "pawn", "white")],
+    ["a4", piece("black-resonance-pawn-a", "pawn", "black")],
+    ["b4", piece("black-resonance-pawn-b", "pawn", "black")],
+    ["h4", piece("black-response-pawn", "pawn", "black")],
+    ["g8", piece("black-king", "king", "black")],
+  );
+  state.players.white.orbs.black = 1;
   state.players.white.upgrades = {
     resonance: 3,
     lure: 2,
     enchant: 2,
-    construction: 2,
+    construction: 3,
     harden: 2,
     flight: 2,
     "air-lift": 2,
     "air-strike": 3,
   };
-  forceOpeningReply(state, "b3");
-  freezeHardPuzzleDecoys(
-    state,
-    [
-      "white-resonance-rook",
-      "white-monument-pawn-d",
-      "white-monument-pawn-e",
-      "white-monument-pawn-f",
-      "white-passenger",
-    ],
-    ["black-pawn-c", "black-opening-pawn"],
-  );
-  for (const square of ["d3", "e2", "f2"] as Square[]) {
-    freezeUntilPlayerTurn(state, square, 1);
-  }
-  freezeUntilPlayerTurn(state, "g2", 2);
+  reserveOpeningSource(state, "a2");
+  forceOpeningReply(state, "h4");
   return state;
 };
 
@@ -991,7 +956,20 @@ const threatenedTurncoat = (playerName?: string) => {
     ["ares", "midas", "chiron"],
     playerName,
   );
-  relocatePiece(state, "a7", "g4");
+  state.board = board(
+    ["a1", piece("white-king", "king", "white")],
+    ["c3", piece("white-recruiter", "bishop", "white")],
+    ["h2", piece("white-threat-pawn", "pawn", "white")],
+    ["c6", piece("white-cage-pawn-c6", "pawn", "white")],
+    ["d6", piece("white-cage-pawn-d6", "pawn", "white")],
+    ["f6", piece("white-cage-pawn-f6", "pawn", "white")],
+    ["g6", piece("white-cage-pawn-g6", "pawn", "white")],
+    ["c7", piece("white-cage-pawn-c7", "pawn", "white")],
+    ["g7", piece("white-cage-pawn-g7", "pawn", "white")],
+    ["e4", piece("black-turncoat", "knight", "black")],
+    ["g4", piece("black-response-pawn", "pawn", "black")],
+    ["e8", piece("black-king", "king", "black")],
+  );
   state.players.white.orbs.black = 7;
   state.players.white.upgrades = {
     threaten: 3,
@@ -1004,14 +982,8 @@ const threatenedTurncoat = (playerName?: string) => {
     mount: 2,
     charge: 2,
   };
+  reserveOpeningSource(state, "h2");
   forceOpeningReply(state, "g4");
-  freezeHardPuzzleDecoys(
-    state,
-    ["white-pawn-h", "white-recruiter"],
-    ["black-turncoat", "black-pawn-a"],
-  );
-  freezeUntilPlayerTurn(state, "c3", 1);
-  freezeUntilPlayerTurn(state, "e4", 1);
   return state;
 };
 
@@ -1023,9 +995,22 @@ const architectsBargain = (playerName?: string) => {
     ["anubis", "midas", "quetzacoatl"],
     playerName,
   );
-  relocatePiece(state, "e4", "d4");
-  state.board.d4 = piece("white-recruiter", "knight", "white");
-  state.board.e1 = piece("white-construction-blocker", "queen", "white");
+  state.board = board(
+    ["b1", piece("white-king", "king", "white")],
+    ["f1", piece("white-construction-rook", "rook", "white")],
+    ["h1", piece("white-cage-rook", "rook", "white")],
+    ["d4", piece("white-recruiter", "knight", "white")],
+    ["f6", piece("white-cage-bishop-f6", "bishop", "white")],
+    ["f8", piece("white-pinned-blocker", "bishop", "white")],
+    ["e1", piece("white-construction-blocker-e1", "pawn", "white")],
+    ["f2", piece("white-construction-blocker-f2", "pawn", "white")],
+    ["e6", piece("white-cage-pawn-e6", "pawn", "white")],
+    ["g6", piece("white-cage-pawn", "pawn", "white")],
+    ["b8", piece("white-carrier", "queen", "white")],
+    ["c7", piece("black-passenger", "knight", "black")],
+    ["a7", piece("black-response-pawn", "pawn", "black")],
+    ["g8", piece("black-king", "king", "black")],
+  );
   state.players.white.orbs.black = 5;
   state.players.white.upgrades = {
     construction: 3,
@@ -1038,15 +1023,8 @@ const architectsBargain = (playerName?: string) => {
     "air-lift": 2,
     "air-strike": 3,
   };
-  forceOpeningReply(state, "a6");
-  freezeHardPuzzleDecoys(
-    state,
-    ["white-rook-f", "white-recruiter", "white-carrier"],
-    ["black-passenger", "black-pawn-a"],
-  );
-  freezeUntilPlayerTurn(state, "d4", 1);
-  freezeUntilPlayerTurn(state, "a7", 2);
-  freezeUntilPlayerTurn(state, "b7", 1);
+  reserveOpeningSource(state, "f1");
+  forceOpeningReply(state, "a7");
   return state;
 };
 
@@ -1058,10 +1036,27 @@ const sungExecution = (playerName?: string) => {
     ["teles", "death", "chiron"],
     playerName,
   );
-  relocatePiece(state, "a7", "c4");
-  relocatePiece(state, "b7", "b3");
-  relocatePiece(state, "c7", "b4");
-  relocatePiece(state, "b1", "h1");
+  state.board = board(
+    ["a1", piece("white-king", "king", "white")],
+    ["e2", piece("white-charge-knight", "knight", "white")],
+    ["e4", piece("white-doomed-bishop", "bishop", "white")],
+    ["c2", piece("white-resonance-pawn", "pawn", "white")],
+    ["d3", piece("white-mark-blocker-rook", "rook", "white")],
+    ["d5", piece("white-mark-blocker-queen", "queen", "white")],
+    ["f3", piece("white-mark-blocker-pawn", "pawn", "white")],
+    ["c6", piece("white-cage-pawn-c6", "pawn", "white")],
+    ["d6", piece("white-cage-pawn-d6", "pawn", "white")],
+    ["f6", piece("white-cage-pawn-f6", "pawn", "white")],
+    ["g6", piece("white-cage-pawn-g6", "pawn", "white")],
+    ["c7", piece("white-cage-pawn-c7", "pawn", "white")],
+    ["g7", piece("white-cage-pawn-g7", "pawn", "white")],
+    ["b3", piece("black-resonance-pawn-b3", "pawn", "black")],
+    ["b4", piece("black-resonance-pawn-b4", "pawn", "black")],
+    ["c4", piece("black-resonance-pawn-c4", "pawn", "black")],
+    ["d4", piece("black-resonance-pawn-d4", "pawn", "black")],
+    ["h7", piece("black-response-pawn", "pawn", "black")],
+    ["e8", piece("black-king", "king", "black")],
+  );
   state.players.white.orbs.black = 0;
   state.players.white.upgrades = {
     resonance: 3,
@@ -1073,17 +1068,8 @@ const sungExecution = (playerName?: string) => {
     mount: 2,
     charge: 2,
   };
+  reserveOpeningSource(state, "c2");
   forceOpeningReply(state, "h7");
-  state.board.d3 = piece("white-mark-blocker-d3", "pawn", "white");
-  state.board.d5 = piece("white-mark-blocker", "pawn", "white");
-  state.board.f3 = piece("white-mark-blocker-f3", "pawn", "white");
-  freezeHardPuzzleDecoys(
-    state,
-    ["white-pawn-c", "white-doomed-bishop", "white-charge-knight"],
-    ["black-pawn-h"],
-  );
-  freezeUntilPlayerTurn(state, "e4", 1);
-  freezeUntilPlayerTurn(state, "e2", 2);
   return state;
 };
 
@@ -1095,14 +1081,22 @@ const openedThrone = (playerName?: string) => {
     ["anubis", "quetzacoatl", "leonidas"],
     playerName,
   );
-  relocatePiece(state, "a2", "e5");
-  delete state.board.a1;
-  state.board.e5 = piece("white-construction-rook", "rook", "white");
-  state.board.e6 = piece("black-construction-target", "pawn", "black");
-  state.board.d5 = piece("white-construction-blocker-d5", "pawn", "white");
-  state.board.e4 = piece("white-construction-blocker-e4", "pawn", "white");
-  state.board.f5 = piece("white-airlift-blocker-f5", "pawn", "white");
-  state.board.g5 = piece("white-airlift-blocker-g5", "pawn", "white");
+  state.board = board(
+    ["b1", piece("white-king", "king", "white")],
+    ["e5", piece("white-construction-queen", "queen", "white")],
+    ["f6", piece("white-escort", "rook", "white")],
+    ["a8", piece("white-cage-rook", "rook", "white")],
+    ["e7", piece("white-cage-knight-e7", "knight", "white")],
+    ["d5", piece("white-rook-blocker-d5", "pawn", "white")],
+    ["d4", piece("white-queen-blocker-d4", "pawn", "white")],
+    ["d6", piece("white-queen-blocker-d6", "pawn", "white")],
+    ["e4", piece("white-rook-blocker-e4", "pawn", "white")],
+    ["f4", piece("white-cage-bishop-f4", "bishop", "white")],
+    ["f5", piece("white-cage-bishop", "bishop", "white")],
+    ["g6", piece("white-cage-pawn-g6", "pawn", "white")],
+    ["a7", piece("black-response-pawn", "pawn", "black")],
+    ["g7", piece("black-king", "king", "black")],
+  );
   state.players.white.upgrades = {
     construction: 2,
     harden: 3,
@@ -1113,14 +1107,9 @@ const openedThrone = (playerName?: string) => {
     "royal-step": 2,
     "march-home": 2,
   };
+  state.players.white.orbs.black = 0;
+  reserveOpeningSource(state, "e5");
   forceOpeningReply(state, "a7");
-  freezeHardPuzzleDecoys(
-    state,
-    ["white-construction-rook", "white-king", "white-escort"],
-    ["black-pawn-a", "black-construction-target"],
-  );
-  freezeUntilPlayerTurn(state, "b1", 1);
-  freezeUntilPlayerTurn(state, "f6", 2);
   return state;
 };
 
@@ -1132,15 +1121,25 @@ const pinnedSerpent = (playerName?: string) => {
     ["medusa", "quetzacoatl", "kangus"],
     playerName,
   );
-  relocatePiece(state, "d1", "a5");
-  relocatePiece(state, "c8", "f8");
-  relocatePiece(state, "a8", "b6");
-  relocatePiece(state, "d8", "d6");
-  state.board.a4 = piece("white-captivate-blocker-a4", "pawn", "white");
-  state.board.a6 = piece("white-captivate-blocker-a6", "pawn", "white");
-  state.board.b4 = piece("white-captivate-blocker-b4", "pawn", "white");
-  state.board.b5 = piece("white-captivate-blocker-b5", "pawn", "white");
-  state.board.c7 = piece("white-captivate-blocker-c7", "pawn", "white");
+  state.board = board(
+    ["h3", piece("white-king", "king", "white")],
+    ["a5", piece("white-queen", "queen", "white")],
+    ["g3", piece("white-slithering-rook", "rook", "white")],
+    ["a4", piece("white-captivate-blocker-a4", "pawn", "white")],
+    ["a6", piece("white-captivate-blocker-a6", "pawn", "white")],
+    ["b4", piece("white-captivate-blocker-b4", "pawn", "white")],
+    ["b5", piece("white-captivate-blocker-b5", "pawn", "white")],
+    ["f5", piece("white-cage-bishop-f5", "bishop", "white")],
+    ["f6", piece("white-cage-pawn-f6", "pawn", "white")],
+    ["f7", piece("white-cage-pawn-f7", "pawn", "white")],
+    ["b6", piece("black-captivate-rook", "rook", "black")],
+    ["a7", piece("black-pawn-blocker-a7", "pawn", "black")],
+    ["c8", piece("black-response-knight", "knight", "black")],
+    ["d6", piece("black-queen", "queen", "black")],
+    ["f8", piece("black-pawn-blocker-rook", "rook", "black")],
+    ["h8", piece("black-king", "king", "black")],
+  );
+  state.players.white.orbs = { white: 0, black: 0 };
   state.players.white.upgrades = {
     captivate: 3,
     slither: 2,
@@ -1152,13 +1151,8 @@ const pinnedSerpent = (playerName?: string) => {
     "banana-peel": 2,
     rage: 1,
   };
-  forceOpeningReply(state, "c6");
-  freezeHardPuzzleDecoys(
-    state,
-    ["white-queen", "white-slithering-rook"],
-    ["black-bishop", "black-pawn-c"],
-  );
-  freezeUntilPlayerTurn(state, "g3", 1);
+  reserveOpeningSource(state, "a5");
+  forceOpeningReply(state, "c8");
   return state;
 };
 
@@ -1170,7 +1164,20 @@ const hexedProvocation = (playerName?: string) => {
     ["salem", "ares", "chiron"],
     playerName,
   );
-  [state.board.a7, state.board.b7] = [state.board.b7, state.board.a7];
+  state.board = board(
+    ["h1", piece("white-king", "king", "white")],
+    ["b7", piece("white-rook-a", "rook", "white")],
+    ["e5", piece("white-pin-bishop", "bishop", "white")],
+    ["f5", piece("white-provoked-knight", "knight", "white")],
+    ["f7", piece("white-cage-pawn-f7", "pawn", "white")],
+    ["g6", piece("white-cage-pawn-g6", "pawn", "white")],
+    ["a7", piece("black-response-pawn", "pawn", "black")],
+    ["b8", piece("black-hex-knight", "knight", "black")],
+    ["d8", piece("black-queen", "queen", "black")],
+    ["f8", piece("black-rook", "rook", "black")],
+    ["g7", piece("black-provoker", "bishop", "black")],
+    ["h8", piece("black-king", "king", "black")],
+  );
   state.players.white.orbs = { white: 2, black: 0 };
   state.players.white.upgrades = {
     hex: 3,
@@ -1183,13 +1190,8 @@ const hexedProvocation = (playerName?: string) => {
     mount: 2,
     charge: 2,
   };
+  reserveOpeningSource(state, "b7");
   forceOpeningReply(state, "a7");
-  freezeHardPuzzleDecoys(
-    state,
-    ["white-rook-a", "white-provoked-knight", "white-pin-bishop"],
-    ["black-pawn-b", "black-provoker"],
-  );
-  freezeUntilPlayerTurn(state, "e5", 1);
   return state;
 };
 
@@ -1533,28 +1535,28 @@ export const PUZZLES: PuzzleDefinition[] = [
     title: "Position Sixteen",
     difficulty: "hard",
     objective: "Capture the black King in three divine turns.",
-    hint: "The Queen can finance two paid abilities, but Enchant must clear both blockers from the e-file.",
-    solutionSummary: "Use Captivate to move the Queen from b3 to a4, Enchant the bishop from f7 to d5 and capture it with your bishop from e4, then Charge from e2 to e8.",
+    hint: "The opening pawn step commits Medusa before Enchant places a target on the charging knight's square.",
+    solutionSummary: "Use Captivate to move the pawn from h2 to h3, Enchant the pawn from e6 to e5 and capture it with the knight from c4, then Charge that knight to e8.",
     playerTurns: 3,
     solutionTurns: [
       [
         { type: "select-god", godId: "medusa" },
         { type: "select-ability", abilityId: "captivate" },
-        { type: "square", square: "b3" },
-        { type: "square", square: "a4" },
+        { type: "square", square: "h2" },
+        { type: "square", square: "h3" },
       ],
       [
         { type: "select-god", godId: "teles" },
         { type: "select-ability", abilityId: "enchant" },
-        { type: "square", square: "f7" },
-        { type: "square", square: "d5" },
-        { type: "square", square: "e4" },
-        { type: "square", square: "d5" },
+        { type: "square", square: "e6" },
+        { type: "square", square: "e5" },
+        { type: "square", square: "c4" },
+        { type: "square", square: "e5" },
       ],
       [
         { type: "select-god", godId: "chiron" },
         { type: "select-ability", abilityId: "charge" },
-        { type: "square", square: "e2" },
+        { type: "square", square: "e5" },
         { type: "square", square: "e8" },
       ],
     ],
@@ -1566,7 +1568,7 @@ export const PUZZLES: PuzzleDefinition[] = [
     difficulty: "hard",
     objective: "Capture the black King in three divine turns.",
     hint: "Three aligned curses can finance the hire that gives your reserve Queen a landing anchor.",
-    solutionSummary: "Hex b7, b8, and d8, move the rook from f6 to b6, hire the bishop on h7 with Leverage, then Resurrect the Queen onto h8.",
+    solutionSummary: "Hex b7, b8, and d8, move the rook from f6 to b6, move the knight from e7 to g8 to hire the bishop on h7, then Resurrect the Queen onto h8.",
     playerTurns: 3,
     solutionTurns: [
       [
@@ -1581,8 +1583,8 @@ export const PUZZLES: PuzzleDefinition[] = [
       [
         { type: "select-god", godId: "midas" },
         { type: "select-ability", abilityId: "leverage" },
-        { type: "square", square: "b6" },
-        { type: "square", square: "g6" },
+        { type: "square", square: "e7" },
+        { type: "square", square: "g8" },
         { type: "square", square: "h7" },
       ],
       [
@@ -1599,15 +1601,15 @@ export const PUZZLES: PuzzleDefinition[] = [
     title: "Position Eighteen",
     difficulty: "hard",
     objective: "Capture the black King in three divine turns.",
-    hint: "A trade beside the advanced pawn can fund the final explosion before the knight carries its rider.",
-    solutionSummary: "Barter after moving g2 to g3 and take 3 black orbs, Mount the rook from f7 beside the King, then use Rage.",
+    hint: "A trade beside the advanced pawn can fund the final explosion before the knight carries its rider to the only useful dismount square.",
+    solutionSummary: "Barter after moving c2 to c3 and take 3 black orbs, use Mount to carry the rook from f7 to g7 with the knight from e7, then use Rage on the mounted knight.",
     playerTurns: 3,
     solutionTurns: [
       [
         { type: "select-god", godId: "midas" },
         { type: "select-ability", abilityId: "barter" },
-        { type: "square", square: "g2" },
-        { type: "square", square: "g3" },
+        { type: "square", square: "c2" },
+        { type: "square", square: "c3" },
         { type: "barter", give: "white" },
       ],
       [
@@ -1621,7 +1623,7 @@ export const PUZZLES: PuzzleDefinition[] = [
       [
         { type: "select-god", godId: "kangus" },
         { type: "select-ability", abilityId: "rage" },
-        { type: "square", square: "g7" },
+        { type: "square", square: "g8" },
       ],
     ],
     createState: goldenFuse,
@@ -1631,8 +1633,8 @@ export const PUZZLES: PuzzleDefinition[] = [
     title: "Position Nineteen",
     difficulty: "hard",
     objective: "Capture the black King in three divine turns.",
-    hint: "A rook can resonate beside the clustered dark pieces while the f-file remains screened for the Monument.",
-    solutionSummary: "Use Resonance to move the rook from a2 to a3, raise a Monument rook on f2, then Air Strike to f8 and drop the bishop onto f7.",
+    hint: "A Queen can resonate beside the clustered dark pieces before Construction clears the carrier's landing square.",
+    solutionSummary: "Use Resonance to move the Queen from a2 to a3, use Construction to move the knight from h8 to f7, then Air Strike from a8 to h8 and drop the bishop onto g8.",
     playerTurns: 3,
     solutionTurns: [
       [
@@ -1643,19 +1645,17 @@ export const PUZZLES: PuzzleDefinition[] = [
       ],
       [
         { type: "select-god", godId: "anubis" },
-        { type: "select-ability", abilityId: "monument" },
-        { type: "square", square: "f2" },
-        { type: "square", square: "d3" },
-        { type: "square", square: "e2" },
-        { type: "square", square: "f2" },
+        { type: "select-ability", abilityId: "construction" },
+        { type: "square", square: "h8" },
+        { type: "square", square: "f7" },
       ],
       [
         { type: "select-god", godId: "quetzacoatl" },
         { type: "select-ability", abilityId: "air-strike" },
-        { type: "square", square: "f2" },
-        { type: "square", square: "g2" },
-        { type: "square", square: "f8" },
-        { type: "square", square: "f7" },
+        { type: "square", square: "a8" },
+        { type: "square", square: "b8" },
+        { type: "square", square: "h8" },
+        { type: "square", square: "g8" },
       ],
     ],
     createState: resonantFoundation,
@@ -1697,7 +1697,7 @@ export const PUZZLES: PuzzleDefinition[] = [
     difficulty: "hard",
     objective: "Capture the black King in three divine turns.",
     hint: "One careful rook step completes the treasury needed to hire a passenger and launch it.",
-    solutionSummary: "Use level 3 Construction to move the rook from f1 to g1, hire the bishop on b7 with Leverage, then Air Strike from a7 and drop it onto f7.",
+    solutionSummary: "Use level 3 Construction to move the rook from f1 to g1, hire the knight on c7 with Leverage, then Air Strike from b8 to h8 and drop it onto g8.",
     playerTurns: 3,
     solutionTurns: [
       [
@@ -1711,15 +1711,15 @@ export const PUZZLES: PuzzleDefinition[] = [
         { type: "select-ability", abilityId: "leverage" },
         { type: "square", square: "d4" },
         { type: "square", square: "c6" },
-        { type: "square", square: "b7" },
+        { type: "square", square: "c7" },
       ],
       [
         { type: "select-god", godId: "quetzacoatl" },
         { type: "select-ability", abilityId: "air-strike" },
-        { type: "square", square: "a7" },
-        { type: "square", square: "b7" },
-        { type: "square", square: "h7" },
-        { type: "square", square: "f7" },
+        { type: "square", square: "b8" },
+        { type: "square", square: "c7" },
+        { type: "square", square: "h8" },
+        { type: "square", square: "g8" },
       ],
     ],
     createState: architectsBargain,
@@ -1759,8 +1759,8 @@ export const PUZZLES: PuzzleDefinition[] = [
     title: "Position Twenty-Three",
     difficulty: "hard",
     objective: "Capture the black King in three divine turns.",
-    hint: "The royal landing square is occupied by your rook; Construction can clear it by taking the pawn directly ahead.",
-    solutionSummary: "Use Construction to capture from e5 to e6 with the rook, Air Lift the King to e5, then Escort through the rook on f6 to capture on g7.",
+    hint: "The royal landing square is occupied by your Queen; Construction can clear it by stepping directly ahead.",
+    solutionSummary: "Use Construction to move the Queen from e5 to e6, Air Lift the King to e5, then Escort through the rook on f6 to capture on g7.",
     playerTurns: 3,
     solutionTurns: [
       [
@@ -1819,15 +1819,15 @@ export const PUZZLES: PuzzleDefinition[] = [
     title: "Position Twenty-Five",
     difficulty: "hard",
     objective: "Capture the black King in three divine turns.",
-    hint: "The rook can enter the enemy back rank while aligning with three curses, funding the provocation and charge that follow.",
-    solutionSummary: "Hex d8, g8, and h8, capture a8 with the rook for 4 black orbs, use Pick a Fight to move e5 to g6, then Charge to g8.",
+    hint: "The rook can enter the enemy back rank while aligning with three curses, funding a provocation against the pinned bishop.",
+    solutionSummary: "Hex d8, f8, and h8, capture b8 with the rook for 4 black orbs, use Pick a Fight to move f5 to h6, then Charge to h8.",
     playerTurns: 3,
     solutionTurns: [
       [
         { type: "select-god", godId: "salem" },
         { type: "select-ability", abilityId: "hex" },
         { type: "square", square: "d8" },
-        { type: "square", square: "g8" },
+        { type: "square", square: "f8" },
         { type: "square", square: "h8" },
         { type: "square", square: "b7" },
         { type: "square", square: "b8" },
@@ -1835,14 +1835,14 @@ export const PUZZLES: PuzzleDefinition[] = [
       [
         { type: "select-god", godId: "ares" },
         { type: "select-ability", abilityId: "pick-a-fight" },
-        { type: "square", square: "e5" },
-        { type: "square", square: "g6" },
+        { type: "square", square: "f5" },
+        { type: "square", square: "h6" },
       ],
       [
         { type: "select-god", godId: "chiron" },
         { type: "select-ability", abilityId: "charge" },
-        { type: "square", square: "g6" },
-        { type: "square", square: "g8" },
+        { type: "square", square: "h6" },
+        { type: "square", square: "h8" },
       ],
     ],
     createState: hexedProvocation,

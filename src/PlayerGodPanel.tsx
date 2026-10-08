@@ -124,7 +124,6 @@ export function PlayerAbilityCard({
                 {ability.cost?.black
                   ? <AbilityOrb affinity="black" count={ability.cost.black} />
                   : null}
-                {!ability.cost && <span className="free-tag">GENERATES</span>}
               </div>
             )}
             {footerAction && <b className="upgrade-tag">{footerAction}</b>}
