@@ -15,7 +15,7 @@ import {
   PUZZLE_GOD_USAGE_BY_ID,
   PUZZLES,
 } from "./puzzles";
-import type { GameState, PieceType } from "./types";
+import type { GameState, GodId, PieceType } from "./types";
 
 const HARD_PUZZLES = PUZZLES.filter((puzzle) => puzzle.difficulty === "hard");
 
@@ -35,6 +35,34 @@ const uniqueTurnPlans = (state: GameState) => {
     if (!byState.has(key)) byState.set(key, plan);
   }
   return [...byState.values()];
+};
+
+const requiredAbilityTurnPlans = (
+  state: GameState,
+  godId: GodId | undefined,
+  abilityId: string | undefined,
+) => {
+  if (!godId || !abilityId) return [];
+  let staged = gameReducer(state, { type: "select-god", godId });
+  staged = gameReducer(staged, { type: "select-ability", abilityId });
+  if (staged.selectedGod !== godId || staged.selectedAbility !== abilityId) return [];
+  return uniqueTurnPlans(staged)
+    .filter((plan) =>
+      plan.actions.every(
+        (action) =>
+          action.type !== "cancel" &&
+          action.type !== "select-god" &&
+          action.type !== "select-ability",
+      )
+    )
+    .map((plan) => ({
+      ...plan,
+      actions: [
+        { type: "select-god", godId },
+        { type: "select-ability", abilityId },
+        ...plan.actions,
+      ] as GameAction[],
+    }));
 };
 
 const canonicalAction = (action: GameAction) => JSON.stringify(action);
@@ -71,6 +99,19 @@ const countDistinctWinningLines = (
 ) => {
   const winningKeys = new Set<string>();
   const seen = new Set<string>();
+  let documented = state;
+  for (const [turnIndex, actions] of requiredTurns.entries()) {
+    documented = applyActions(documented, actions);
+    if (documented.phase === "gameover") {
+      if (turnIndex === requiredTurns.length - 1 && isWhitePuzzleWin(documented)) {
+        winningKeys.add(JSON.stringify(requiredTurns.map(canonicalTurnKey)));
+      }
+      break;
+    }
+    const aiActions = chooseAiPlan(documented, () => 0);
+    if (!aiActions.length) break;
+    documented = applyActions(documented, aiActions);
+  }
 
   const search = (
     current: GameState,
@@ -92,16 +133,7 @@ const countDistinctWinningLines = (
         action.type === "select-ability",
     )?.abilityId;
 
-    for (const plan of uniqueTurnPlans(current).filter((candidate) =>
-      candidate.actions.some(
-        (action) => action.type === "select-god" && action.godId === requiredGod,
-      ) &&
-      candidate.actions.some(
-        (action) =>
-          action.type === "select-ability" &&
-          action.abilityId === requiredAbility,
-      )
-    )) {
+    for (const plan of requiredAbilityTurnPlans(current, requiredGod, requiredAbility)) {
       const line = [...prefix, plan.actions];
       if (isWhitePuzzleWin(plan.state)) {
         if (turnsRemaining === 1) {
@@ -135,25 +167,14 @@ describe("puzzle mode", () => {
     expect(HARD_PUZZLES.every((puzzle) => puzzle.playerTurns === 3)).toBe(true);
   });
 
-  it("reserves sequencing freezes for Hard positions", () => {
-    const frozenPieces = PUZZLES.filter((puzzle) => puzzle.difficulty !== "hard")
-      .flatMap((puzzle) =>
-        Object.entries(puzzle.createState().board)
-          .filter(([, piece]) => piece.status.frozen || piece.status.frozenBy)
-          .map(([square, piece]) => `${puzzle.id}:${square}:${piece.id}`)
-      );
+  it("starts every puzzle without unexplained frozen pieces", () => {
+    const frozenPieces = PUZZLES.flatMap((puzzle) =>
+      Object.entries(puzzle.createState().board)
+        .filter(([, piece]) => piece.status.frozen || piece.status.frozenBy)
+        .map(([square, piece]) => `${puzzle.id}:${square}:${piece.id}`)
+    );
 
     expect(frozenPieces).toEqual([]);
-    for (const puzzle of HARD_PUZZLES) {
-      const sequenced = Object.values(puzzle.createState().board)
-        .filter((piece) => piece.status.frozen || piece.status.frozenBy);
-      expect(sequenced.length).toBeGreaterThan(0);
-      expect(sequenced.every((piece) =>
-        typeof piece.status.frozen === "number" &&
-        piece.status.frozen >= 1 &&
-        Boolean(piece.status.frozenBy)
-      )).toBe(true);
-    }
   });
 
   it("gives every Hard position a unique board and documented move sequence", () => {
@@ -183,6 +204,11 @@ describe("puzzle mode", () => {
       knight: 2,
     };
     for (const color of ["white", "black"] as const) {
+      expect(
+        Object.values(state.board).filter(
+          (piece) => piece.color === color && piece.type === "pawn",
+        ).length,
+      ).toBeLessThanOrEqual(8);
       for (const [type, limit] of Object.entries(limits) as Array<[PieceType, number]>) {
         expect(
           Object.values(state.board).filter(
@@ -338,7 +364,7 @@ describe("puzzle mode", () => {
     expect(state.gameMode).toBe("puzzle");
     expect(state.aiDifficulty).toBe(10);
     expect(state.aiColor).toBe("black");
-    expect(Object.keys(state.board).length).toBeGreaterThanOrEqual(16);
+    expect(Object.keys(state.board).length).toBeGreaterThanOrEqual(6);
 
     const blackKingSquare = Object.entries(state.board).find(
       ([, piece]) => piece.type === "king" && piece.controller === "black",

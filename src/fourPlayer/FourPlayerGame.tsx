@@ -869,7 +869,6 @@ function UpgradeAbilityCard({
             <div className="ability-cost">
               {ability.cost?.white ? <Orb affinity="light" count={ability.cost.white} /> : null}
               {ability.cost?.black ? <Orb affinity="dark" count={ability.cost.black} /> : null}
-              {!ability.cost && <span className="free-tag">GENERATES</span>}
             </div>
             <b className="upgrade-tag">
               {level >= 3 ? "MAX LEVEL" : `SELECT LVL ${level + 1}`}
