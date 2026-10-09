@@ -33,6 +33,7 @@ import {
   useReducer,
   useRef,
   useState,
+  type ReactNode,
 } from "react";
 import { GameResultPresentation } from "../GameResultPresentation";
 import { MatchEscapeMenu } from "../MatchEscapeMenu";
@@ -831,6 +832,8 @@ function UpgradeAbilityCard({
   active,
   disabled,
   onClick,
+  onDoubleClick,
+  children,
 }: {
   ability: Ability;
   level: number;
@@ -838,6 +841,8 @@ function UpgradeAbilityCard({
   active: boolean;
   disabled: boolean;
   onClick: () => void;
+  onDoubleClick?: () => void;
+  children?: ReactNode;
 }) {
   return (
     <div className={`ability-card ${active ? "active" : ""} ${disabled ? "disabled" : ""}`}>
@@ -848,6 +853,10 @@ function UpgradeAbilityCard({
         aria-disabled={disabled || undefined}
         onClick={() => {
           if (!disabled) onClick();
+        }}
+        onDoubleClick={(event) => {
+          if ((event.target as HTMLElement).closest(".level-selector")) return;
+          if (!disabled) onDoubleClick?.();
         }}
         onKeyDown={(event) => {
           if (!disabled && (event.key === "Enter" || event.key === " ")) {
@@ -876,6 +885,7 @@ function UpgradeAbilityCard({
           </div>
         </div>
       </div>
+      {children && <div className="ability-pending">{children}</div>}
     </div>
   );
 }
@@ -1121,18 +1131,6 @@ function FourActionPanel({
   ]);
 
   if (state.phase === "upgrade") {
-    const selectedUpgradeGod = active.gods
-      .map((godId) => GOD_BY_ID[godId])
-      .find((candidate) =>
-        candidate.abilities.some((ability) => ability.id === selectedUpgradeAbilityId)
-      );
-    const selectedUpgradeAbility = selectedUpgradeGod?.abilities.find(
-      (ability) => ability.id === selectedUpgradeAbilityId,
-    );
-    const selectedUpgradeLevel = selectedUpgradeAbility
-      ? abilityLevel(active.upgrades, selectedUpgradeAbility.id)
-      : undefined;
-
     return (
       <aside className="four-action-panel upgrade-panel">
         <div className="panel-heading">
@@ -1162,41 +1160,39 @@ function FourActionPanel({
                 </div>
                 {upgradeGod.abilities.map((ability) => {
                   const level = abilityLevel(active.upgrades, ability.id);
+                  const selected = selectedUpgradeAbilityId === ability.id;
                   return (
                     <UpgradeAbilityCard
                       ability={ability}
                       level={level}
                       previewLevel={godPreviewLevel}
-                      active={selectedUpgradeAbilityId === ability.id}
+                      active={selected}
                       disabled={inputDisabled || level >= 3}
-                      onClick={() => setSelectedUpgradeAbilityId(ability.id)}
+                      onClick={() => {
+                        setGodPreviewLevel(Math.min(3, level + 1));
+                        setSelectedUpgradeAbilityId(ability.id);
+                      }}
+                      onDoubleClick={() => {
+                        dispatch({ type: "upgrade", abilityId: ability.id });
+                      }}
                       key={ability.id}
-                    />
+                    >
+                      {selected && (
+                        <div className="upgrade-confirmation">
+                          <button
+                            className="primary-button"
+                            onClick={() => dispatch({ type: "upgrade", abilityId: ability.id })}
+                          >
+                            Confirm {ability.name} · Lv {level + 1}
+                          </button>
+                        </div>
+                      )}
+                    </UpgradeAbilityCard>
                   );
                 })}
               </section>
             );
           })}
-        </div>
-        <div className="upgrade-confirmation">
-          <button
-            className="primary-button"
-            disabled={
-              inputDisabled ||
-              !selectedUpgradeAbility ||
-              selectedUpgradeLevel === undefined ||
-              selectedUpgradeLevel >= 3
-            }
-            onClick={() => {
-              if (selectedUpgradeAbility) {
-                dispatch({ type: "upgrade", abilityId: selectedUpgradeAbility.id });
-              }
-            }}
-          >
-            {selectedUpgradeAbility && selectedUpgradeLevel !== undefined
-              ? `Confirm ${selectedUpgradeAbility.name} · Lv ${selectedUpgradeLevel + 1}`
-              : "Select an ability to upgrade"}
-          </button>
         </div>
       </aside>
     );

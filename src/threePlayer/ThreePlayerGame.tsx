@@ -1543,12 +1543,6 @@ export function ThreePlayerGame({
   const showNeutralAffinity = threePlayerHasAlternatingNeutralCells(
     state.config.boardVariant,
   );
-  const selectedUpgradeAction = selectedUpgradeAbility
-    ? upgradeActions.find((action) =>
-      actionValue<string>(action, "abilityId") === selectedUpgradeAbility
-    )
-    : undefined;
-
   return (
     <main className={`three-game-page ${state.phase === "gameover" ? "finished-view" : ""} ${inputDisabled ? "input-gated" : ""}`}>
       <header className="three-game-topbar">
@@ -1702,40 +1696,43 @@ export function ThreePlayerGame({
                         const action = upgradeActions.find((candidate) =>
                           actionValue<string>(candidate, "abilityId") === ability.id
                         );
+                        const selected = selectedUpgradeAbility === ability.id;
                         return (
                           <PlayerAbilityCard
                             ability={ability}
                             level={level}
                             previewLevel={previewLevel}
-                            active={selectedUpgradeAbility === ability.id}
+                            active={selected}
                             selectable={!inputDisabled && Boolean(action)}
                             disabled={inputDisabled || !action}
                             footerLabel={`CURRENT LVL ${level}`}
                             footerAction={level >= 3 ? "MAX LEVEL" : `SELECT LVL ${level + 1}`}
                             showCost={false}
-                            onClick={() => setSelectedUpgradeAbility(ability.id)}
+                            onClick={() => {
+                              setPreviewLevel(Math.min(3, level + 1));
+                              setSelectedUpgradeAbility(ability.id);
+                            }}
+                            onDoubleClick={() => {
+                              if (action) dispatchAction(action);
+                            }}
                             key={ability.id}
-                          />
+                          >
+                            {selected && action && (
+                              <div className="upgrade-confirmation">
+                                <button
+                                  className="primary-button"
+                                  onClick={() => dispatchAction(action)}
+                                >
+                                  Confirm {ability.name} · Lv {level + 1}
+                                </button>
+                              </div>
+                            )}
+                          </PlayerAbilityCard>
                         );
                       })}
                     </section>
                   );
                 })}
-              </div>
-              <div className="upgrade-confirmation">
-                <button
-                  className="primary-button"
-                  disabled={inputDisabled || !selectedUpgradeAction}
-                  onClick={() => {
-                    if (selectedUpgradeAction) dispatchAction(selectedUpgradeAction);
-                  }}
-                >
-                  {selectedUpgradeAbility
-                    ? `Confirm ${GODS.flatMap((god) => god.abilities).find(
-                      (ability) => ability.id === selectedUpgradeAbility,
-                    )?.name ?? "ability"} upgrade`
-                    : "Select an ability to upgrade"}
-                </button>
               </div>
             </>
           ) : moveFirstDraft ? (

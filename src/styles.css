@@ -763,6 +763,7 @@ span.move-target-dot {
 .ability-cost { display: flex; gap: 8px; }
 .upgrade-tag { color: var(--gold); font-size: 8px; letter-spacing: .09em; }
 .upgrade-confirmation { padding: 0 12px 15px; }
+.ability-pending .upgrade-confirmation { padding-top: 12px; }
 .action-buttons { padding: 0 12px 15px; display: flex; gap: 8px; }
 .secondary-button, .text-button {
   flex: 1; min-height: 34px; color: #b9b5ad; background: transparent; border: 1px solid #34363e; font-size: 9px; text-transform: uppercase; letter-spacing: .08em; cursor: pointer;
