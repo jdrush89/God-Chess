@@ -457,11 +457,70 @@ describe("game startup", () => {
 
     fireEvent.keyDown(window, { key: "ArrowRight" });
     expect(screen.getByRole("dialog", { name: /track rounds and turns/i })).toBeTruthy();
+    expect(screen.getByText(/all six drafted gods/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^next$/i }));
+    expect(screen.getByText(/rests for the remainder of the round/i)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /skip tutorial/i }));
 
     expect(screen.getByRole("button", { name: /^tutorial$/i })).toBeTruthy();
     expect(screen.queryByRole("dialog")).toBeNull();
   });
+
+  it("guides a full practice round, upgrade, and special power", async () => {
+    const { container } = render(<App />);
+    openPlayOption("Tutorial");
+
+    for (let step = 0; step < 8; step += 1) {
+      fireEvent.click(screen.getByRole("button", { name: /^next$/i }));
+    }
+    fireEvent.click(screen.getByRole("button", { name: /start guided practice/i }));
+
+    fireEvent.click(screen.getByRole("button", { name: /^Ares/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Threaten/i }));
+    fireEvent.click(container.querySelector('[data-square="e2"]')!);
+    fireEvent.click(container.querySelector('[data-square="e4"]')!);
+    await waitFor(
+      () => expect(screen.getByRole("button", { name: /^Anubis/i })).toBeTruthy(),
+      { timeout: 3000 },
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^Anubis/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Construction/i }));
+    fireEvent.click(container.querySelector('[data-square="d2"]')!);
+    fireEvent.click(container.querySelector('[data-square="d3"]')!);
+    await waitFor(
+      () => expect(screen.getByRole("button", { name: /^Chiron/i })).toBeTruthy(),
+      { timeout: 3000 },
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^Chiron/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Gallop/i }));
+    fireEvent.click(container.querySelector('[data-square="g1"]')!);
+    fireEvent.click(container.querySelector('[data-square="f3"]')!);
+    await waitFor(
+      () => expect(container.querySelector(".upgrade-panel")).toBeTruthy(),
+      { timeout: 3000 },
+    );
+
+    fireEvent.click(
+      container.querySelector('[data-ability-id="charge"] .ability-card-main')!,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /confirm charge/i }));
+    await waitFor(
+      () => expect(screen.getByRole("button", { name: /^Chiron/i })).toBeTruthy(),
+      { timeout: 3000 },
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^Chiron/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Charge/i }));
+    fireEvent.click(container.querySelector('[data-square="f3"]')!);
+    fireEvent.click(container.querySelector('[data-square="f7"]')!);
+
+    expect(screen.getByRole("dialog", { name: /practice complete/i })).toBeTruthy();
+    expect(container.querySelector('[data-square="f7"] [data-piece-id]')).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /finish tutorial/i }));
+    expect(screen.getByRole("button", { name: /^tutorial$/i })).toBeTruthy();
+  }, 15_000);
 
   describe("finished classic matches", () => {
     it("reveals the final board, reopens the result, enables undo, and resumes play", () => {

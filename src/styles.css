@@ -1074,6 +1074,9 @@ span.move-target-dot {
 /* Guided tutorial */
 .tutorial-stage { min-height: 100dvh; }
 .tutorial-overlay { position: fixed; z-index: 200; inset: 0; pointer-events: auto; }
+.tutorial-overlay.practice { pointer-events: none; }
+.tutorial-overlay.practice.blocking { pointer-events: auto; }
+.tutorial-overlay.practice .tutorial-card { pointer-events: auto; }
 .tutorial-full-scrim {
   position: absolute; inset: 0; background: rgba(3, 4, 8, .83); backdrop-filter: blur(2px);
 }
@@ -1124,6 +1127,17 @@ span.move-target-dot {
   border: 0; cursor: pointer; font-size: 8px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
 }
 .tutorial-skip:hover { color: #c8c1b4; }
+.tutorial-instruction {
+  display: block; margin-top: 17px; padding: 12px 13px;
+  color: #f0d99e; background: rgba(198, 161, 91, .09); border-left: 2px solid var(--gold);
+  font-size: 10px; line-height: 1.45;
+}
+.tutorial-feedback {
+  margin-top: 10px !important; padding: 9px 11px; color: #efb4aa !important;
+  background: rgba(170, 62, 48, .12); border: 1px solid rgba(220, 105, 90, .28);
+  font-size: 10px !important;
+}
+.tutorial-overlay.practice .tutorial-card > .primary-button { margin-top: 22px; }
 .shell-library {
   width: min(760px, calc(100% - 32px)); max-height: none; margin: clamp(26px, 5vh, 52px) auto;
 }
@@ -2607,6 +2621,9 @@ span.move-target-dot {
   }
   .tutorial-overlay.centered .tutorial-card {
     top: 50%; right: 12px; bottom: auto; left: 12px; width: auto; transform: translateY(-50%);
+  }
+  .tutorial-overlay.practice.has-target.target-low .tutorial-card {
+    top: 12px; bottom: auto;
   }
   .tutorial-card h2 { font-size: 20px; }
   .tutorial-card > p:not(.eyebrow) { font-size: 11px; line-height: 1.55; }

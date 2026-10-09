@@ -84,6 +84,7 @@ export function PlayerAbilityCard({
   return (
     <div
       className={`ability-card ${active ? "active" : ""} ${highlighted ? "opponent-selecting" : ""} ${disabled ? "disabled" : ""} ${!selectable && !disabled ? "read-only" : ""}`}
+      data-ability-id={ability.id}
     >
       <div
         className="ability-card-main"
