@@ -160,7 +160,7 @@ const drawAbility = (doc, god, abilityData, index, x, y, width, height) => {
     .text("LV 2", x + 20, upgradeY, { width: 26 });
   fitText(doc, abilityData.details[1], x + 48, upgradeY - 1, upgradeWidth - 30, height - 84, {
     font: "Helvetica",
-    maxSize: 7.2,
+    maxSize: 7.6,
     minSize: 5.8,
     color: "#cfc9bb",
     lineGap: 0.4,
@@ -169,7 +169,7 @@ const drawAbility = (doc, god, abilityData, index, x, y, width, height) => {
     .text("LV 3", x + 20 + upgradeWidth, upgradeY, { width: 26 });
   fitText(doc, abilityData.details[2], x + 48 + upgradeWidth, upgradeY - 1, upgradeWidth - 28, height - 84, {
     font: "Helvetica",
-    maxSize: 7.2,
+    maxSize: 7.6,
     minSize: 5.8,
     color: "#cfc9bb",
     lineGap: 0.4,
