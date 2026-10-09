@@ -1051,7 +1051,7 @@ span.move-target-dot {
 }
 .play-menu-heading > p:last-child { margin: 0; color: #85868d; font-size: 11px; line-height: 1.65; }
 .play-menu-grid {
-  width: min(920px, calc(100% - 32px)); display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  width: min(1120px, calc(100% - 32px)); display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 14px; margin: 0 auto;
 }
 .play-menu-grid > button {
@@ -1070,6 +1070,60 @@ span.move-target-dot {
   min-height: 18px; margin: 16px auto 42px; padding: 0 18px; color: #7c7d83;
   font-size: 9px; letter-spacing: .08em; text-align: center; text-transform: uppercase;
 }
+
+/* Guided tutorial */
+.tutorial-stage { min-height: 100dvh; }
+.tutorial-overlay { position: fixed; z-index: 200; inset: 0; pointer-events: auto; }
+.tutorial-full-scrim {
+  position: absolute; inset: 0; background: rgba(3, 4, 8, .83); backdrop-filter: blur(2px);
+}
+.tutorial-highlight {
+  position: fixed; z-index: 201; border: 2px solid var(--gold-bright); border-radius: 8px;
+  box-shadow:
+    0 0 0 9999px rgba(3, 4, 8, .78),
+    0 0 0 5px rgba(198, 161, 91, .18),
+    0 0 30px rgba(224, 189, 118, .42);
+  pointer-events: none; transition: top .22s ease, left .22s ease, width .22s ease, height .22s ease;
+}
+.tutorial-card {
+  position: fixed; z-index: 202; right: clamp(16px, 3vw, 42px); bottom: clamp(16px, 3vw, 36px);
+  width: min(390px, calc(100vw - 32px)); padding: 26px;
+  color: #e9e4da; background: linear-gradient(145deg, #191c24, #0d0f14 72%);
+  border: 1px solid rgba(224, 189, 118, .55);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, .62);
+}
+.tutorial-card.side-left { right: auto; left: clamp(16px, 3vw, 42px); }
+.tutorial-overlay.centered .tutorial-card {
+  top: 50%; right: auto; bottom: auto; left: 50%; transform: translate(-50%, -50%);
+}
+.tutorial-close {
+  position: absolute; top: 12px; right: 12px; width: 32px; height: 32px; display: grid; place-items: center;
+  padding: 0; color: #888a91; background: transparent; border: 1px solid transparent; cursor: pointer;
+}
+.tutorial-close:hover { color: #f4ead3; border-color: var(--line); background: rgba(255, 255, 255, .04); }
+.tutorial-card .eyebrow { margin: 0 36px 0 0; }
+.tutorial-progress {
+  display: block; margin-top: 8px; color: #6f7178; font-size: 8px; font-weight: 700;
+  letter-spacing: .15em;
+}
+.tutorial-card h2 { margin: 18px 0 10px; color: #f2ecdf; font: 600 24px/1.2 "Cinzel"; }
+.tutorial-card > p:not(.eyebrow) { margin: 0; color: #a5a4a2; font-size: 12px; line-height: 1.65; }
+.tutorial-dots { display: flex; gap: 6px; margin: 22px 0 15px; }
+.tutorial-dots i { width: 18px; height: 2px; background: #34363e; transition: background .2s ease; }
+.tutorial-dots i.active { background: var(--gold-bright); }
+.tutorial-actions { display: grid; grid-template-columns: auto 1fr; gap: 9px; }
+.tutorial-actions .primary-button { height: 42px; }
+.tutorial-back {
+  min-width: 92px; display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  color: #b8b3a9; background: #111319; border: 1px solid #343740; cursor: pointer;
+  font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+}
+.tutorial-back:disabled { opacity: .35; cursor: not-allowed; }
+.tutorial-skip {
+  width: 100%; margin-top: 10px; padding: 8px; color: #73757d; background: transparent;
+  border: 0; cursor: pointer; font-size: 8px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+}
+.tutorial-skip:hover { color: #c8c1b4; }
 .shell-library {
   width: min(760px, calc(100% - 32px)); max-height: none; margin: clamp(26px, 5vh, 52px) auto;
 }
@@ -2514,7 +2568,7 @@ span.move-target-dot {
 }
 
 @media (max-width: 980px) {
-  .play-menu-grid { grid-template-columns: 1fr 1fr; }
+  .play-menu-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .four-game-page .header-actions span { display: none; }
   .four-seat-setup-grid { grid-template-columns: 1fr 1fr; }
   .four-online-seats { grid-template-columns: 1fr 1fr; }
@@ -2546,6 +2600,17 @@ span.move-target-dot {
   .play-menu-heading { margin: 34px auto 24px; }
   .play-menu-grid { grid-template-columns: 1fr; width: calc(100% - 24px); gap: 10px; }
   .play-menu-grid > button { min-height: 112px; flex-direction: row; gap: 12px; }
+  .tutorial-highlight { border-radius: 4px; }
+  .tutorial-card,
+  .tutorial-card.side-left {
+    right: 12px; bottom: 12px; left: 12px; width: auto; padding: 22px 18px 18px;
+  }
+  .tutorial-overlay.centered .tutorial-card {
+    top: 50%; right: 12px; bottom: auto; left: 12px; width: auto; transform: translateY(-50%);
+  }
+  .tutorial-card h2 { font-size: 20px; }
+  .tutorial-card > p:not(.eyebrow) { font-size: 11px; line-height: 1.55; }
+  .tutorial-dots { margin: 16px 0 13px; }
   .shell-library { width: calc(100% - 24px); margin: 20px auto; padding: 24px 12px 12px; }
   .game-page > .topbar .brand,
   .four-game-page > .topbar .brand,

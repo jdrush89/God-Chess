@@ -192,7 +192,7 @@ const openPlayMenu = () => {
   if (start) fireEvent.click(start);
 };
 
-const openPlayOption = (name: "Local" | "Online" | "Puzzles" | "Load") => {
+const openPlayOption = (name: "Local" | "Online" | "Puzzles" | "Tutorial" | "Load") => {
   openPlayMenu();
   fireEvent.click(screen.getByRole("button", {
     name: new RegExp(`^${name}$`, "i"),
@@ -403,7 +403,7 @@ describe("game startup", () => {
       within(screen.getByRole("group", { name: /play options/i }))
         .getAllByRole("button")
         .map((button) => button.getAttribute("aria-label") ?? button.textContent?.trim()),
-    ).toEqual(["Local", "Online", "Puzzles", "Load"]);
+    ).toEqual(["Local", "Online", "Puzzles", "Tutorial", "Load"]);
     fireEvent.click(screen.getByRole("button", { name: /^load$/i }));
     expect(screen.getByRole("heading", { name: /load game/i })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /back to play/i }));
@@ -440,6 +440,27 @@ describe("game startup", () => {
     expect(screen.getByRole("heading", { name: /choose a difficulty/i })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /play menu/i }));
     expect(screen.getByRole("button", { name: /^puzzles$/i })).toBeTruthy();
+  });
+
+  it("opens an accessible guided tutorial from the Play menu", () => {
+    const { container } = render(<App />);
+    openPlayOption("Tutorial");
+
+    expect(screen.getByRole("dialog", { name: /welcome to god chess/i })).toBeTruthy();
+    expect(screen.getByText(/step 1 of 9/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^next$/i }));
+
+    expect(screen.getByRole("dialog", { name: /follow the turn prompt/i })).toBeTruthy();
+    expect(
+      container.querySelector('[data-tutorial-highlight="turn-guidance"]'),
+    ).toBeTruthy();
+
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    expect(screen.getByRole("dialog", { name: /track rounds and turns/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /skip tutorial/i }));
+
+    expect(screen.getByRole("button", { name: /^tutorial$/i })).toBeTruthy();
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   describe("finished classic matches", () => {

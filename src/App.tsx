@@ -12,6 +12,7 @@ import {
   Eye,
   Flame,
   FlaskConical,
+  GraduationCap,
   Hexagon,
   History,
   Info,
@@ -94,6 +95,7 @@ import {
 } from "./multiplayer/useThreePlayerOnlineGame";
 import { GameResultPresentation } from "./GameResultPresentation";
 import { MatchEscapeMenu } from "./MatchEscapeMenu";
+import { TutorialOverlay, type TutorialStep } from "./TutorialOverlay";
 import {
   GodPortrait,
   PlayerAbilityCard as AbilityCard,
@@ -594,6 +596,7 @@ function PlayerBar({
     <section
       className={`player-bar ${color} ${isActive ? "active" : ""} ${toolsOpen ? "tools-open" : ""}`}
       data-player-tools-layout="container-responsive"
+      data-tutorial={color === "white" ? "player-status" : "opponent-status"}
     >
       <div className={`player-avatar ${color}`}><Crown size={19} /></div>
       <div className="player-copy">
@@ -707,7 +710,7 @@ export function ChessBoard({
     state.pending?.step === "enchant-followup-move"
   ) && !state.selectedSquare;
   return (
-    <div className="board-shell">
+    <div className="board-shell" data-tutorial="board">
       <div className="board-frame">
         <div className="chess-board" role="grid" aria-label="God Chess board">
           {displaySquares.map((square) => {
@@ -1612,6 +1615,7 @@ function PlayMenu({
   onOpenLocal,
   onOpenOnline,
   onOpenPuzzles,
+  onOpenTutorial,
   onOpenLoad,
 }: {
   savedGames: SavedGame[];
@@ -1622,6 +1626,7 @@ function PlayMenu({
   onOpenLocal: () => void;
   onOpenOnline: () => void;
   onOpenPuzzles: () => void;
+  onOpenTutorial: () => void;
   onOpenLoad: () => void;
 }) {
   const loadDescription = savesLoading
@@ -1634,7 +1639,7 @@ function PlayMenu({
       <div className="play-menu-heading">
         <p className="eyebrow">PLAY</p>
         <h1>Choose your path.</h1>
-        <p>Begin a local match, meet online, solve a puzzle, or continue a saved game.</p>
+        <p>Learn the game, begin a match, meet online, solve a puzzle, or continue a saved game.</p>
       </div>
       <div className="play-menu-grid" role="group" aria-label="Play options">
         <button onClick={onOpenLocal}>
@@ -1648,6 +1653,10 @@ function PlayMenu({
         <button onClick={onOpenPuzzles}>
           <Crosshair size={30} />
           <strong>Puzzles</strong>
+        </button>
+        <button onClick={onOpenTutorial}>
+          <GraduationCap size={30} />
+          <strong>Tutorial</strong>
         </button>
         <button
           onClick={onOpenLoad}
@@ -2714,13 +2723,13 @@ export function GameScreen({
     <main className={`game-page ${puzzle ? "puzzle-mode" : ""} ${state.lastAction ? "has-last-action" : ""} ${gameFinished ? "finished-view" : ""} ${inputDisabled || opponentPresentation ? "input-locked" : ""}`}>
       <header className="topbar">
         <Brand />
-        <div className="game-meta">
+        <div className="game-meta" data-tutorial="round-and-turn">
           <span>ROUND <strong>{state.round}</strong></span>
           <i />
           <span>TURN <strong>{state.turn}</strong></span>
           {onlineRoomCode && <><i /><span>ROOM <strong>{onlineRoomCode}</strong></span></>}
         </div>
-        <div className="header-actions">
+        <div className="header-actions" data-tutorial="match-controls">
           {state.gameMode !== "puzzle" && (
             <button
               onClick={onUndo}
@@ -2776,7 +2785,10 @@ export function GameScreen({
           <button onClick={onRestart}>Return to game setup</button>
         </div>
       )}
-      <div className={`turn-notice ${kingInCheck ? "check" : ""}`}>
+      <div
+        className={`turn-notice ${kingInCheck ? "check" : ""}`}
+        data-tutorial="turn-guidance"
+      >
         <span className={`turn-dot ${state.activeColor}`} />
         <strong>{colorLabel(state.activeColor)}</strong>
         <p>
@@ -2833,7 +2845,7 @@ export function GameScreen({
             graveyardArriving={arrivingGraveyards.has("white")}
           />
         </section>
-        <div className="side-column">
+        <div className="side-column" data-tutorial="divine-actions">
           {state.phase === "upgrade" ? (
             <UpgradePanel
               state={state}
@@ -2978,6 +2990,112 @@ export function GameScreen({
   );
 }
 
+const TUTORIAL_STEPS: TutorialStep[] = [
+  {
+    title: "Welcome to God Chess",
+    body: "Every turn combines familiar chess movement with one divine ability. This short tour shows where to find the information you need before you make your first move.",
+  },
+  {
+    title: "Follow the turn prompt",
+    body: "This banner names the active side and tells you what the game is waiting for. If your King is in check or an ability needs another choice, the instruction appears here.",
+    target: "turn-guidance",
+  },
+  {
+    title: "Track rounds and turns",
+    body: "A round ends after both sides act. After each round, you may spend earned upgrade progress before the next round begins.",
+    target: "round-and-turn",
+    cardSide: "left",
+  },
+  {
+    title: "Read your opponent",
+    body: "The upper player bar shows your opponent’s orb supply, captured pieces, and drafted gods. Gods that were just used must rest for the next turn.",
+    target: "opponent-status",
+  },
+  {
+    title: "Move on the board",
+    body: "Pieces follow normal chess movement. Select a piece and then a highlighted destination. Capturing the opposing King wins immediately—there is no checkmate requirement.",
+    target: "board",
+    cardSide: "left",
+  },
+  {
+    title: "Watch your resources",
+    body: "Your lower player bar tracks light and dark orbs. Moving and capturing pieces earns orbs based on the squares involved, and abilities spend the amounts shown on their cards.",
+    target: "player-status",
+    cardSide: "left",
+  },
+  {
+    title: "Choose a god and ability",
+    body: "The Divine Action panel contains your available gods and their abilities. Select a non-resting god, review its cards and costs, then follow the highlighted board choices. You may back out before committing.",
+    target: "divine-actions",
+    cardSide: "left",
+  },
+  {
+    title: "Use the match controls",
+    body: "History reviews completed actions, Rules opens the reference guide, and Settings controls options such as undo. Save & quit preserves local matches so you can continue later.",
+    target: "match-controls",
+    cardSide: "left",
+  },
+  {
+    title: "You are ready",
+    body: "Draft three gods, combine their powers with legal chess moves, manage resting gods and orb costs, and capture the enemy King. You can replay this tutorial from the Play menu at any time.",
+  },
+];
+
+const createTutorialState = () => {
+  let tutorialState = createGame(1, { mode: "local" });
+  for (const godId of [
+    "quetzacoatl",
+    "chiron",
+    "midas",
+    "death",
+    "artemis",
+    "medusa",
+  ] as const) {
+    tutorialState = gameReducer(tutorialState, { type: "draft", godId });
+  }
+  tutorialState = {
+    ...tutorialState,
+    players: {
+      ...tutorialState.players,
+      white: {
+        ...tutorialState.players.white,
+        name: "You",
+        orbs: { white: 6, black: 6 },
+      },
+      black: {
+        ...tutorialState.players.black,
+        name: "Divine Rival",
+        orbs: { white: 4, black: 4 },
+      },
+    },
+  };
+  const tutorialGod = tutorialState.players.white.gods[0];
+  return tutorialGod
+    ? gameReducer(tutorialState, { type: "select-god", godId: tutorialGod })
+    : tutorialState;
+};
+
+function TutorialScreen({ onExit }: { onExit: () => void }) {
+  const [tutorialState] = useState(createTutorialState);
+  return (
+    <div className="tutorial-stage">
+      <GameScreen
+        state={tutorialState}
+        dispatch={() => undefined}
+        undoEnabled={false}
+        canUndo={false}
+        onUndo={() => undefined}
+        onOpenSettings={() => undefined}
+        onRestart={onExit}
+        onRestartPuzzle={() => undefined}
+        onNextPuzzle={() => undefined}
+        onSaveAndQuit={onExit}
+      />
+      <TutorialOverlay steps={TUTORIAL_STEPS} onExit={onExit} />
+    </div>
+  );
+}
+
 export default function App() {
   const accountService = useAccount();
   useEffect(() => installGlobalDiagnostics(), []);
@@ -3006,7 +3124,7 @@ export default function App() {
   const savedGamesRef = useRef(savedGames);
   savedGamesRef.current = savedGames;
   const activeSaveId = useRef<string | undefined>(undefined);
-  const [startView, setStartView] = useState<"menu" | "play" | "load" | "setup" | "three-setup" | "four-setup" | "puzzles" | "none">("menu");
+  const [startView, setStartView] = useState<"menu" | "play" | "load" | "setup" | "three-setup" | "four-setup" | "puzzles" | "tutorial" | "none">("menu");
   const [setupReturnView, setSetupReturnView] = useState<"menu" | "play" | "none">("menu");
   const [setupCategory, setSetupCategory] = useState<StartCategory>("local");
   const [setupPlayerCount, setSetupPlayerCount] = useState<PlayerCount>();
@@ -3953,9 +4071,14 @@ export default function App() {
         onOpenLocal={() => openStartFlow("local", undefined, "play")}
         onOpenOnline={() => openStartFlow("online", undefined, "play")}
         onOpenPuzzles={() => setStartView("puzzles")}
+        onOpenTutorial={() => setStartView("tutorial")}
         onOpenLoad={() => setStartView("load")}
       />
     );
+  }
+
+  if (startView === "tutorial") {
+    return <TutorialScreen onExit={() => setStartView("play")} />;
   }
 
   if (startView === "load") {
