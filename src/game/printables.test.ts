@@ -5,6 +5,7 @@ import { GOD_BY_ID } from "./gods";
 describe("printable God boards", () => {
   it("renders current Quetzacoatl and Medusa movement names and level rules", () => {
     expect(generator).toContain('const sourcePath = path.join(root, "src/game/gods.ts")');
+    expect(generator.match(/maxSize: 7\.6/g)).toHaveLength(2);
 
     const quetzSlither = GOD_BY_ID.quetzacoatl.abilities.find(
       (ability) => ability.id === "flight",
