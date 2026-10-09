@@ -11,9 +11,13 @@ export type TutorialStep = {
 export function TutorialOverlay({
   steps,
   onExit,
+  onComplete = onExit,
+  completeLabel = "Finish tutorial",
 }: {
   steps: TutorialStep[];
   onExit: () => void;
+  onComplete?: () => void;
+  completeLabel?: string;
 }) {
   const [stepIndex, setStepIndex] = useState(0);
   const [targetRect, setTargetRect] = useState<DOMRect>();
@@ -65,7 +69,7 @@ export function TutorialOverlay({
         onExit();
       } else if (event.key === "ArrowRight") {
         event.preventDefault();
-        if (finalStep) onExit();
+        if (finalStep) onComplete();
         else setStepIndex((current) => current + 1);
       } else if (event.key === "ArrowLeft" && stepIndex > 0) {
         event.preventDefault();
@@ -86,7 +90,7 @@ export function TutorialOverlay({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [finalStep, onExit, stepIndex]);
+  }, [finalStep, onComplete, onExit, stepIndex]);
 
   const highlightStyle = targetRect
     ? {
@@ -150,17 +154,140 @@ export function TutorialOverlay({
           <button
             className="primary-button"
             onClick={() => {
-              if (finalStep) onExit();
+              if (finalStep) onComplete();
               else setStepIndex((current) => current + 1);
             }}
           >
-            {finalStep ? "Finish tutorial" : "Next"}
+            {finalStep ? completeLabel : "Next"}
             {!finalStep && <ArrowRight size={16} />}
           </button>
         </div>
         {!finalStep && (
           <button className="tutorial-skip" onClick={onExit}>
             Skip tutorial
+          </button>
+        )}
+      </section>
+    </div>
+  );
+}
+
+export type TutorialPracticePrompt = {
+  title: string;
+  body: string;
+  instruction?: string;
+  targetSelector?: string;
+  targetName?: string;
+  cardSide?: "left" | "right";
+  blocking?: boolean;
+  complete?: boolean;
+};
+
+export function TutorialPracticeOverlay({
+  prompt,
+  step,
+  totalSteps,
+  feedback,
+  onExit,
+}: {
+  prompt: TutorialPracticePrompt;
+  step: number;
+  totalSteps: number;
+  feedback?: string;
+  onExit: () => void;
+}) {
+  const [targetRect, setTargetRect] = useState<DOMRect>();
+
+  useLayoutEffect(() => {
+    const updateTarget = () => {
+      const target = prompt.targetSelector
+        ? document.querySelector<HTMLElement>(prompt.targetSelector)
+        : undefined;
+      setTargetRect(target?.getBoundingClientRect());
+    };
+    const target = prompt.targetSelector
+      ? document.querySelector<HTMLElement>(prompt.targetSelector)
+      : undefined;
+    if (typeof target?.scrollIntoView === "function") {
+      target.scrollIntoView({ block: "center", inline: "nearest" });
+    }
+    const frame = window.requestAnimationFrame(updateTarget);
+    window.addEventListener("resize", updateTarget);
+    window.addEventListener("scroll", updateTarget, true);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", updateTarget);
+      window.removeEventListener("scroll", updateTarget, true);
+    };
+  }, [prompt.targetSelector]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onExit();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onExit]);
+
+  const highlightStyle = targetRect
+    ? {
+      top: Math.max(8, targetRect.top - 6),
+      left: Math.max(8, targetRect.left - 6),
+      width: Math.min(window.innerWidth - 16, targetRect.width + 12),
+      height: Math.min(window.innerHeight - 16, targetRect.height + 12),
+    }
+    : undefined;
+  const targetIsLow = targetRect
+    ? targetRect.top + targetRect.height / 2 > window.innerHeight / 2
+    : false;
+
+  return (
+    <div
+      className={`tutorial-overlay practice ${prompt.blocking ? "blocking" : ""} ${targetRect ? "has-target" : "centered"} ${targetIsLow ? "target-low" : ""}`}
+      data-tutorial-practice-step={step}
+      data-tutorial-highlight={prompt.targetName}
+    >
+      {targetRect && (
+        <div
+          className="tutorial-highlight"
+          style={highlightStyle}
+          aria-hidden="true"
+        />
+      )}
+      {!targetRect && prompt.blocking && (
+        <div className="tutorial-full-scrim" aria-hidden="true" />
+      )}
+      <section
+        className={`tutorial-card side-${prompt.cardSide ?? "right"}`}
+        role={prompt.blocking || prompt.complete ? "dialog" : "region"}
+        aria-modal={prompt.blocking || prompt.complete ? "true" : undefined}
+        aria-live={prompt.blocking || prompt.complete ? undefined : "polite"}
+        aria-labelledby="tutorial-practice-title"
+        aria-describedby="tutorial-practice-description"
+      >
+        <button
+          className="tutorial-close"
+          onClick={onExit}
+          aria-label="Exit tutorial"
+        >
+          <X size={18} />
+        </button>
+        <p className="eyebrow">GUIDED PRACTICE</p>
+        <span className="tutorial-progress">
+          {prompt.complete ? "PRACTICE COMPLETE" : `ACTION ${step} OF ${totalSteps}`}
+        </span>
+        <h2 id="tutorial-practice-title">{prompt.title}</h2>
+        <p id="tutorial-practice-description">{prompt.body}</p>
+        {prompt.instruction && (
+          <strong className="tutorial-instruction">{prompt.instruction}</strong>
+        )}
+        {feedback && <p className="tutorial-feedback" role="alert">{feedback}</p>}
+        {prompt.complete && (
+          <button className="primary-button" onClick={onExit}>
+            Finish tutorial
           </button>
         )}
       </section>

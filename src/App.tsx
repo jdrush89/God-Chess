@@ -95,7 +95,12 @@ import {
 } from "./multiplayer/useThreePlayerOnlineGame";
 import { GameResultPresentation } from "./GameResultPresentation";
 import { MatchEscapeMenu } from "./MatchEscapeMenu";
-import { TutorialOverlay, type TutorialStep } from "./TutorialOverlay";
+import {
+  TutorialOverlay,
+  TutorialPracticeOverlay,
+  type TutorialPracticePrompt,
+  type TutorialStep,
+} from "./TutorialOverlay";
 import {
   GodPortrait,
   PlayerAbilityCard as AbilityCard,
@@ -1118,6 +1123,7 @@ export function ActionPanel({
                 <button
                   className={`god-row ${resting ? "resting" : ""}`}
                   key={godId}
+                  data-god-id={godId}
                   onClick={() => resting ? onInspectGod(godId) : dispatch({ type: "select-god", godId })}
                   style={{ "--accent": god.accent } as React.CSSProperties}
                 >
@@ -2302,6 +2308,7 @@ export function GameScreen({
   canUndo,
   onUndo,
   onOpenSettings,
+  moveFirstDisabled = false,
 }: {
   state: GameState;
   dispatch: GameDispatch;
@@ -2317,6 +2324,7 @@ export function GameScreen({
   canUndo: boolean;
   onUndo: () => void;
   onOpenSettings: () => void;
+  moveFirstDisabled?: boolean;
 }) {
   const [rulesOpen, setRulesOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -2388,6 +2396,7 @@ export function GameScreen({
     .sort()
     .join(",");
   const moveFirstEnabled =
+    !moveFirstDisabled &&
     !inputDisabled &&
     !gameFinished &&
     !opponentPresentation &&
@@ -3002,13 +3011,13 @@ const TUTORIAL_STEPS: TutorialStep[] = [
   },
   {
     title: "Track rounds and turns",
-    body: "A round ends after both sides act. After each round, you may spend earned upgrade progress before the next round begins.",
+    body: "A round ends only after all six drafted gods—three for each side—have each completed one action. Then both players upgrade one ability before the next round begins.",
     target: "round-and-turn",
     cardSide: "left",
   },
   {
     title: "Read your opponent",
-    body: "The upper player bar shows your opponent’s orb supply, captured pieces, and drafted gods. Gods that were just used must rest for the next turn.",
+    body: "The upper player bar shows your opponent’s orb supply, captured pieces, and drafted gods. After a god acts, that god rests for the remainder of the round and returns when the next round begins.",
     target: "opponent-status",
   },
   {
@@ -3036,20 +3045,20 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     cardSide: "left",
   },
   {
-    title: "You are ready",
-    body: "Draft three gods, combine their powers with legal chess moves, manage resting gods and orb costs, and capture the enemy King. You can replay this tutorial from the Play menu at any time.",
+    title: "Now take a practice round",
+    body: "Next, you will use each of your three gods once while the Divine Rival responds automatically. Your guided moves will earn the exact orbs needed to upgrade and unleash Chiron’s Charge.",
   },
 ];
 
 const createTutorialState = () => {
   let tutorialState = createGame(1, { mode: "local" });
   for (const godId of [
-    "quetzacoatl",
-    "chiron",
-    "midas",
-    "death",
-    "artemis",
+    "ares",
     "medusa",
+    "midas",
+    "anubis",
+    "chiron",
+    "artemis",
   ] as const) {
     tutorialState = gameReducer(tutorialState, { type: "draft", godId });
   }
@@ -3060,28 +3069,302 @@ const createTutorialState = () => {
       white: {
         ...tutorialState.players.white,
         name: "You",
-        orbs: { white: 6, black: 6 },
+        orbs: { white: 0, black: 3 },
       },
       black: {
         ...tutorialState.players.black,
         name: "Divine Rival",
-        orbs: { white: 4, black: 4 },
+        orbs: { white: 3, black: 3 },
       },
     },
   };
-  const tutorialGod = tutorialState.players.white.gods[0];
-  return tutorialGod
-    ? gameReducer(tutorialState, { type: "select-god", godId: tutorialGod })
-    : tutorialState;
+  return tutorialState;
 };
 
+type TutorialPracticeStep = TutorialPracticePrompt & {
+  expected?: Partial<GameAction>;
+  autoActions?: GameAction[];
+  progress: number;
+};
+
+const TUTORIAL_PRACTICE_STEPS: TutorialPracticeStep[] = [
+  {
+    title: "Call Ares",
+    body: "Start the round with Ares. Calling him opens his ability cards; he will rest after the action is complete.",
+    instruction: "Select Ares in the Divine Action panel.",
+    targetSelector: '[data-god-id="ares"]',
+    targetName: "ares",
+    cardSide: "left",
+    expected: { type: "select-god", godId: "ares" },
+    progress: 1,
+  },
+  {
+    title: "Choose Threaten",
+    body: "Threaten makes one legal chess move and rewards aggressive positioning. Its card has no orb cost.",
+    instruction: "Select Ares’s Threaten ability.",
+    targetSelector: '[data-ability-id="threaten"]',
+    targetName: "threaten",
+    cardSide: "left",
+    expected: { type: "select-ability", abilityId: "threaten" },
+    progress: 2,
+  },
+  {
+    title: "Choose the pawn",
+    body: "The game now highlights pieces that Threaten can move. We will advance the King pawn.",
+    instruction: "Select your pawn on e2.",
+    targetSelector: '[data-square="e2"]',
+    targetName: "e2",
+    cardSide: "left",
+    expected: { type: "square", square: "e2" },
+    progress: 3,
+  },
+  {
+    title: "Advance and earn",
+    body: "Landing on e4 makes this pawn your sole farthest-advanced piece, so Threaten generates a light orb.",
+    instruction: "Move the pawn to e4.",
+    targetSelector: '[data-square="e4"]',
+    targetName: "e4",
+    cardSide: "left",
+    expected: { type: "square", square: "e4" },
+    progress: 4,
+  },
+  {
+    title: "The rival answers",
+    body: "Ares is now resting for the remainder of round 1. The Divine Rival calls Medusa and advances a pawn with Captivate.",
+    blocking: true,
+    autoActions: [
+      { type: "select-god", godId: "medusa" },
+      { type: "select-ability", abilityId: "captivate" },
+      { type: "square", square: "e7" },
+      { type: "square", square: "e5" },
+    ],
+    progress: 4,
+  },
+  {
+    title: "Call Anubis",
+    body: "Your second action must use a different god because Ares is resting. Anubis can generate the dark orb needed for Charge.",
+    instruction: "Select Anubis.",
+    targetSelector: '[data-god-id="anubis"]',
+    targetName: "anubis",
+    cardSide: "left",
+    expected: { type: "select-god", godId: "anubis" },
+    progress: 5,
+  },
+  {
+    title: "Choose Construction",
+    body: "Construction grants one dark orb when its piece moves exactly one square.",
+    instruction: "Select Construction.",
+    targetSelector: '[data-ability-id="construction"]',
+    targetName: "construction",
+    cardSide: "left",
+    expected: { type: "select-ability", abilityId: "construction" },
+    progress: 6,
+  },
+  {
+    title: "Choose the Queen pawn",
+    body: "A one-square pawn move will demonstrate Construction’s resource reward.",
+    instruction: "Select your pawn on d2.",
+    targetSelector: '[data-square="d2"]',
+    targetName: "d2",
+    cardSide: "left",
+    expected: { type: "square", square: "d2" },
+    progress: 7,
+  },
+  {
+    title: "Build one square forward",
+    body: "Moving to d3 completes Construction and generates your fourth dark orb—the full cost of Charge.",
+    instruction: "Move the pawn to d3.",
+    targetSelector: '[data-square="d3"]',
+    targetName: "d3",
+    cardSide: "left",
+    expected: { type: "square", square: "d3" },
+    progress: 8,
+  },
+  {
+    title: "The rival answers",
+    body: "Anubis joins Ares at rest. The Divine Rival uses Midas, leaving Chiron as your final available god this round.",
+    blocking: true,
+    autoActions: [
+      { type: "select-god", godId: "midas" },
+      { type: "select-ability", abilityId: "barter" },
+      { type: "square", square: "a7" },
+      { type: "square", square: "a6" },
+    ],
+    progress: 8,
+  },
+  {
+    title: "Call Chiron",
+    body: "Chiron is your only non-resting god. His free Gallop ability rewards knight movement.",
+    instruction: "Select Chiron.",
+    targetSelector: '[data-god-id="chiron"]',
+    targetName: "chiron",
+    cardSide: "left",
+    expected: { type: "select-god", godId: "chiron" },
+    progress: 9,
+  },
+  {
+    title: "Choose Gallop",
+    body: "Gallop moves any piece normally, and moving a knight generates a light orb.",
+    instruction: "Select Gallop.",
+    targetSelector: '[data-ability-id="gallop"]',
+    targetName: "gallop",
+    cardSide: "left",
+    expected: { type: "select-ability", abilityId: "gallop" },
+    progress: 10,
+  },
+  {
+    title: "Choose the knight",
+    body: "The knight on g1 has a clear path into the battle.",
+    instruction: "Select your knight on g1.",
+    targetSelector: '[data-square="g1"]',
+    targetName: "g1",
+    cardSide: "left",
+    expected: { type: "square", square: "g1" },
+    progress: 11,
+  },
+  {
+    title: "Gallop to f3",
+    body: "This legal knight move completes Chiron’s action and generates another light orb.",
+    instruction: "Move the knight to f3.",
+    targetSelector: '[data-square="f3"]',
+    targetName: "f3",
+    cardSide: "left",
+    expected: { type: "square", square: "f3" },
+    progress: 12,
+  },
+  {
+    title: "The round closes",
+    body: "The Divine Rival calls its third and final god. Once Artemis acts, all six drafted gods have acted and round 1 enters the upgrade phase.",
+    blocking: true,
+    autoActions: [
+      { type: "select-god", godId: "artemis" },
+      { type: "select-ability", abilityId: "take-cover" },
+      { type: "square", square: "b8" },
+      { type: "square", square: "c6" },
+    ],
+    progress: 12,
+  },
+  {
+    title: "Preview Charge’s upgrade",
+    body: "Each side upgrades one ability between rounds. Charge level 2 lets a knight retain rook-like movement for two turns.",
+    instruction: "Select Chiron’s Charge card.",
+    targetSelector: '[data-ability-id="charge"]',
+    targetName: "charge-upgrade",
+    cardSide: "left",
+    expected: { type: "preview-upgrade", godId: "chiron", abilityId: "charge" },
+    progress: 13,
+  },
+  {
+    title: "Confirm the upgrade",
+    body: "The preview shows the next level before anything is committed.",
+    instruction: "Confirm Charge at level 2.",
+    targetSelector: ".upgrade-confirmation .primary-button",
+    targetName: "confirm-upgrade",
+    cardSide: "left",
+    expected: { type: "upgrade", abilityId: "charge" },
+    progress: 14,
+  },
+  {
+    title: "The gods awaken",
+    body: "The rival completes its upgrade. Round 2 begins, every god returns from rest, and your four dark orbs are ready to spend.",
+    blocking: true,
+    autoActions: [
+      { type: "upgrade", abilityId: "captivate" },
+    ],
+    progress: 14,
+  },
+  {
+    title: "Call Chiron again",
+    body: "Rest lasts only until the current round ends, so Chiron is available again immediately in round 2.",
+    instruction: "Select Chiron.",
+    targetSelector: '[data-god-id="chiron"]',
+    targetName: "chiron-round-two",
+    cardSide: "left",
+    expected: { type: "select-god", godId: "chiron" },
+    progress: 15,
+  },
+  {
+    title: "Unleash Charge",
+    body: "Charge costs four dark orbs—the amount you assembled during round 1—and lets a knight move like a rook.",
+    instruction: "Select the upgraded Charge ability.",
+    targetSelector: '[data-ability-id="charge"]',
+    targetName: "charge",
+    cardSide: "left",
+    expected: { type: "select-ability", abilityId: "charge" },
+    progress: 16,
+  },
+  {
+    title: "Choose your knight",
+    body: "The knight you moved with Gallop is now positioned for a straight-line Charge.",
+    instruction: "Select the knight on f3.",
+    targetSelector: '[data-square="f3"]',
+    targetName: "charge-source",
+    cardSide: "left",
+    expected: { type: "square", square: "f3" },
+    progress: 17,
+  },
+  {
+    title: "Capture with divine movement",
+    body: "A normal knight cannot travel straight up the file. Charge changes its movement and allows this capture.",
+    instruction: "Charge to f7 and capture the pawn.",
+    targetSelector: '[data-square="f7"]',
+    targetName: "charge-destination",
+    cardSide: "left",
+    expected: { type: "square", square: "f7" },
+    progress: 18,
+  },
+  {
+    title: "Practice complete",
+    body: "You used all three gods, watched them rest until the round ended, generated both orb colors, upgraded an ability, and spent dark orbs on a special power. You are ready to draft your own pantheon.",
+    blocking: true,
+    complete: true,
+    progress: 18,
+  },
+];
+
+const actionMatchesTutorialExpectation = (
+  action: GameAction,
+  expected: Partial<GameAction>,
+) => Object.entries(expected).every(([key, value]) =>
+  (action as unknown as Record<string, unknown>)[key] === value
+);
+
 function TutorialScreen({ onExit }: { onExit: () => void }) {
-  const [tutorialState] = useState(createTutorialState);
+  const [tutorialState, setTutorialState] = useState(createTutorialState);
+  const [mode, setMode] = useState<"tour" | "practice">("tour");
+  const [practiceIndex, setPracticeIndex] = useState(0);
+  const [feedback, setFeedback] = useState<string>();
+  const practiceStep = TUTORIAL_PRACTICE_STEPS[practiceIndex];
+
+  useEffect(() => {
+    if (mode !== "practice" || !practiceStep.autoActions) return;
+    const timer = window.setTimeout(() => {
+      setTutorialState((current) =>
+        practiceStep.autoActions!.reduce(gameReducer, current)
+      );
+      setPracticeIndex((current) => current + 1);
+    }, 1800);
+    return () => window.clearTimeout(timer);
+  }, [mode, practiceIndex, practiceStep.autoActions]);
+
+  const practiceDispatch: GameDispatch = (action) => {
+    const expected = practiceStep.expected;
+    if (!expected || !actionMatchesTutorialExpectation(action, expected)) {
+      setFeedback(practiceStep.instruction ?? "Follow the highlighted instruction.");
+      return;
+    }
+    setTutorialState((current) => gameReducer(current, action));
+    setFeedback(undefined);
+    setPracticeIndex((current) => current + 1);
+  };
+
   return (
     <div className="tutorial-stage">
       <GameScreen
         state={tutorialState}
-        dispatch={() => undefined}
+        dispatch={mode === "practice" ? practiceDispatch : () => undefined}
+        inputDisabled={mode === "practice" && Boolean(practiceStep.autoActions)}
+        moveFirstDisabled
         undoEnabled={false}
         canUndo={false}
         onUndo={() => undefined}
@@ -3091,7 +3374,22 @@ function TutorialScreen({ onExit }: { onExit: () => void }) {
         onNextPuzzle={() => undefined}
         onSaveAndQuit={onExit}
       />
-      <TutorialOverlay steps={TUTORIAL_STEPS} onExit={onExit} />
+      {mode === "tour" ? (
+        <TutorialOverlay
+          steps={TUTORIAL_STEPS}
+          onExit={onExit}
+          onComplete={() => setMode("practice")}
+          completeLabel="Start guided practice"
+        />
+      ) : (
+        <TutorialPracticeOverlay
+          prompt={practiceStep}
+          step={practiceStep.progress}
+          totalSteps={18}
+          feedback={feedback}
+          onExit={onExit}
+        />
+      )}
     </div>
   );
 }
