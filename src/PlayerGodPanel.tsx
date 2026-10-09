@@ -66,6 +66,7 @@ export function PlayerAbilityCard({
   highlighted = false,
   showCost = true,
   onClick,
+  onDoubleClick,
   children,
 }: {
   ability: Ability;
@@ -79,6 +80,7 @@ export function PlayerAbilityCard({
   highlighted?: boolean;
   showCost?: boolean;
   onClick: () => void;
+  onDoubleClick?: () => void;
   children?: ReactNode;
 }) {
   return (
@@ -93,6 +95,10 @@ export function PlayerAbilityCard({
         aria-disabled={disabled || undefined}
         onClick={() => {
           if (selectable) onClick();
+        }}
+        onDoubleClick={(event) => {
+          if ((event.target as HTMLElement).closest(".level-selector")) return;
+          if (selectable) onDoubleClick?.();
         }}
         onKeyDown={(event) => {
           if (selectable && (event.key === "Enter" || event.key === " ")) {

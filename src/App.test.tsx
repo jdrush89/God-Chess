@@ -1386,6 +1386,29 @@ describe("game startup", () => {
     fireEvent.click(levelThree);
     expect(levelThree.classList.contains("active")).toBe(false);
     expect(levelThree.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(levelTwo);
+    expect(levelTwo.classList.contains("active")).toBe(false);
+    expect(screen.queryByText(/King may teleport within 4 spaces/i)).toBeNull();
+
+    const airLiftControl = within(airLiftCard as HTMLElement).getByRole("button", {
+      name: /^air lift/i,
+    });
+    fireEvent.click(airLiftControl);
+    expect(within(airLiftCard as HTMLElement).getByText(/King may teleport within 4 spaces/i))
+      .toBeTruthy();
+    const confirm = within(airLiftCard as HTMLElement).getByRole("button", {
+      name: /confirm air lift.*lv 2/i,
+    });
+    expect(confirm.closest(".ability-card")).toBe(airLiftCard);
+    fireEvent.doubleClick(within(airLiftCard as HTMLElement).getByRole("button", {
+      name: /lv 3/i,
+    }));
+    expect(within(airLiftCard as HTMLElement).getByRole("button", {
+      name: /confirm air lift.*lv 2/i,
+    })).toBeTruthy();
+
+    fireEvent.doubleClick(airLiftControl);
+    expect(screen.getByText(/black upgrades one ability/i)).toBeTruthy();
   });
 
   it("clears an AI upgrade presentation lock when a prepared save replaces the live state", async () => {

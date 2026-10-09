@@ -1256,26 +1256,13 @@ function UpgradePanel({
     state.phase,
     state.round,
     state.upgradeQueue[0],
-    state.upgradePreview?.godId,
-    state.upgradePreview?.abilityId,
   ]);
 
   const presentedAbilityId = presentation?.abilityId ??
     (state.upgradePreview?.godId === presentedGodId ? state.upgradePreview?.abilityId : undefined) ??
     selectedAbilityId;
-  const selectedAbility = selectedGod?.abilities.find((ability) => ability.id === presentedAbilityId);
-  const selectedAbilityLevel = selectedAbility
-    ? abilityLevel(selectedPlayer.upgrades, selectedAbility.id)
-    : undefined;
   const activePlayer = state.players[state.activeColor];
   const queuedAbilityId = state.upgradePreview?.abilityId ?? selectedAbilityId;
-  const queuedGod = activePlayer.gods
-    .map((godId) => GOD_BY_ID[godId])
-    .find((god) => god.abilities.some((ability) => ability.id === queuedAbilityId));
-  const queuedAbility = queuedGod?.abilities.find((ability) => ability.id === queuedAbilityId);
-  const queuedAbilityLevel = queuedAbility
-    ? abilityLevel(activePlayer.upgrades, queuedAbility.id)
-    : undefined;
   const defaultUpgradePreviewLevel = Math.min(
     ...activePlayer.gods.flatMap((godId) =>
       GOD_BY_ID[godId].abilities.map((ability) =>
@@ -1315,17 +1302,19 @@ function UpgradePanel({
                   </div>
                   {god.abilities.map((ability) => {
                     const level = abilityLevel(activePlayer.upgrades, ability.id);
+                    const selected = queuedAbilityId === ability.id;
                     return (
                       <AbilityCard
                         ability={ability}
                         level={level}
                         previewLevel={godPreviewLevel}
-                        active={state.upgradePreview?.abilityId === ability.id}
+                        active={selected}
                         selectable={level < 3}
                         disabled={level >= 3}
                         footerLabel={`CURRENT LVL ${level}`}
                         footerAction={level >= 3 ? "MAX LEVEL" : `SELECT LVL ${level + 1}`}
                         onClick={() => {
+                          setGodPreviewLevel(Math.min(3, level + 1));
                           setSelectedAbilityId(ability.id);
                           dispatch({
                             type: "preview-upgrade",
@@ -1333,28 +1322,27 @@ function UpgradePanel({
                             abilityId: ability.id,
                           });
                         }}
+                        onDoubleClick={() => {
+                          dispatch({ type: "upgrade", abilityId: ability.id });
+                        }}
                         key={ability.id}
-                      />
+                      >
+                        {selected && (
+                          <div className="upgrade-confirmation">
+                            <button
+                              className="primary-button"
+                              onClick={() => dispatch({ type: "upgrade", abilityId: ability.id })}
+                            >
+                              Confirm {ability.name} · Lv {level + 1}
+                            </button>
+                          </div>
+                        )}
+                      </AbilityCard>
                     );
                   })}
                 </section>
               );
             })}
-          </div>
-          <div className="upgrade-confirmation">
-            <button
-              className="primary-button"
-              disabled={!queuedAbility || queuedAbilityLevel === undefined || queuedAbilityLevel >= 3}
-              onClick={() => {
-                if (queuedAbility) {
-                  dispatch({ type: "upgrade", abilityId: queuedAbility.id });
-                }
-              }}
-            >
-              {queuedAbility && queuedAbilityLevel !== undefined
-                ? `Confirm ${queuedAbility.name} · Lv ${queuedAbilityLevel + 1}`
-                : "Select an ability to upgrade"}
-            </button>
           </div>
         </>
       ) : (
@@ -1396,18 +1384,20 @@ function UpgradePanel({
             {selectedGod.abilities.map((ability) => {
               const level = abilityLevel(selectedPlayer.upgrades, ability.id);
               const canUpgrade = !readOnly && level < 3;
+              const selected = presentedAbilityId === ability.id;
               return (
                 <AbilityCard
                   ability={ability}
                   level={level}
                   previewLevel={godPreviewLevel}
-                  active={presentedAbilityId === ability.id}
+                  active={selected}
                   highlighted={presentation?.abilityId === ability.id}
                   selectable={canUpgrade}
                   disabled={!readOnly && level >= 3}
                   footerLabel={`CURRENT LVL ${level}`}
                   footerAction={readOnly ? "VIEW ONLY" : level >= 3 ? "MAX LEVEL" : `SELECT LVL ${level + 1}`}
                   onClick={() => {
+                    setGodPreviewLevel(Math.min(3, level + 1));
                     setSelectedAbilityId(ability.id);
                     dispatch({
                       type: "preview-upgrade",
@@ -1415,26 +1405,25 @@ function UpgradePanel({
                       abilityId: ability.id,
                     });
                   }}
+                  onDoubleClick={() => {
+                    dispatch({ type: "upgrade", abilityId: ability.id });
+                  }}
                   key={ability.id}
-                />
+                >
+                  {!readOnly && selected && (
+                    <div className="upgrade-confirmation">
+                      <button
+                        className="primary-button"
+                        onClick={() => dispatch({ type: "upgrade", abilityId: ability.id })}
+                      >
+                        Confirm {ability.name} · Lv {level + 1}
+                      </button>
+                    </div>
+                  )}
+                </AbilityCard>
               );
             })}
           </div>
-          {!readOnly && (
-            <div className="upgrade-confirmation">
-              <button
-                className="primary-button"
-                disabled={!selectedAbility || selectedAbilityLevel === undefined || selectedAbilityLevel >= 3}
-                onClick={() => {
-                  if (selectedAbility) dispatch({ type: "upgrade", abilityId: selectedAbility.id });
-                }}
-              >
-                {selectedAbility && selectedAbilityLevel !== undefined
-                  ? `Confirm ${selectedAbility.name} · Lv ${selectedAbilityLevel + 1}`
-                  : "Select an ability to upgrade"}
-              </button>
-            </div>
-          )}
         </>
       )}
     </aside>

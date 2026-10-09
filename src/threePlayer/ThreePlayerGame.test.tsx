@@ -904,6 +904,22 @@ describe("ThreePlayerGame", () => {
     expect(container.querySelectorAll(
       ".three-upgrade-list .ability-card > .ability-card-main .ability-card-title",
     )).toHaveLength(cards.length);
+
+    const ability = GOD_BY_ID[state.players.white.gods[0]].abilities[0];
+    const card = screen.getByText(ability.name).closest(".ability-card") as HTMLElement;
+    const control = within(card).getByRole("button", { name: new RegExp(`^${ability.name}`, "i") });
+    expect(card.querySelector(".level-rule")).toBeNull();
+
+    fireEvent.click(control);
+    expect(card.querySelector(".level-rule")).toBeTruthy();
+    const confirm = within(card).getByRole("button", {
+      name: new RegExp(`confirm ${ability.name}.*lv 2`, "i"),
+    });
+    expect(confirm.closest(".ability-card")).toBe(card);
+
+    fireEvent.doubleClick(control);
+    expect(screen.getByText(new RegExp(`${state.players.red.name} upgrades one ability`, "i")))
+      .toBeTruthy();
   });
 
   it("inspects resting Gods read-only without bypassing action authorization", () => {

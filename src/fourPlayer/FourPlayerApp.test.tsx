@@ -591,15 +591,24 @@ describe("four-player app integration", () => {
     expect(levelThree.classList.contains("active")).toBe(false);
     expect(levelThree.getAttribute("aria-pressed")).toBe("false");
     expect(screen.queryByText(/1 orb per piece in the snake/i)).toBeNull();
+    fireEvent.click(levelTwo);
+    expect(levelTwo.classList.contains("active")).toBe(false);
+    expect(screen.queryByText(/snake is 2 or more pieces/i)).toBeNull();
 
     const slitherCard = within(panel).getByText("Slither").closest(".ability-card") as HTMLElement;
     expect(within(slitherCard).getByText("Slither")
       .classList.contains("ability-card-title")).toBe(true);
-    fireEvent.click(within(slitherCard).getByRole("button", { name: /^slither/i }));
+    const slitherControl = within(slitherCard).getByRole("button", { name: /^slither/i });
+    fireEvent.click(slitherControl);
     expect(slitherCard.classList.contains("active")).toBe(true);
-    const confirm = within(panel).getByRole("button", { name: /confirm slither.*lv 2/i });
+    expect(within(slitherCard).getByText(/snake is 2 or more pieces/i)).toBeTruthy();
+    const confirm = within(slitherCard).getByRole("button", { name: /confirm slither.*lv 2/i });
     expect((confirm as HTMLButtonElement).disabled).toBe(false);
-    fireEvent.click(confirm);
+    expect(confirm.closest(".ability-card")).toBe(slitherCard);
+    fireEvent.doubleClick(within(slitherCard).getByRole("button", { name: /lv 3/i }));
+    expect(within(slitherCard).getByRole("button", { name: /confirm slither.*lv 2/i }))
+      .toBeTruthy();
+    fireEvent.doubleClick(slitherControl);
     expect(screen.getByText(/east upgrades one ability/i)).toBeTruthy();
     expect(within(panel).getByText(/round 1.*east seat/i)).toBeTruthy();
   });
@@ -630,10 +639,7 @@ describe("four-player app integration", () => {
     expect(within(slitherCard).getByText("MAX LEVEL")).toBeTruthy();
     fireEvent.click(slitherControl);
     expect(slitherCard.classList.contains("active")).toBe(false);
-    expect(
-      (screen.getByRole("button", { name: /select an ability to upgrade/i }) as HTMLButtonElement)
-        .disabled,
-    ).toBe(true);
+    expect(screen.queryByRole("button", { name: /select an ability to upgrade/i })).toBeNull();
   });
 
   it("routes authorized online upgrades and gates remote-seat and AI input", () => {
@@ -718,10 +724,7 @@ describe("four-player app integration", () => {
     const remoteSlither = screen.getByText("Slither").closest(".ability-card") as HTMLElement;
     expect(within(remoteSlither).getByRole("button", { name: /^slither/i }).getAttribute("aria-disabled"))
       .toBe("true");
-    expect(
-      (screen.getByRole("button", { name: /select an ability to upgrade/i }) as HTMLButtonElement)
-        .disabled,
-    ).toBe(true);
+    expect(screen.queryByRole("button", { name: /select an ability to upgrade/i })).toBeNull();
     expect(remoteAction).not.toHaveBeenCalled();
     remote.unmount();
 
@@ -769,15 +772,12 @@ describe("four-player app integration", () => {
 
     const slitherCard = screen.getByText("Slither").closest(".ability-card") as HTMLElement;
     fireEvent.click(within(slitherCard).getByRole("button", { name: /^slither/i }));
-    const confirm = screen.getByRole("button", { name: /confirm slither.*lv 3/i });
+    const confirm = within(slitherCard).getByRole("button", { name: /confirm slither.*lv 3/i });
     expect((confirm as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(confirm);
 
     expect(screen.getByText(/East seat/i)).toBeTruthy();
-    expect(
-      (screen.getByRole("button", { name: /select an ability to upgrade/i }) as HTMLButtonElement)
-        .disabled,
-    ).toBe(true);
+    expect(screen.queryByRole("button", { name: /select an ability to upgrade/i })).toBeNull();
     await waitFor(() => {
       const persisted = onPersist.mock.calls.at(-1)?.[0];
       expect(persisted?.players.north.upgrades.flight).toBe(3);
