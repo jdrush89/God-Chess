@@ -2522,7 +2522,7 @@ span.move-target-dot {
 }
 .ability-card .ability-level-selector > span,
 .four-ability-card .ability-level-selector > span {
-  font-size: 7px;
+  font-size: 8px;
   line-height: 1.25;
 }
 .ability-card .ability-level-selector button,
@@ -2534,6 +2534,11 @@ span.move-target-dot {
 }
 .ability-card .ability-footer > span,
 .four-ability-card .ability-footer > span {
+  font-size: 8px;
+  line-height: 1.25;
+}
+.ability-card .upgrade-tag,
+.four-ability-card .upgrade-tag {
   font-size: 8px;
   line-height: 1.25;
 }
