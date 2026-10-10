@@ -333,7 +333,7 @@ describe("game flow", () => {
     state.phase = "play";
     state.gameMode = "puzzle";
     state.players.white.gods = ["leonidas"];
-    state.players.white.orbs.black = 1;
+    state.players.white.orbs.black = 2;
     state.board = {
       g7: testPiece("king", "black", "black-king"),
       e5: testPiece("king", "white", "white-king"),
@@ -363,7 +363,7 @@ describe("game flow", () => {
     let state = createGame(1);
     state.phase = "play";
     state.players.white.gods = ["leonidas"];
-    state.players.white.orbs.black = 1;
+    state.players.white.orbs.black = 2;
     state.board = {
       a8: testPiece("king", "black", "black-king"),
       e4: testPiece("king", "white", "white-king"),
@@ -404,7 +404,7 @@ describe("game flow", () => {
     let state = createGame(1);
     state.phase = "play";
     state.players.white.gods = ["leonidas"];
-    state.players.white.orbs.black = 1;
+    state.players.white.orbs.black = 2;
     state.board = {
       a8: testPiece("king", "black", "black-king"),
       e4: testPiece("king", "white", "white-king"),
@@ -424,7 +424,7 @@ describe("game flow", () => {
     let state = createGame(1);
     state.phase = "play";
     state.players.white.gods = ["leonidas"];
-    state.players.white.orbs.black = 1;
+    state.players.white.orbs.black = 2;
     state.players.white.upgrades.escort = 2;
     state.board = {
       a8: testPiece("king", "black", "black-king"),
@@ -1384,6 +1384,7 @@ describe("game flow", () => {
         h8: testPiece("king", "black", "black-king"),
         d4: testPiece("rook", "white", "carrier"),
         e4: testPiece(passengerType, "white", "passenger"),
+        d5: testPiece("pawn", "white", "pawn-passenger"),
       };
       state.players.white.upgrades["air-strike"] = level;
       state.players.white.orbs.black = 3;
@@ -1392,11 +1393,11 @@ describe("game flow", () => {
       return gameReducer(state, { type: "square", square: "d4" });
     };
 
-    expect(setup(1, "knight").pending?.step).toBe("source");
-    expect(setup(2, "knight").pending?.step).toBe("source");
+    expect(setup(1, "knight").legalTargets).not.toContain("e4");
+    expect(setup(2, "knight").legalTargets).not.toContain("e4");
     expect(setup(3, "knight").legalTargets).toContain("e4");
     expect(setup(3, "bishop").legalTargets).toContain("e4");
-    expect(setup(3, "queen").pending?.step).toBe("source");
+    expect(setup(3, "queen").legalTargets).not.toContain("e4");
   });
 
   it("rejects Air Strike routes whose carried piece would expose its King", () => {
@@ -1518,7 +1519,7 @@ describe("game flow", () => {
 
       state = gameReducer(state, { type: "square", square: "e8" });
       expect(state.board.e8.status.hexedBy).toBe("white");
-      if (level > 1) state = gameReducer(state, { type: "pass" });
+      state = gameReducer(state, { type: "pass" });
 
       const orbsBeforeMove =
         state.players.white.orbs.white + state.players.white.orbs.black;
@@ -1533,7 +1534,68 @@ describe("game flow", () => {
       });
       expect(
         state.players.white.orbs.white + state.players.white.orbs.black,
-      ).toBe(orbsBeforeMove + 2);
+      ).toBe(orbsBeforeMove + 1);
+    }
+  });
+
+  it("keeps Poison Cloud active until the poisoned piece moves", () => {
+    let state = createGame(1);
+    state.phase = "play";
+    state.players.white.gods = ["salem"];
+    state.players.black.gods = ["anubis"];
+    state.players.white.orbs.white = 3;
+    state.board = {
+      e1: testPiece("king", "white", "white-king"),
+      e8: testPiece("king", "black", "black-king"),
+      d5: testPiece("pawn", "black", "poisoned-pawn"),
+    };
+
+    state = gameReducer(state, { type: "select-god", godId: "salem" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "poison-cloud" });
+    state = gameReducer(state, { type: "square", square: "d5" });
+    expect(state.board.d5.status.poisonedBy).toBe("white");
+
+    state.activeColor = "white";
+    state.rested = [];
+    state = gameReducer(state, { type: "select-god", godId: "salem" });
+    expect(state.board.d5.status.poisonedBy).toBe("white");
+
+    state.activeColor = "black";
+    state.selectedGod = undefined;
+    state.selectedAbility = undefined;
+    state.pending = undefined;
+    state.legalTargets = [];
+    state.rested = [];
+    state = gameReducer(state, { type: "select-god", godId: "anubis" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "construction" });
+    state = gameReducer(state, { type: "square", square: "d5" });
+    state = gameReducer(state, { type: "square", square: "d4" });
+    expect(state.board.d4.status.poisoned).toBeUndefined();
+    expect(state.board.d4.status.poisonedBy).toBeUndefined();
+  });
+
+  it("counts diagonal Hex alignment only at level 3", () => {
+    for (const level of [2, 3] as const) {
+      let state = createGame(1);
+      state.phase = "play";
+      state.players.white.gods = ["salem"];
+      state.players.white.upgrades.hex = level;
+      state.board = {
+        a1: testPiece("king", "white", "white-king"),
+        h8: testPiece("king", "black", "black-king"),
+        f3: testPiece("rook", "white", "hex-mover"),
+        g5: {
+          ...testPiece("pawn", "black", "hexed-pawn"),
+          status: { hexedBy: "white" },
+        },
+      };
+      const before = state.players.white.orbs.white + state.players.white.orbs.black;
+      state = gameReducer(state, { type: "select-god", godId: "salem" });
+      state = gameReducer(state, { type: "select-ability", abilityId: "hex" });
+      state = gameReducer(state, { type: "square", square: "f3" });
+      state = gameReducer(state, { type: "square", square: "f4" });
+      const after = state.players.white.orbs.white + state.players.white.orbs.black;
+      expect(after - before).toBe(level === 3 ? 1 : 0);
     }
   });
 

@@ -263,7 +263,15 @@ export const fourPlayerPseudoTargets = (
   const piece = board[from];
   const actor = piece?.controller;
   if (!piece || !actor) return [];
-  if (!options.attacksOnly && (piece.status.hardened || piece.status.frozen || piece.status.gazing)) return [];
+  if (
+    !options.attacksOnly &&
+    (
+      piece.status.hardened ||
+      piece.status.frozen ||
+      piece.status.gazing ||
+      piece.status.stunned
+    )
+  ) return [];
   const [file, rank] = fourPlayerCoords(from);
   const type = piece.status.polymorphed ? "pawn" : options.forceType ?? piece.type;
   const diagonal: Direction[] = [[1, 1], [1, -1], [-1, 1], [-1, -1]];

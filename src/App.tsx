@@ -237,6 +237,7 @@ const statusMarkers: {
 }[] = [
   { key: "hardened", label: "Hardened", icon: Shield },
   { key: "frozen", label: "Stone", icon: Snowflake },
+  { key: "stunned", label: "Stunned", icon: X },
   { key: "poisoned", label: "Poisoned", icon: FlaskConical },
   { key: "polymorphed", label: "Polymorphed", icon: Rabbit },
   { key: "luredBy", label: "Lured", icon: Magnet },
@@ -285,6 +286,12 @@ const pieceMarkerDetails = (piece: Piece, state: GameState) => {
       description: "This Queen cannot move while any piece affected by Stone Gaze remains frozen.",
     });
   }
+  if (piece.status.stunned) {
+    markers.push({
+      name: "Stunned",
+      description: "Cannot move or be moved by abilities until the end of its controller’s turn.",
+    });
+  }
   if (piece.status.poisoned) {
     markers.push({
       name: "Poisoned",
@@ -324,14 +331,12 @@ const pieceMarkerDetails = (piece: Piece, state: GameState) => {
     });
   }
   if (piece.status.ritual) {
-    const ritualLevel = abilityLevel(state.players[piece.status.ritual.owner].upgrades, "ritual-sacrifice");
-    const reward = ritualLevel >= 3 ? 4 : 3;
-    const duration = piece.status.ritual.expires === "kangus"
-      ? "before Kangus’ next turn"
-      : `before turn ${piece.status.ritual.expires}`;
+    const ritualLevel = piece.status.ritual.level ??
+      abilityLevel(state.players[piece.status.ritual.owner].upgrades, "ritual-sacrifice");
+    const reward = ritualLevel >= 3 ? 3 : 2;
     markers.push({
       name: "Goad",
-      description: `If captured ${duration}, ${colorLabel(piece.status.ritual.owner)} gains ${reward} white and ${reward} black orbs.`,
+      description: `If captured before Kangus’ next turn, ${colorLabel(piece.status.ritual.owner)} gains ${reward} white and ${reward} black orbs.`,
     });
   }
   if (piece.status.markedForDeath) {
@@ -1073,6 +1078,7 @@ export function ActionPanel({
     state.pending?.step === "slither" ||
     state.pending?.step === "mount-rider" ||
     state.pending?.step === "funding" ||
+    state.pending?.step === "siphon-targets" ||
     state.pending?.step === "march-companions" ||
     (state.pending?.step === "escort-companions" && Boolean(state.pending.selected?.length)) ||
     (state.pending?.step === "hex-target" && Boolean(state.pending.selected?.length));
@@ -1087,7 +1093,16 @@ export function ActionPanel({
         <span>DIVINE ACTION</span>
         <small>ROUND {state.round}</small>
       </div>
-      {state.pending?.abilityId === "snipe-shot" ? (
+      {state.pending?.abilityId === "stealth-return" ? (
+        <div className="prepared-shot-panel">
+          <span>ARTEMIS · STEALTH</span>
+          <h3>Choose where the piece returns</h3>
+          <p>
+            Select the planned destination or its original space. Returning to
+            the original space captures any piece currently there.
+          </p>
+        </div>
+      ) : state.pending?.abilityId === "snipe-shot" ? (
         <>
           <div className="prepared-shot-panel">
             <Swords size={28} />
@@ -1096,7 +1111,7 @@ export function ActionPanel({
             <p>
               {state.pending.step === "snipe-source"
                 ? "Select a highlighted prepared piece on the board."
-                : "Now select one of the highlighted enemy pieces it attacks."}
+                : "Select an attacked enemy piece. The prepared piece will be stunned for the rest of this turn."}
             </p>
           </div>
           <div className="action-buttons">

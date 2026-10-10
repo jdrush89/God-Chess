@@ -242,7 +242,12 @@ export const threePlayerPseudoTargets = (
   if (!piece || !actor) return [];
   if (
     !options.attacksOnly &&
-    (piece.status.hardened || piece.status.frozen || piece.status.gazing)
+    (
+      piece.status.hardened ||
+      piece.status.frozen ||
+      piece.status.gazing ||
+      piece.status.stunned
+    )
   ) return [];
   const topology = topologyFor(state);
   const type = piece.status.polymorphed

@@ -44,13 +44,18 @@ export interface ThreePlayerPieceStatus {
   frozen?: number | "god";
   frozenBy?: ThreePlayerSeat;
   gazing?: boolean;
+  stunned?: boolean;
   poisoned?: number | "god";
   poisonedBy?: ThreePlayerSeat;
   polymorphed?: number | "god";
   luredBy?: ThreePlayerSeat;
   hexedBy?: ThreePlayerSeat;
   prepared?: boolean | { owner: ThreePlayerSeat; level: 1 | 2 | 3 };
-  ritual?: { owner: ThreePlayerSeat; expires: number | "kangus" };
+  ritual?: {
+    owner: ThreePlayerSeat;
+    expires: number | "kangus";
+    level?: 1 | 2 | 3;
+  };
   markedForDeath?: { owner: ThreePlayerSeat; round: number; immediate?: boolean };
   hired?: boolean;
   movedThisTurn?: boolean;
@@ -112,12 +117,15 @@ export interface ThreePlayerBanana {
   cell: ThreePlayerCell;
   owner: ThreePlayerSeat;
   expires: number | "kangus" | "god";
+  level?: 1 | 2 | 3;
 }
 
 export interface ThreePlayerStealthMove {
   piece: ThreePlayerPiece;
+  source?: ThreePlayerCell;
   destination: ThreePlayerCell;
   returnOnTurn: number;
+  level?: 1 | 2 | 3;
 }
 
 export interface ThreePlayerOrbEvent {
@@ -159,6 +167,10 @@ export interface ThreePlayerPendingAction {
   selectedPieceIds?: string[];
   selectedPathIds?: string[];
   movedPieceId?: string;
+  passengerIds?: string[];
+  droppedPassengerIds?: string[];
+  dropCells?: ThreePlayerCell[];
+  captureUsed?: boolean;
   movesRemaining?: number;
   targetSeat?: ThreePlayerSeat;
   queuedMove?: ThreePlayerQueuedMove;

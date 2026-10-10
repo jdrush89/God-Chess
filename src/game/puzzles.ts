@@ -556,6 +556,7 @@ const fundedFlight = (playerName?: string) => {
   state.board = board(
     ["b1", piece("white-king", "king", "white")],
     ["a7", piece("white-carrier", "rook", "white")],
+    ["a6", piece("white-air-strike-pawn", "pawn", "white")],
     ["f1", piece("white-rook-f", "rook", "white")],
     ["e4", piece("white-recruiter", "bishop", "white")],
     ["b4", piece("white-escape-guard", "bishop", "white")],
@@ -567,7 +568,6 @@ const fundedFlight = (playerName?: string) => {
     ["e2", piece("white-pawn-e", "pawn", "white")],
     ["f2", piece("white-pawn-f", "pawn", "white")],
     ["g2", piece("white-pawn-g", "pawn", "white")],
-    ["h2", piece("white-pawn-h", "pawn", "white")],
     ["b7", piece("black-passenger", "bishop", "black")],
     ["f7", piece("black-king", "king", "black")],
     ["f8", piece("black-rook-f", "rook", "black")],
@@ -577,7 +577,6 @@ const fundedFlight = (playerName?: string) => {
     ["f6", piece("black-pawn-f", "pawn", "black")],
     ["g6", piece("black-pawn-g6", "pawn", "black")],
     ["g7", piece("black-pawn-g7", "pawn", "black")],
-    ["a6", piece("black-pawn-a", "pawn", "black")],
     ["b6", piece("black-pawn-b", "pawn", "black")],
     ["h6", piece("black-pawn-h", "pawn", "black")],
   );
@@ -686,7 +685,7 @@ const royalLanding = (playerName?: string) => {
     leverage: 2,
   };
   enableBestDefense(state);
-  for (const square of ["b8", "d7", "f8"]) {
+  for (const square of ["b8", "d7", "f8", "h8"]) {
     state.board[square].status.movedThisTurn = true;
   }
   return state;
@@ -911,25 +910,25 @@ const resonantFoundation = (playerName?: string) => {
     playerName,
   );
   state.board = board(
-    ["e1", piece("white-king", "king", "white")],
+    ["e8", piece("white-king", "king", "white")],
     ["a2", piece("white-resonance-queen", "queen", "white")],
     ["a1", piece("white-queen-blocker-a1", "knight", "white")],
     ["b1", piece("white-queen-blocker-b1", "pawn", "white")],
     ["b2", piece("white-queen-blocker-b2", "pawn", "white")],
     ["b3", piece("white-queen-blocker-b3", "pawn", "white")],
     ["g1", piece("white-rook-blocker-g1", "pawn", "white")],
-    ["h1", piece("white-cage-rook", "rook", "white")],
     ["h2", piece("white-rook-blocker-h2", "pawn", "white")],
     ["h8", piece("white-construction-knight", "knight", "white")],
-    ["a8", piece("white-carrier", "rook", "white")],
-    ["b8", piece("white-passenger", "bishop", "white")],
-    ["e6", piece("white-cage-pawn-e6", "pawn", "white")],
-    ["f6", piece("white-cage-pawn-f6", "pawn", "white")],
-    ["f5", piece("white-cage-bishop", "bishop", "white")],
-    ["e7", piece("white-cage-pawn-e7", "pawn", "white")],
+    ["d8", piece("white-carrier", "rook", "white")],
+    ["e7", piece("white-passenger", "bishop", "white")],
+    ["f7", piece("white-construction-blocker-f7", "rook", "white")],
+    ["f6", piece("white-cage-bishop", "bishop", "white")],
+    ["f5", piece("white-cage-pawn-f5", "pawn", "white")],
+    ["c7", piece("white-air-strike-pawn", "pawn", "white")],
     ["a4", piece("black-resonance-pawn-a", "pawn", "black")],
     ["b4", piece("black-resonance-pawn-b", "pawn", "black")],
     ["h4", piece("black-response-pawn", "pawn", "black")],
+    ["h7", piece("black-king-blocker", "pawn", "black")],
     ["g8", piece("black-king", "king", "black")],
   );
   state.players.white.orbs.black = 1;
@@ -998,20 +997,19 @@ const architectsBargain = (playerName?: string) => {
   state.board = board(
     ["b1", piece("white-king", "king", "white")],
     ["f1", piece("white-construction-rook", "rook", "white")],
-    ["h1", piece("white-cage-rook", "rook", "white")],
     ["d4", piece("white-recruiter", "knight", "white")],
     ["f6", piece("white-cage-bishop-f6", "bishop", "white")],
-    ["f8", piece("white-pinned-blocker", "bishop", "white")],
+    ["h8", piece("white-construction-bishop", "bishop", "white")],
     ["e1", piece("white-construction-blocker-e1", "pawn", "white")],
     ["f2", piece("white-construction-blocker-f2", "pawn", "white")],
-    ["e6", piece("white-cage-pawn-e6", "pawn", "white")],
+    ["e8", piece("white-air-strike-pawn", "pawn", "white")],
     ["g6", piece("white-cage-pawn", "pawn", "white")],
-    ["b8", piece("white-carrier", "queen", "white")],
+    ["d8", piece("white-carrier", "queen", "white")],
     ["c7", piece("black-passenger", "knight", "black")],
     ["a7", piece("black-response-pawn", "pawn", "black")],
     ["g8", piece("black-king", "king", "black")],
   );
-  state.players.white.orbs.black = 5;
+  state.players.white.orbs.black = 6;
   state.players.white.upgrades = {
     construction: 3,
     harden: 2,
@@ -1023,7 +1021,7 @@ const architectsBargain = (playerName?: string) => {
     "air-lift": 2,
     "air-strike": 3,
   };
-  reserveOpeningSource(state, "f1");
+  reserveOpeningSource(state, "h8");
   forceOpeningReply(state, "a7");
   return state;
 };
@@ -1107,7 +1105,7 @@ const openedThrone = (playerName?: string) => {
     "royal-step": 2,
     "march-home": 2,
   };
-  state.players.white.orbs.black = 0;
+  state.players.white.orbs.black = 1;
   reserveOpeningSource(state, "e5");
   forceOpeningReply(state, "a7");
   return state;
@@ -1169,16 +1167,17 @@ const hexedProvocation = (playerName?: string) => {
     ["b7", piece("white-rook-a", "rook", "white")],
     ["e5", piece("white-pin-bishop", "bishop", "white")],
     ["f5", piece("white-provoked-knight", "knight", "white")],
+    ["b2", piece("white-rook-lane-blocker-b2", "pawn", "white")],
     ["f7", piece("white-cage-pawn-f7", "pawn", "white")],
     ["g6", piece("white-cage-pawn-g6", "pawn", "white")],
-    ["a7", piece("black-response-pawn", "pawn", "black")],
+    ["a6", piece("black-response-knight", "knight", "black")],
     ["b8", piece("black-hex-knight", "knight", "black")],
     ["d8", piece("black-queen", "queen", "black")],
     ["f8", piece("black-rook", "rook", "black")],
     ["g7", piece("black-provoker", "bishop", "black")],
     ["h8", piece("black-king", "king", "black")],
   );
-  state.players.white.orbs = { white: 2, black: 0 };
+  state.players.white.orbs = { white: 2, black: 1 };
   state.players.white.upgrades = {
     hex: 3,
     "poison-cloud": 2,
@@ -1191,7 +1190,7 @@ const hexedProvocation = (playerName?: string) => {
     charge: 2,
   };
   reserveOpeningSource(state, "b7");
-  forceOpeningReply(state, "a7");
+  forceOpeningReply(state, "a6");
   return state;
 };
 
@@ -1410,7 +1409,7 @@ export const PUZZLES: PuzzleDefinition[] = [
     difficulty: "medium",
     objective: "Capture the black King in two divine turns.",
     hint: "The carrier needs a passenger that does not begin under your control.",
-    solutionSummary: "Hire the bishop on b7 with Leverage, then use level 3 Air Strike from a7 to h7 and drop it on the King at f7.",
+    solutionSummary: "Hire the bishop on b7 with Leverage, then use level 3 Air Strike from a7 to h7, dropping the pawn from a6 on e7 and the bishop on the King at f7.",
     playerTurns: 2,
     solutionTurns: [
       [
@@ -1425,7 +1424,11 @@ export const PUZZLES: PuzzleDefinition[] = [
         { type: "select-ability", abilityId: "air-strike" },
         { type: "square", square: "a7" },
         { type: "square", square: "b7" },
+        { type: "square", square: "a6" },
         { type: "square", square: "h7" },
+        { type: "square", square: "a6" },
+        { type: "square", square: "e7" },
+        { type: "square", square: "b7" },
         { type: "square", square: "f7" },
       ],
     ],
@@ -1602,7 +1605,7 @@ export const PUZZLES: PuzzleDefinition[] = [
     difficulty: "hard",
     objective: "Capture the black King in three divine turns.",
     hint: "A trade beside the advanced pawn can fund the final explosion before the knight carries its rider to the only useful dismount square.",
-    solutionSummary: "Barter after moving c2 to c3 and take 3 black orbs, use Mount to carry the rook from f7 to g7 with the knight from e7, then use Rage on the mounted knight.",
+    solutionSummary: "Barter after moving c2 to c3 and take 4 black orbs, use Mount to carry the rook from f7 to g7 with the knight from e7, then use Rage on the friendly rook at g7.",
     playerTurns: 3,
     solutionTurns: [
       [
@@ -1623,7 +1626,7 @@ export const PUZZLES: PuzzleDefinition[] = [
       [
         { type: "select-god", godId: "kangus" },
         { type: "select-ability", abilityId: "rage" },
-        { type: "square", square: "g8" },
+        { type: "square", square: "g7" },
       ],
     ],
     createState: goldenFuse,
@@ -1633,8 +1636,8 @@ export const PUZZLES: PuzzleDefinition[] = [
     title: "Position Nineteen",
     difficulty: "hard",
     objective: "Capture the black King in three divine turns.",
-    hint: "A Queen can resonate beside the clustered dark pieces before Construction clears the carrier's landing square.",
-    solutionSummary: "Use Resonance to move the Queen from a2 to a3, use Construction to move the knight from h8 to f7, then Air Strike from a8 to h8 and drop the bishop onto g8.",
+    hint: "A Queen can resonate beside the clustered dark pieces before Construction clears the nearby carrier's landing square.",
+    solutionSummary: "Use Resonance to move the Queen from a2 to a3, use Construction to move the knight from h8 to g6, then Air Strike from d8 to h8, dropping the pawn on f8 and the bishop onto g8.",
     playerTurns: 3,
     solutionTurns: [
       [
@@ -1647,14 +1650,18 @@ export const PUZZLES: PuzzleDefinition[] = [
         { type: "select-god", godId: "anubis" },
         { type: "select-ability", abilityId: "construction" },
         { type: "square", square: "h8" },
-        { type: "square", square: "f7" },
+        { type: "square", square: "g6" },
       ],
       [
         { type: "select-god", godId: "quetzacoatl" },
         { type: "select-ability", abilityId: "air-strike" },
-        { type: "square", square: "a8" },
-        { type: "square", square: "b8" },
+        { type: "square", square: "d8" },
+        { type: "square", square: "e7" },
+        { type: "square", square: "c7" },
         { type: "square", square: "h8" },
+        { type: "square", square: "c7" },
+        { type: "square", square: "f8" },
+        { type: "square", square: "e7" },
         { type: "square", square: "g8" },
       ],
     ],
@@ -1696,15 +1703,15 @@ export const PUZZLES: PuzzleDefinition[] = [
     title: "Position Twenty-One",
     difficulty: "hard",
     objective: "Capture the black King in three divine turns.",
-    hint: "One careful rook step completes the treasury needed to hire a passenger and launch it.",
-    solutionSummary: "Use level 3 Construction to move the rook from f1 to g1, hire the knight on c7 with Leverage, then Air Strike from b8 to h8 and drop it onto g8.",
+    hint: "One careful bishop step clears the landing square and completes the treasury needed to hire a nearby passenger.",
+    solutionSummary: "Use level 3 Construction to move the bishop from h8 to g7, hire the knight on c7 with Leverage, then Air Strike from d8 to h8, dropping the pawn on f8 before the hired knight drops onto g8.",
     playerTurns: 3,
     solutionTurns: [
       [
         { type: "select-god", godId: "anubis" },
         { type: "select-ability", abilityId: "construction" },
-        { type: "square", square: "f1" },
-        { type: "square", square: "g1" },
+        { type: "square", square: "h8" },
+        { type: "square", square: "g7" },
       ],
       [
         { type: "select-god", godId: "midas" },
@@ -1716,9 +1723,13 @@ export const PUZZLES: PuzzleDefinition[] = [
       [
         { type: "select-god", godId: "quetzacoatl" },
         { type: "select-ability", abilityId: "air-strike" },
-        { type: "square", square: "b8" },
+        { type: "square", square: "d8" },
         { type: "square", square: "c7" },
+        { type: "square", square: "e8" },
         { type: "square", square: "h8" },
+        { type: "square", square: "e8" },
+        { type: "square", square: "f8" },
+        { type: "square", square: "c7" },
         { type: "square", square: "g8" },
       ],
     ],
@@ -1819,8 +1830,8 @@ export const PUZZLES: PuzzleDefinition[] = [
     title: "Position Twenty-Five",
     difficulty: "hard",
     objective: "Capture the black King in three divine turns.",
-    hint: "The rook can enter the enemy back rank while aligning with three curses, funding a provocation against the pinned bishop.",
-    solutionSummary: "Hex d8, f8, and h8, capture b8 with the rook for 4 black orbs, use Pick a Fight to move f5 to h6, then Charge to h8.",
+    hint: "The rook can enter the enemy back rank while aligning with three curses, completing the reserve needed for a provocation and charge.",
+    solutionSummary: "Hex d8, f8, and h8, capture b8 with the rook for 3 black orbs, use Pick a Fight to teleport f5 to h6, then Charge to h8.",
     playerTurns: 3,
     solutionTurns: [
       [

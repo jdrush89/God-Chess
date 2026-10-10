@@ -1096,6 +1096,7 @@ describe("four-player app integration", () => {
       within(screen.getByRole("gridcell", { name: /a7.*west.*king/i }))
         .getByLabelText(/hexed/i),
     ).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /pass.*finish/i }));
     expect(screen.getAllByText(/choose a piece to move/i).length).toBeGreaterThan(0);
     expect(screen.getByRole("gridcell", { name: /g8.*north.*rook.*legal target/i }))
       .toBeTruthy();

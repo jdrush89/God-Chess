@@ -90,6 +90,15 @@ const canonicalTurnKey = (turn: GameAction[]) => {
       canonicalAction(squares.at(-1)!),
     ]);
   }
+  if (ability === "air-strike" && squares.length >= 4) {
+    return JSON.stringify([
+      ...turn.slice(0, 2).map(canonicalAction),
+      canonicalAction(squares[0]),
+      ...squares.slice(1, 3).map((action) => action.square).sort(),
+      canonicalAction(squares[3]),
+      ...squares.slice(4).map(canonicalAction),
+    ]);
+  }
   return JSON.stringify(turn.map(canonicalAction));
 };
 

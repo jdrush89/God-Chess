@@ -354,7 +354,8 @@ describe("four-player move-first contracts", () => {
     const queued = moveFirst(state, "salem", move);
     delete queued.board[move.from];
     const target = queued.legalTargets[0];
-    const next = fourPlayerReducer(queued, { type: "square", square: target });
+    const marked = fourPlayerReducer(queued, { type: "square", square: target });
+    const next = fourPlayerReducer(marked, { type: "pass" });
     expect(next.notice).toMatch(/no longer legal/i);
     expect(next.pending?.step).toBe("source");
     expect(next.legalTargets.length).toBeGreaterThan(0);

@@ -638,7 +638,7 @@ describe("three-player God catalog", () => {
 
       state = threePlayerReducer(state, { type: "cell", cell: targetKing });
       expect(state.board[targetKing].status.hexedBy).toBe("white");
-      if (level > 1) state = threePlayerReducer(state, { type: "pass" });
+      state = threePlayerReducer(state, { type: "pass" });
 
       const orbsBeforeMove =
         state.players.white.orbs.light + state.players.white.orbs.dark;
@@ -655,7 +655,7 @@ describe("three-player God catalog", () => {
 
       expect(
         state.players.white.orbs.light + state.players.white.orbs.dark,
-      ).toBe(orbsBeforeMove + 2);
+      ).toBe(orbsBeforeMove + 1);
       expect(state.board[targetKing]).toMatchObject({
         type: "king",
         status: { hexedBy: "white" },
@@ -758,7 +758,7 @@ describe("three-player God catalog", () => {
     )!;
     const [kingCell, friendlyCell, hostileCell] = topology.kingNeighbors(center);
     state.board = {
-      [center]: piece("center", "pawn", "black"),
+      [center]: piece("center", "pawn", "white"),
       [kingCell]: piece("red-king", "king", "red"),
       [friendlyCell]: piece("white-pawn", "pawn", "white"),
       [hostileCell]: piece("black-pawn", "pawn", "black"),

@@ -27,6 +27,7 @@ export const THREE_PLAYER_STATUS_LABELS: ReadonlyArray<{
 }> = [
   { key: "hardened", label: "Hardened" },
   { key: "frozen", label: "Stone" },
+  { key: "stunned", label: "Stunned" },
   { key: "gazing", label: "Gazing" },
   { key: "poisoned", label: "Poisoned" },
   { key: "polymorphed", label: "Polymorphed" },

@@ -88,6 +88,13 @@ const addOrbs = (
   state.players[seat].orbs.dark = Math.max(0, state.players[seat].orbs.dark + dark);
 };
 
+const statusAfterMovement = (status: FourPlayerPiece["status"]) => {
+  const next = { ...status, movedThisTurn: true };
+  delete next.poisoned;
+  delete next.poisonedBy;
+  return next;
+};
+
 const addAffinityOrb = (
   state: FourPlayerState,
   seat: Seat,
@@ -128,7 +135,7 @@ const COMMITTED_PENDING_STEPS = new Set([
   "rage-choice",
   "resurrect-more",
   "siphon-amount",
-  "siphon-seat",
+  "siphon-targets",
   "slither",
   "slither-orb",
 ]);
@@ -375,7 +382,9 @@ const sendToGraveyard = (
       state.hostileTurns[piece.status.ritual.owner] < piece.status.ritual.expires
     )
   ) {
-    const reward = levelFor(state, piece.status.ritual.owner, "ritual-sacrifice") >= 3 ? 4 : 3;
+    const ritualLevel = piece.status.ritual.level ??
+      levelFor(state, piece.status.ritual.owner, "ritual-sacrifice");
+    const reward = ritualLevel >= 3 ? 3 : 2;
     addOrbs(state, piece.status.ritual.owner, reward, reward);
   }
   if (piece.type === "king") eliminateSeat(state, piece.owner, captor);
@@ -413,7 +422,10 @@ const bananaOnPath = (
   state.bananas.some(
     (banana) =>
       banana.square === square &&
-      seatsAreHostile(state.config, actor, banana.owner),
+      (
+        seatsAreHostile(state.config, actor, banana.owner) ||
+        (banana.level ?? 1) >= 3
+      ),
   )
 );
 
@@ -435,8 +447,18 @@ const moveDirect = (
   state.enPassant = result.enPassant
     ? { ...result.enPassant, expiresOnTurn: state.turn + 1 }
     : undefined;
+  if (moving.status.poisoned && state.board[to]) {
+    delete state.board[to].status.poisoned;
+    delete state.board[to].status.poisonedBy;
+  }
   if (result.captured) sendToGraveyard(state, result.captured, result.capturedSquare ?? to);
-  if (peel) state.bananas = state.bananas.filter((banana) => banana.square !== peel);
+  if (peel) {
+    const banana = state.bananas.find((candidate) => candidate.square === peel);
+    state.bananas = state.bananas.filter((banana) => banana.square !== peel);
+    if ((banana?.level ?? 1) >= 3 && state.board[to]) {
+      state.board[to].status.stunned = true;
+    }
+  }
   return { piece: state.board[to], from, to, captured: result.captured };
 };
 
@@ -477,6 +499,7 @@ const expireStatuses = (state: FourPlayerState, endingSeat: Seat) => {
       }
       delete status.luredBy;
       delete status.movedThisTurn;
+      delete status.stunned;
     }
     if (
       status.ritual &&
@@ -509,6 +532,9 @@ const preparedDetails = (piece: FourPlayerPiece) => {
 };
 
 const preparedShotTargets = (state: FourPlayerState, source: Square) =>
+  state.board[source]?.status.stunned
+    ? []
+    :
   fourPlayerOrdinaryAttackedSquares(
     state.board,
     source,
@@ -556,34 +582,60 @@ const queueHardenChoice = (state: FourPlayerState) => {
   return true;
 };
 
+const placeStealthReturn = (
+  state: FourPlayerState,
+  returning: FourPlayerState["stealth"][Seat][number],
+  square: Square,
+) => {
+  const occupant = state.board[square];
+  if (occupant && !occupant.status.hardened) {
+    captureAt(state, square, true, true);
+  }
+  if (!state.board[square]) {
+    state.board[square] = {
+      ...returning.piece,
+      status: {
+        ...returning.piece.status,
+        ...((returning.level ?? 1) >= 3 ? {} : { movedThisTurn: true }),
+      },
+    };
+    if ((returning.level ?? 1) >= 3) {
+      delete state.board[square].status.movedThisTurn;
+    }
+  } else {
+    sendToGraveyard(state, returning.piece, square);
+  }
+  state.stealth[state.activeSeat] = state.stealth[state.activeSeat]
+    .filter((move) => move.piece.id !== returning.piece.id);
+};
+
+const queueStealthReturn = (state: FourPlayerState): boolean => {
+  while (true) {
+    const returning = state.stealth[state.activeSeat]
+      .find((move) => move.returnOnTurn <= state.seatTurns[state.activeSeat]);
+    if (!returning) return false;
+    const level = returning.level ??
+      levelFor(state, state.activeSeat, "stealth");
+    if (level < 2 || !returning.source) {
+      placeStealthReturn(state, returning, returning.destination);
+      continue;
+    }
+    state.pending = {
+      godId: "artemis",
+      abilityId: "stealth-return",
+      step: "stealth-return",
+      movedPieceId: returning.piece.id,
+    };
+    state.legalTargets = [...new Set([returning.destination, returning.source])];
+    state.notice = "Stealth: choose the planned destination or the original square.";
+    return true;
+  }
+};
+
 const resolveStartOfTurn = (state: FourPlayerState) => {
-  for (const piece of Object.values(state.board)) {
-    if (piece.status.poisonedBy === state.activeSeat) {
-      delete piece.status.poisoned;
-      delete piece.status.poisonedBy;
-    }
+  if (!queueStealthReturn(state) && !queueHardenChoice(state)) {
+    queuePreparedShot(state);
   }
-  const returns = state.stealth[state.activeSeat].filter(
-    (move) => move.returnOnTurn <= state.seatTurns[state.activeSeat],
-  );
-  for (const returning of returns) {
-    const occupant = state.board[returning.destination];
-    if (occupant && !occupant.status.hardened) {
-      captureAt(state, returning.destination, true, true);
-    }
-    if (!state.board[returning.destination]) {
-      state.board[returning.destination] = {
-        ...returning.piece,
-        status: { ...returning.piece.status, movedThisTurn: true },
-      };
-    } else {
-      sendToGraveyard(state, returning.piece, returning.destination);
-    }
-  }
-  state.stealth[state.activeSeat] = state.stealth[state.activeSeat].filter(
-    (move) => move.returnOnTurn > state.seatTurns[state.activeSeat],
-  );
-  if (!queueHardenChoice(state)) queuePreparedShot(state);
 };
 
 const resolveMarkedForDeath = (state: FourPlayerState) => {
@@ -772,81 +824,155 @@ const constrainLure = (
   return closer.length ? closer : targets;
 };
 
-const airStrikePassengerTypes = (level: number): PieceType[] =>
-  level >= 3 ? ["pawn", "knight", "bishop"] : ["pawn"];
-
-const airStrikePassengerSquares = (
+const eligibleAirStrikePassengers = (
   state: FourPlayerState,
   carrierSquare: Square,
 ) => fourPlayerAdjacentSquares(carrierSquare).filter((square) => {
   const passenger = state.board[square];
   return (
     alliedPiece(state, passenger) &&
-    airStrikePassengerTypes(currentLevel(state, "air-strike")).includes(passenger.type) &&
+    ["pawn", "knight", "bishop"].includes(passenger.type) &&
     !passenger.status.hardened &&
     !passenger.status.frozen &&
     !passenger.status.gazing &&
+    !passenger.status.stunned &&
     !passenger.status.movedThisTurn
   );
 });
 
-const airStrikeDropTargets = (
+const airStrikeSecondPassengerSquares = (
+  state: FourPlayerState,
+  carrierSquare: Square,
+  firstPassengerSquare: Square,
+) => {
+  const first = state.board[firstPassengerSquare];
+  if (!first || currentLevel(state, "air-strike") < 3) return [];
+  return eligibleAirStrikePassengers(state, carrierSquare).filter((square) => {
+    if (square === firstPassengerSquare) return false;
+    const second = state.board[square];
+    return first.type === "pawn"
+      ? second?.type === "knight" || second?.type === "bishop"
+      : second?.type === "pawn";
+  });
+};
+
+const airStrikeCompletionExists = (
   state: FourPlayerState,
   carrierSquare: Square,
   carrierDestination: Square,
-  passengerSquare: Square,
+  passengerIds: string[],
+  droppedPassengerIds: string[] = [],
+  captureUsed = false,
+  forcedPassengerId?: string,
+  forcedDrop?: Square,
 ) => {
-  const passenger = state.board[passengerSquare];
-  if (!passenger) return [];
+  const dropped = new Set(droppedPassengerIds);
+  const remaining = passengerIds
+    .filter((id) => !dropped.has(id))
+    .map((id) => {
+      const square = findSquareById(state, id);
+      return square ? { id, square, piece: state.board[square] } : undefined;
+    })
+    .filter((entry): entry is { id: string; square: Square; piece: FourPlayerPiece } =>
+      Boolean(entry)
+    );
+  if (!remaining.length) return false;
   const path = fourPlayerFlightPathSquares(carrierSquare, carrierDestination);
   const board = structuredClone(state.board);
-  delete board[passengerSquare];
+  for (const passenger of remaining) delete board[passenger.square];
   const afterCarrier = fourPlayerApplyMove(
     board,
     { from: carrierSquare, to: carrierDestination },
     state.enPassant,
   ).board;
   const firstEnemy = currentLevel(state, "air-strike") >= 2
-    ? path.find((square) => hostilePiece(state, afterCarrier[square]))
+    ? path.find((dropSquare) => hostilePiece(state, afterCarrier[dropSquare]))
     : undefined;
-  return path.filter((square) => {
-    const occupying = afterCarrier[square];
-    if (
-      occupying &&
-      (
-        square !== firstEnemy ||
-        !hostilePiece(state, occupying) ||
-        occupying.type === "king" ||
-        occupying.status.hardened
-      )
-    ) {
-      return false;
+
+  const placeRemaining = (
+    dropBoard: Record<Square, FourPlayerPiece>,
+    passengers: typeof remaining,
+    usedCapture: boolean,
+    applyForcedChoice: boolean,
+  ): boolean => {
+    if (!passengers.length) {
+      return !fourPlayerIsInCheck(
+        dropBoard,
+        state.activeSeat,
+        state.config,
+        state.bananas,
+      );
     }
-    const simulated = { ...afterCarrier };
-    delete simulated[square];
-    simulated[square] = {
-      ...passenger,
-      hasMoved: true,
-      status: { ...passenger.status, movedThisTurn: true },
-    };
-    return !fourPlayerIsInCheck(
-      simulated,
-      state.activeSeat,
-      state.config,
-      state.bananas,
-    );
-  });
+    const passengerChoices = applyForcedChoice && forcedPassengerId
+      ? passengers.filter((passenger) => passenger.id === forcedPassengerId)
+      : passengers;
+    for (const passenger of passengerChoices) {
+      const laterPassengers = passengers.filter(
+        (candidate) => candidate.id !== passenger.id,
+      );
+      const dropChoices = applyForcedChoice && forcedDrop ? [forcedDrop] : path;
+      for (const dropSquare of dropChoices) {
+        const occupant = dropBoard[dropSquare];
+        const captures = Boolean(occupant);
+        if (
+          occupant &&
+          (
+            usedCapture ||
+            dropSquare !== firstEnemy ||
+            !hostilePiece(state, occupant) ||
+            occupant.type === "king" ||
+            occupant.status.hardened
+          )
+        ) continue;
+        const nextBoard = structuredClone(dropBoard);
+        delete nextBoard[dropSquare];
+        nextBoard[dropSquare] = {
+          ...passenger.piece,
+          hasMoved: true,
+          status: statusAfterMovement(passenger.piece.status),
+        };
+        if (placeRemaining(nextBoard, laterPassengers, usedCapture || captures, false)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+
+  return placeRemaining(afterCarrier, remaining, captureUsed, true);
 };
+
+const airStrikeDropTargets = (
+  state: FourPlayerState,
+  carrierSquare: Square,
+  carrierDestination: Square,
+  passengerId: string,
+) => fourPlayerFlightPathSquares(carrierSquare, carrierDestination).filter((dropSquare) =>
+  airStrikeCompletionExists(
+    state,
+    carrierSquare,
+    carrierDestination,
+    state.pending?.passengerIds ?? [passengerId],
+    state.pending?.droppedPassengerIds,
+    state.pending?.captureUsed,
+    passengerId,
+    dropSquare,
+  )
+);
 
 const airStrikeLandingTargets = (
   state: FourPlayerState,
   carrierSquare: Square,
-  passengerSquare: Square,
+  passengerSquares: Square[],
 ) => {
   const board = structuredClone(state.board);
-  delete board[passengerSquare];
+  for (const passengerSquare of passengerSquares) delete board[passengerSquare];
   const carrier = board[carrierSquare];
   if (!carrier) return [];
+  const passengerIds = passengerSquares
+    .map((square) => state.board[square]?.id)
+    .filter((id): id is string => Boolean(id));
+  if (passengerIds.length !== passengerSquares.length) return [];
   return constrainLure(
     state,
     carrierSquare,
@@ -858,8 +984,27 @@ const airStrikeLandingTargets = (
     }).filter((target) =>
       !board[target] &&
       (carrier.type !== "king" || fourPlayerDistance(carrierSquare, target) <= 1) &&
-      airStrikeDropTargets(state, carrierSquare, target, passengerSquare).length > 0
+      airStrikeCompletionExists(state, carrierSquare, target, passengerIds)
     ),
+  );
+};
+
+const airStrikePassengerSquares = (
+  state: FourPlayerState,
+  carrierSquare: Square,
+) => {
+  const passengers = eligibleAirStrikePassengers(state, carrierSquare);
+  if (currentLevel(state, "air-strike") < 3) {
+    return passengers.filter((square) =>
+      state.board[square]?.type === "pawn" &&
+      airStrikeLandingTargets(state, carrierSquare, [square]).length > 0
+    );
+  }
+  return passengers.filter((first) =>
+    airStrikeSecondPassengerSquares(state, carrierSquare, first)
+      .some((second) =>
+        airStrikeLandingTargets(state, carrierSquare, [first, second]).length > 0
+      )
   );
 };
 
@@ -921,7 +1066,7 @@ const escortPlan = (
     simulated[landing.to] = {
       ...landing.piece,
       hasMoved: true,
-      status: { ...landing.piece.status, movedThisTurn: true },
+      status: statusAfterMovement(landing.piece.status),
     };
   }
   const bananas = slippedOn
@@ -933,7 +1078,13 @@ const escortPlan = (
 
 const sourceIsAllowed = (state: FourPlayerState, square: Square) => {
   const piece = state.board[square];
-  if (!piece || piece.status.gazing || piece.status.frozen || !state.selectedAbility) return false;
+  if (
+    !piece ||
+    piece.status.gazing ||
+    piece.status.frozen ||
+    piece.status.stunned ||
+    !state.selectedAbility
+  ) return false;
   const abilityId = state.selectedAbility;
   const level = currentLevel(state, abilityId);
   const fundingRepeat =
@@ -962,11 +1113,13 @@ const sourceIsAllowed = (state: FourPlayerState, square: Square) => {
   if (abilityId === "air-strike") {
     return (
       piece.controller === state.activeSeat &&
-      airStrikePassengerSquares(state, square)
-        .some((passenger) => airStrikeLandingTargets(state, square, passenger).length)
+      airStrikePassengerSquares(state, square).length > 0
     );
   }
-  if (abilityId === "slither") return piece.controller === state.activeSeat && piece.type === "queen";
+  if (abilityId === "slither") {
+    return piece.controller === state.activeSeat &&
+      (piece.type === "queen" || piece.type === "pawn");
+  }
   if (abilityId === "military-funding") return piece.controller === state.activeSeat && piece.type === "pawn";
   if (abilityId === "charge") return piece.controller === state.activeSeat && piece.type === "knight";
   if (abilityId === "mount") return piece.controller === state.activeSeat && piece.type === "knight";
@@ -976,7 +1129,11 @@ const sourceIsAllowed = (state: FourPlayerState, square: Square) => {
 
 const ordinaryMoveTargets = (state: FourPlayerState, square: Square) => {
   const piece = state.board[square];
-  if (!piece || piece.controller !== state.activeSeat) return [];
+  if (
+    !piece ||
+    piece.controller !== state.activeSeat ||
+    piece.status.stunned
+  ) return [];
   let targets = fourPlayerLegalTargets(state.board, square, state.config, {
     enPassant: state.enPassant,
     bananas: state.bananas,
@@ -1003,6 +1160,7 @@ const firstAbilityNormalMoveTargets = (
     piece.controller !== state.activeSeat ||
     piece.status.gazing ||
     piece.status.frozen ||
+    piece.status.stunned ||
     piece.status.movedThisTurn
   ) return [];
   const compelled = compelledLuredSources(state);
@@ -1106,7 +1264,10 @@ const sourceTargets = (state: FourPlayerState, square: Square): Square[] => {
   if (abilityId === "mount") {
     if (piece.type !== "knight") return [];
     const riders = fourPlayerAdjacentSquares(square, false)
-      .filter((target) => alliedPiece(state, state.board[target]));
+      .filter((target) => {
+        const rider = state.board[target];
+        return alliedPiece(state, rider) && !rider.status.stunned;
+      });
     if (!riders.length) return [];
     return constrainLure(
       state,
@@ -1165,21 +1326,21 @@ const sourceTargets = (state: FourPlayerState, square: Square): Square[] => {
   }
   if (abilityId === "pick-a-fight") {
     if (level < 3 && !["knight", "bishop"].includes(piece.type)) return [];
-    const ordinaryTargets = fourPlayerLegalTargets(
-      state.board,
-      square,
-      state.config,
-      {
-        enPassant: state.enPassant,
-        bananas: state.bananas,
-      },
-    ).filter((target) => !state.board[target]);
     return constrainLure(
       state,
       square,
-      ordinaryTargets.filter((target) => {
+      fourPlayerSquares.filter((target) => {
+        if (state.board[target]) return false;
         const simulated = { ...state.board, [target]: piece };
         delete simulated[square];
+        if (
+          fourPlayerIsInCheck(
+            simulated,
+            state.activeSeat,
+            state.config,
+            state.bananas,
+          )
+        ) return false;
         const attacked = fourPlayerIsSquareAttacked(
           simulated,
           target,
@@ -1361,7 +1522,9 @@ const startTargetAbility = (state: FourPlayerState, abilityId: string) => {
       .filter(([, piece]) => hostilePiece(state, piece) && allowedEnchantTypes(level).includes(piece.type))
       .map(([square]) => square);
   } else if (abilityId === "rage") {
-    state.legalTargets = Object.keys(state.board);
+    state.legalTargets = Object.entries(state.board)
+      .filter(([, piece]) => piece.controller === state.activeSeat)
+      .map(([square]) => square);
     state.pending = {
       godId: state.selectedGod!,
       abilityId,
@@ -1370,11 +1533,6 @@ const startTargetAbility = (state: FourPlayerState, abilityId: string) => {
     state.notice = level >= 3
       ? "Rage: choose a controlled piece to move up to one space."
       : "Choose the piece at the center of Rage.";
-    if (level >= 3) {
-      state.legalTargets = Object.entries(state.board)
-        .filter(([, piece]) => piece.controller === state.activeSeat)
-        .map(([square]) => square);
-    }
     return;
   } else if (abilityId === "poison-cloud" && level >= 2) {
     state.legalTargets = fourPlayerSquares;
@@ -1475,7 +1633,7 @@ const activateAbility = (state: FourPlayerState, abilityId: string) => {
     return;
   }
   if (abilityId === "hex") {
-    const capacity = currentLevel(state, abilityId);
+    const capacity = Math.min(3, currentLevel(state, abilityId) + 1);
     const existing = Object.values(state.board)
       .filter((piece) => piece.status.hexedBy === state.activeSeat).length;
     if (!existing) {
@@ -1514,6 +1672,7 @@ const activateAbility = (state: FourPlayerState, abilityId: string) => {
           const [file, rank] = fourPlayerCoords(square);
           return (
             alliedPiece(state, state.board[square]) &&
+            !state.board[square].status.stunned &&
             Boolean(fourPlayerSquareAt(file + homeFile - kingFile, rank + homeRank - kingRank))
           );
         });
@@ -1527,7 +1686,11 @@ const activateAbility = (state: FourPlayerState, abilityId: string) => {
 const bananaPlacementTargets = (
   state: FourPlayerState,
   center: Square,
-) => fourPlayerAdjacentSquares(center, false).filter(
+) => (
+  currentLevel(state, "banana-peel") >= 2
+    ? fourPlayerSquares.filter((square) => fourPlayerDistance(center, square) <= 2)
+    : fourPlayerAdjacentSquares(center, false)
+).filter(
   (square) =>
     !state.board[square] &&
     !state.bananas.some((banana) => banana.square === square),
@@ -1552,7 +1715,11 @@ const safeBananaPlacementsAfterMove = (
     : state.bananas;
   return {
     destination,
-    placements: fourPlayerAdjacentSquares(destination, false).filter((placement) =>
+    placements: (
+      currentLevel(state, "banana-peel") >= 2
+        ? fourPlayerSquares.filter((square) => fourPlayerDistance(destination, square) <= 2)
+        : fourPlayerAdjacentSquares(destination, false)
+    ).filter((placement) =>
       !simulated[placement] &&
       !remaining.some((banana) => banana.square === placement) &&
       !fourPlayerIsInCheck(
@@ -1645,6 +1812,7 @@ const resolveMoveEffect = (
     const riders = fourPlayerAdjacentSquares(from, false)
       .filter((square) =>
         alliedPiece(state, state.board[square]) &&
+        !state.board[square].status.stunned &&
         mountPlacementTargets(state, square, to).length > 0
       );
     const destinations = fourPlayerAdjacentSquares(to, false)
@@ -1710,8 +1878,18 @@ const resolveMoveEffect = (
   } else if (abilityId === "ritual-sacrifice") {
     state.board[to].status.ritual = {
       owner: state.activeSeat,
-      expires: level >= 2 ? "kangus" : state.hostileTurns[state.activeSeat] + 1,
+      expires: "kangus",
+      level: level as 1 | 2 | 3,
     };
+    const adjacentBananas = fourPlayerAdjacentSquares(to)
+      .filter((square) => state.bananas.some((banana) => banana.square === square))
+      .length;
+    addOrbs(
+      state,
+      state.activeSeat,
+      level >= 2 ? adjacentBananas : Math.min(adjacentBananas, 1),
+      0,
+    );
   } else if (abilityId === "banana-peel") {
     state.pending = {
       godId: state.selectedGod!,
@@ -1746,17 +1924,26 @@ const resolveMoveEffect = (
       return "pending";
     }
   } else if (abilityId === "siphon") {
-    const seats = hostileControllersAdjacentTo(state, to)
-      .filter((seat) => state.players[seat].orbs.light > 0);
-    if (seats.length) {
+    const targets = fourPlayerAdjacentSquares(to).filter((square) => {
+      const target = state.board[square];
+      return Boolean(
+        target?.controller &&
+        seatsAreHostile(state.config, state.activeSeat, target.controller) &&
+        state.players[target.controller].orbs.light > 0,
+      );
+    });
+    if (targets.length) {
       state.pending = {
         godId: state.selectedGod!,
         abilityId,
-        step: "siphon-seat",
+        step: "siphon-targets",
         destination: to,
+        selected: [],
       };
-      state.legalSeats = seats;
-      state.notice = "Choose a hostile player to siphon.";
+      state.legalTargets = targets;
+      state.notice = level === 1
+        ? "Choose an adjacent enemy piece to siphon."
+        : `Choose up to ${level} adjacent enemy pieces to siphon, or pass.`;
       return "pending";
     }
   } else if (abilityId === "royal-step") {
@@ -1783,12 +1970,14 @@ const resolveMoveEffect = (
   } else if (abilityId === "hex") {
     const hexed = Object.entries(state.board)
       .filter(([, piece]) => piece.status.hexedBy === state.activeSeat)
-      .slice(0, level);
+      .slice(0, Math.min(3, level + 1));
     const aligned = hexed.filter(([square]) => {
       const [file, rank] = fourPlayerCoords(square);
-      return file === toFile || rank === toRank;
+      return file === toFile ||
+        rank === toRank ||
+        (level >= 3 && Math.abs(file - toFile) === Math.abs(rank - toRank));
     }).length;
-    if (aligned) addAffinityOrb(state, state.activeSeat, fourPlayerSquareAffinity(to), aligned + 1);
+    if (aligned) addAffinityOrb(state, state.activeSeat, fourPlayerSquareAffinity(to), aligned);
   } else if (abilityId === "barter") {
     const seats = hostileControllersAdjacentTo(state, to);
     if (
@@ -1887,7 +2076,7 @@ const executeEscort = (
     state.board[landing.to] = {
       ...landing.piece,
       hasMoved: true,
-      status: { ...landing.piece.status, movedThisTurn: true },
+      status: statusAfterMovement(landing.piece.status),
     };
   }
   if (plan.slippedOn) {
@@ -1965,7 +2154,7 @@ const executeMarchHome = (
     state.board[landing.to] = {
       ...landing.piece,
       hasMoved: true,
-      status: { ...landing.piece.status, movedThisTurn: true },
+      status: statusAfterMovement(landing.piece.status),
     };
   }
   finishTurn(
@@ -2010,10 +2199,16 @@ const executeMovement = (
   }
   if (abilityId === "stealth") {
     delete state.board[from];
+    const stealthPiece = {
+      ...moving,
+      status: statusAfterMovement(moving.status),
+    };
     state.stealth[state.activeSeat].push({
-      piece: moving,
+      piece: stealthPiece,
+      source: from,
       destination: to,
       returnOnTurn: state.seatTurns[state.activeSeat] + 1,
+      level: currentLevel(state, abilityId) as 1 | 2 | 3,
     });
     finishTurn(state, abilityDescription(state, `: ${pieceName(moving)} entered stealth toward ${to}`));
     return;
@@ -2063,10 +2258,13 @@ const executeMovement = (
     return;
   }
   if (abilityId === "slither") {
-    const unlimited = currentLevel(state, abilityId) >= 3;
+    const unlimited = moving.type === "queen" && currentLevel(state, abilityId) >= 3;
+    const moveLimit = moving.type === "pawn"
+      ? 2
+      : currentLevel(state, abilityId) + 1;
     const remaining = unlimited
       ? -1
-      : (state.pending?.movesRemaining ?? currentLevel(state, abilityId) + 1) - 1;
+      : (state.pending?.movesRemaining ?? moveLimit) - 1;
     if (unlimited || remaining > 0) {
       state.pending = {
         godId: state.selectedGod!,
@@ -2272,11 +2470,8 @@ const completeSpecialTarget = (state: FourPlayerState, square: Square) => {
     state.bananas.push({
       square,
       owner: state.activeSeat,
-      expires: level >= 3
-        ? "god"
-        : level === 2
-          ? "kangus"
-          : state.hostileTurns[state.activeSeat] + 1,
+      expires: "god",
+      level: level as 1 | 2 | 3,
     });
     finishTurn(state, abilityDescription(state, `: placed a banana on ${square}`));
   } else if (pending.step === "hire") {
@@ -2402,7 +2597,10 @@ const handleSquare = (state: FourPlayerState, square: Square) => {
     ) {
       const prepared = state.board[state.selectedSquare];
       if (!captureAt(state, square)) return;
-      if (prepared) delete prepared.status.prepared;
+      if (prepared) {
+        delete prepared.status.prepared;
+        prepared.status.stunned = true;
+      }
       state.pending = undefined;
       state.selectedSquare = undefined;
       state.legalTargets = [];
@@ -2412,67 +2610,228 @@ const handleSquare = (state: FourPlayerState, square: Square) => {
     }
     return;
   }
+  if (
+    state.pending?.abilityId === "siphon" &&
+    state.pending.step === "siphon-targets"
+  ) {
+    if (!state.legalTargets.includes(square)) return;
+    const target = state.board[square];
+    if (!target?.controller) return;
+    const amount = Math.min(2, state.players[target.controller].orbs.light);
+    addOrbs(state, target.controller, -amount, 0);
+    addOrbs(state, state.activeSeat, amount, 0);
+    const selected = [...(state.pending.selected ?? []), target.id];
+    const limit = currentLevel(state, "siphon");
+    if (selected.length >= limit) {
+      finishTurn(state, abilityDescription(state, `: siphoned ${selected.length} pieces`));
+    } else {
+      state.pending.selected = selected;
+      state.legalTargets = state.legalTargets.filter((targetSquare) => targetSquare !== square);
+      state.notice = `Choose up to ${limit - selected.length} more adjacent enemy pieces, or pass.`;
+    }
+    return;
+  }
+  if (
+    state.pending?.abilityId === "stealth-return" &&
+    state.pending.step === "stealth-return"
+  ) {
+    if (!state.legalTargets.includes(square) || !state.pending.movedPieceId) return;
+    const returning = state.stealth[state.activeSeat]
+      .find((move) => move.piece.id === state.pending!.movedPieceId);
+    if (!returning) return;
+    placeStealthReturn(state, returning, square);
+    state.pending = undefined;
+    state.legalTargets = [];
+    state.selectedSquare = undefined;
+    if (!queueStealthReturn(state) && !queueHardenChoice(state) && !queuePreparedShot(state)) {
+      state.notice = `${name(state.activeSeat)} to act. Choose an available God.`;
+    }
+    return;
+  }
   if (state.pending?.abilityId === "air-strike") {
     if (state.pending.step === "source") {
       if (!sourceIsAllowed(state, square)) return;
-      const passengers = airStrikePassengerSquares(state, square)
-        .filter((passenger) => airStrikeLandingTargets(state, square, passenger).length);
+      const passengers = airStrikePassengerSquares(state, square);
       state.pending = { ...state.pending, step: "air-strike-passenger", source: square };
       state.selectedSquare = square;
       state.legalTargets = passengers;
-      state.notice = "Choose an adjacent passenger.";
+      state.notice = currentLevel(state, "air-strike") >= 3
+        ? "Air Strike: choose the pawn or the knight/bishop to pick up first."
+        : "Air Strike: choose an adjacent friendly pawn to pick up.";
     } else if (
       state.pending.step === "air-strike-passenger" &&
       state.pending.source &&
       state.legalTargets.includes(square)
     ) {
+      const passenger = state.board[square];
+      if (!passenger) return;
+      if (currentLevel(state, "air-strike") >= 3) {
+        const carrierSource = state.pending.source;
+        state.pending = {
+          ...state.pending,
+          step: "air-strike-passenger-two",
+          passengerIds: [passenger.id],
+        };
+        state.legalTargets = airStrikeSecondPassengerSquares(
+          state,
+          carrierSource,
+          square,
+        ).filter((second) =>
+          airStrikeLandingTargets(state, state.pending!.source!, [square, second]).length > 0
+        );
+        state.notice = passenger.type === "pawn"
+          ? "Air Strike: choose an adjacent friendly knight or bishop as the second passenger."
+          : "Air Strike: choose an adjacent friendly pawn as the second passenger.";
+        return;
+      }
       const carrierSource = state.pending.source;
       state.pending = {
         ...state.pending,
         step: "air-strike-destination",
-        selected: [square],
-        movedPieceId: state.board[square]?.id,
+        passengerIds: [passenger.id],
       };
-      state.legalTargets = airStrikeLandingTargets(state, carrierSource, square);
-      state.notice = "Choose the carrier destination.";
+      state.legalTargets = airStrikeLandingTargets(state, carrierSource, [square]);
+      state.notice = "Air Strike: choose an empty landing space for the carrier.";
+    } else if (
+      state.pending.step === "air-strike-passenger-two" &&
+      state.pending.source &&
+      state.pending.passengerIds?.[0] &&
+      state.legalTargets.includes(square)
+    ) {
+      const passenger = state.board[square];
+      if (!passenger) return;
+      const passengerIds = [...state.pending.passengerIds, passenger.id];
+      const carrierSource = state.pending.source;
+      const passengerSquares = passengerIds
+        .map((id) => findSquareById(state, id))
+        .filter((candidate): candidate is Square => Boolean(candidate));
+      state.pending = {
+        ...state.pending,
+        step: "air-strike-destination",
+        passengerIds,
+      };
+      state.legalTargets = airStrikeLandingTargets(
+        state,
+        carrierSource,
+        passengerSquares,
+      );
+      state.notice = "Air Strike: choose an empty landing space for the carrier.";
     } else if (
       state.pending.step === "air-strike-destination" &&
       state.pending.source &&
-      state.pending.selected?.[0] &&
+      state.pending.passengerIds?.length &&
       state.legalTargets.includes(square)
     ) {
       const carrierSource = state.pending.source;
-      const passengerSquare = state.pending.selected[0];
-      state.pending = { ...state.pending, step: "air-strike-drop", destination: square };
+      const passengerIds = state.pending.passengerIds;
+      if (passengerIds.length > 1) {
+        state.pending = {
+          ...state.pending,
+          step: "air-strike-drop-passenger",
+          destination: square,
+          droppedPassengerIds: [],
+          dropSquares: [],
+          captureUsed: false,
+        };
+        state.legalTargets = passengerIds
+          .map((id) => findSquareById(state, id))
+          .filter((candidate): candidate is Square => Boolean(candidate));
+        state.notice = "Air Strike: choose which passenger to drop first.";
+      } else {
+        const passengerId = passengerIds[0]!;
+        state.pending = {
+          ...state.pending,
+          step: "air-strike-drop",
+          destination: square,
+          movedPieceId: passengerId,
+          droppedPassengerIds: [],
+          dropSquares: [],
+          captureUsed: false,
+        };
+        state.legalTargets = airStrikeDropTargets(
+          state,
+          carrierSource,
+          square,
+          passengerId,
+        );
+        state.notice = "Air Strike: choose the passenger drop square.";
+      }
+    } else if (
+      state.pending.step === "air-strike-drop-passenger" &&
+      state.pending.source &&
+      state.pending.destination &&
+      state.pending.passengerIds?.length &&
+      state.legalTargets.includes(square)
+    ) {
+      const passenger = state.board[square];
+      if (!passenger || !state.pending.passengerIds.includes(passenger.id)) return;
+      const carrierSource = state.pending.source;
+      const carrierDestination = state.pending.destination;
+      state.pending = {
+        ...state.pending,
+        step: "air-strike-drop",
+        movedPieceId: passenger.id,
+      };
       state.legalTargets = airStrikeDropTargets(
         state,
         carrierSource,
-        square,
-        passengerSquare,
+        carrierDestination,
+        passenger.id,
       );
-      state.notice = "Choose the passenger drop square.";
+      state.notice = state.pending.captureUsed
+        ? "Air Strike: drop this passenger on an empty crossed space."
+        : "Air Strike: drop on an empty crossed space or capture the first enemy flown over.";
     } else if (
       state.pending.step === "air-strike-drop" &&
       state.pending.source &&
       state.pending.destination &&
-      state.pending.selected?.[0] &&
+      state.pending.movedPieceId &&
+      state.pending.passengerIds?.length &&
       state.legalTargets.includes(square)
     ) {
-      const passengerSquare = state.pending.selected[0];
+      const passengerSquare = findSquareById(state, state.pending.movedPieceId);
+      if (!passengerSquare) return;
       const passenger = state.board[passengerSquare];
       if (!passenger) return;
+      const captures = Boolean(state.board[square]);
       delete state.board[passengerSquare];
-      const result = moveDirect(state, state.pending.source, state.pending.destination);
-      if (!result) return;
-      if (state.board[square]) captureAt(state, square);
+      if (state.board[square]) captureAt(state, square, true);
       state.board[square] = {
         ...passenger,
         hasMoved: true,
-        status: { ...passenger.status, movedThisTurn: true },
+        status: statusAfterMovement(passenger.status),
       };
+      const droppedPassengerIds = [
+        ...(state.pending.droppedPassengerIds ?? []),
+        passenger.id,
+      ];
+      const remainingPassengerIds = state.pending.passengerIds.filter(
+        (id) => !droppedPassengerIds.includes(id),
+      );
+      if (remainingPassengerIds.length) {
+        state.pending = {
+          ...state.pending,
+          step: "air-strike-drop-passenger",
+          movedPieceId: undefined,
+          droppedPassengerIds,
+          dropSquares: [...(state.pending.dropSquares ?? []), square],
+          captureUsed: state.pending.captureUsed || captures,
+        };
+        state.legalTargets = remainingPassengerIds
+          .map((id) => findSquareById(state, id))
+          .filter((candidate): candidate is Square => Boolean(candidate));
+        state.notice = "Air Strike: choose the remaining passenger to drop.";
+        return;
+      }
+      const carrierResult = moveDirect(
+        state,
+        state.pending.source,
+        state.pending.destination,
+      );
+      if (!carrierResult) return;
       finishTurn(
         state,
-        abilityDescription(state, `: landed on ${result.to} and dropped ${pieceName(passenger)} on ${square}`),
+        abilityDescription(state, `: landed and dropped ${droppedPassengerIds.length} passenger${droppedPassengerIds.length === 1 ? "" : "s"}`),
       );
     }
     return;
@@ -2567,13 +2926,18 @@ const handleSquare = (state: FourPlayerState, square: Square) => {
     if (!riderSquare) return;
     const rider = state.board[riderSquare];
     delete state.board[riderSquare];
-    state.board[square] = { ...rider, hasMoved: true };
+    state.board[square] = {
+      ...rider,
+      hasMoved: true,
+      status: statusAfterMovement(rider.status),
+    };
     const selected = [...(state.pending.selected ?? []), rider.id];
     const remaining = fourPlayerAdjacentSquares(state.pending.source!, false)
       .filter((target) => {
         const piece = state.board[target];
         return (
           alliedPiece(state, piece) &&
+          !piece.status.stunned &&
           !selected.includes(piece.id) &&
           mountPlacementTargets(state, target, state.pending!.destination!).length > 0
         );
@@ -2615,7 +2979,7 @@ const handleSquare = (state: FourPlayerState, square: Square) => {
     if (!state.legalTargets.includes(square) || !state.board[square]) return;
     state.board[square].status.hexedBy = state.activeSeat;
     const selected = [...(state.pending.selected ?? []), state.board[square].id];
-    if (selected.length >= currentLevel(state, "hex")) {
+    if (selected.length >= Math.min(3, currentLevel(state, "hex") + 1)) {
       state.pending = { ...state.pending, selected };
       completeQueuedHexMove(state);
     } else {
@@ -2654,7 +3018,10 @@ const handleSquare = (state: FourPlayerState, square: Square) => {
   if (sourceIsAllowed(state, square)) {
     if (state.selectedAbility === "escort" && state.pending.step === "source") {
       const companions = fourPlayerAdjacentSquares(square)
-        .filter((target) => alliedPiece(state, state.board[target]));
+        .filter((target) => {
+          const companion = state.board[target];
+          return alliedPiece(state, companion) && !companion.status.stunned;
+        });
       if (!companions.length) {
         state.notice = "Escort requires an adjacent allied piece.";
         return;
@@ -2703,16 +3070,10 @@ const selectGod = (state: FourPlayerState, godId: GodId) => {
     if (godId === "medusa" && piece.status.frozen === "god") delete piece.status.frozen;
     if (godId === "medusa" && piece.status.gazing) delete piece.status.gazing;
     if (godId === "salem") {
-      if (piece.status.poisoned === "god") delete piece.status.poisoned;
       if (piece.status.polymorphed === "god") delete piece.status.polymorphed;
     }
     if (godId === "chiron" && piece.status.chargeUntil === "god") delete piece.status.chargeUntil;
     if (godId === "kangus" && piece.status.ritual?.expires === "kangus") delete piece.status.ritual;
-  }
-  if (godId === "kangus") {
-    state.bananas = state.bananas.filter(
-      (banana) => !(banana.owner === state.activeSeat && banana.expires === "kangus"),
-    );
   }
   state.godTurns[state.activeSeat][godId] =
     (state.godTurns[state.activeSeat][godId] ?? 0) + 1;
@@ -3007,6 +3368,7 @@ const canPassAction = (state: FourPlayerState) =>
   state.pending?.step === "funding" ||
   state.pending?.step === "march-companions" ||
   state.pending?.step === "barter-orb" ||
+  (state.pending?.step === "siphon-targets" && Boolean(state.pending.selected?.length)) ||
   (state.pending?.step === "escort-companions" && Boolean(state.pending.selected?.length)) ||
   (state.pending?.step === "hex-target" && Boolean(state.pending.selected?.length));
 
@@ -3463,6 +3825,14 @@ const reduceFourPlayerState = (
         next.notice = "Choose the King's destination.";
       } else if (next.pending?.step === "barter-orb") {
         finishTurn(next, abilityDescription(next, ": declined the trade"));
+      } else if (
+        next.pending?.step === "siphon-targets" &&
+        next.pending.selected?.length
+      ) {
+        finishTurn(
+          next,
+          abilityDescription(next, `: siphoned ${next.pending.selected.length} pieces`),
+        );
       }
     }
   }

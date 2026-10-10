@@ -109,6 +109,7 @@ const isPieceStatus = (value: unknown): value is FourPlayerPieceStatus => {
   if (value.frozen !== undefined && !isDuration(value.frozen, ["god"])) return false;
   if (value.frozenBy !== undefined && !isSeat(value.frozenBy)) return false;
   if (value.gazing !== undefined && typeof value.gazing !== "boolean") return false;
+  if (value.stunned !== undefined && typeof value.stunned !== "boolean") return false;
   if (value.poisoned !== undefined && !isDuration(value.poisoned, ["god"])) return false;
   if (value.poisonedBy !== undefined && !isSeat(value.poisonedBy)) return false;
   if (value.polymorphed !== undefined && !isDuration(value.polymorphed, ["god"])) return false;
@@ -130,7 +131,11 @@ const isPieceStatus = (value: unknown): value is FourPlayerPieceStatus => {
     !(
       isRecord(value.ritual) &&
       isSeat(value.ritual.owner) &&
-      isDuration(value.ritual.expires, ["kangus"])
+      isDuration(value.ritual.expires, ["kangus"]) &&
+      (
+        value.ritual.level === undefined ||
+        [1, 2, 3].includes(Number(value.ritual.level))
+      )
     )
   ) return false;
   if (
@@ -216,6 +221,7 @@ const isPending = (value: unknown) => {
   if (!isRecord(value) || !isGodId(value.godId) || typeof value.abilityId !== "string") return false;
   if (!GOD_BY_ID[value.godId].abilities.some((ability) => ability.id === value.abilityId) &&
       value.abilityId !== "snipe-shot" &&
+      value.abilityId !== "stealth-return" &&
       value.abilityId !== "harden-choice") return false;
   const fieldsAreValid = (
     typeof value.step === "string" &&
@@ -226,6 +232,11 @@ const isPending = (value: unknown) => {
     (value.movedPieceId === undefined || typeof value.movedPieceId === "string") &&
     (value.movesRemaining === undefined || Number.isInteger(value.movesRemaining)) &&
     (value.targetSeat === undefined || isSeat(value.targetSeat)) &&
+    (value.passengerIds === undefined || isStringArray(value.passengerIds)) &&
+    (value.droppedPassengerIds === undefined || isStringArray(value.droppedPassengerIds)) &&
+    (value.dropSquares === undefined ||
+      (Array.isArray(value.dropSquares) && value.dropSquares.every(isSquare))) &&
+    (value.captureUsed === undefined || typeof value.captureUsed === "boolean") &&
     (
       value.queuedMove === undefined ||
       (
@@ -360,8 +371,13 @@ export const isFourPlayerState = (value: unknown): value is FourPlayerState => {
       !stealth.every((move) =>
         isRecord(move) &&
         isPiece(move.piece) &&
+        (move.source === undefined || isSquare(move.source)) &&
         isSquare(move.destination) &&
-        isInteger(move.returnOnTurn)
+        isInteger(move.returnOnTurn) &&
+        (
+          move.level === undefined ||
+          [1, 2, 3].includes(Number(move.level))
+        )
       )
     ) return false;
     const validStealth = stealth as FourPlayerState["stealth"][Seat];
@@ -437,6 +453,10 @@ export const isFourPlayerState = (value: unknown): value is FourPlayerState => {
     (
       isInteger(banana.expires, 1) ||
       ["kangus", "god"].includes(String(banana.expires))
+    ) &&
+    (
+      banana.level === undefined ||
+      [1, 2, 3].includes(Number(banana.level))
     )
   )) return false;
 

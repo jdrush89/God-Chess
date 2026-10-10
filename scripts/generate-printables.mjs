@@ -276,6 +276,7 @@ const tokenPalette = {
   charged: ["#9b5a36", "#ffead8"],
   banana: ["#b99b28", "#211d0d"],
   stealth: ["#343d58", "#e7ecff"],
+  stunned: ["#7a3030", "#fff0e8"],
 };
 
 const drawToken = (doc, token, x, y, diameter) => {
@@ -362,6 +363,7 @@ const writeMarkerTokens = async () => {
     ...repeatToken("charged", "CH", "Charged", 4),
     ...repeatToken("banana", "BN", "Banana", 6),
     ...repeatToken("stealth", "SV", "Stealth", 4),
+    ...repeatToken("stunned", "SZ", "Stunned", 6),
   ];
   const filePath = path.join(outputPath, "god-chess-marker-tokens.pdf");
   const doc = new PDFDocument({

@@ -32,7 +32,13 @@ describe("printable God boards", () => {
       (ability) => ability.id === "pick-a-fight",
     )!;
     expect(pickAFight.kind).toBe("move");
-    expect(pickAFight.summary).toContain("ordinarily legal empty space");
+    expect(pickAFight.summary).toBe(
+      "Teleport a knight or bishop to an empty space where it is being attacked.",
+    );
+    expect([
+      pickAFight.summary,
+      ...pickAFight.details,
+    ].join(" ").toLowerCase()).not.toContain("legal");
 
     const marked = GOD_BY_ID.death.abilities.find(
       (ability) => ability.id === "marked",
