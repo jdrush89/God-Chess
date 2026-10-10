@@ -278,7 +278,7 @@ const bananaOnMovePath = (state: GameState, from: Square, requestedTo: Square, c
   [...pathSquares(from, requestedTo), requestedTo].find((square) =>
     state.bananas.some((banana) =>
       banana.square === square &&
-      (banana.owner !== controller || (banana.level ?? 1) >= 3)
+      banana.owner !== controller
     ),
   );
 

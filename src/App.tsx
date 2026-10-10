@@ -580,6 +580,94 @@ function DraftScreen({
   );
 }
 
+function RosterScreen({ onBack }: { onBack: () => void }) {
+  const [inspected, setInspected] = useState<GodId>(GODS[0].id);
+  const [previewLevel, setPreviewLevel] = useState(1);
+  const currentGod = GOD_BY_ID[inspected];
+
+  useEffect(() => {
+    setPreviewLevel(1);
+  }, [inspected]);
+
+  return (
+    <main className="draft-page roster-page">
+      <header className="topbar draft-topbar">
+        <Brand />
+        <div className="draft-turn">
+          <BookOpen size={16} />
+          Divine roster
+        </div>
+        <div className="header-actions">
+          <button onClick={onBack}>
+            <ArrowLeft size={18} />
+            <span>Back to title</span>
+          </button>
+        </div>
+      </header>
+
+      <section className="draft-hero">
+        <p className="eyebrow">THE DIVINE ROSTER</p>
+        <h1>Know your gods.</h1>
+        <p>Explore every god and preview how each ability changes at levels 1, 2, and 3.</p>
+      </section>
+
+      <section className="draft-layout">
+        <div className="pantheon-grid">
+          {GODS.map((god) => (
+            <button
+              className={`draft-card ${inspected === god.id ? "inspected" : ""}`}
+              key={god.id}
+              onClick={() => setInspected(god.id)}
+              style={{ "--accent": god.accent } as React.CSSProperties}
+              aria-pressed={inspected === god.id}
+            >
+              <GodPortrait godId={god.id} className="god-card-portrait" />
+              <span className="draft-card-copy">
+                <strong>{god.name}</strong>
+                <small>{god.domain}</small>
+              </span>
+            </button>
+          ))}
+        </div>
+
+        <aside className="god-inspector" style={{ "--accent": currentGod.accent } as React.CSSProperties}>
+          <div className="inspector-heading">
+            <GodPortrait godId={currentGod.id} className="god-hero-portrait" />
+            <div>
+              <p>{currentGod.domain}</p>
+              <h2>{currentGod.name}</h2>
+              <span>{currentGod.epithet}</span>
+            </div>
+          </div>
+          <LevelSelector
+            level={previewLevel}
+            onChange={setPreviewLevel}
+            label="All abilities"
+            className="god-level-selector"
+          />
+          <div className="draft-abilities">
+            {currentGod.abilities.map((item, index) => (
+              <div className="draft-ability" key={item.id}>
+                <span>0{index + 1}</span>
+                <div>
+                  <strong>{item.name}</strong>
+                  <AbilityRules ability={item} level={1} previewLevelOverride={previewLevel} compact />
+                </div>
+                {item.cost && (
+                  <div className="mini-cost">
+                    {item.cost.white ? <Orb color="white" count={item.cost.white} small /> : null}
+                    {item.cost.black ? <Orb color="black" count={item.cost.black} small /> : null}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </aside>
+      </section>
+    </main>
+  );
+}
+
 function PlayerBar({
   state,
   color,
@@ -1564,6 +1652,7 @@ function MainMenu({
   accountWorking,
   accountError,
   onStart,
+  onOpenRoster,
   onSignIn,
   onSignUp,
   onSignOut,
@@ -1576,6 +1665,7 @@ function MainMenu({
   accountWorking: boolean;
   accountError?: string;
   onStart: () => void;
+  onOpenRoster: () => void;
   onSignIn: (email: string, password: string) => Promise<string>;
   onSignUp: (email: string, password: string, displayName: string) => Promise<string>;
   onSignOut: () => Promise<void>;
@@ -1595,6 +1685,10 @@ function MainMenu({
         <p className="eyebrow">THE DIVINE GAME</p>
         <button className="primary-button main-start-button" onClick={onStart}>
           Start
+        </button>
+        <button className="secondary-button main-roster-button" onClick={onOpenRoster}>
+          <BookOpen size={17} />
+          Roster
         </button>
         {saveError && <p className="main-menu-error" role="alert">{saveError}</p>}
       </div>
@@ -3426,7 +3520,7 @@ export default function App() {
   const savedGamesRef = useRef(savedGames);
   savedGamesRef.current = savedGames;
   const activeSaveId = useRef<string | undefined>(undefined);
-  const [startView, setStartView] = useState<"menu" | "play" | "load" | "setup" | "three-setup" | "four-setup" | "puzzles" | "tutorial" | "none">("menu");
+  const [startView, setStartView] = useState<"menu" | "roster" | "play" | "load" | "setup" | "three-setup" | "four-setup" | "puzzles" | "tutorial" | "none">("menu");
   const [setupReturnView, setSetupReturnView] = useState<"menu" | "play" | "none">("menu");
   const [setupCategory, setSetupCategory] = useState<StartCategory>("local");
   const [setupPlayerCount, setSetupPlayerCount] = useState<PlayerCount>();
@@ -4354,12 +4448,17 @@ export default function App() {
         accountWorking={accountService.working}
         accountError={accountService.error}
         onStart={() => setStartView("play")}
+        onOpenRoster={() => setStartView("roster")}
         onSignIn={accountService.signIn}
         onSignUp={accountService.signUp}
         onSignOut={accountService.signOut}
         onUpdateDisplayName={accountService.updateDisplayName}
       />
     );
+  }
+
+  if (startView === "roster") {
+    return <RosterScreen onBack={() => setStartView("menu")} />;
   }
 
   if (startView === "play") {

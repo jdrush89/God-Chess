@@ -7,6 +7,9 @@ describe("printable God boards", () => {
     expect(generator).toContain('const sourcePath = path.join(root, "src/game/gods.ts")');
     expect(generator.match(/maxSize: 8\.5/g)).toHaveLength(3);
     expect(generator).toContain("const panelHeight = 116");
+    expect(generator).toContain("[2, 3].forEach");
+    expect(generator).not.toContain("[1, 2, 3].forEach");
+    expect(generator).toContain("Abilities begin at level 1.");
 
     const quetzSlither = GOD_BY_ID.quetzacoatl.abilities.find(
       (ability) => ability.id === "flight",

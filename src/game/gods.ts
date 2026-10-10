@@ -151,7 +151,7 @@ export const GODS: God[] = [
       ability("banana-peel", "Banana Peel", "Move a piece, then leave a banana peel token in an orthogonally adjacent empty spot. It stays there until an opponent steps on it. That piece must stop moving.", "move", [
         "The banana stays until an opponent steps on it.",
         "You may throw the banana to any empty space within 2 spaces of the moved piece.",
-        "Any piece that steps on the banana is stunned for one turn. Stunned pieces cannot move or be moved by any abilities.",
+        "Any opponent’s piece that steps on the banana is stunned for one turn. Stunned pieces cannot move or be moved by any abilities.",
       ], { white: 1 }),
       ability("rage", "Rage", "Choose a friendly piece and capture all friendly and enemy pieces adjacent to that piece.", "target", [
         "Friendly pieces are also destroyed.",

@@ -848,6 +848,33 @@ describe("game flow", () => {
     expect(isInCheck(state.board, "white", state.bananas)).toBe(false);
   });
 
+  it("does not trigger a level 3 banana for a friendly piece", () => {
+    let state = createGame(1);
+    state.phase = "play";
+    state.players.white.gods = ["anubis"];
+    state.board = {
+      a1: testPiece("king", "white", "white-king"),
+      h8: testPiece("king", "black", "black-king"),
+      d2: testPiece("rook", "white", "white-rook"),
+    };
+    state.bananas = [{
+      square: "d3",
+      owner: "white",
+      expires: "god",
+      level: 3,
+    }];
+
+    state = gameReducer(state, { type: "select-god", godId: "anubis" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "construction" });
+    state = gameReducer(state, { type: "square", square: "d2" });
+    expect(state.legalTargets).toContain("d4");
+    state = gameReducer(state, { type: "square", square: "d4" });
+
+    expect(state.board.d4?.id).toBe("white-rook");
+    expect(state.board.d4?.status.stunned).toBeUndefined();
+    expect(state.bananas).toContainEqual(expect.objectContaining({ square: "d3" }));
+  });
+
   it("offers and resolves a prepared Snipe shot at the start of the next turn", () => {
     let state = createPreparedShotTurn();
     expect(state.pending).toMatchObject({ abilityId: "snipe-shot", step: "snipe-source" });

@@ -392,6 +392,23 @@ describe("four-player God abilities", () => {
     expect(result.board.h8).toBeUndefined();
   });
 
+  it("does not trigger a level 3 banana for a friendly piece", () => {
+    const state = gameFor("anubis");
+    state.board.g8 = piece(state, "rook", "north", "friendly-rook");
+    state.bananas = [{
+      square: "g9",
+      owner: "north",
+      expires: "god",
+      level: 3,
+    }];
+
+    const result = move(state, "anubis", "construction", "g8", "g10");
+
+    expect(result.board.g10?.id).toBe("friendly-rook");
+    expect(result.board.g10?.status.stunned).toBeUndefined();
+    expect(result.bananas).toContainEqual(expect.objectContaining({ square: "g9" }));
+  });
+
   it("generalizes Death's Marked, Resurrect, and Siphon", () => {
     let state = gameFor("death");
     state.board.g8 = piece(state, "rook", "north", "marked");

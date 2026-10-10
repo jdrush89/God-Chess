@@ -422,10 +422,7 @@ const bananaOnPath = (
   state.bananas.some(
     (banana) =>
       banana.square === square &&
-      (
-        seatsAreHostile(state.config, actor, banana.owner) ||
-        (banana.level ?? 1) >= 3
-      ),
+      seatsAreHostile(state.config, actor, banana.owner),
   )
 );
 

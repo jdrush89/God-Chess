@@ -526,7 +526,7 @@ const bananaOnPath = (
 ].find((cell) =>
   state.bananas!.some((banana) =>
     banana.cell === cell &&
-    (banana.owner !== state.activeSeat || (banana.level ?? 1) >= 3)
+    banana.owner !== state.activeSeat
   )
 );
 

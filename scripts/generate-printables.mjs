@@ -107,9 +107,9 @@ const drawOrb = (doc, x, y, color, amount) => {
 
 const drawAbilityLevelTrack = (doc, x, y, accent) => {
   doc.fillColor("#a79d85").font("Helvetica-Bold").fontSize(5.5)
-    .text("ABILITY LEVEL", x - 8, y - 23, { width: 98, align: "center", characterSpacing: 0.8 });
-  [1, 2, 3].forEach((level, index) => {
-    const cx = x + index * 31;
+    .text("UPGRADE LEVEL", x - 8, y - 23, { width: 98, align: "center", characterSpacing: 0.8 });
+  [2, 3].forEach((level, index) => {
+    const cx = x + 18 + index * 44;
     doc.save();
     doc.dash(3, { space: 2 });
     doc.circle(cx, y, 13.5).lineWidth(1.2).strokeColor(mix(accent, "#ffffff", 0.25)).stroke();
@@ -227,7 +227,7 @@ const drawGodBoard = (doc, god, pageIndex) => {
 
   doc.fillColor("#777166").font("Helvetica").fontSize(5.8)
     .text(
-      "Place one level marker on each ability track. After this god acts, place a rest marker in the rest well. Remove all rest markers after every drafted god has acted.",
+      "Abilities begin at level 1. Place a level marker only when an ability reaches level 2 or 3. After this god acts, place a rest marker in the rest well. Remove all rest markers after every drafted god has acted.",
       28,
       boardHeight - 17,
       { width: boardWidth - 56, align: "center", characterSpacing: 0.15 },
