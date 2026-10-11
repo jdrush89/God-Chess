@@ -510,6 +510,11 @@ function ThreePlayerDraft({
               <span>{currentGod.epithet}</span>
             </div>
           </div>
+          <GodSkinPicker
+            godId={currentGod.id}
+            selectedSkinId={selectedSkinId}
+            onSelect={setSelectedSkinId}
+          />
           <DraftLevelSelector level={level} onChange={setLevel} />
           <div
             className="draft-abilities three-draft-abilities"
@@ -543,11 +548,6 @@ function ThreePlayerDraft({
               </div>
             ))}
           </div>
-          <GodSkinPicker
-            godId={currentGod.id}
-            selectedSkinId={selectedSkinId}
-            onSelect={setSelectedSkinId}
-          />
           <button
             type="button"
             className="primary-button three-draft-claim"
@@ -887,6 +887,9 @@ function ThreePlayerMoveFirstChooser({
   onCancel: () => void;
   onCommit: (candidate: ThreePlayerMoveFirstCandidate) => void;
 }) {
+  const selectedMoveGod = state.selectedGod
+    ? GOD_BY_ID[state.selectedGod]
+    : undefined;
   if (!draft.destination) {
     return (
       <div className="move-first-prompt" role="status">
@@ -903,7 +906,11 @@ function ThreePlayerMoveFirstChooser({
       <div className="move-first-heading" role="status" aria-live="polite">
         <span>PROVISIONAL MOVE</span>
         <strong>{draft.source} → {draft.destination}</strong>
-        <p>Not committed. Choose which God’s first ability applies this move.</p>
+        <p>
+          {selectedMoveGod
+            ? `Not committed. Review ${selectedMoveGod.name}'s ${selectedMoveGod.abilities[0].name} reward, then confirm the move.`
+            : "Not committed. Choose which God’s first ability applies this move."}
+        </p>
         <button className="secondary-button" onClick={onCancel}>
           <ArrowLeft size={15} /> Back / cancel
         </button>
@@ -927,7 +934,7 @@ function ThreePlayerMoveFirstChooser({
               footerLabel={god.name}
               footerAction={candidate.requiresPreMoveChoice
                 ? "PRE-MOVE CHOICE"
-                : "COMMIT MOVE"}
+                : "CONFIRM MOVE"}
               onClick={() => onCommit(candidate)}
               key={candidate.godId}
             >
@@ -1849,7 +1856,7 @@ export function ThreePlayerGame({
                           <strong>{god.name}</strong>
                           <small>{resting ? "RESTING · VIEW" : god.domain}</small>
                         </span>
-                        {resting ? <i className="rest-token">Z</i> : <ChevronRight size={17} />}
+                        <ChevronRight size={17} />
                       </button>
                     );
                   })}

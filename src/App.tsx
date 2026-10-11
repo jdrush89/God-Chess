@@ -569,6 +569,11 @@ function DraftScreen({
               <span>{currentGod.epithet}</span>
             </div>
           </div>
+          <GodSkinPicker
+            godId={currentGod.id}
+            selectedSkinId={selectedSkinId}
+            onSelect={setSelectedSkinId}
+          />
           <LevelSelector
             level={godPreviewLevel ?? 1}
             onChange={setGodPreviewLevel}
@@ -592,11 +597,6 @@ function DraftScreen({
               </div>
             ))}
           </div>
-          <GodSkinPicker
-            godId={currentGod.id}
-            selectedSkinId={selectedSkinId}
-            onSelect={setSelectedSkinId}
-          />
           <button
             className="primary-button"
             onClick={() => dispatch({
@@ -723,6 +723,13 @@ function RosterScreen({ onBack }: { onBack: () => void }) {
               <span>{currentGod.epithet}</span>
             </div>
           </div>
+          <GodSkinPicker
+            godId={currentGod.id}
+            selectedSkinId={selectedSkinId}
+            favoriteSkinId={favorites[currentGod.id]}
+            onSelect={setSelectedSkinId}
+            onFavorite={toggleFavorite}
+          />
           <LevelSelector
             level={previewLevel}
             onChange={setPreviewLevel}
@@ -746,13 +753,6 @@ function RosterScreen({ onBack }: { onBack: () => void }) {
               </div>
             ))}
           </div>
-          <GodSkinPicker
-            godId={currentGod.id}
-            selectedSkinId={selectedSkinId}
-            favoriteSkinId={favorites[currentGod.id]}
-            onSelect={setSelectedSkinId}
-            onFavorite={toggleFavorite}
-          />
         </aside>
       </section>
     </main>
@@ -963,6 +963,9 @@ function MoveFirstChooser({
   onCancel: () => void;
   onCommit: (candidate: ClassicMoveFirstCandidate) => void;
 }) {
+  const selectedMoveGod = state.selectedGod
+    ? GOD_BY_ID[state.selectedGod]
+    : undefined;
   if (!draft.destination) {
     return (
       <div className="move-first-prompt" role="status">
@@ -977,7 +980,11 @@ function MoveFirstChooser({
       <div className="move-first-heading" role="status" aria-live="polite">
         <span>PROVISIONAL MOVE</span>
         <strong>{draft.source} → {draft.destination}</strong>
-        <p>Not committed. Choose which God’s first ability applies this move.</p>
+        <p>
+          {selectedMoveGod
+            ? `Not committed. Review ${selectedMoveGod.name}'s ${selectedMoveGod.abilities[0].name} reward, then confirm the move.`
+            : "Not committed. Choose which God’s first ability applies this move."}
+        </p>
         <button className="secondary-button" onClick={onCancel}>
           <ArrowLeft size={15} /> Back / cancel
         </button>
@@ -999,7 +1006,7 @@ function MoveFirstChooser({
               disabled={!candidate.valid}
               showCost={false}
               footerLabel={god.name}
-              footerAction={candidate.requiresPreMoveChoice ? "PRE-MOVE CHOICE" : "COMMIT MOVE"}
+              footerAction={candidate.requiresPreMoveChoice ? "PRE-MOVE CHOICE" : "CONFIRM MOVE"}
               onClick={() => onCommit(candidate)}
               key={candidate.godId}
             >
@@ -1109,7 +1116,7 @@ function PendingAbilityChoices({
           </div>
         </div>
       )}
-      <div className="action-buttons">
+      <div className="action-buttons ability-pending-actions">
         {(state.pending?.step === "confirm-stone-gaze" ||
           state.pending?.step === "confirm-march-home") && (
           <button className="primary-button" onClick={() => dispatch({ type: "confirm-ability" })}>
@@ -1205,7 +1212,10 @@ function PendingAbilityChoices({
           </button>
         )}
         {!committed && state.pending?.step !== "slither-orb" && (
-          <button className="text-button" onClick={() => dispatch({ type: "cancel" })}>
+          <button
+            className="text-button cancel-ability-button"
+            onClick={() => dispatch({ type: "cancel" })}
+          >
             Cancel ability
           </button>
         )}
@@ -1331,7 +1341,7 @@ export function ActionPanel({
                     className="god-row-portrait"
                   />
                   <span className="god-row-copy"><strong>{god.name}</strong><small>{resting ? "RESTING · VIEW" : god.domain}</small></span>
-                  {resting ? <i className="rest-token">Z</i> : <ChevronRight size={17} />}
+                  <ChevronRight size={17} />
                 </button>
               );
             })}

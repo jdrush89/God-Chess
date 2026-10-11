@@ -205,11 +205,29 @@ describe("three-player move-first contracts", () => {
         expectedTurn: state.turn,
         expectedRevision: state.revision,
       });
+
       expect(candidate.immediateOrbDelta).toEqual({
         light: next.players.white.orbs.light - state.players.white.orbs.light,
         dark: next.players.white.orbs.dark - state.players.white.orbs.dark,
       });
     }
+  });
+
+  it("keeps a selected God active and offers only its first ability", () => {
+    const state = playableState("anubis", 3);
+    state.players.white.gods = ["anubis", "death"];
+    const selected = threePlayerReducer(state, {
+      type: "select-god",
+      godId: "anubis",
+    });
+    const move = firstMove(selected);
+
+    expect(canStartThreePlayerMoveFirst(selected)).toBe(true);
+    expect(threePlayerMoveFirstCandidates(selected, move)
+      .map((candidate) => candidate.godId)).toEqual(["anubis"]);
+    expect(semanticState(moveFirst(selected, "anubis", move))).toEqual(
+      semanticState(godFirst(state, "anubis", move)),
+    );
   });
 
   it("preserves a move-first Marked King without previewing or offering a reward", () => {

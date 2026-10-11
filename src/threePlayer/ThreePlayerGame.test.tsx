@@ -172,6 +172,29 @@ describe("ThreePlayerGame", () => {
     },
   );
 
+  it("offers only the selected God's first ability for a provisional move", () => {
+    const state = completeDraft();
+    const selected = threePlayerReducer(state, {
+      type: "select-god",
+      godId: state.players.white.gods[0],
+    });
+    const selectedGod = GOD_BY_ID[selected.selectedGod!];
+    const from = threePlayerMoveFirstSources(selected)[0];
+    const to = threePlayerMoveFirstTargets(selected, from)[0];
+    const { container } = renderGame(selected);
+
+    fireEvent.click(container.querySelector(`[data-cell="${from}"]`)!);
+    fireEvent.click(container.querySelector(`[data-cell="${to}"]`)!);
+
+    expect(screen.getByText(
+      new RegExp(`Review ${selectedGod.name}'s ${selectedGod.abilities[0].name} reward`, "i"),
+    )).toBeTruthy();
+    expect(container.querySelectorAll(
+      ".move-first-ability-list .ability-card",
+    )).toHaveLength(1);
+    expect(screen.getByText("CONFIRM MOVE")).toBeTruthy();
+  });
+
   it("suppresses the board tap after a zoomed drag", () => {
     const state = completeDraft();
     const from = threePlayerMoveFirstSources(state)[0];
@@ -547,9 +570,11 @@ describe("ThreePlayerGame", () => {
     const abilityRegion = screen.getByRole("region", { name: /Quetzacoatl ability details/i });
     const inspector = abilityRegion.closest(".three-god-inspector");
     const claim = screen.getByRole("button", { name: /^Claim Quetzacoatl$/i });
+    const skinPicker = screen.getByLabelText(/quetzacoatl skins/i);
     expect(abilityRegion.classList.contains("three-draft-abilities")).toBe(true);
     expect(abilityRegion.getAttribute("tabindex")).toBe("0");
-    expect(inspector?.children[2]).toBe(abilityRegion);
+    expect(inspector?.children[1]).toBe(skinPicker);
+    expect(inspector?.children[3]).toBe(abilityRegion);
     expect(inspector?.lastElementChild).toBe(claim);
     expect(abilityRegion.contains(container.querySelector(".mini-cost"))).toBe(true);
     expect(container.querySelectorAll(".pantheon-grid > .draft-card")).toHaveLength(12);
@@ -930,6 +955,7 @@ describe("ThreePlayerGame", () => {
 
     const resting = screen.getByRole("button", { name: /Teles/i });
     expect(resting.classList.contains("resting")).toBe(true);
+    expect(resting.querySelector(".rest-token")).toBeNull();
     fireEvent.click(resting);
 
     expect(screen.getByText(/Teles is resting · abilities are unavailable/i)).toBeTruthy();

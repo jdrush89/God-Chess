@@ -437,6 +437,11 @@ function FourPlayerDraft({
               <span>{currentGod.epithet}</span>
             </div>
           </div>
+          <GodSkinPicker
+            godId={currentGod.id}
+            selectedSkinId={selectedSkinId}
+            onSelect={setSelectedSkinId}
+          />
           <LevelSelector
             level={godPreviewLevel ?? 1}
             onChange={setGodPreviewLevel}
@@ -466,11 +471,6 @@ function FourPlayerDraft({
               </div>
             ))}
           </div>
-          <GodSkinPicker
-            godId={currentGod.id}
-            selectedSkinId={selectedSkinId}
-            onSelect={setSelectedSkinId}
-          />
           <button
             className="primary-button"
             onClick={() => dispatch({
@@ -784,6 +784,9 @@ function FourPlayerMoveFirstChooser({
   onCancel: () => void;
   onCommit: (candidate: FourPlayerMoveFirstCandidate) => void;
 }) {
+  const selectedMoveGod = state.selectedGod
+    ? GOD_BY_ID[state.selectedGod]
+    : undefined;
   if (!draft.destination) {
     return (
       <div className="move-first-prompt four-move-first-prompt" role="status">
@@ -800,7 +803,11 @@ function FourPlayerMoveFirstChooser({
       <div className="move-first-heading" role="status" aria-live="polite">
         <span>PROVISIONAL MOVE</span>
         <strong>{draft.source} → {draft.destination}</strong>
-        <p>Not committed. Choose which God’s first ability applies this move.</p>
+        <p>
+          {selectedMoveGod
+            ? `Not committed. Review ${selectedMoveGod.name}'s ${selectedMoveGod.abilities[0].name} reward, then confirm the move.`
+            : "Not committed. Choose which God’s first ability applies this move."}
+        </p>
         <button className="secondary-button" onClick={onCancel}>
           <ArrowLeft size={15} /> Back / cancel
         </button>
@@ -854,6 +861,9 @@ function FourPlayerMoveFirstChooser({
                   {candidate.followUp && <small>{candidate.followUp.label}</small>}
                   {candidate.error && <p className="move-first-error">{candidate.error}</p>}
                 </div>
+                <span className="four-move-first-confirm">
+                  {candidate.requiresPreMoveChoice ? "PRE-MOVE CHOICE" : "CONFIRM MOVE"}
+                </span>
               </button>
             </article>
           );
@@ -1100,7 +1110,10 @@ function PendingChoices({
             </button>
           )}
           {!committed && (
-            <button className="text-button" onClick={() => dispatch({ type: "cancel" })}>
+            <button
+              className="text-button cancel-ability-button"
+              onClick={() => dispatch({ type: "cancel" })}
+            >
               Cancel ability
             </button>
           )}

@@ -201,6 +201,23 @@ describe("four-player move-first contracts", () => {
     },
   );
 
+  it("keeps a selected God active and offers only its first ability", () => {
+    const state = playableState("anubis", 3);
+    state.players[state.activeSeat].gods = ["anubis", "death"];
+    const selected = fourPlayerReducer(state, {
+      type: "select-god",
+      godId: "anubis",
+    });
+    const move = firstMove(selected);
+
+    expect(canStartFourPlayerMoveFirst(selected)).toBe(true);
+    expect(fourPlayerMoveFirstCandidates(selected, move)
+      .map((candidate) => candidate.godId)).toEqual(["anubis"]);
+    expect(moveFirst(selected, "anubis", move)).toEqual(
+      godFirst(state, "anubis", move),
+    );
+  });
+
   it("uses canonical God order, excludes resting Gods, and ignores Charge reach", () => {
     const state = playableState("chiron");
     state.players.north.gods = ["death", "anubis", "chiron"];
@@ -494,6 +511,8 @@ describe("four-player move-first contracts", () => {
     const state = playableState("anubis");
     expect(canStartFourPlayerMoveFirst(state)).toBe(true);
     state.selectedGod = "anubis";
+    expect(canStartFourPlayerMoveFirst(state)).toBe(true);
+    state.selectedAbility = "construction";
     expect(canStartFourPlayerMoveFirst(state)).toBe(false);
   });
 });
