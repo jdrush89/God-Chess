@@ -4003,7 +4003,13 @@ const canPassAction = (state: ThreePlayerState) =>
 export const canStartThreePlayerMoveFirst = (state: ThreePlayerState) =>
   state.phase === "play" &&
   !state.result &&
-  !state.selectedGod &&
+  (
+    !state.selectedGod ||
+    (
+      activePlayer(state).gods.includes(state.selectedGod) &&
+      !state.rested.includes(state.selectedGod)
+    )
+  ) &&
   !state.selectedAbility &&
   !state.selectedCell &&
   !state.selectedPath &&
@@ -4086,6 +4092,7 @@ const applyThreePlayerMoveFirstCommit = (
     god.abilities[0].id !== action.abilityId ||
     !activePlayer(state).gods.includes(action.godId) ||
     state.rested.includes(action.godId) ||
+    (state.selectedGod !== undefined && state.selectedGod !== action.godId) ||
     !firstAbilityNormalMoveTargets(state, action.move.from).includes(
       action.move.to,
     )
@@ -4093,7 +4100,7 @@ const applyThreePlayerMoveFirstCommit = (
   const pieceId = state.board[action.move.from]?.id;
   if (!pieceId) return false;
 
-  selectGod(state, action.godId);
+  if (!state.selectedGod) selectGod(state, action.godId);
   activateAbility(state, action.abilityId);
   if (
     state.selectedGod !== action.godId ||
@@ -4135,7 +4142,8 @@ export const threePlayerMoveFirstCandidates = (
   return GODS
     .filter((god) =>
       state.players[seat].gods.includes(god.id) &&
-      !state.rested.includes(god.id)
+      !state.rested.includes(god.id) &&
+      (!state.selectedGod || god.id === state.selectedGod)
     )
     .map((god) => {
       const ability = god.abilities[0];

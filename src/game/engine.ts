@@ -3053,7 +3053,13 @@ export const availableClassicActions = (state: GameState): GameAction[] => {
 export const canStartClassicMoveFirst = (state: GameState) =>
   state.phase === "play" &&
   !state.result &&
-  !state.selectedGod &&
+  (
+    !state.selectedGod ||
+    (
+      state.players[state.activeColor].gods.includes(state.selectedGod) &&
+      !state.rested.includes(state.selectedGod)
+    )
+  ) &&
   !state.selectedAbility &&
   !state.selectedSquare &&
   !state.pending &&
@@ -3132,14 +3138,17 @@ const applyMoveFirstCommit = (
     god.abilities[0].id !== action.abilityId ||
     !state.players[state.activeColor].gods.includes(action.godId) ||
     state.rested.includes(action.godId) ||
+    (state.selectedGod !== undefined && state.selectedGod !== action.godId) ||
     !firstAbilityNormalMoveTargets(state, action.move.from).includes(action.move.to)
   ) return false;
   const pieceId = state.board[action.move.from]?.id;
   if (!pieceId) return false;
 
-  selectGod(state, action.godId);
-  if (state.selectedGod === action.godId) {
-    present(state, { kind: "god", godId: action.godId });
+  if (!state.selectedGod) {
+    selectGod(state, action.godId);
+    if (state.selectedGod === action.godId) {
+      present(state, { kind: "god", godId: action.godId });
+    }
   }
   activateAbility(state, action.abilityId);
   if (
@@ -3184,7 +3193,8 @@ export const classicMoveFirstCandidates = (
   return GODS
     .filter((god) =>
       state.players[state.activeColor].gods.includes(god.id) &&
-      !state.rested.includes(god.id)
+      !state.rested.includes(god.id) &&
+      (!state.selectedGod || god.id === state.selectedGod)
     )
     .map((god) => {
       const ability = god.abilities[0];

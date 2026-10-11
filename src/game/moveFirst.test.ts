@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  canStartClassicMoveFirst,
   classicMoveFirstCandidates,
   classicMoveFirstSources,
   classicMoveFirstTargets,
@@ -156,6 +157,23 @@ describe("classic move-first contracts", () => {
       });
     expect(candidates.find((candidate) => candidate.godId === "death")!
       .conditionalOutcome).toContain("Marked");
+  });
+
+  it("keeps a selected God active and offers only its first ability", () => {
+    const state = playableState("anubis", 3);
+    state.players.white.gods = ["anubis", "death"];
+    const selected = gameReducer(state, {
+      type: "select-god",
+      godId: "anubis",
+    });
+    const move = { from: "e2", to: "e4" };
+
+    expect(canStartClassicMoveFirst(selected)).toBe(true);
+    expect(classicMoveFirstCandidates(selected, move)
+      .map((candidate) => candidate.godId)).toEqual(["anubis"]);
+    expect(moveFirst(selected, "anubis", move.from, move.to)).toEqual(
+      godFirst(state, "anubis", move.from, move.to),
+    );
   });
 
   it("preserves a move-first Marked King without previewing or offering a reward", () => {

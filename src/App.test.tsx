@@ -1030,6 +1030,8 @@ describe("game startup", () => {
     expect(within(resurrectCard as HTMLElement).getByText("YOUR GRAVEYARD")).toBeTruthy();
     expect((resurrectCard as HTMLElement).querySelector(".grave-picker")).toBeTruthy();
     expect(document.querySelector(".action-panel > .grave-picker")).toBeNull();
+    expect(screen.getByRole("button", { name: /cancel ability/i })
+      .classList.contains("cancel-ability-button")).toBe(true);
   });
 
   it("highlights Position Six Enchant sources and attaches both stage prompts to Enchant", () => {
@@ -1147,7 +1149,7 @@ describe("game startup", () => {
     );
   });
 
-  it("cancels, reselects, and commits a local move-first draft as one divine action", () => {
+  it("provisionally moves after selecting a God and confirms only its first ability", () => {
     const state = completeClassicDraft();
     window.localStorage.setItem(SAVE_KEY, JSON.stringify([
       createSavedGame("move-first-ui", state, []),
@@ -1157,6 +1159,9 @@ describe("game startup", () => {
     openPlayOption("Load");
     fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
 
+    fireEvent.click(container.querySelector(
+      '.god-row[data-god-id="quetzacoatl"]',
+    )!);
     fireEvent.click(container.querySelector('[data-square="e2"]')!);
     expect(container.querySelector('[data-square="e2"].provisional-source')).toBeTruthy();
     fireEvent.click(container.querySelector('[data-square="e2"]')!);
@@ -1167,6 +1172,9 @@ describe("game startup", () => {
     expect(container.querySelector('[data-square="e2"].provisional-source')).toBeNull();
     fireEvent.click(container.querySelector('[data-square="f3"]')!);
     expect(container.querySelector('[data-square="f3"].provisional-destination')).toBeTruthy();
+    expect(screen.getByText(/Review Quetzacoatl's Slither reward/i)).toBeTruthy();
+    expect(container.querySelectorAll(".move-first-ability-list .ability-card")).toHaveLength(1);
+    expect(screen.getByText("CONFIRM MOVE")).toBeTruthy();
     expect(container.querySelector('[data-square="g1"] [data-piece-id]')).toBeTruthy();
     expect(container.querySelector('[data-square="f3"] [data-piece-id]')).toBeNull();
 

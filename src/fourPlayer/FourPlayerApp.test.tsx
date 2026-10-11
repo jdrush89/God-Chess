@@ -140,6 +140,37 @@ describe("four-player app integration", () => {
       ?.closest("[data-square]")?.getAttribute("data-square")).toBe(reselectedSource);
   });
 
+  it("offers only the selected God's first ability for a provisional move", () => {
+    const state = completeFourPlayerDraft();
+    const godId = state.players[state.activeSeat].gods[0];
+    const selected = fourPlayerReducer(state, {
+      type: "select-god",
+      godId,
+    });
+    const god = GODS.find((candidate) => candidate.id === godId)!;
+    const source = fourPlayerMoveFirstSources(selected)[0];
+    const destination = fourPlayerMoveFirstTargets(selected, source)[0];
+    const { container } = render(
+      <FourPlayerGame
+        initialState={selected}
+        undoPreferred={false}
+        onUndoPreferenceChange={vi.fn()}
+        onPersist={vi.fn(async () => false)}
+        onQuit={vi.fn()}
+        onNewGame={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(container.querySelector(`[data-square="${source}"]`)!);
+    fireEvent.click(container.querySelector(`[data-square="${destination}"]`)!);
+
+    expect(screen.getByText(
+      new RegExp(`Review ${god.name}'s ${god.abilities[0].name} reward`, "i"),
+    )).toBeTruthy();
+    expect(container.querySelectorAll(".four-move-first-card")).toHaveLength(1);
+    expect(screen.getByText("CONFIRM MOVE")).toBeTruthy();
+  });
+
   it("commits one canonical four-player move-first action online", () => {
     const state = completeFourPlayerDraft(createFourPlayerOnlineConfig());
     const source = fourPlayerMoveFirstSources(state)[0];
@@ -1162,6 +1193,8 @@ describe("four-player app integration", () => {
     expect(within(enchantCard as HTMLElement).getByText(/choose a highlighted hostile piece/i))
       .toBeTruthy();
     expect(container.querySelector('[data-square="g8"].legal-source')).toBeTruthy();
+    expect(screen.getByRole("button", { name: /cancel ability/i })
+      .classList.contains("cancel-ability-button")).toBe(true);
 
     fireEvent.click(screen.getByRole("gridcell", { name: /g8.*west.*pawn/i }));
     const destination = container.querySelector<HTMLButtonElement>(
