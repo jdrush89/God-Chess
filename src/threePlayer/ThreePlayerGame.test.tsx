@@ -1464,6 +1464,7 @@ describe("ThreePlayerGame", () => {
       `[data-cell="${whiteKing}"].legal-destination`,
     )).toBeNull();
     fireEvent.click(screen.getByRole("gridcell", { name: new RegExp(redKing) }));
+    fireEvent.click(screen.getByRole("button", { name: /^pass$/i }));
     expect(screen.getAllByText(/choose a piece to move/i).length)
       .toBeGreaterThan(0);
     expect(screen.getByRole("gridcell", { name: new RegExp(redKing) }))

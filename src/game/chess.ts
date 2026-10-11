@@ -198,7 +198,15 @@ export const pseudoTargets = (
 ): Square[] => {
   const piece = board[from];
   if (!piece) return [];
-  if (!options.attacksOnly && (piece.status.hardened || piece.status.frozen || piece.status.gazing)) return [];
+  if (
+    !options.attacksOnly &&
+    (
+      piece.status.hardened ||
+      piece.status.frozen ||
+      piece.status.gazing ||
+      piece.status.stunned
+    )
+  ) return [];
   const [file, rank] = coords(from);
   const type = piece.status.polymorphed ? "pawn" : options.forceType ?? piece.type;
   let targets: Square[] = [];

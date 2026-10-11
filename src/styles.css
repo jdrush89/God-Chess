@@ -828,6 +828,11 @@ span.move-target-dot {
 .main-menu-actions .eyebrow { margin: 0 0 13px; color: #cfb06d; }
 .main-menu-actions small { display: block; margin-top: 11px; color: #8d8b85; font-size: 8px; letter-spacing: .08em; text-transform: uppercase; }
 .main-start-button { width: 100%; min-height: 48px; }
+.main-roster-button {
+  width: 100%; min-height: 42px; margin-top: 9px; display: flex;
+  align-items: center; justify-content: center; gap: 8px;
+}
+.roster-page { padding-bottom: 54px; }
 .main-menu-error { margin: 10px 0 0; color: #e69a8e; font-size: 10px; line-height: 1.4; }
 .puzzle-select-view {
   min-height: 100dvh; padding: clamp(18px, 4vw, 44px);

@@ -638,7 +638,7 @@ describe("three-player God catalog", () => {
 
       state = threePlayerReducer(state, { type: "cell", cell: targetKing });
       expect(state.board[targetKing].status.hexedBy).toBe("white");
-      if (level > 1) state = threePlayerReducer(state, { type: "pass" });
+      state = threePlayerReducer(state, { type: "pass" });
 
       const orbsBeforeMove =
         state.players.white.orbs.light + state.players.white.orbs.dark;
@@ -655,7 +655,7 @@ describe("three-player God catalog", () => {
 
       expect(
         state.players.white.orbs.light + state.players.white.orbs.dark,
-      ).toBe(orbsBeforeMove + 2);
+      ).toBe(orbsBeforeMove + 1);
       expect(state.board[targetKing]).toMatchObject({
         type: "king",
         status: { hexedBy: "white" },
@@ -758,7 +758,7 @@ describe("three-player God catalog", () => {
     )!;
     const [kingCell, friendlyCell, hostileCell] = topology.kingNeighbors(center);
     state.board = {
-      [center]: piece("center", "pawn", "black"),
+      [center]: piece("center", "pawn", "white"),
       [kingCell]: piece("red-king", "king", "red"),
       [friendlyCell]: piece("white-pawn", "pawn", "white"),
       [hostileCell]: piece("black-pawn", "pawn", "black"),
@@ -1141,6 +1141,45 @@ describe("three-player God catalog", () => {
     expect(state.board[setup.destination]?.id).toBe("route-rook");
     expect(state.board[firstCell]?.id).toBe("route-blocker");
     expect(secondCell).toBeTruthy();
+  });
+
+  it("does not trigger a level 3 banana for a friendly piece", () => {
+    let state = abilityState("anubis", 1);
+    const topology = getThreePlayerTopology(state.config.boardVariant);
+    const kings = Object.entries(state.board).filter(([, candidate]) =>
+      candidate.type === "king"
+    );
+    const occupied = new Set(kings.map(([cell]) => cell));
+    const route = topology.cells.flatMap((source) =>
+      occupied.has(source)
+        ? []
+        : topology.rookRays(source)
+          .filter((ray) =>
+            ray.cells.length >= 2 &&
+            !occupied.has(ray.cells[0]) &&
+            !occupied.has(ray.cells[1])
+          )
+          .map((ray) => ({ source, banana: ray.cells[0], destination: ray.cells[1] }))
+    )[0]!;
+    expect(route).toBeTruthy();
+    state.board = Object.fromEntries(kings);
+    state.board[route.source] = piece("friendly-rook", "rook", "white");
+    state.bananas = [{
+      cell: route.banana,
+      owner: "white",
+      expires: "god",
+      level: 3,
+    }];
+
+    state = threePlayerReducer(state, { type: "select-god", godId: "anubis" });
+    state = threePlayerReducer(state, { type: "select-ability", abilityId: "construction" });
+    state = threePlayerReducer(state, { type: "cell", cell: route.source });
+    expect(state.legalCells).toContain(route.destination);
+    state = threePlayerReducer(state, { type: "cell", cell: route.destination });
+
+    expect(state.board[route.destination]?.type).toBe("rook");
+    expect(state.board[route.destination]?.status.stunned).toBeUndefined();
+    expect(state.bananas).toContainEqual(expect.objectContaining({ cell: route.banana }));
   });
 
   it.each(["three-player", "three-half"] as const)(

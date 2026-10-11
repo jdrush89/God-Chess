@@ -7,6 +7,9 @@ describe("printable God boards", () => {
     expect(generator).toContain('const sourcePath = path.join(root, "src/game/gods.ts")');
     expect(generator.match(/maxSize: 8\.5/g)).toHaveLength(3);
     expect(generator).toContain("const panelHeight = 116");
+    expect(generator).toContain("[2, 3].forEach");
+    expect(generator).not.toContain("[1, 2, 3].forEach");
+    expect(generator).toContain("Abilities begin at level 1.");
 
     const quetzSlither = GOD_BY_ID.quetzacoatl.abilities.find(
       (ability) => ability.id === "flight",
@@ -32,7 +35,13 @@ describe("printable God boards", () => {
       (ability) => ability.id === "pick-a-fight",
     )!;
     expect(pickAFight.kind).toBe("move");
-    expect(pickAFight.summary).toContain("ordinarily legal empty space");
+    expect(pickAFight.summary).toBe(
+      "Teleport a knight or bishop to an empty space where it is being attacked.",
+    );
+    expect([
+      pickAFight.summary,
+      ...pickAFight.details,
+    ].join(" ").toLowerCase()).not.toContain("legal");
 
     const marked = GOD_BY_ID.death.abilities.find(
       (ability) => ability.id === "marked",

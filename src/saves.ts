@@ -153,6 +153,7 @@ const isPieceStatus = (value: unknown): value is PieceStatus => {
       "frozen",
       "frozenBy",
       "gazing",
+      "stunned",
       "poisoned",
       "poisonedBy",
       "polymorphed",
@@ -170,6 +171,7 @@ const isPieceStatus = (value: unknown): value is PieceStatus => {
   if (value.frozen !== undefined && !isDuration(value.frozen, ["god"])) return false;
   if (value.frozenBy !== undefined && !isColor(value.frozenBy)) return false;
   if (value.gazing !== undefined && typeof value.gazing !== "boolean") return false;
+  if (value.stunned !== undefined && typeof value.stunned !== "boolean") return false;
   if (value.poisoned !== undefined && !isDuration(value.poisoned, ["god"])) return false;
   if (value.poisonedBy !== undefined && !isColor(value.poisonedBy)) return false;
   if (value.polymorphed !== undefined && !isDuration(value.polymorphed, ["god"])) return false;
@@ -191,9 +193,13 @@ const isPieceStatus = (value: unknown): value is PieceStatus => {
     value.ritual !== undefined &&
     !(
       isRecord(value.ritual) &&
-      hasOnlyKeys(value.ritual, ["owner", "expires"]) &&
+      hasOnlyKeys(value.ritual, ["owner", "expires", "level"]) &&
       isColor(value.ritual.owner) &&
-      isDuration(value.ritual.expires, ["kangus"])
+      isDuration(value.ritual.expires, ["kangus"]) &&
+      (
+        value.ritual.level === undefined ||
+        [1, 2, 3].includes(Number(value.ritual.level))
+      )
     )
   ) return false;
   if (
@@ -279,6 +285,7 @@ const pendingAbilityIsValid = (
 ) =>
   GOD_BY_ID[godId].abilities.some((ability) => ability.id === abilityId) ||
   (godId === "artemis" && abilityId === "snipe-shot") ||
+  (godId === "artemis" && abilityId === "stealth-return") ||
   (godId === "anubis" && abilityId === "harden-choice");
 
 const isPending = (value: unknown): value is PendingAction => {
@@ -294,6 +301,10 @@ const isPending = (value: unknown): value is PendingAction => {
       "movedPieceId",
       "movesRemaining",
       "mountHistory",
+      "passengerIds",
+      "droppedPassengerIds",
+      "dropSquares",
+      "captureUsed",
       "queuedMove",
     ]) ||
     !isGodId(value.godId) ||
@@ -310,7 +321,8 @@ const isPending = (value: unknown): value is PendingAction => {
       (
         Array.isArray(value.selected) &&
         value.selected.every((entry) =>
-          value.abilityId === "mount" || value.abilityId === "hex"
+          typeof value.abilityId === "string" &&
+          ["mount", "hex", "siphon"].includes(value.abilityId)
             ? typeof entry === "string" && entry.length > 0
             : isSquare(entry)
         ) &&
@@ -327,6 +339,31 @@ const isPending = (value: unknown): value is PendingAction => {
         value.mountHistory.every((entry) => typeof entry === "string")
       )
     ) &&
+    (
+      value.passengerIds === undefined ||
+      (
+        Array.isArray(value.passengerIds) &&
+        value.passengerIds.every((entry) => typeof entry === "string" && entry.length > 0) &&
+        isUnique(value.passengerIds)
+      )
+    ) &&
+    (
+      value.droppedPassengerIds === undefined ||
+      (
+        Array.isArray(value.droppedPassengerIds) &&
+        value.droppedPassengerIds.every((entry) => typeof entry === "string" && entry.length > 0) &&
+        isUnique(value.droppedPassengerIds)
+      )
+    ) &&
+    (
+      value.dropSquares === undefined ||
+      (
+        Array.isArray(value.dropSquares) &&
+        value.dropSquares.every(isSquare) &&
+        isUnique(value.dropSquares)
+      )
+    ) &&
+    (value.captureUsed === undefined || typeof value.captureUsed === "boolean") &&
     (
       value.queuedMove === undefined ||
       (
@@ -358,21 +395,30 @@ const isPending = (value: unknown): value is PendingAction => {
 
 const isBanana = (value: unknown): value is Banana =>
   isRecord(value) &&
-  hasOnlyKeys(value, ["square", "owner", "expires"]) &&
+  hasOnlyKeys(value, ["square", "owner", "expires", "level"]) &&
   isSquare(value.square) &&
   isColor(value.owner) &&
   (
     isInteger(value.expires, 1) ||
     value.expires === "kangus" ||
     value.expires === "god"
+  ) &&
+  (
+    value.level === undefined ||
+    [1, 2, 3].includes(Number(value.level))
   );
 
 const isStealthMove = (value: unknown): value is StealthMove =>
   isRecord(value) &&
-  hasOnlyKeys(value, ["piece", "destination", "returnOnTurn"]) &&
+  hasOnlyKeys(value, ["piece", "source", "destination", "returnOnTurn", "level"]) &&
   isPiece(value.piece) &&
+  (value.source === undefined || isSquare(value.source)) &&
   isSquare(value.destination) &&
-  isInteger(value.returnOnTurn, 1);
+  isInteger(value.returnOnTurn, 1) &&
+  (
+    value.level === undefined ||
+    [1, 2, 3].includes(Number(value.level))
+  );
 
 const isStealthRecord = (
   value: unknown,

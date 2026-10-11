@@ -31,7 +31,7 @@ export const GODS: God[] = [
       ability("air-strike", "Air Strike", "Move a piece that is adjacent to a friendly pawn. The piece picks up the pawn and may fly as it moves. The moved piece must land on an empty space, and the pawn must be dropped on an empty space along the flight path.", "multi-move", [
         "Pick up an adjacent friendly pawn and drop it on an empty crossed space.",
         "The passenger may instead capture the first enemy piece flown over.",
-        "You may also pick up an adjacent friendly knight or bishop.",
+        "Also pick up an adjacent friendly knight or bishop. Either passenger may capture the first enemy piece flown over, but the other passenger must be dropped on an empty space along the movement path.",
       ], { black: 3 }),
     ],
   },
@@ -125,10 +125,10 @@ export const GODS: God[] = [
       ]),
       ability("stealth", "Stealth", "Plan a legal move with one of your pieces and remove that piece from the board. On your next turn, place the piece on the destination before taking an action, capturing any piece where it lands. The stealthed piece may not move again on your next turn.", "move", [
         "Return on the planned destination next turn.",
-        "No additional level 2 effect is specified.",
-        "No additional level 3 effect is specified.",
+        "You can choose not to move to the planned location and return the piece to where it was. If you do, capture any piece that is currently there.",
+        "You are allowed to move the piece again on your next turn.",
       ], { white: 2 }),
-      ability("snipe", "Snipe", "Move a piece and then mark it as prepared. At the beginning of your next turn, that piece may capture any piece it is attacking without moving. If you do not use the prepared shot, remove the marker.", "move", [
+      ability("snipe", "Snipe", "Move a piece and then mark it as prepared. At the beginning of your next turn, that piece may capture any piece it is attacking without moving. If it captures with the prepared marker, it is stunned until the end of that turn. If you do not use the prepared shot, remove the marker.", "move", [
         "The prepared shot expires if it is not used on your next turn.",
         "Skipping the prepared shot does not remove the marker. It remains until Artemis’ next turn.",
         "The marker no longer expires when Artemis is called. It remains until the prepared shot is used.",
@@ -143,17 +143,17 @@ export const GODS: God[] = [
     accent: "#d9894c",
     symbol: "K",
     abilities: [
-      ability("ritual-sacrifice", "Goad", "Move a piece. If that piece gets taken on your opponent’s next turn, gain 3 of each orb.", "move", [
-        "Reward 3 of each if captured next turn.",
-        "You gain the orbs if the piece is taken at any time before Kangus’ next turn.",
-        "Increase the reward to 4 white orbs and 4 black orbs.",
+      ability("ritual-sacrifice", "Goad", "Move a piece. Until Kangus’ next turn, gain 2 of each orb if that piece is taken. If the moved piece is adjacent to a banana, gain 1 white orb.", "move", [
+        "Until Kangus’ next turn, gain 2 of each orb if the piece is taken. Gain 1 white orb if it is adjacent to a banana.",
+        "Gain 1 white orb for each adjacent banana.",
+        "Gain 3 of each orb if the piece is taken.",
       ]),
-      ability("banana-peel", "Banana Peel", "Move a piece, then leave a banana peel token in an orthogonally adjacent empty spot. If an opponent moves across the banana, their piece must stop moving. The banana stays out for 1 turn.", "move", [
-        "Peel lasts 1 turn.",
-        "The banana stays until Kangus’ next turn.",
-        "The banana stays until stepped on by an opponent.",
+      ability("banana-peel", "Banana Peel", "Move a piece, then leave a banana peel token in an orthogonally adjacent empty spot. It stays there until an opponent steps on it. That piece must stop moving.", "move", [
+        "The banana stays until an opponent steps on it.",
+        "You may throw the banana to any empty space within 2 spaces of the moved piece.",
+        "Any opponent’s piece that steps on the banana is stunned for one turn. Stunned pieces cannot move or be moved by any abilities.",
       ], { white: 1 }),
-      ability("rage", "Rage", "Choose a piece and capture all friendly and enemy pieces adjacent to that piece.", "target", [
+      ability("rage", "Rage", "Choose a friendly piece and capture all friendly and enemy pieces adjacent to that piece.", "target", [
         "Friendly pieces are also destroyed.",
         "You may choose not to capture friendly pieces.",
         "You may move the chosen piece 1 legal space before capturing adjacent pieces.",
@@ -180,8 +180,8 @@ export const GODS: God[] = [
       ], { white: 4 }),
       ability("siphon", "Siphon", "Move a piece. It must end its move adjacent to an enemy piece. Steal up to 2 white orbs from the enemy player.", "move", [
         "Steal up to 2 white.",
-        "No additional level 2 effect is specified.",
-        "No additional level 3 effect is specified.",
+        "Steal up to 2 white orbs from each of up to 2 adjacent enemy pieces.",
+        "Steal up to 2 white orbs from each of up to 3 adjacent enemy pieces.",
       ], { black: 1 }),
     ],
   },
@@ -207,7 +207,7 @@ export const GODS: God[] = [
         "Move 1 adjacent ally.",
         "The King may move all adjacent friendly pieces with him.",
         "The King and his escorts may move 2 spaces in any 1 direction.",
-      ], { black: 1 }),
+      ], { black: 2 }),
     ],
   },
   {
@@ -223,10 +223,10 @@ export const GODS: God[] = [
         "If the piece moves from out of a queen’s line of sight into that queen’s line of sight, gain 2 matching orbs from that queen instead.",
         "If the piece moves into a queen’s line of sight, gain 3 matching orbs from that queen instead.",
       ]),
-      ability("slither", "Serpentine Step", "The queen can move diagonally twice, but can’t capture any pieces.", "multi-move", [
-        "Move twice.",
-        "The queen can move diagonally three times.",
-        "The queen can move diagonally any number of times.",
+      ability("slither", "Serpentine Step", "Move the queen or a pawn diagonally twice without capturing.", "multi-move", [
+        "Move the queen or a pawn diagonally twice.",
+        "The queen can move diagonally three times. A pawn still moves twice.",
+        "The queen can move diagonally any number of times. A pawn still moves twice.",
       ], { white: 1 }),
       ability("stone-gaze", "Stone Gaze", "All pieces within line of sight of your Queen, friendly and enemy, can’t move for 2 turns. The Queen can’t move while any of them remain frozen.", "target", [
         "Stone all pieces in the Queen’s line of sight for 2 turns.",
@@ -243,12 +243,12 @@ export const GODS: God[] = [
     accent: "#bb77b7",
     symbol: "S",
     abilities: [
-      ability("hex", "Hex", "If there’s not a currently hexed living piece, choose an enemy piece to mark as hexed. Move a piece. If you move into the row or column of a hexed piece, gain 2 orbs matching the color of the space you landed on.", "move", [
-        "Maintain 1 hex.",
-        "When placing hexes, you can hex 2 pieces at once. Aligning with both gains 3 matching orbs.",
-        "When placing hexes, you can hex 3 pieces at once. Aligning with all three gains 4 matching orbs.",
+      ability("hex", "Hex", "If there are no currently hexed living pieces, choose up to 2 enemy pieces to mark as hexed. Move a piece. Gain 1 orb matching the color of the space you landed on for each hexed piece in the same row or column.", "move", [
+        "Maintain up to 2 hexes. Gain 1 matching orb per hexed piece aligned by row or column.",
+        "When placing hexes, you can hex up to 3 pieces.",
+        "Hexed pieces also count as aligned when they are on the same diagonal.",
       ]),
-      ability("poison-cloud", "Poison Cloud", "Choose an opponent’s piece and mark it as poisoned. That piece may not move more than 3 spaces in a turn until your next turn.", "target", [
+      ability("poison-cloud", "Poison Cloud", "Choose an opponent’s piece and mark it as poisoned. That piece may not move more than 3 spaces in a turn until it moves.", "target", [
         "Poison 1 piece.",
         "Choose a 1×2 or 2×1 area; every opponent’s piece in that area is poisoned.",
         "Choose a 2×2 area; every opponent’s piece in that area is poisoned.",
@@ -298,10 +298,10 @@ export const GODS: God[] = [
         "Ties count for the white-orb reward. Gain 1 extra white orb if the moved piece is the sole farthest advanced piece.",
         "Gain 1 black orb for each enemy piece being attacked instead of only 1 black orb.",
       ]),
-      ability("pick-a-fight", "Pick a Fight", "Move a knight or bishop to an ordinarily legal empty space where it is being attacked.", "move", [
-        "Knight or bishop lands on a legal empty space where it is attacked.",
-        "It may instead land on a legal empty space where it attacks 2 enemy pieces.",
-        "You may move any type of piece to a legal empty space where it is attacked.",
+      ability("pick-a-fight", "Pick a Fight", "Teleport a knight or bishop to an empty space where it is being attacked.", "move", [
+        "Teleport a knight or bishop to an empty space where it is being attacked.",
+        "It may instead teleport to an empty space where it attacks 2 enemy pieces.",
+        "You may teleport any type of piece to an empty space where it is being attacked.",
       ], { white: 2 }),
       ability("cull-the-weak", "Cull the Weak", "Move a piece to a spot where it is attacking multiple pieces. Capture the lowest point value piece that it is attacking.", "move", [
         "Capture the lowest-value attacked piece.",

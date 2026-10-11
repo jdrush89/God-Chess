@@ -237,6 +237,7 @@ const statusMarkers: {
 }[] = [
   { key: "hardened", label: "Hardened", icon: Shield },
   { key: "frozen", label: "Stone", icon: Snowflake },
+  { key: "stunned", label: "Stunned", icon: X },
   { key: "poisoned", label: "Poisoned", icon: FlaskConical },
   { key: "polymorphed", label: "Polymorphed", icon: Rabbit },
   { key: "luredBy", label: "Lured", icon: Magnet },
@@ -285,6 +286,12 @@ const pieceMarkerDetails = (piece: Piece, state: GameState) => {
       description: "This Queen cannot move while any piece affected by Stone Gaze remains frozen.",
     });
   }
+  if (piece.status.stunned) {
+    markers.push({
+      name: "Stunned",
+      description: "Cannot move or be moved by abilities until the end of its controller’s turn.",
+    });
+  }
   if (piece.status.poisoned) {
     markers.push({
       name: "Poisoned",
@@ -324,14 +331,12 @@ const pieceMarkerDetails = (piece: Piece, state: GameState) => {
     });
   }
   if (piece.status.ritual) {
-    const ritualLevel = abilityLevel(state.players[piece.status.ritual.owner].upgrades, "ritual-sacrifice");
-    const reward = ritualLevel >= 3 ? 4 : 3;
-    const duration = piece.status.ritual.expires === "kangus"
-      ? "before Kangus’ next turn"
-      : `before turn ${piece.status.ritual.expires}`;
+    const ritualLevel = piece.status.ritual.level ??
+      abilityLevel(state.players[piece.status.ritual.owner].upgrades, "ritual-sacrifice");
+    const reward = ritualLevel >= 3 ? 3 : 2;
     markers.push({
       name: "Goad",
-      description: `If captured ${duration}, ${colorLabel(piece.status.ritual.owner)} gains ${reward} white and ${reward} black orbs.`,
+      description: `If captured before Kangus’ next turn, ${colorLabel(piece.status.ritual.owner)} gains ${reward} white and ${reward} black orbs.`,
     });
   }
   if (piece.status.markedForDeath) {
@@ -571,6 +576,94 @@ function DraftScreen({
           </div>
         ))}
       </footer>
+    </main>
+  );
+}
+
+function RosterScreen({ onBack }: { onBack: () => void }) {
+  const [inspected, setInspected] = useState<GodId>(GODS[0].id);
+  const [previewLevel, setPreviewLevel] = useState(1);
+  const currentGod = GOD_BY_ID[inspected];
+
+  useEffect(() => {
+    setPreviewLevel(1);
+  }, [inspected]);
+
+  return (
+    <main className="draft-page roster-page">
+      <header className="topbar draft-topbar">
+        <Brand />
+        <div className="draft-turn">
+          <BookOpen size={16} />
+          Divine roster
+        </div>
+        <div className="header-actions">
+          <button onClick={onBack}>
+            <ArrowLeft size={18} />
+            <span>Back to title</span>
+          </button>
+        </div>
+      </header>
+
+      <section className="draft-hero">
+        <p className="eyebrow">THE DIVINE ROSTER</p>
+        <h1>Know your gods.</h1>
+        <p>Explore every god and preview how each ability changes at levels 1, 2, and 3.</p>
+      </section>
+
+      <section className="draft-layout">
+        <div className="pantheon-grid">
+          {GODS.map((god) => (
+            <button
+              className={`draft-card ${inspected === god.id ? "inspected" : ""}`}
+              key={god.id}
+              onClick={() => setInspected(god.id)}
+              style={{ "--accent": god.accent } as React.CSSProperties}
+              aria-pressed={inspected === god.id}
+            >
+              <GodPortrait godId={god.id} className="god-card-portrait" />
+              <span className="draft-card-copy">
+                <strong>{god.name}</strong>
+                <small>{god.domain}</small>
+              </span>
+            </button>
+          ))}
+        </div>
+
+        <aside className="god-inspector" style={{ "--accent": currentGod.accent } as React.CSSProperties}>
+          <div className="inspector-heading">
+            <GodPortrait godId={currentGod.id} className="god-hero-portrait" />
+            <div>
+              <p>{currentGod.domain}</p>
+              <h2>{currentGod.name}</h2>
+              <span>{currentGod.epithet}</span>
+            </div>
+          </div>
+          <LevelSelector
+            level={previewLevel}
+            onChange={setPreviewLevel}
+            label="All abilities"
+            className="god-level-selector"
+          />
+          <div className="draft-abilities">
+            {currentGod.abilities.map((item, index) => (
+              <div className="draft-ability" key={item.id}>
+                <span>0{index + 1}</span>
+                <div>
+                  <strong>{item.name}</strong>
+                  <AbilityRules ability={item} level={1} previewLevelOverride={previewLevel} compact />
+                </div>
+                {item.cost && (
+                  <div className="mini-cost">
+                    {item.cost.white ? <Orb color="white" count={item.cost.white} small /> : null}
+                    {item.cost.black ? <Orb color="black" count={item.cost.black} small /> : null}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </aside>
+      </section>
     </main>
   );
 }
@@ -1073,6 +1166,7 @@ export function ActionPanel({
     state.pending?.step === "slither" ||
     state.pending?.step === "mount-rider" ||
     state.pending?.step === "funding" ||
+    state.pending?.step === "siphon-targets" ||
     state.pending?.step === "march-companions" ||
     (state.pending?.step === "escort-companions" && Boolean(state.pending.selected?.length)) ||
     (state.pending?.step === "hex-target" && Boolean(state.pending.selected?.length));
@@ -1087,7 +1181,16 @@ export function ActionPanel({
         <span>DIVINE ACTION</span>
         <small>ROUND {state.round}</small>
       </div>
-      {state.pending?.abilityId === "snipe-shot" ? (
+      {state.pending?.abilityId === "stealth-return" ? (
+        <div className="prepared-shot-panel">
+          <span>ARTEMIS · STEALTH</span>
+          <h3>Choose where the piece returns</h3>
+          <p>
+            Select the planned destination or its original space. Returning to
+            the original space captures any piece currently there.
+          </p>
+        </div>
+      ) : state.pending?.abilityId === "snipe-shot" ? (
         <>
           <div className="prepared-shot-panel">
             <Swords size={28} />
@@ -1096,7 +1199,7 @@ export function ActionPanel({
             <p>
               {state.pending.step === "snipe-source"
                 ? "Select a highlighted prepared piece on the board."
-                : "Now select one of the highlighted enemy pieces it attacks."}
+                : "Select an attacked enemy piece. The prepared piece will be stunned for the rest of this turn."}
             </p>
           </div>
           <div className="action-buttons">
@@ -1549,6 +1652,7 @@ function MainMenu({
   accountWorking,
   accountError,
   onStart,
+  onOpenRoster,
   onSignIn,
   onSignUp,
   onSignOut,
@@ -1561,6 +1665,7 @@ function MainMenu({
   accountWorking: boolean;
   accountError?: string;
   onStart: () => void;
+  onOpenRoster: () => void;
   onSignIn: (email: string, password: string) => Promise<string>;
   onSignUp: (email: string, password: string, displayName: string) => Promise<string>;
   onSignOut: () => Promise<void>;
@@ -1580,6 +1685,10 @@ function MainMenu({
         <p className="eyebrow">THE DIVINE GAME</p>
         <button className="primary-button main-start-button" onClick={onStart}>
           Start
+        </button>
+        <button className="secondary-button main-roster-button" onClick={onOpenRoster}>
+          <BookOpen size={17} />
+          Roster
         </button>
         {saveError && <p className="main-menu-error" role="alert">{saveError}</p>}
       </div>
@@ -3411,7 +3520,7 @@ export default function App() {
   const savedGamesRef = useRef(savedGames);
   savedGamesRef.current = savedGames;
   const activeSaveId = useRef<string | undefined>(undefined);
-  const [startView, setStartView] = useState<"menu" | "play" | "load" | "setup" | "three-setup" | "four-setup" | "puzzles" | "tutorial" | "none">("menu");
+  const [startView, setStartView] = useState<"menu" | "roster" | "play" | "load" | "setup" | "three-setup" | "four-setup" | "puzzles" | "tutorial" | "none">("menu");
   const [setupReturnView, setSetupReturnView] = useState<"menu" | "play" | "none">("menu");
   const [setupCategory, setSetupCategory] = useState<StartCategory>("local");
   const [setupPlayerCount, setSetupPlayerCount] = useState<PlayerCount>();
@@ -4339,12 +4448,17 @@ export default function App() {
         accountWorking={accountService.working}
         accountError={accountService.error}
         onStart={() => setStartView("play")}
+        onOpenRoster={() => setStartView("roster")}
         onSignIn={accountService.signIn}
         onSignUp={accountService.signUp}
         onSignOut={accountService.signOut}
         onUpdateDisplayName={accountService.updateDisplayName}
       />
     );
+  }
+
+  if (startView === "roster") {
+    return <RosterScreen onBack={() => setStartView("menu")} />;
   }
 
   if (startView === "play") {

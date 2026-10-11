@@ -392,6 +392,23 @@ describe("four-player God abilities", () => {
     expect(result.board.h8).toBeUndefined();
   });
 
+  it("does not trigger a level 3 banana for a friendly piece", () => {
+    const state = gameFor("anubis");
+    state.board.g8 = piece(state, "rook", "north", "friendly-rook");
+    state.bananas = [{
+      square: "g9",
+      owner: "north",
+      expires: "god",
+      level: 3,
+    }];
+
+    const result = move(state, "anubis", "construction", "g8", "g10");
+
+    expect(result.board.g10?.id).toBe("friendly-rook");
+    expect(result.board.g10?.status.stunned).toBeUndefined();
+    expect(result.bananas).toContainEqual(expect.objectContaining({ square: "g9" }));
+  });
+
   it("generalizes Death's Marked, Resurrect, and Siphon", () => {
     let state = gameFor("death");
     state.board.g8 = piece(state, "rook", "north", "marked");
@@ -414,8 +431,7 @@ describe("four-player God abilities", () => {
     state.board.h9 = piece(state, "pawn", "south", "victim");
     state.players.south.orbs.light = 3;
     result = move(state, "death", "siphon", "g8", "g9");
-    result = fourPlayerReducer(result, { type: "seat", seat: "south" });
-    result = fourPlayerReducer(result, { type: "amount", amount: 2 });
+    result = fourPlayerReducer(result, { type: "square", square: "h9" });
     expect(result.players.south.orbs.light).toBe(1);
     expect(result.players.north.orbs.light).toBe(52);
   });
@@ -554,9 +570,10 @@ describe("four-player God abilities", () => {
     state.board.g10 = piece(state, "pawn", "south", "hexed");
     let result = activate(state, "salem", "hex");
     result = fourPlayerReducer(result, { type: "square", square: "g10" });
+    result = fourPlayerReducer(result, { type: "pass" });
     result = fourPlayerReducer(result, { type: "square", square: "g8" });
     result = fourPlayerReducer(result, { type: "square", square: "g9" });
-    expect(result.players.north.orbs.dark).toBe(52);
+    expect(result.players.north.orbs.dark).toBe(51);
 
     state = gameFor("salem");
     state.board.g10 = piece(state, "pawn", "south", "poisoned");
@@ -577,6 +594,7 @@ describe("four-player God abilities", () => {
 
     state = fourPlayerReducer(state, { type: "square", square: "b11" });
     expect(state.board.b11.status.hexedBy).toBe("north");
+    state = fourPlayerReducer(state, { type: "pass" });
     expect(state.pending?.step).toBe("source");
     expect(state.legalTargets).toContain("g8");
     const sourceActions = availableFourPlayerActions(state);
@@ -618,11 +636,9 @@ describe("four-player God abilities", () => {
     for (const level of [1, 2, 3] as const) {
       let leveled = activate(teamHexGame(level), "salem", "hex");
       leveled = fourPlayerReducer(leveled, { type: "square", square: "b11" });
-      if (level > 1) {
-        expect(leveled.pending?.step).toBe("hex-target");
-        expect(availableFourPlayerActions(leveled)).toContainEqual({ type: "pass" });
-        leveled = fourPlayerReducer(leveled, { type: "pass" });
-      }
+      expect(leveled.pending?.step).toBe("hex-target");
+      expect(availableFourPlayerActions(leveled)).toContainEqual({ type: "pass" });
+      leveled = fourPlayerReducer(leveled, { type: "pass" });
       expect(leveled.pending?.step).toBe("source");
       expect(availableFourPlayerActions(leveled).length).toBeGreaterThan(0);
     }
@@ -636,7 +652,7 @@ describe("four-player God abilities", () => {
 
       state = fourPlayerReducer(state, { type: "square", square: "a7" });
       expect(state.board.a7.status.hexedBy).toBe("north");
-      if (level > 1) state = fourPlayerReducer(state, { type: "pass" });
+      state = fourPlayerReducer(state, { type: "pass" });
       expect(state.board.a7).toMatchObject({
         type: "king",
         controller: "west",
@@ -650,6 +666,7 @@ describe("four-player God abilities", () => {
     rewarded.board.g8 = piece(rewarded, "rook", "north", "hex-mover");
     rewarded = activate(rewarded, "salem", "hex");
     rewarded = fourPlayerReducer(rewarded, { type: "square", square: "g10" });
+    rewarded = fourPlayerReducer(rewarded, { type: "pass" });
     const orbsBeforeMove =
       rewarded.players.north.orbs.light + rewarded.players.north.orbs.dark;
     rewarded = fourPlayerReducer(rewarded, { type: "square", square: "g8" });
@@ -663,7 +680,7 @@ describe("four-player God abilities", () => {
     });
     expect(
       rewarded.players.north.orbs.light + rewarded.players.north.orbs.dark,
-    ).toBe(orbsBeforeMove + 2);
+    ).toBe(orbsBeforeMove + 1);
   });
 
   it("finishes Hex cleanly when no controlled piece has a legal movement", () => {
@@ -672,6 +689,7 @@ describe("four-player God abilities", () => {
     state.board.g14.status.gazing = true;
     state = activate(state, "salem", "hex");
     state = fourPlayerReducer(state, { type: "square", square: "b11" });
+    state = fourPlayerReducer(state, { type: "pass" });
 
     expect(state.board.b11.status.hexedBy).toBe("north");
     expect(state.pending).toBeUndefined();

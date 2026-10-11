@@ -75,13 +75,14 @@ export interface PieceStatus {
   frozen?: number | "god";
   frozenBy?: Color;
   gazing?: boolean;
+  stunned?: boolean;
   poisoned?: number | "god";
   poisonedBy?: Color;
   polymorphed?: number | "god";
   luredBy?: Color;
   hexedBy?: Color;
   prepared?: boolean | { owner: Color; level: 1 | 2 | 3 };
-  ritual?: { owner: Color; expires: number | "kangus" };
+  ritual?: { owner: Color; expires: number | "kangus"; level?: 1 | 2 | 3 };
   markedForDeath?: { owner: Color; round: number; immediate?: boolean };
   hired?: boolean;
   movedThisTurn?: boolean;
@@ -121,12 +122,15 @@ export interface Banana {
   square: Square;
   owner: Color;
   expires: number | "kangus" | "god";
+  level?: 1 | 2 | 3;
 }
 
 export interface StealthMove {
   piece: Piece;
+  source?: Square;
   destination: Square;
   returnOnTurn: number;
+  level?: 1 | 2 | 3;
 }
 
 export interface PendingAction {
@@ -137,6 +141,10 @@ export interface PendingAction {
   destination?: Square;
   selected?: Square[];
   movedPieceId?: string;
+  passengerIds?: string[];
+  droppedPassengerIds?: string[];
+  dropSquares?: Square[];
+  captureUsed?: boolean;
   movesRemaining?: number;
   mountHistory?: string[];
   queuedMove?: QueuedClassicMove;

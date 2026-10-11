@@ -382,10 +382,9 @@ describe("three-player persistence", () => {
       }],
       ["kangus", "banana-peel", "banana", { movedPieceId }],
       ["death", "marked", "marked-choice", { movedPieceId }],
-      ["death", "siphon", "siphon-seat", { destination }],
-      ["death", "siphon", "siphon-amount", {
+      ["death", "siphon", "siphon-targets", {
         destination,
-        targetSeat: "red",
+        selected: [movedPieceId],
       }],
       ["midas", "barter", "barter-seat", { destination }],
       ["midas", "barter", "barter-orb", {
@@ -414,17 +413,21 @@ describe("three-player persistence", () => {
       ["quetzacoatl", "air-strike", "air-strike-passenger", { source }],
       ["quetzacoatl", "air-strike", "air-strike-destination", {
         source,
-        selected: [destination],
+        passengerIds: [movedPieceId],
       }],
       ["quetzacoatl", "air-strike", "air-strike-path", {
         source,
         destination,
-        selected: [destination],
+        passengerIds: [movedPieceId],
       }],
       ["quetzacoatl", "air-strike", "air-strike-drop", {
         source,
         destination,
-        selected: [destination],
+        passengerIds: [movedPieceId],
+        movedPieceId,
+        droppedPassengerIds: [],
+        dropCells: [],
+        captureUsed: false,
       }],
       ["leonidas", "escort", "escort-companions", {
         source,

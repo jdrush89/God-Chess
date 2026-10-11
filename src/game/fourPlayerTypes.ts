@@ -42,13 +42,14 @@ export interface FourPlayerPieceStatus {
   frozen?: number | "god";
   frozenBy?: Seat;
   gazing?: boolean;
+  stunned?: boolean;
   poisoned?: number | "god";
   poisonedBy?: Seat;
   polymorphed?: number | "god";
   luredBy?: Seat;
   hexedBy?: Seat;
   prepared?: boolean | { owner: Seat; level: 1 | 2 | 3 };
-  ritual?: { owner: Seat; expires: number | "kangus" };
+  ritual?: { owner: Seat; expires: number | "kangus"; level?: 1 | 2 | 3 };
   markedForDeath?: { owner: Seat; round: number; immediate?: boolean };
   hired?: boolean;
   movedThisTurn?: boolean;
@@ -96,12 +97,15 @@ export interface FourPlayerBanana {
   square: Square;
   owner: Seat;
   expires: number | "kangus" | "god";
+  level?: 1 | 2 | 3;
 }
 
 export interface FourPlayerStealthMove {
   piece: FourPlayerPiece;
+  source?: Square;
   destination: Square;
   returnOnTurn: number;
+  level?: 1 | 2 | 3;
 }
 
 export interface FourPlayerEnPassant {
@@ -128,6 +132,10 @@ export interface FourPlayerPendingAction {
   destination?: Square;
   selected?: string[];
   movedPieceId?: string;
+  passengerIds?: string[];
+  droppedPassengerIds?: string[];
+  dropSquares?: Square[];
+  captureUsed?: boolean;
   movesRemaining?: number;
   targetSeat?: Seat;
   queuedMove?: FourPlayerQueuedMove;

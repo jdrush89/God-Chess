@@ -313,14 +313,14 @@ describe("three-player move-first contracts", () => {
       from: source,
       to: destination,
     }).find((candidate) => candidate.godId === "salem");
-    expect(lightCell?.immediateOrbDelta).toEqual({ light: 2, dark: 0 });
+    expect(lightCell?.immediateOrbDelta).toEqual({ light: 1, dark: 0 });
 
     state.turn = 2;
     const darkCell = threePlayerMoveFirstCandidates(state, {
       from: source,
       to: destination,
     }).find((candidate) => candidate.godId === "salem");
-    expect(darkCell?.immediateOrbDelta).toEqual({ light: 0, dark: 2 });
+    expect(darkCell?.immediateOrbDelta).toEqual({ light: 0, dark: 1 });
   });
 
   it("uses canonical God order and excludes resting Gods", () => {
@@ -389,7 +389,8 @@ describe("three-player move-first contracts", () => {
     });
     const loaded = prepareThreePlayerState(structuredClone(queued));
     const target = loaded.legalCells[0];
-    const completed = threePlayerReducer(loaded, { type: "cell", cell: target });
+    const marked = threePlayerReducer(loaded, { type: "cell", cell: target });
+    const completed = threePlayerReducer(marked, { type: "pass" });
     expect(completed.board[move.from]?.id).not.toBe(
       state.board[move.from].id,
     );

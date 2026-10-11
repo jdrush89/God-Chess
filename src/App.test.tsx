@@ -380,7 +380,7 @@ describe("game startup", () => {
     expect(screen.queryByRole("heading", { name: /choose opponent/i })).toBeNull();
   });
 
-  it("shows one title action and the ordered Play menu with coherent back paths", () => {
+  it("shows title actions and the ordered Play menu with coherent back paths", () => {
     const savedState = createGame(1);
     window.localStorage.setItem(LEGACY_SAVE_KEY, JSON.stringify({
       version: 1,
@@ -393,6 +393,7 @@ describe("game startup", () => {
     expect(screen.getByText("Version dev")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /settings/i })).toBeNull();
     expect(screen.getByRole("button", { name: /^start$/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^roster$/i })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /^local$/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /^online$/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /^puzzles$/i })).toBeNull();
@@ -421,6 +422,36 @@ describe("game startup", () => {
     expect(screen.getByRole("button", { name: /^3 player$/i })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /back to play/i }));
     expect(screen.getByRole("button", { name: /^local$/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /back to title/i }));
+    expect(screen.getByRole("button", { name: /^start$/i })).toBeTruthy();
+  });
+
+  it("opens a read-only roster with every God and level preview", () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /^roster$/i }));
+
+    expect(screen.getByRole("heading", { name: /know your gods/i })).toBeTruthy();
+    for (const god of GODS) {
+      expect(screen.getByRole("button", { name: new RegExp(god.name, "i") })).toBeTruthy();
+    }
+    expect(screen.queryByRole("button", { name: /claim/i })).toBeNull();
+    expect(screen.getByText(GODS[0].abilities[0].name)).toBeTruthy();
+
+    fireEvent.click(
+      within(screen.getByLabelText(/all abilities levels/i))
+        .getByRole("button", { name: /^lv 3$/i }),
+    );
+    expect(screen.getAllByText("Lv 3:")[0].parentElement?.textContent)
+      .toContain(GODS[0].abilities[0].details[2]);
+
+    fireEvent.click(screen.getByRole("button", { name: new RegExp(GODS[1].name, "i") }));
+    expect(screen.getByRole("heading", { name: GODS[1].name })).toBeTruthy();
+    expect(
+      within(screen.getByLabelText(/all abilities levels/i))
+        .getByRole("button", { name: /^lv 2$/i })
+        .getAttribute("aria-pressed"),
+    ).toBe("false");
+
     fireEvent.click(screen.getByRole("button", { name: /back to title/i }));
     expect(screen.getByRole("button", { name: /^start$/i })).toBeTruthy();
   });

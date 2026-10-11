@@ -64,6 +64,10 @@ const PENDING_STEP_RULES: Readonly<Record<string, PendingStepRule>> = {
   target: { abilities: ["lure", "rage", "poison-cloud", "polymorph"] },
   "snipe-source": { abilities: ["snipe-shot"] },
   "snipe-target": { abilities: ["snipe-shot"] },
+  "stealth-return": {
+    abilities: ["stealth-return"],
+    required: ["movedPieceId"],
+  },
   "harden-choice": { abilities: ["harden-choice"] },
   "harden-decision": {
     abilities: ["harden-choice"],
@@ -116,10 +120,9 @@ const PENDING_STEP_RULES: Readonly<Record<string, PendingStepRule>> = {
   },
   banana: { abilities: ["banana-peel"], required: ["movedPieceId"] },
   "marked-choice": { abilities: ["marked"], required: ["movedPieceId"] },
-  "siphon-seat": { abilities: ["siphon"], required: ["destination"] },
-  "siphon-amount": {
+  "siphon-targets": {
     abilities: ["siphon"],
-    required: ["destination", "targetSeat"],
+    required: ["destination", "selected"],
   },
   "barter-seat": { abilities: ["barter"], required: ["destination"] },
   "barter-orb": {
@@ -155,17 +158,25 @@ const PENDING_STEP_RULES: Readonly<Record<string, PendingStepRule>> = {
     abilities: ["air-strike"],
     required: ["source"],
   },
+  "air-strike-passenger-two": {
+    abilities: ["air-strike"],
+    required: ["source", "passengerIds"],
+  },
   "air-strike-destination": {
     abilities: ["air-strike"],
-    required: ["source", "selected"],
+    required: ["source", "passengerIds"],
   },
   "air-strike-path": {
     abilities: ["air-strike"],
-    required: ["source", "destination", "selected"],
+    required: ["source", "destination", "passengerIds"],
+  },
+  "air-strike-drop-passenger": {
+    abilities: ["air-strike"],
+    required: ["source", "destination", "passengerIds", "droppedPassengerIds", "dropCells", "captureUsed"],
   },
   "air-strike-drop": {
     abilities: ["air-strike"],
-    required: ["source", "destination", "selected"],
+    required: ["source", "destination", "passengerIds", "movedPieceId", "droppedPassengerIds", "dropCells", "captureUsed"],
   },
   "escort-companions": {
     abilities: ["escort"],
@@ -282,6 +293,7 @@ const isPieceStatus = (value: unknown): value is ThreePlayerPieceStatus => {
       "frozen",
       "frozenBy",
       "gazing",
+      "stunned",
       "poisoned",
       "poisonedBy",
       "polymorphed",
@@ -300,6 +312,7 @@ const isPieceStatus = (value: unknown): value is ThreePlayerPieceStatus => {
   if (value.frozen !== undefined && !isDuration(value.frozen, ["god"])) return false;
   if (value.frozenBy !== undefined && !isSeat(value.frozenBy)) return false;
   if (value.gazing !== undefined && typeof value.gazing !== "boolean") return false;
+  if (value.stunned !== undefined && typeof value.stunned !== "boolean") return false;
   if (value.poisoned !== undefined && !isDuration(value.poisoned, ["god"])) return false;
   if (value.poisonedBy !== undefined && !isSeat(value.poisonedBy)) return false;
   if (value.polymorphed !== undefined &&
@@ -322,9 +335,13 @@ const isPieceStatus = (value: unknown): value is ThreePlayerPieceStatus => {
     value.ritual !== undefined &&
     !(
       isRecord(value.ritual) &&
-      hasExactKeys(value.ritual, ["owner", "expires"]) &&
+      hasExactKeys(value.ritual, ["owner", "expires"], ["level"]) &&
       isSeat(value.ritual.owner) &&
-      isDuration(value.ritual.expires, ["kangus"])
+      isDuration(value.ritual.expires, ["kangus"]) &&
+      (
+        value.ritual.level === undefined ||
+        [1, 2, 3].includes(Number(value.ritual.level))
+      )
     )
   ) return false;
   if (
@@ -855,6 +872,8 @@ const isThreePlayerStateVersion = (value: unknown): boolean => {
           ? "artemis"
           : pending.abilityId === "harden-choice"
             ? "anubis"
+            : pending.abilityId === "stealth-return"
+              ? "artemis"
             : undefined
         : undefined;
       const pendingGod = isRecord(pending) && typeof pending.abilityId === "string"
@@ -883,6 +902,19 @@ const isThreePlayerStateVersion = (value: unknown): boolean => {
         (pending.source !== undefined && !isCell(pending.source)) ||
         (pending.destination !== undefined && !isCell(pending.destination)) ||
         (pending.selected !== undefined && !isStringArray(pending.selected)) ||
+        (pending.passengerIds !== undefined && !isStringArray(pending.passengerIds)) ||
+        (
+          pending.droppedPassengerIds !== undefined &&
+          !isStringArray(pending.droppedPassengerIds)
+        ) ||
+        (
+          pending.dropCells !== undefined &&
+          (
+            !isStringArray(pending.dropCells) ||
+            pending.dropCells.some((cell) => !isCell(cell))
+          )
+        ) ||
+        (pending.captureUsed !== undefined && typeof pending.captureUsed !== "boolean") ||
         (
           pending.selectedPathIds !== undefined &&
           (
@@ -894,7 +926,21 @@ const isThreePlayerStateVersion = (value: unknown): boolean => {
           pending.movedPieceId !== undefined &&
           (
             typeof pending.movedPieceId !== "string" ||
-            !pieceIds.includes(pending.movedPieceId)
+            (
+              !pieceIds.includes(pending.movedPieceId) &&
+              !(
+                pending.step === "stealth-return" &&
+                isRecord(value.stealth) &&
+                Object.values(value.stealth).some((moves) =>
+                  Array.isArray(moves) &&
+                  moves.some((move) =>
+                    isRecord(move) &&
+                    isRecord(move.piece) &&
+                    move.piece.id === pending.movedPieceId
+                  )
+                )
+              )
+            )
           )
         ) ||
         (
@@ -929,10 +975,14 @@ const isThreePlayerStateVersion = (value: unknown): boolean => {
     for (const banana of value.bananas) {
       if (
         !isRecord(banana) ||
-        !hasExactKeys(banana, ["cell", "owner", "expires"]) ||
+        !hasExactKeys(banana, ["cell", "owner", "expires"], ["level"]) ||
         !isCell(banana.cell) ||
         !isSeat(banana.owner) ||
-        !isDuration(banana.expires, ["kangus", "god"])
+        !isDuration(banana.expires, ["kangus", "god"]) ||
+        (
+          banana.level !== undefined &&
+          ![1, 2, 3].includes(Number(banana.level))
+        )
       ) return false;
     }
     if (!isUnique(value.bananas.map((banana) => banana.cell))) return false;
@@ -943,10 +993,19 @@ const isThreePlayerStateVersion = (value: unknown): boolean => {
       for (const move of moves) {
         if (
           !isRecord(move) ||
-          !hasExactKeys(move, ["piece", "destination", "returnOnTurn"]) ||
+          !hasExactKeys(
+            move,
+            ["piece", "destination", "returnOnTurn"],
+            ["source", "level"],
+          ) ||
           !isPiece(move.piece) ||
+          (move.source !== undefined && !isCell(move.source)) ||
           !isCell(move.destination) ||
           !isInteger(move.returnOnTurn, 1) ||
+          (
+            move.level !== undefined &&
+            ![1, 2, 3].includes(Number(move.level))
+          ) ||
           move.piece.controller !== seat ||
           players[seat].eliminated
         ) return false;

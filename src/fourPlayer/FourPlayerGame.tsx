@@ -134,6 +134,7 @@ const STATUS_MARKERS: {
 }[] = [
   { key: "hardened", label: "Hardened", icon: Shield },
   { key: "frozen", label: "Stone", icon: Snowflake },
+  { key: "stunned", label: "Stunned", icon: X },
   { key: "poisoned", label: "Poisoned", icon: FlaskConical },
   { key: "polymorphed", label: "Polymorphed", icon: Rabbit },
   { key: "luredBy", label: "Lured", icon: Magnet },
@@ -690,6 +691,7 @@ const canPass = (state: FourPlayerState) =>
   state.pending?.step === "funding" ||
   state.pending?.step === "march-companions" ||
   state.pending?.step === "barter-orb" ||
+  (state.pending?.step === "siphon-targets" && Boolean(state.pending.selected?.length)) ||
   (state.pending?.step === "escort-companions" && Boolean(state.pending.selected?.length)) ||
   (state.pending?.step === "hex-target" && Boolean(state.pending.selected?.length));
 

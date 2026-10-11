@@ -143,7 +143,26 @@ const addOrbs = (
         source,
       });
     }
+    if (state.pending?.abilityId === "stealth-return") {
+      return state.legalCells.map((cell) => ({ type: "cell", cell }));
+    }
   }
+  if (state.pending?.step === "siphon-targets") {
+    return [
+      ...state.legalCells.map((cell) => ({
+        type: "cell",
+        cell,
+      } as ThreePlayerAction)),
+      { type: "pass" },
+    ];
+  }
+};
+
+const statusAfterMovement = (status: ThreePlayerPiece["status"]) => {
+  const next = { ...status, movedThisTurn: true };
+  delete next.poisoned;
+  delete next.poisonedBy;
+  return next;
 };
 
 const addAffinityOrb = (
@@ -452,11 +471,9 @@ const capturePiece = (
         piece.status.ritual.expires
     )
   ) {
-    const reward = levelFor(
-      state,
-      piece.status.ritual.owner,
-      "ritual-sacrifice",
-    ) >= 3 ? 4 : 3;
+    const ritualLevel = piece.status.ritual.level ??
+      levelFor(state, piece.status.ritual.owner, "ritual-sacrifice");
+    const reward = ritualLevel >= 3 ? 3 : 2;
     addOrbs(
       state,
       piece.status.ritual.owner,
@@ -508,7 +525,8 @@ const bananaOnPath = (
   requestedTo,
 ].find((cell) =>
   state.bananas!.some((banana) =>
-    banana.cell === cell && banana.owner !== state.activeSeat
+    banana.cell === cell &&
+    banana.owner !== state.activeSeat
   )
 );
 
@@ -529,11 +547,19 @@ const moveDirect = (
   state.board = result.board;
   state.castlingRights = result.castlingRights;
   state.enPassant = result.enPassant;
+  if (moving.status.poisoned && state.board[to]) {
+    delete state.board[to].status.poisoned;
+    delete state.board[to].status.poisonedBy;
+  }
   if (result.captured) capturePiece(state, result.captured, state.activeSeat);
   if (peel) {
+    const banana = state.bananas.find((candidate) => candidate.cell === peel);
     state.bananas = state.bananas!.filter(
       (banana) => banana.cell !== peel,
     );
+    if ((banana?.level ?? 1) >= 3 && state.board[to]) {
+      state.board[to].status.stunned = true;
+    }
   }
   mutatePosition(state);
   emitPresentation(state, {
@@ -655,6 +681,19 @@ export const resolveThreePlayerTurnStart = (state: ThreePlayerState) => {
       state.notice = threePlayerIsInCheck(state, seat)
         ? `${name(state, seat)} is in check and must use a legal escape.`
         : `${name(state, seat)} to move.`;
+      return;
+    }
+    if (state.pending?.step === "siphon-targets") {
+      const selected = state.pending.selected ?? [];
+      let total = 0;
+      for (const piece of Object.values(state.board)) {
+        if (!selected.includes(piece.id) || !piece.controller) continue;
+        const stolen = Math.min(2, state.players[piece.controller].orbs.light);
+        addOrbs(state, piece.controller, -stolen, 0);
+        addOrbs(state, state.activeSeat, stolen, 0);
+        total += stolen;
+      }
+      finishDivineTurn(state, abilityDescription(state, `: stole ${total} light orbs`));
       return;
     }
     if (threePlayerIsInCheck(state, seat)) {
@@ -880,6 +919,7 @@ const expireStatuses = (
       }
       delete status.luredBy;
       delete status.movedThisTurn;
+      delete status.stunned;
     }
     if (
       status.ritual &&
@@ -912,6 +952,7 @@ const preparedShotTargets = (
   state: ThreePlayerState,
   source: string,
 ) => threePlayerOrdinaryAttackedCells(state, source).filter((target) => {
+  if (state.board[source]?.status.stunned) return false;
   const victim = state.board[target];
   if (!hostilePiece(state, victim) || victim.type === "king") return false;
   const simulated = clone(state);
@@ -960,35 +1001,62 @@ const queueHardenChoice = (state: ThreePlayerState) => {
   return true;
 };
 
+const placeStealthReturn = (
+  state: ThreePlayerState,
+  returning: ThreePlayerState["stealth"][ThreePlayerSeat][number],
+  cell: string,
+) => {
+  const occupant = state.board[cell];
+  if (occupant && !occupant.status.hardened) {
+    captureAt(state, cell, true, true);
+  }
+  if (!state.board[cell]) {
+    state.board[cell] = {
+      ...returning.piece,
+      status: {
+        ...returning.piece.status,
+        ...((returning.level ?? 1) >= 3 ? {} : { movedThisTurn: true }),
+      },
+    };
+    if ((returning.level ?? 1) >= 3) {
+      delete state.board[cell].status.movedThisTurn;
+    }
+  } else {
+    sendToGraveyard(state, returning.piece);
+  }
+  state.stealth[state.activeSeat] = state.stealth[state.activeSeat]
+    .filter((entry) => entry.piece.id !== returning.piece.id);
+  mutatePosition(state);
+};
+
+const queueStealthReturn = (state: ThreePlayerState): boolean => {
+  while (true) {
+    const returning = state.stealth[state.activeSeat]
+      .find((entry) => entry.returnOnTurn <= state.seatTurns[state.activeSeat]);
+    if (!returning) return false;
+    const level = returning.level ??
+      levelFor(state, state.activeSeat, "stealth");
+    if (level < 2 || !returning.source) {
+      placeStealthReturn(state, returning, returning.destination);
+      continue;
+    }
+    state.pending = {
+      godId: "artemis",
+      abilityId: "stealth-return",
+      step: "stealth-return",
+      movedPieceId: returning.piece.id,
+    };
+    state.legalCells = [...new Set([returning.destination, returning.source])];
+    state.notice = "Stealth: choose the planned destination or the original cell.";
+    return true;
+  }
+};
+
 const resolveStartOfDivineTurn = (state: ThreePlayerState) => {
   ensureLayer2(state);
-  for (const piece of Object.values(state.board)) {
-    if (piece.status.poisonedBy === state.activeSeat) {
-      delete piece.status.poisoned;
-      delete piece.status.poisonedBy;
-    }
+  if (!queueStealthReturn(state) && !queueHardenChoice(state)) {
+    queuePreparedShot(state);
   }
-  const returns = state.stealth![state.activeSeat].filter(
-    (entry) => entry.returnOnTurn <= state.seatTurns![state.activeSeat],
-  );
-  for (const returning of returns) {
-    const occupant = state.board[returning.destination];
-    if (occupant && !occupant.status.hardened) {
-      captureAt(state, returning.destination, true, true);
-    }
-    if (!state.board[returning.destination]) {
-      state.board[returning.destination] = {
-        ...returning.piece,
-        status: { ...returning.piece.status, movedThisTurn: true },
-      };
-    } else {
-      sendToGraveyard(state, returning.piece);
-    }
-  }
-  state.stealth![state.activeSeat] = state.stealth![state.activeSeat].filter(
-    (entry) => entry.returnOnTurn > state.seatTurns![state.activeSeat],
-  );
-  if (!queueHardenChoice(state)) queuePreparedShot(state);
 };
 
 const resolveMarkedForDeath = (state: ThreePlayerState) => {
@@ -1136,7 +1204,13 @@ const constrainLure = (
 
 const sourceIsAllowed = (state: ThreePlayerState, cell: string) => {
   const piece = state.board[cell];
-  if (!piece || piece.status.gazing || !state.selectedAbility) return false;
+  if (
+    !piece ||
+    piece.status.gazing ||
+    piece.status.frozen ||
+    piece.status.stunned ||
+    !state.selectedAbility
+  ) return false;
   const abilityId = state.selectedAbility;
   const level = currentLevel(state, abilityId);
   const fundingRepeat = abilityId === "military-funding" &&
@@ -1166,16 +1240,11 @@ const sourceIsAllowed = (state: ThreePlayerState, cell: string) => {
   }
   if (abilityId === "air-strike") {
     return piece.controller === state.activeSeat &&
-      threePlayerAdjacentCells(state, cell).some((adjacent) => {
-        const passenger = state.board[adjacent];
-        return alliedPiece(state, passenger) &&
-          (level >= 3
-            ? ["pawn", "knight", "bishop"].includes(passenger.type)
-            : passenger.type === "pawn");
-      });
+      airStrikePassengers(state, cell).length > 0;
   }
   if (abilityId === "slither") {
-    return piece.controller === state.activeSeat && piece.type === "queen";
+    return piece.controller === state.activeSeat &&
+      (piece.type === "queen" || piece.type === "pawn");
   }
   if (abilityId === "military-funding") {
     return piece.controller === state.activeSeat && piece.type === "pawn";
@@ -1197,6 +1266,7 @@ const firstAbilityNormalMoveTargets = (
   if (
     !piece ||
     piece.controller !== state.activeSeat ||
+    piece.status.stunned ||
     piece.status.movedThisTurn
   ) return [];
   const compelled = compelledLuredSources(state);
@@ -1209,7 +1279,11 @@ const ordinaryMoveTargets = (
   cell: string,
 ) => {
   const piece = state.board[cell];
-  if (!piece || piece.controller !== state.activeSeat) return [];
+  if (
+    !piece ||
+    piece.controller !== state.activeSeat ||
+    piece.status.stunned
+  ) return [];
   let targets = threePlayerLegalTargets(state, cell);
   if (piece.type === "knight" && piece.status.chargeUntil) {
     targets = [...new Set([
@@ -1273,7 +1347,7 @@ const safeTeleportTargets = (
   simulated.board[target] = {
     ...piece,
     hasMoved: true,
-    status: { ...piece.status, movedThisTurn: true },
+    status: statusAfterMovement(piece.status),
   };
   if (captured?.status.hardened) return false;
   return !threePlayerIsInCheck(simulated, state.activeSeat);
@@ -1360,7 +1434,7 @@ const escortPlan = (
       simulated.board[landing.to] = {
         ...landing.piece,
         hasMoved: true,
-        status: { ...landing.piece.status, movedThisTurn: true },
+        status: statusAfterMovement(landing.piece.status),
       };
     }
     if (!legal) continue;
@@ -1418,7 +1492,10 @@ const sourceTargets = (state: ThreePlayerState, cell: string): string[] => {
   if (abilityId === "mount") {
     if (piece.type !== "knight") return [];
     const riders = threePlayerOrthogonalCells(state, cell)
-      .filter((target) => alliedPiece(state, state.board[target]));
+      .filter((target) => {
+        const rider = state.board[target];
+        return alliedPiece(state, rider) && !rider.status.stunned;
+      });
     if (!riders.length) return [];
     return constrainLure(
       state,
@@ -1466,15 +1543,14 @@ const sourceTargets = (state: ThreePlayerState, cell: string): string[] => {
   }
   if (abilityId === "pick-a-fight") {
     if (level < 3 && !["knight", "bishop"].includes(piece.type)) return [];
-    const ordinaryTargets = threePlayerLegalTargets(state, cell)
-      .filter((target) => !state.board[target]);
     return constrainLure(
       state,
       cell,
       safeTeleportTargets(
         state,
         cell,
-        ordinaryTargets.filter((target) => {
+        getTopologyCells(state).filter((target) => {
+          if (state.board[target]) return false;
           const simulated = clone(state);
           delete simulated.board[cell];
           simulated.board[target] = piece;
@@ -1607,11 +1683,9 @@ const startTargetAbility = (
       abilityId,
       step: level >= 3 ? "rage-source" : "target",
     };
-    state.legalCells = level >= 3
-      ? Object.entries(state.board)
-        .filter(([, piece]) => piece.controller === state.activeSeat)
-        .map(([cell]) => cell)
-      : Object.keys(state.board);
+    state.legalCells = Object.entries(state.board)
+      .filter(([, piece]) => piece.controller === state.activeSeat)
+      .map(([cell]) => cell);
     state.notice = level >= 3
       ? "Rage: choose a controlled piece to move up to one space."
       : "Choose the center of Rage.";
@@ -1763,12 +1837,17 @@ const activateAbility = (
   }
   if (abilityId === "march-home") {
     const king = Object.entries(state.board).find(([, piece]) =>
-      piece.controller === state.activeSeat && piece.type === "king"
+      piece.controller === state.activeSeat &&
+      piece.type === "king" &&
+      !piece.status.stunned
     );
     if (!king) return;
     state.pending.source = king[0];
     const companions = threePlayerAdjacentCells(state, king[0])
-      .filter((cell) => alliedPiece(state, state.board[cell]));
+      .filter((cell) => {
+        const companion = state.board[cell];
+        return alliedPiece(state, companion) && !companion.status.stunned;
+      });
     if (currentLevel(state, abilityId) === 1 || !companions.length) {
       state.pending.step = "confirm-march-home";
       state.notice = "Confirm March Home.";
@@ -1785,7 +1864,7 @@ const activateAbility = (
 
 const selectGod = (state: ThreePlayerState, godId: GodId) => {
   if (
-    ["snipe-shot", "harden-choice"].includes(
+    ["snipe-shot", "harden-choice", "stealth-return"].includes(
       state.pending?.abilityId ?? "",
     )
   ) return;
@@ -1822,7 +1901,6 @@ function commitGodCall(state: ThreePlayerState, godId: GodId) {
       delete piece.status.gazing;
     }
     if (godId === "salem") {
-      if (piece.status.poisoned === "god") delete piece.status.poisoned;
       if (piece.status.polymorphed === "god") {
         delete piece.status.polymorphed;
       }
@@ -1906,7 +1984,10 @@ const resolveMoveEffect = (
     if (captured) addOrbs(state, state.activeSeat, 0, level + 1, to);
   } else if (abilityId === "mount") {
     const riders = threePlayerOrthogonalCells(state, from)
-      .filter((cell) => alliedPiece(state, boardBefore?.[cell]));
+      .filter((cell) => {
+        const rider = boardBefore?.[cell];
+        return Boolean(alliedPiece(state, rider) && !rider?.status.stunned);
+      });
     const destinations = threePlayerOrthogonalCells(state, to)
       .filter((cell) => !state.board[cell]);
     if (riders.length && destinations.length) {
@@ -1984,10 +2065,21 @@ const resolveMoveEffect = (
   } else if (abilityId === "ritual-sacrifice") {
     state.board[to].status.ritual = {
       owner: state.activeSeat,
-      expires: level >= 2
-        ? "kangus"
-        : state.hostileTurns![state.activeSeat] + 1,
+      expires: "kangus",
+      level: level as 1 | 2 | 3,
     };
+    const adjacentBananas = threePlayerAdjacentCells(state, to)
+      .filter((cell) => state.bananas.some((banana) => banana.cell === cell))
+      .length;
+    if (adjacentBananas) {
+      addOrbs(
+        state,
+        state.activeSeat,
+        level >= 2 ? adjacentBananas : 1,
+        0,
+        to,
+      );
+    }
   } else if (abilityId === "banana-peel") {
     state.pending = {
       godId: state.selectedGod!,
@@ -1995,13 +2087,21 @@ const resolveMoveEffect = (
       step: "banana",
       movedPieceId: moving.id,
     };
-    state.legalCells = threePlayerOrthogonalCells(state, to)
+    state.legalCells = (
+      level >= 2
+        ? getTopologyCells(state).filter((cell) =>
+          threePlayerDistance(state, to, cell) <= 2
+        )
+        : threePlayerOrthogonalCells(state, to)
+    )
       .filter((cell) =>
         !state.board[cell] &&
         !state.bananas!.some((banana) => banana.cell === cell)
       );
     if (state.legalCells.length) {
-      state.notice = "Place the banana on an adjacent empty cell.";
+      state.notice = level >= 2
+        ? "Throw the banana to any empty cell within 2 spaces."
+        : "Place the banana on an orthogonally adjacent empty cell.";
       return "pending";
     }
   } else if (abilityId === "marked") {
@@ -2020,17 +2120,29 @@ const resolveMoveEffect = (
       return "pending";
     }
   } else if (abilityId === "siphon") {
-    const seats = hostileControllersAdjacentTo(state, to)
-      .filter((seat) => state.players[seat].orbs.light > 0);
-    if (seats.length) {
+    const adjacentTargets = threePlayerAdjacentCells(state, to)
+      .filter((cell) => {
+        const target = state.board[cell];
+        return hostilePiece(state, target) &&
+          target.controller &&
+          state.players[target.controller].orbs.light > 0;
+      });
+    if (adjacentTargets.length) {
       state.pending = {
         godId: state.selectedGod!,
         abilityId,
-        step: "siphon-seat",
+        step: level >= 2 ? "siphon-targets" : "siphon-seat",
         destination: to,
+        selected: [],
       };
-      state.legalSeats = seats;
-      state.notice = "Choose a hostile player to siphon.";
+      if (level >= 2) {
+        state.legalCells = adjacentTargets;
+        state.notice = `Choose up to ${level} adjacent hostile pieces. Each steals up to 2 light orbs.`;
+      } else {
+        state.legalSeats = hostileControllersAdjacentTo(state, to)
+          .filter((seat) => state.players[seat].orbs.light > 0);
+        state.notice = "Choose a hostile player to siphon.";
+      }
       return "pending";
     }
   } else if (abilityId === "royal-step") {
@@ -2070,16 +2182,17 @@ const resolveMoveEffect = (
   } else if (abilityId === "hex") {
     const hexed = Object.entries(state.board)
       .filter(([, piece]) => piece.status.hexedBy === state.activeSeat)
-      .slice(0, level);
+      .slice(0, Math.min(3, level + 1));
     const aligned = hexed.filter(([cell]) =>
-      threePlayerSharesTrace(state, cell, to, "rook")
+      threePlayerSharesTrace(state, cell, to, "rook") ||
+      (level >= 3 && threePlayerSharesTrace(state, cell, to, "bishop"))
     ).length;
     if (aligned) {
       addAffinityOrb(
         state,
         state.activeSeat,
         threePlayerCellAffinity(state, to),
-        aligned + 1,
+        aligned,
         to,
       );
     }
@@ -2195,13 +2308,20 @@ const executeEscort = (
     state.board[landing.to] = {
       ...landing.piece,
       hasMoved: true,
-      status: { ...landing.piece.status, movedThisTurn: true },
+      status: statusAfterMovement(landing.piece.status),
     };
   }
   if (plan.slippedOn) {
+    const banana = state.bananas.find((candidate) =>
+      candidate.cell === plan.slippedOn
+    );
     state.bananas = state.bananas.filter(
       (banana) => banana.cell !== plan.slippedOn,
     );
+    const movedKing = state.board[plan.kingDestination];
+    if ((banana?.level ?? 1) >= 3 && movedKing) {
+      movedKing.status.stunned = true;
+    }
   }
   mutatePosition(state);
   finishDivineTurn(
@@ -2259,7 +2379,7 @@ const executeMarchHome = (
     state.board[landing.to] = {
       ...landing.piece,
       hasMoved: true,
-      status: { ...landing.piece.status, movedThisTurn: true },
+      status: statusAfterMovement(landing.piece.status),
     };
   }
   mutatePosition(state);
@@ -2307,10 +2427,16 @@ const executeMovement = (
   }
   if (abilityId === "stealth") {
     delete state.board[from];
+    const stealthPiece = {
+      ...moving,
+      status: statusAfterMovement(moving.status),
+    };
     state.stealth![state.activeSeat].push({
-      piece: moving,
+      piece: stealthPiece,
+      source: from,
       destination: to,
       returnOnTurn: state.seatTurns![state.activeSeat] + 1,
+      level: currentLevel(state, abilityId) as 1 | 2 | 3,
     });
     mutatePosition(state);
     finishDivineTurn(
@@ -2337,7 +2463,7 @@ const executeMovement = (
     state,
     from,
     to,
-    abilityId === "air-lift",
+    abilityId === "air-lift" || abilityId === "pick-a-fight",
     state.selectedPath,
   );
   if (!result) {
@@ -2375,11 +2501,13 @@ const executeMovement = (
     return;
   }
   if (abilityId === "slither") {
-    const unlimited = currentLevel(state, abilityId) >= 3;
+    const level = currentLevel(state, abilityId);
+    const unlimited = moving.type === "queen" && level >= 3;
+    const totalMoves = moving.type === "queen" ? level + 1 : 2;
     const remaining = unlimited
       ? -1
       : (state.pending?.movesRemaining ??
-        currentLevel(state, abilityId) + 1) - 1;
+        totalMoves) - 1;
     if (unlimited || remaining > 0) {
       state.pending = {
         godId: state.selectedGod!,
@@ -2557,9 +2685,8 @@ const completeSpecialTarget = (
     state.bananas!.push({
       cell,
       owner: state.activeSeat,
-      expires: level === 1
-        ? state.hostileTurns![state.activeSeat] + 1
-        : level === 2 ? "kangus" : "god",
+      expires: "god",
+      level: level as 1 | 2 | 3,
     });
     finishDivineTurn(state, abilityDescription(state, ` on ${cell}`));
   } else if (pending.step === "hire") {
@@ -2639,30 +2766,60 @@ const completeSpecialTarget = (
   }
 };
 
-const airStrikePassengers = (
+const eligibleAirStrikePassengers = (
   state: ThreePlayerState,
   carrier: string,
 ) => {
-  const level = currentLevel(state, "air-strike");
   return threePlayerAdjacentCells(state, carrier).filter((cell) => {
     const piece = state.board[cell];
     return alliedPiece(state, piece) &&
-      (level >= 3
-        ? ["pawn", "knight", "bishop"].includes(piece.type)
-        : piece.type === "pawn") &&
+      ["pawn", "knight", "bishop"].includes(piece.type) &&
       !piece.status.hardened &&
       !piece.status.frozen &&
-      !piece.status.gazing;
+      !piece.status.gazing &&
+      !piece.status.stunned &&
+      !piece.status.movedThisTurn;
   });
 };
 
-const airStrikeDrops = (
+const airStrikeSecondPassengers = (
+  state: ThreePlayerState,
+  carrier: string,
+  firstCell: string,
+) => {
+  const first = state.board[firstCell];
+  if (!first || currentLevel(state, "air-strike") < 3) return [];
+  return eligibleAirStrikePassengers(state, carrier).filter((cell) => {
+    if (cell === firstCell) return false;
+    const second = state.board[cell];
+    return first.type === "pawn"
+      ? second?.type === "knight" || second?.type === "bishop"
+      : second?.type === "pawn";
+  });
+};
+
+const airStrikeCompletionExists = (
   state: ThreePlayerState,
   carrier: string,
   destination: string,
-  passenger: string,
+  passengerIds: string[],
   pathId?: string,
+  droppedPassengerIds: string[] = [],
+  captureUsed = false,
+  forcedPassengerId?: string,
+  forcedDrop?: string,
 ) => {
+  const dropped = new Set(droppedPassengerIds);
+  const remaining = passengerIds
+    .filter((id) => !dropped.has(id))
+    .map((id) => {
+      const cell = findCellById(state, id);
+      return cell ? { id, cell, piece: state.board[cell] } : undefined;
+    })
+    .filter((entry): entry is { id: string; cell: string; piece: ThreePlayerPiece } =>
+      Boolean(entry)
+    );
+  if (!remaining.length) return false;
   const crossed = threePlayerCrossedCells(
     state,
     carrier,
@@ -2674,42 +2831,120 @@ const airStrikeDrops = (
   const reachable = bananaIndex >= 0
     ? crossed.slice(0, bananaIndex)
     : crossed;
+  const simulated = clone(state);
+  for (const passenger of remaining) delete simulated.board[passenger.cell];
+  const moved = threePlayerApplyMove(simulated, { from: carrier, to: destination });
+  simulated.board = moved.board;
   const firstEnemy = currentLevel(state, "air-strike") >= 2
     ? reachable.find((cell) =>
-      hostilePiece(state, state.board[cell]) &&
-      state.board[cell].type !== "king"
+      hostilePiece(state, simulated.board[cell]) &&
+      simulated.board[cell].type !== "king"
     )
     : undefined;
-  return reachable.filter((cell) => {
-    const occupying = state.board[cell];
-    return !occupying || (
-      cell === firstEnemy &&
-      hostilePiece(state, occupying) &&
-      !occupying.status.hardened
-    );
-  }).filter((cell) => cell !== passenger);
+
+  const placeRemaining = (
+    boardState: ThreePlayerState,
+    passengers: typeof remaining,
+    usedCapture: boolean,
+    applyForcedChoice: boolean,
+  ): boolean => {
+    if (!passengers.length) return !threePlayerIsInCheck(boardState, state.activeSeat);
+    const choices = applyForcedChoice && forcedPassengerId
+      ? passengers.filter((passenger) => passenger.id === forcedPassengerId)
+      : passengers;
+    for (const passenger of choices) {
+      const later = passengers.filter((candidate) => candidate.id !== passenger.id);
+      const drops = applyForcedChoice && forcedDrop ? [forcedDrop] : reachable;
+      for (const drop of drops) {
+        const occupant = boardState.board[drop];
+        const captures = Boolean(occupant);
+        if (
+          occupant &&
+          (
+            usedCapture ||
+            drop !== firstEnemy ||
+            !hostilePiece(state, occupant) ||
+            occupant.type === "king" ||
+            occupant.status.hardened
+          )
+        ) continue;
+        const next = clone(boardState);
+        delete next.board[drop];
+        next.board[drop] = {
+          ...passenger.piece,
+          hasMoved: true,
+          status: statusAfterMovement(passenger.piece.status),
+        };
+        if (placeRemaining(next, later, usedCapture || captures, false)) return true;
+      }
+    }
+    return false;
+  };
+
+  return placeRemaining(simulated, remaining, captureUsed, true);
 };
+
+const airStrikeDrops = (
+  state: ThreePlayerState,
+  carrier: string,
+  destination: string,
+  passengerId: string,
+  pathId?: string,
+) => threePlayerCrossedCells(state, carrier, destination, pathId).filter((cell) =>
+  airStrikeCompletionExists(
+    state,
+    carrier,
+    destination,
+    state.pending?.passengerIds ?? [passengerId],
+    pathId,
+    state.pending?.droppedPassengerIds,
+    state.pending?.captureUsed,
+    passengerId,
+    cell,
+  )
+);
 
 const airStrikeDestinations = (
   state: ThreePlayerState,
   carrier: string,
-  passenger: string,
+  passengerCells: string[],
 ) => {
   const simulated = clone(state);
-  delete simulated.board[passenger];
+  for (const passenger of passengerCells) delete simulated.board[passenger];
+  const passengerIds = passengerCells
+    .map((cell) => state.board[cell]?.id)
+    .filter((id): id is string => Boolean(id));
   return threePlayerLegalTargets(simulated, carrier, {
     ignoreBlockers: true,
     noCapture: true,
   }).filter((cell) =>
     !simulated.board[cell] &&
     threePlayerTravelPaths(state, carrier, cell).some((path) =>
-      airStrikeDrops(
+      airStrikeCompletionExists(
         state,
         carrier,
         cell,
-        passenger,
+        passengerIds,
         path.traceId,
-      ).length > 0
+      )
+    )
+  );
+};
+
+const airStrikePassengers = (
+  state: ThreePlayerState,
+  carrier: string,
+) => {
+  const passengers = eligibleAirStrikePassengers(state, carrier);
+  if (currentLevel(state, "air-strike") < 3) {
+    return passengers.filter((cell) =>
+      state.board[cell]?.type === "pawn" &&
+      airStrikeDestinations(state, carrier, [cell]).length > 0
+    );
+  }
+  return passengers.filter((first) =>
+    airStrikeSecondPassengers(state, carrier, first).some((second) =>
+      airStrikeDestinations(state, carrier, [first, second]).length > 0
     )
   );
 };
@@ -2894,6 +3129,23 @@ const handleCell = (state: ThreePlayerState, cell: string) => {
     }
     return;
   }
+  if (state.pending?.abilityId === "stealth-return") {
+    if (!state.legalCells.includes(cell) || !state.pending.movedPieceId) return;
+    const returning = state.stealth[state.activeSeat]
+      .find((entry) => entry.piece.id === state.pending?.movedPieceId);
+    if (!returning) return;
+    placeStealthReturn(state, returning, cell);
+    state.pending = undefined;
+    state.legalCells = [];
+    if (
+      !queueStealthReturn(state) &&
+      !queueHardenChoice(state) &&
+      !queuePreparedShot(state)
+    ) {
+      state.notice = `${name(state, state.activeSeat)} to act. Choose a God.`;
+    }
+    return;
+  }
   if (state.pending?.abilityId === "snipe-shot") {
     if (
       state.pending.step === "snipe-source" &&
@@ -2907,14 +3159,36 @@ const handleCell = (state: ThreePlayerState, cell: string) => {
       state.selectedCell &&
       state.legalCells!.includes(cell)
     ) {
+      const prepared = state.board[state.selectedCell];
       captureAt(state, cell);
-      delete state.board[state.selectedCell]?.status.prepared;
+      if (prepared) {
+        delete prepared.status.prepared;
+        prepared.status.stunned = true;
+      }
       state.pending = undefined;
       state.selectedCell = undefined;
       state.legalCells = [];
       if (!queuePreparedShot(state)) {
         state.notice = `${name(state, state.activeSeat)} to act. Choose a God.`;
       }
+    }
+    return;
+  }
+  if (state.pending?.step === "siphon-targets") {
+    if (!state.legalCells.includes(cell) || !state.board[cell]) return;
+    const selected = [...(state.pending.selected ?? []), state.board[cell].id];
+    state.pending.selected = selected;
+    state.legalCells = state.legalCells.filter((candidate) => candidate !== cell);
+    if (selected.length >= currentLevel(state, "siphon")) {
+      let total = 0;
+      for (const piece of Object.values(state.board)) {
+        if (!selected.includes(piece.id) || !piece.controller) continue;
+        const stolen = Math.min(2, state.players[piece.controller].orbs.light);
+        addOrbs(state, piece.controller, -stolen, 0);
+        addOrbs(state, state.activeSeat, stolen, 0);
+        total += stolen;
+      }
+      finishDivineTurn(state, abilityDescription(state, `: stole ${total} light orbs`));
     }
     return;
   }
@@ -2929,27 +3203,59 @@ const handleCell = (state: ThreePlayerState, cell: string) => {
       pending.source &&
       state.legalCells!.includes(cell)
     ) {
+      const passenger = state.board[cell];
+      if (!passenger) return;
+      if (currentLevel(state, "air-strike") >= 3) {
+        state.pending = {
+          ...pending,
+          step: "air-strike-passenger-two",
+          passengerIds: [passenger.id],
+        };
+        state.legalCells = airStrikeSecondPassengers(state, pending.source, cell)
+          .filter((second) =>
+            airStrikeDestinations(state, pending.source!, [cell, second]).length > 0
+          );
+        return;
+      }
       state.pending = {
         ...pending,
         step: "air-strike-destination",
-        selected: [cell],
+        passengerIds: [passenger.id],
       };
-      state.legalCells = airStrikeDestinations(state, pending.source, cell);
+      state.legalCells = airStrikeDestinations(state, pending.source, [cell]);
+    } else if (
+      pending.step === "air-strike-passenger-two" &&
+      pending.source &&
+      pending.passengerIds?.[0] &&
+      state.legalCells.includes(cell)
+    ) {
+      const passenger = state.board[cell];
+      if (!passenger) return;
+      const passengerIds = [...pending.passengerIds, passenger.id];
+      const passengerCells = passengerIds
+        .map((id) => findCellById(state, id))
+        .filter((candidate): candidate is string => Boolean(candidate));
+      state.pending = {
+        ...pending,
+        step: "air-strike-destination",
+        passengerIds,
+      };
+      state.legalCells = airStrikeDestinations(state, pending.source, passengerCells);
     } else if (
       pending.step === "air-strike-destination" &&
       pending.source &&
-      pending.selected?.[0] &&
+      pending.passengerIds?.length &&
       state.legalCells!.includes(cell)
     ) {
       const paths = threePlayerTravelPaths(state, pending.source, cell)
         .filter((path) =>
-          airStrikeDrops(
+          airStrikeCompletionExists(
             state,
             pending.source!,
             cell,
-            pending.selected![0],
+            pending.passengerIds!,
             path.traceId,
-          ).length > 0
+          )
         );
       if (!paths.length) return;
       if (paths.length > 1) {
@@ -2961,27 +3267,69 @@ const handleCell = (state: ThreePlayerState, cell: string) => {
         state.legalPaths = paths.map((path) => path.traceId);
       } else {
         state.selectedPath = paths[0]?.traceId;
-        state.pending = {
-          ...pending,
-          step: "air-strike-drop",
-          destination: cell,
-        };
-        state.legalCells = airStrikeDrops(
-          state,
-          pending.source,
-          cell,
-          pending.selected[0],
-          state.selectedPath,
-        );
+        if (pending.passengerIds.length > 1) {
+          state.pending = {
+            ...pending,
+            step: "air-strike-drop-passenger",
+            destination: cell,
+            droppedPassengerIds: [],
+            dropCells: [],
+            captureUsed: false,
+          };
+          state.legalCells = pending.passengerIds
+            .map((id) => findCellById(state, id))
+            .filter((candidate): candidate is string => Boolean(candidate));
+        } else {
+          const passengerId = pending.passengerIds[0]!;
+          state.pending = {
+            ...pending,
+            step: "air-strike-drop",
+            destination: cell,
+            movedPieceId: passengerId,
+            droppedPassengerIds: [],
+            dropCells: [],
+            captureUsed: false,
+          };
+          state.legalCells = airStrikeDrops(
+            state,
+            pending.source,
+            cell,
+            passengerId,
+            state.selectedPath,
+          );
+        }
       }
+    } else if (
+      pending.step === "air-strike-drop-passenger" &&
+      pending.source &&
+      pending.destination &&
+      pending.passengerIds?.length &&
+      state.legalCells.includes(cell)
+    ) {
+      const passenger = state.board[cell];
+      if (!passenger || !pending.passengerIds.includes(passenger.id)) return;
+      state.pending = {
+        ...pending,
+        step: "air-strike-drop",
+        movedPieceId: passenger.id,
+      };
+      state.legalCells = airStrikeDrops(
+        state,
+        pending.source,
+        pending.destination,
+        passenger.id,
+        state.selectedPath,
+      );
     } else if (
       pending.step === "air-strike-drop" &&
       pending.source &&
       pending.destination &&
-      pending.selected?.[0] &&
+      pending.movedPieceId &&
+      pending.passengerIds?.length &&
       state.legalCells!.includes(cell)
     ) {
-      const passengerCell = pending.selected[0];
+      const passengerCell = findCellById(state, pending.movedPieceId);
+      if (!passengerCell) return;
       const passenger = state.board[passengerCell];
       if (!passenger) return;
       const allowedDrops = airStrikeDrops(
@@ -2992,7 +3340,37 @@ const handleCell = (state: ThreePlayerState, cell: string) => {
         state.selectedPath,
       );
       if (!allowedDrops.includes(cell)) return;
+      const captures = Boolean(state.board[cell]);
       delete state.board[passengerCell];
+      if (state.board[cell] && !captureAt(state, cell)) {
+        return;
+      }
+      state.board[cell] = {
+        ...passenger,
+        hasMoved: true,
+        status: statusAfterMovement(passenger.status),
+      };
+      const droppedPassengerIds = [
+        ...(pending.droppedPassengerIds ?? []),
+        passenger.id,
+      ];
+      const remainingPassengerIds = pending.passengerIds.filter(
+        (id) => !droppedPassengerIds.includes(id),
+      );
+      if (remainingPassengerIds.length) {
+        state.pending = {
+          ...pending,
+          step: "air-strike-drop-passenger",
+          movedPieceId: undefined,
+          droppedPassengerIds,
+          dropCells: [...(pending.dropCells ?? []), cell],
+          captureUsed: pending.captureUsed || captures,
+        };
+        state.legalCells = remainingPassengerIds
+          .map((id) => findCellById(state, id))
+          .filter((candidate): candidate is string => Boolean(candidate));
+        return;
+      }
       const result = moveDirect(
         state,
         pending.source,
@@ -3000,21 +3378,10 @@ const handleCell = (state: ThreePlayerState, cell: string) => {
         false,
         state.selectedPath,
       );
-      if (!result) {
-        state.board[passengerCell] = passenger;
-        return;
-      }
-      if (state.board[cell] && !captureAt(state, cell)) {
-        return;
-      }
-      state.board[cell] = {
-        ...passenger,
-        hasMoved: true,
-        status: { ...passenger.status, movedThisTurn: true },
-      };
+      if (!result) return;
       finishDivineTurn(
         state,
-        abilityDescription(state, `: dropped ${pieceName(passenger)} on ${cell}`),
+        abilityDescription(state, `: dropped ${droppedPassengerIds.length} passengers`),
       );
     }
     return;
@@ -3116,7 +3483,11 @@ const handleCell = (state: ThreePlayerState, cell: string) => {
     if (!riderCell) return;
     const rider = state.board[riderCell];
     delete state.board[riderCell];
-    state.board[cell] = { ...rider, hasMoved: true };
+    state.board[cell] = {
+      ...rider,
+      hasMoved: true,
+      status: statusAfterMovement(rider.status),
+    };
     const selected = [...(state.pending.selected ?? []), rider.id];
     if (selected.length >= currentLevel(state, "mount")) {
       finishDivineTurn(
@@ -3129,7 +3500,9 @@ const handleCell = (state: ThreePlayerState, cell: string) => {
         state.pending.source!,
       ).filter((candidate) => {
         const piece = state.board[candidate];
-        return alliedPiece(state, piece) && !selected.includes(piece.id);
+        return alliedPiece(state, piece) &&
+          !piece.status.stunned &&
+          !selected.includes(piece.id);
       });
       const placements = threePlayerOrthogonalCells(
         state,
@@ -3182,7 +3555,7 @@ const handleCell = (state: ThreePlayerState, cell: string) => {
       state.board[cell].id,
     ];
     state.pending.selected = selected;
-    if (selected.length >= currentLevel(state, "hex")) {
+    if (selected.length >= Math.min(3, currentLevel(state, "hex") + 1)) {
       completeQueuedHexMove(state);
     } else {
       state.legalCells = state.legalCells!.filter(
@@ -3278,7 +3651,10 @@ const handleCell = (state: ThreePlayerState, cell: string) => {
   if (!sourceIsAllowed(state, cell)) return;
   if (state.selectedAbility === "escort") {
     const companions = threePlayerAdjacentCells(state, cell)
-      .filter((target) => alliedPiece(state, state.board[target]));
+      .filter((target) => {
+        const companion = state.board[target];
+        return alliedPiece(state, companion) && !companion.status.stunned;
+      });
     if (!companions.length) return;
     state.pending = {
       ...state.pending,
@@ -3303,17 +3679,41 @@ const handlePath = (state: ThreePlayerState, pathId: string) => {
     state.pending?.step === "air-strike-path" &&
     state.pending.source &&
     state.pending.destination &&
-    state.pending.selected?.[0]
+    state.pending.passengerIds?.length
   ) {
-    state.pending.step = "air-strike-drop";
+    const passengerIds = state.pending.passengerIds;
+    const carrierSource = state.pending.source;
+    const carrierDestination = state.pending.destination;
     state.legalPaths = [];
-    state.legalCells = airStrikeDrops(
-      state,
-      state.pending.source,
-      state.pending.destination,
-      state.pending.selected[0],
-      pathId,
-    );
+    if (passengerIds.length > 1) {
+      state.pending = {
+        ...state.pending,
+        step: "air-strike-drop-passenger",
+        droppedPassengerIds: [],
+        dropCells: [],
+        captureUsed: false,
+      };
+      state.legalCells = passengerIds
+        .map((id) => findCellById(state, id))
+        .filter((candidate): candidate is string => Boolean(candidate));
+    } else {
+      const passengerId = passengerIds[0]!;
+      state.pending = {
+        ...state.pending,
+        step: "air-strike-drop",
+        movedPieceId: passengerId,
+        droppedPassengerIds: [],
+        dropCells: [],
+        captureUsed: false,
+      };
+      state.legalCells = airStrikeDrops(
+        state,
+        carrierSource,
+        carrierDestination,
+        passengerId,
+        pathId,
+      );
+    }
   } else if (
     state.pending?.step === "path-choice" &&
     state.pending.destination &&
@@ -3581,7 +3981,7 @@ const canPassAction = (state: ThreePlayerState) =>
   state.selectedAbility === "construction" ||
   state.selectedAbility === "marked" ||
   ["slither", "mount-rider", "funding", "march-companions",
-    "barter-orb"].includes(state.pending?.step ?? "") ||
+    "barter-orb", "siphon-targets"].includes(state.pending?.step ?? "") ||
   (
     state.pending?.step === "escort-companions" &&
     Boolean(state.pending.selected?.length)
@@ -3626,10 +4026,10 @@ const threePlayerMoveFirstConditionalOutcome = (
 ) => {
   if (abilityId === "ritual-sacrifice") {
     return level >= 3
-      ? "This Goad grants 0 now. If this piece is captured before Kangus next acts, gain 4 light and 4 dark orbs."
+      ? "Gain 1 light orb for each adjacent banana. If this piece is captured before Kangus next acts, gain 3 light and 3 dark orbs."
       : level >= 2
-        ? "This Goad grants 0 now. If this piece is captured before Kangus next acts, gain 3 light and 3 dark orbs."
-        : "This Goad grants 0 now. If this piece is captured before the next hostile turn ends, gain 3 light and 3 dark orbs.";
+        ? "Gain 1 light orb for each adjacent banana. If this piece is captured before Kangus next acts, gain 2 light and 2 dark orbs."
+        : "Gain 1 light orb if this piece is adjacent to a banana. If it is captured before Kangus next acts, gain 2 light and 2 dark orbs.";
   }
   if (abilityId === "marked") {
     if (movingKing) {
