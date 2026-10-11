@@ -14,6 +14,7 @@ import {
 } from "./fourPlayerTypes";
 import { GOD_BY_ID, GODS } from "./gods";
 import type { GodId } from "./types";
+import { isGodSkinSelections } from "../godSkins";
 
 const GOD_IDS = new Set(GODS.map((god) => god.id));
 const PIECE_TYPES = new Set(["king", "queen", "rook", "bishop", "knight", "pawn"]);
@@ -316,6 +317,7 @@ export const isFourPlayerState = (value: unknown): value is FourPlayerState => {
       typeof player.eliminated !== "boolean" ||
       (player.eliminatedBy !== undefined && !isSeat(player.eliminatedBy)) ||
       !isGodArray(player.gods) ||
+      (player.godSkins !== undefined && !isGodSkinSelections(player.godSkins, player.gods)) ||
       !isRecord(player.orbs) ||
       !isInteger(player.orbs.light) ||
       !isInteger(player.orbs.dark) ||
@@ -524,6 +526,9 @@ export const isFourPlayerState = (value: unknown): value is FourPlayerState => {
 export const prepareFourPlayerState = (state: FourPlayerState): FourPlayerState => {
   if (!isFourPlayerState(state)) throw new Error("Cannot serialize an invalid four-player state.");
   const prepared = structuredClone(state);
+  for (const seat of FOUR_PLAYER_SEATS) {
+    prepared.players[seat].godSkins ??= {};
+  }
   prepared.attackSequence ??= 0;
   prepared.orbAnimations ??= [];
   prepared.nextOrbAnimationId ??=

@@ -107,6 +107,7 @@ export interface PlayerState {
   name: string;
   color: Color;
   gods: GodId[];
+  godSkins?: GodSkinSelections;
   orbs: Record<OrbColor, number>;
   graveyard: GravePiece[];
   upgrades: Record<string, 1 | 2 | 3>;
@@ -283,3 +284,4 @@ export interface Move {
 }
 
 export const opposite = (color: Color): Color => (color === "white" ? "black" : "white");
+import type { GodSkinSelections } from "../godSkins";

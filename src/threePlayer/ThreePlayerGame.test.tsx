@@ -1147,6 +1147,7 @@ describe("ThreePlayerGame", () => {
     expect(onAction).toHaveBeenCalledWith({
       type: "draft",
       godId: GODS[Math.floor(GODS.length * 0.25)].id,
+      skinId: "base",
     });
     expect(screen.queryByRole("button", { name: /^quick draft$/i })).toBeNull();
     expect((screen.getByRole("button", {

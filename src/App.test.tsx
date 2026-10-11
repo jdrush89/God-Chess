@@ -460,6 +460,53 @@ describe("game startup", () => {
     expect(screen.getByRole("button", { name: /^start$/i })).toBeTruthy();
   });
 
+  it("browses skin unlocks in the roster and saves Salem's Chonk favorite", () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /^roster$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /salem/i }));
+
+    const chonk = screen.getByRole("button", { name: /^chonk unlocked$/i });
+    fireEvent.click(chonk);
+    expect(chonk.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: /set chonk as favorite/i }));
+    expect(JSON.parse(
+      window.localStorage.getItem("god-chess-favorite-skins-v1") ?? "{}",
+    )).toEqual({ salem: "chonk" });
+    expect(screen.getByRole("button", { name: /remove chonk as favorite/i })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /^ares/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^businessman locked$/i }));
+    expect(screen.getByText(/must be unlocked before it can be drafted/i)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /businessman as favorite/i })).toBeNull();
+  });
+
+  it("defaults drafts to a favorite skin, permits overrides, and blocks locked skins", () => {
+    window.localStorage.setItem(
+      "god-chess-favorite-skins-v1",
+      JSON.stringify({ salem: "chonk" }),
+    );
+    const { container } = render(<App />);
+    openPlayOption("Local");
+    fireEvent.click(screen.getByRole("button", { name: /^2 player$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /begin local duel/i }));
+
+    fireEvent.click(screen.getByRole("button", { name: /salem/i }));
+    expect(
+      screen.getByRole("button", { name: /^chonk unlocked$/i }).getAttribute("aria-pressed"),
+    ).toBe("true");
+
+    fireEvent.click(screen.getByRole("button", { name: /^base unlocked$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^claim salem$/i }));
+    expect(
+      container.querySelector<HTMLImageElement>(".draft-roster .god-portrait")?.src,
+    ).toMatch(/\/salem(?:-[A-Za-z0-9_-]+)?\.jpg$/);
+
+    fireEvent.click(screen.getByRole("button", { name: /^ares/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^businessman locked$/i }));
+    const lockedClaim = screen.getByRole("button", { name: /^ares skin locked$/i });
+    expect((lockedClaim as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it("routes Online player counts to Host/Join and Puzzles directly", () => {
     render(<App />);
     openPlayOption("Online");

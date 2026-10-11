@@ -25,6 +25,7 @@ import type {
   StealthMove,
   UpgradePreview,
 } from "./game/types";
+import { isGodSkinSelections } from "./godSkins";
 
 export const SAVE_KEY = "god-chess-saves-v2";
 export const LEGACY_SAVE_KEY = "god-chess-save-v1";
@@ -257,6 +258,7 @@ const isPlayerState = (
     "name",
     "color",
     "gods",
+    "godSkins",
     "orbs",
     "graveyard",
     "upgrades",
@@ -266,6 +268,7 @@ const isPlayerState = (
   value.color === color &&
   isGodArray(value.gods) &&
   value.gods.length <= 3 &&
+  (value.godSkins === undefined || isGodSkinSelections(value.godSkins, value.gods)) &&
   isRecord(value.orbs) &&
   hasOnlyKeys(value.orbs, COLORS) &&
   isInteger(value.orbs.white) &&
@@ -515,6 +518,10 @@ const isClassicResult = (
 
 export const prepareTwoPlayerState = (state: GameState) => {
   const savedState = structuredClone(state);
+  if (savedState.players?.white && savedState.players?.black) {
+    savedState.players.white.godSkins ??= {};
+    savedState.players.black.godSkins ??= {};
+  }
   savedState.orbAnimations = [];
   savedState.nextOrbAnimationId ??= 1;
   savedState.captureAnimations = [];

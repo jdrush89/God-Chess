@@ -1,35 +1,23 @@
 import type { ReactNode } from "react";
 import { AbilityRules } from "./UpgradePreview";
 import type { Ability, GodId } from "./game/types";
-
-const GOD_PORTRAITS: Record<GodId, string> = {
-  quetzacoatl: new URL("./assets/gods/quetzacoatl.jpg", import.meta.url).href,
-  chiron: new URL("./assets/gods/chiron.jpg", import.meta.url).href,
-  anubis: new URL("./assets/gods/anubis.jpg", import.meta.url).href,
-  teles: new URL("./assets/gods/teles.jpg", import.meta.url).href,
-  artemis: new URL("./assets/gods/artemis.jpg", import.meta.url).href,
-  kangus: new URL("./assets/gods/kangus.jpg", import.meta.url).href,
-  death: new URL("./assets/gods/death.jpg", import.meta.url).href,
-  leonidas: new URL("./assets/gods/leonidas.jpg", import.meta.url).href,
-  medusa: new URL("./assets/gods/medusa.jpg", import.meta.url).href,
-  salem: new URL("./assets/gods/salem.jpg", import.meta.url).href,
-  midas: new URL("./assets/gods/midas.jpg", import.meta.url).href,
-  ares: new URL("./assets/gods/ares.jpg", import.meta.url).href,
-};
+import { godSkin, type GodSkinId } from "./godSkins";
 
 export function GodPortrait({
   godId,
+  skinId = "base",
   className = "",
   alt = "",
 }: {
   godId: GodId;
+  skinId?: GodSkinId;
   className?: string;
   alt?: string;
 }) {
   return (
     <img
       className={`god-portrait ${className}`}
-      src={GOD_PORTRAITS[godId]}
+      src={godSkin(godId, skinId).src}
       alt={alt}
       decoding="async"
     />

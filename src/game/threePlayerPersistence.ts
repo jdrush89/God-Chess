@@ -17,6 +17,7 @@ import {
 } from "./threePlayerTypes";
 import { GODS } from "./gods";
 import type { GodId } from "./types";
+import { isGodSkinSelections } from "../godSkins";
 
 const GOD_IDS = new Set(GODS.map((god) => god.id));
 const ABILITY_IDS = new Set(
@@ -674,7 +675,7 @@ const isThreePlayerStateVersion = (value: unknown): boolean => {
           "graveyard",
           "upgrades",
         ],
-        ["eliminatedBy"],
+        ["eliminatedBy", "godSkins"],
       ) ||
       player.seat !== seat ||
       typeof player.name !== "string" ||
@@ -687,6 +688,7 @@ const isThreePlayerStateVersion = (value: unknown): boolean => {
           : player.eliminatedBy !== undefined
       ) ||
       !isGodArray(player.gods) ||
+      (player.godSkins !== undefined && !isGodSkinSelections(player.godSkins, player.gods)) ||
       !isRecord(player.orbs) ||
       !hasExactKeys(player.orbs, ["light", "dark"]) ||
       !isInteger(player.orbs.light) ||
@@ -1246,6 +1248,13 @@ export const prepareThreePlayerState = (value: unknown): ThreePlayerState => {
     prepared.nextOrbEventId = 1;
     prepared.presentationEvents = [];
     prepared.nextPresentationEventId = 1;
+  }
+  const preparedPlayers = prepared.players as Record<
+    ThreePlayerSeat,
+    Record<string, unknown>
+  >;
+  for (const seat of THREE_PLAYER_SEATS) {
+    preparedPlayers[seat].godSkins ??= {};
   }
   if (!isThreePlayerState(prepared)) {
     throw new Error("Cannot serialize an invalid three-player state.");

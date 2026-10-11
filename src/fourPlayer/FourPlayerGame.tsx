@@ -38,6 +38,16 @@ import {
 import { GameResultPresentation } from "../GameResultPresentation";
 import { MatchEscapeMenu } from "../MatchEscapeMenu";
 import { BoardViewport } from "../components/BoardViewport";
+import { GodPortrait } from "../PlayerGodPanel";
+import { GodSkinPicker } from "../GodSkinPicker";
+import {
+  draftedGodSkin,
+  favoriteGodSkin,
+  isGodSkinUnlocked,
+  loadFavoriteGodSkins,
+  type GodSkinId,
+  type GodSkinSelections,
+} from "../godSkins";
 import {
   recordActionTransition,
   recordDiagnostic,
@@ -110,21 +120,6 @@ const PIECE_NAMES: Record<PieceType, string> = {
   bishop: "Bishop",
   knight: "Knight",
   pawn: "Pawn",
-};
-
-const GOD_PORTRAITS: Record<GodId, string> = {
-  quetzacoatl: new URL("../assets/gods/quetzacoatl.jpg", import.meta.url).href,
-  chiron: new URL("../assets/gods/chiron.jpg", import.meta.url).href,
-  anubis: new URL("../assets/gods/anubis.jpg", import.meta.url).href,
-  teles: new URL("../assets/gods/teles.jpg", import.meta.url).href,
-  artemis: new URL("../assets/gods/artemis.jpg", import.meta.url).href,
-  kangus: new URL("../assets/gods/kangus.jpg", import.meta.url).href,
-  death: new URL("../assets/gods/death.jpg", import.meta.url).href,
-  leonidas: new URL("../assets/gods/leonidas.jpg", import.meta.url).href,
-  medusa: new URL("../assets/gods/medusa.jpg", import.meta.url).href,
-  salem: new URL("../assets/gods/salem.jpg", import.meta.url).href,
-  midas: new URL("../assets/gods/midas.jpg", import.meta.url).href,
-  ares: new URL("../assets/gods/ares.jpg", import.meta.url).href,
 };
 
 const STATUS_MARKERS: {
@@ -204,18 +199,13 @@ function Brand() {
   );
 }
 
-function GodPortrait({ godId, className = "" }: { godId: GodId; className?: string }) {
-  return (
-    <img
-      className={`god-portrait ${className}`}
-      src={GOD_PORTRAITS[godId]}
-      alt=""
-      decoding="async"
-    />
-  );
-}
-
-function GodSigil({ godId }: { godId: GodId }) {
+function GodSigil({
+  godId,
+  skinId = "base",
+}: {
+  godId: GodId;
+  skinId?: GodSkinId;
+}) {
   const god = GOD_BY_ID[godId];
   return (
     <span
@@ -223,7 +213,7 @@ function GodSigil({ godId }: { godId: GodId }) {
       style={{ "--accent": god.accent } as React.CSSProperties}
       aria-hidden="true"
     >
-      <GodPortrait godId={godId} />
+      <GodPortrait godId={godId} skinId={skinId} />
     </span>
   );
 }
@@ -317,11 +307,17 @@ function FourPlayerDraft({
 }) {
   const [inspected, setInspected] = useState<GodId>(state.draft.available[0]);
   const [godPreviewLevel, setGodPreviewLevel] = useState<number>();
+  const [favorites] = useState<GodSkinSelections>(loadFavoriteGodSkins);
+  const [selectedSkinId, setSelectedSkinId] = useState<GodSkinId>(() =>
+    favoriteGodSkin(favorites, state.draft.available[0])
+  );
   const activePlayer = state.players[state.activeSeat];
   const currentGod = GOD_BY_ID[inspected];
+  const selectedSkinUnlocked = isGodSkinUnlocked(inspected, selectedSkinId);
 
   useEffect(() => {
     setGodPreviewLevel(undefined);
+    setSelectedSkinId(favoriteGodSkin(favorites, inspected));
   }, [inspected]);
 
   return (
@@ -358,7 +354,13 @@ function FourPlayerDraft({
               disabled={inputDisabled || !state.draft.available.length}
               onClick={() => {
                 const godId = randomItem(state.draft.available);
-                if (godId) dispatch({ type: "draft", godId });
+                if (godId) {
+                  dispatch({
+                    type: "draft",
+                    godId,
+                    skinId: favoriteGodSkin(favorites, godId),
+                  });
+                }
               }}
             >
               Auto-pick a God
@@ -394,6 +396,9 @@ function FourPlayerDraft({
             const owner = FOUR_PLAYER_SEATS.find((seat) =>
               state.players[seat].gods.includes(god.id)
             );
+            const skinId = owner
+              ? draftedGodSkin(state.players[owner].godSkins, god.id)
+              : favoriteGodSkin(favorites, god.id);
             return (
               <button
                 className={`draft-card ${inspected === god.id ? "inspected" : ""} ${owner ? "claimed" : ""}`}
@@ -401,7 +406,7 @@ function FourPlayerDraft({
                 onClick={() => setInspected(god.id)}
                 style={{ "--accent": god.accent } as React.CSSProperties}
               >
-                <GodPortrait godId={god.id} className="god-card-portrait" />
+                <GodPortrait godId={god.id} skinId={skinId} className="god-card-portrait" />
                 <span className="draft-card-copy">
                   <strong>{god.name}</strong>
                   <small>{god.domain}</small>
@@ -421,7 +426,11 @@ function FourPlayerDraft({
 
         <aside className="god-inspector" style={{ "--accent": currentGod.accent } as React.CSSProperties}>
           <div className="inspector-heading">
-            <GodPortrait godId={currentGod.id} className="god-hero-portrait" />
+            <GodPortrait
+              godId={currentGod.id}
+              skinId={selectedSkinId}
+              className="god-hero-portrait"
+            />
             <div>
               <p>{currentGod.domain}</p>
               <h2>{currentGod.name}</h2>
@@ -457,16 +466,28 @@ function FourPlayerDraft({
               </div>
             ))}
           </div>
+          <GodSkinPicker
+            godId={currentGod.id}
+            selectedSkinId={selectedSkinId}
+            onSelect={setSelectedSkinId}
+          />
           <button
             className="primary-button"
-            onClick={() => dispatch({ type: "draft", godId: currentGod.id })}
+            onClick={() => dispatch({
+              type: "draft",
+              godId: currentGod.id,
+              skinId: selectedSkinId,
+            })}
             disabled={
               inputDisabled ||
               activePlayer.control.kind === "ai" ||
-              !state.draft.available.includes(currentGod.id)
+              !state.draft.available.includes(currentGod.id) ||
+              !selectedSkinUnlocked
             }
           >
-            Claim {currentGod.name}
+            {selectedSkinUnlocked
+              ? `Claim ${currentGod.name}`
+              : `${currentGod.name} skin locked`}
           </button>
         </aside>
       </section>
@@ -483,7 +504,13 @@ function FourPlayerDraft({
             <strong>{state.players[seat].name}</strong>
             <small>{seatName(seat)}</small>
             <div>
-              {state.players[seat].gods.map((godId) => <GodSigil godId={godId} key={godId} />)}
+              {state.players[seat].gods.map((godId) => (
+                <GodSigil
+                  godId={godId}
+                  skinId={draftedGodSkin(state.players[seat].godSkins, godId)}
+                  key={godId}
+                />
+              ))}
               {Array.from({ length: 3 - state.players[seat].gods.length }).map((_, index) => (
                 <i className="empty-sigil" key={index} />
               ))}
@@ -587,7 +614,10 @@ function FourPlayerPanel({
             title={`${GOD_BY_ID[godId].name}${state.rested.includes(godId) ? " · resting" : ""}`}
             key={godId}
           >
-            <GodSigil godId={godId} />
+            <GodSigil
+              godId={godId}
+              skinId={draftedGodSkin(player.godSkins, godId)}
+            />
           </button>
         ))}
       </div>
@@ -795,7 +825,13 @@ function FourPlayerMoveFirstChooser({
                 aria-label={`${god.name} ${ability.name}: ${candidate.immediateOrbDelta.light} light orbs now and ${candidate.immediateOrbDelta.dark} dark orbs now`}
               >
                 <div className="four-move-first-title">
-                  <GodPortrait godId={god.id} />
+                  <GodPortrait
+                    godId={god.id}
+                    skinId={draftedGodSkin(
+                      state.players[state.activeSeat].godSkins,
+                      god.id,
+                    )}
+                  />
                   <span>
                     <small>{god.name} · FIRST ABILITY · LEVEL {level}</small>
                     <strong>{ability.name}</strong>
@@ -1156,7 +1192,10 @@ function FourActionPanel({
             return (
               <section key={godId}>
                 <div className="four-panel-god-heading">
-                  <GodPortrait godId={godId} />
+                  <GodPortrait
+                    godId={godId}
+                    skinId={draftedGodSkin(active.godSkins, godId)}
+                  />
                   <strong>{upgradeGod.name}</strong>
                   <small>{upgradeGod.domain}</small>
                 </div>
@@ -1253,7 +1292,11 @@ function FourActionPanel({
                     style={{ "--accent": item.accent } as React.CSSProperties}
                     key={godId}
                   >
-                    <GodPortrait godId={godId} className="god-row-portrait" />
+                    <GodPortrait
+                      godId={godId}
+                      skinId={draftedGodSkin(active.godSkins, godId)}
+                      className="god-row-portrait"
+                    />
                     <span className="god-row-copy">
                       <strong>{item.name}</strong>
                       <small>{resting ? "RESTING · VIEW" : item.domain}</small>
@@ -1270,7 +1313,11 @@ function FourActionPanel({
             className="chosen-god"
             style={{ "--accent": god.accent } as React.CSSProperties}
           >
-            <GodPortrait godId={god.id} className="god-hero-portrait" />
+            <GodPortrait
+              godId={god.id}
+              skinId={draftedGodSkin(owner.godSkins, god.id)}
+              className="god-hero-portrait"
+            />
             <div><span>{god.domain}</span><h3>{god.name}</h3><p>{god.epithet}</p></div>
             <button
               className="god-back-button"
@@ -1794,11 +1841,16 @@ export function FourPlayerGame({
     aiPlan.current = [];
     aiActionsThisTurn.current = 0;
     setAiWorking(false);
+    const favorites = loadFavoriteGodSkins();
     try {
       while (stateRef.current.phase === "draft") {
         const godId = randomItem(stateRef.current.draft.available);
         if (!godId) break;
-        if (!applyAction({ type: "draft", godId })) break;
+        if (!applyAction({
+          type: "draft",
+          godId,
+          skinId: favoriteGodSkin(favorites, godId),
+        })) break;
       }
     } finally {
       quickDraftPending.current = false;

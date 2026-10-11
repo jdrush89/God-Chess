@@ -5,6 +5,7 @@ import type {
   PieceType,
   Square,
 } from "./types";
+import type { GodSkinId, GodSkinSelections } from "../godSkins";
 
 export const FOUR_PLAYER_SEATS = ["north", "east", "south", "west"] as const;
 export type Seat = (typeof FOUR_PLAYER_SEATS)[number];
@@ -82,6 +83,7 @@ export interface FourPlayerSeatState {
   eliminated: boolean;
   eliminatedBy?: Seat;
   gods: GodId[];
+  godSkins?: GodSkinSelections;
   orbs: Record<OrbAffinity, number>;
   graveyard: FourPlayerGravePiece[];
   upgrades: Record<string, 1 | 2 | 3>;
@@ -213,7 +215,7 @@ export type FourPlayerMoveFirstCandidate = MoveFirstCandidate<
 >;
 
 export type FourPlayerAction =
-  | { type: "draft"; godId: GodId }
+  | { type: "draft"; godId: GodId; skinId?: GodSkinId }
   | { type: "select-god"; godId: GodId }
   | { type: "clear-god" }
   | { type: "select-ability"; abilityId: string }

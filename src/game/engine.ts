@@ -35,10 +35,15 @@ import type {
   Square,
 } from "./types";
 import { opposite } from "./types";
+import {
+  isGodSkinFor,
+  isGodSkinUnlocked,
+  type GodSkinId,
+} from "../godSkins";
 
 export type GameAction =
-  | { type: "draft"; godId: GodId }
-  | { type: "auto-draft"; godId: GodId }
+  | { type: "draft"; godId: GodId; skinId?: GodSkinId }
+  | { type: "auto-draft"; godId: GodId; skinId?: GodSkinId }
   | { type: "load-game"; state: GameState }
   | { type: "select-god"; godId: GodId }
   | { type: "clear-god" }
@@ -207,6 +212,7 @@ export const createGame = (
       name: whiteName,
       color: "white",
       gods: [],
+      godSkins: {},
       orbs: { white: 0, black: 0 },
       graveyard: [],
       upgrades: {},
@@ -215,6 +221,7 @@ export const createGame = (
       name: blackName,
       color: "black",
       gods: [],
+      godSkins: {},
       orbs: { white: 0, black: 0 },
       graveyard: [],
       upgrades: {},
@@ -2853,10 +2860,13 @@ const selectGod = (state: GameState, godId: GodId) => {
   state.notice = `${GOD_BY_ID[godId].name} answers. Choose an ability.`;
 };
 
-const draftGod = (state: GameState, godId: GodId) => {
+const draftGod = (state: GameState, godId: GodId, skinId: GodSkinId = "base") => {
   if (!state.draft.available.includes(godId)) return;
+  if (!isGodSkinFor(godId, skinId) || !isGodSkinUnlocked(godId, skinId)) return;
   const color = state.draft.order[state.draft.pickIndex];
   state.players[color].gods.push(godId);
+  state.players[color].godSkins ??= {};
+  state.players[color].godSkins[godId] = skinId;
   state.draft.available = state.draft.available.filter((id) => id !== godId);
   log(state, `${colorName(color)} drafted ${GOD_BY_ID[godId].name}.`);
   state.draft.pickIndex += 1;
@@ -3450,8 +3460,12 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
   next.captureAnimations ??= [];
   next.nextCaptureAnimationId ??= 1;
   next.nextPresentationId ??= 1;
-  if (action.type === "draft" && next.phase === "draft") draftGod(next, action.godId);
-  else if (action.type === "auto-draft" && next.phase === "draft") draftGod(next, action.godId);
+  if (action.type === "draft" && next.phase === "draft") {
+    draftGod(next, action.godId, action.skinId);
+  }
+  else if (action.type === "auto-draft" && next.phase === "draft") {
+    draftGod(next, action.godId, action.skinId);
+  }
   else if (action.type === "commit-move-first" && next.phase === "play") {
     if (!applyMoveFirstCommit(next, action)) return state;
   }

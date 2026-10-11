@@ -42,6 +42,11 @@ import {
   type OrbAffinity,
   type Seat,
 } from "./fourPlayerTypes";
+import {
+  isGodSkinFor,
+  isGodSkinUnlocked,
+  type GodSkinId,
+} from "../godSkins";
 import { isFourPlayerState } from "./fourPlayerPersistence";
 import { abilityLevel, GOD_BY_ID, GODS } from "./gods";
 import { hasCompleteTurn } from "./completeTurnSearch";
@@ -721,6 +726,7 @@ export const createFourPlayerGame = (
       control: structuredClone(config.seats[seat].control),
       eliminated: false,
       gods: [],
+      godSkins: {},
       orbs: { light: 0, dark: 0 },
       graveyard: [],
       upgrades: {},
@@ -3265,10 +3271,17 @@ export const fourPlayerMoveFirstCandidates = (
     });
 };
 
-const draftGod = (state: FourPlayerState, godId: GodId) => {
+const draftGod = (
+  state: FourPlayerState,
+  godId: GodId,
+  skinId: GodSkinId = "base",
+) => {
   if (!state.draft.available.includes(godId)) return;
+  if (!isGodSkinFor(godId, skinId) || !isGodSkinUnlocked(godId, skinId)) return;
   const seat = state.draft.order[state.draft.pickIndex];
   state.players[seat].gods.push(godId);
+  state.players[seat].godSkins ??= {};
+  state.players[seat].godSkins[godId] = skinId;
   state.draft.available = state.draft.available.filter((candidate) => candidate !== godId);
   state.draft.pickIndex += 1;
   if (state.draft.pickIndex >= state.draft.order.length) {
@@ -3630,7 +3643,7 @@ const reduceFourPlayerState = (
   next.nextOrbAnimationId ??=
     Math.max(0, ...next.orbAnimations.map((event) => event.id)) + 1;
   if (action.type === "draft" && next.phase === "draft") {
-    draftGod(next, action.godId);
+    draftGod(next, action.godId, action.skinId);
   } else if (
     action.type === "commit-move-first" &&
     next.phase === "play"

@@ -124,6 +124,20 @@ describe("versioned multiplayer protocol", () => {
     expect(normalizeProtocolMessage(message)).toEqual(message);
   });
 
+  it("normalizes unlocked classic draft skins and rejects locked ones", () => {
+    const unlocked = createProtocolMessage("classic", "peer", {
+      type: "game_action",
+      action: { type: "draft", godId: "salem", skinId: "chonk" },
+    });
+    expect(normalizeProtocolMessage(unlocked)).toEqual(unlocked);
+
+    const locked = createProtocolMessage("classic", "peer", {
+      type: "game_action",
+      action: { type: "draft", godId: "anubis", skinId: "tightrope" },
+    });
+    expect(normalizeProtocolMessage(locked)).toBeUndefined();
+  });
+
   it("round-trips only fully bound classic move-first commits", () => {
     const action = {
       type: "commit-move-first" as const,
