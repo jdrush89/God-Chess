@@ -849,14 +849,30 @@ span.move-target-dot {
   position: absolute; z-index: 2; right: 16px; bottom: 13px;
   color: rgba(227,218,197,.55); font-size: 8px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
 }
-.main-account-button {
+.main-account-area {
   position: absolute; z-index: 3; top: 16px; right: 16px;
+  display: flex; flex-direction: column; align-items: flex-end;
+}
+.main-account-button {
   min-height: 36px; display: inline-flex; align-items: center; gap: 8px; padding: 0 13px;
   color: #ddd6c7; background: rgba(7,9,13,.86); border: 1px solid rgba(218,181,105,.34);
   font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; cursor: pointer;
   backdrop-filter: blur(8px);
 }
 .main-account-button:hover { color: #fff2cf; border-color: var(--gold); }
+.main-account-button:disabled { cursor: wait; opacity: .72; }
+.main-account-menu {
+  width: 170px; margin-top: 7px; padding: 5px;
+  background: rgba(9,11,16,.96); border: 1px solid rgba(218,181,105,.34);
+  box-shadow: 0 18px 40px rgba(0,0,0,.42); backdrop-filter: blur(10px);
+}
+.main-account-menu button {
+  width: 100%; min-height: 36px; display: flex; align-items: center; gap: 9px; padding: 0 10px;
+  color: #c9c4b8; background: transparent; border: 0; font-size: 9px; font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase; cursor: pointer; text-align: left;
+}
+.main-account-menu button:hover { color: #fff2cf; background: rgba(198,161,91,.1); }
+.main-account-menu button:disabled { cursor: wait; opacity: .55; }
 .main-menu-shade {
   position: absolute; inset: 0;
   background:

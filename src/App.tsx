@@ -17,8 +17,10 @@ import {
   History,
   Info,
   LoaderCircle,
+  LogOut,
   Magnet,
   Menu,
+  Pencil,
   Coins,
   Rabbit,
   RotateCcw,
@@ -674,7 +676,7 @@ function RosterScreen({ onBack }: { onBack: () => void }) {
         <div className="header-actions">
           <button onClick={onBack}>
             <ArrowLeft size={18} />
-            <span>Back to title</span>
+            <span>Back to play</span>
           </button>
         </div>
       </header>
@@ -1760,7 +1762,6 @@ function MainMenu({
   accountWorking,
   accountError,
   onStart,
-  onOpenRoster,
   onSignIn,
   onSignUp,
   onSignOut,
@@ -1773,13 +1774,41 @@ function MainMenu({
   accountWorking: boolean;
   accountError?: string;
   onStart: () => void;
-  onOpenRoster: () => void;
   onSignIn: (email: string, password: string) => Promise<string>;
   onSignUp: (email: string, password: string, displayName: string) => Promise<string>;
   onSignOut: () => Promise<void>;
   onUpdateDisplayName: (displayName: string) => Promise<string>;
 }) {
-  const [accountOpen, setAccountOpen] = useState(false);
+  const [accountModalMode, setAccountModalMode] = useState<"auth" | "name">();
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (!account) {
+      setAccountMenuOpen(false);
+      return;
+    }
+    if (account.needsDisplayName) {
+      setAccountModalMode("name");
+    } else if (accountModalMode === "auth") {
+      setAccountModalMode(undefined);
+    }
+  }, [account, accountModalMode]);
+
+  const signOut = async () => {
+    setAccountMenuOpen(false);
+    try {
+      await onSignOut();
+    } catch (error) {
+      console.error("God Chess sign-out failed.", error);
+    }
+  };
+
+  const updateDisplayName = async (displayName: string) => {
+    const message = await onUpdateDisplayName(displayName);
+    setAccountModalMode(undefined);
+    return message;
+  };
+
   return (
     <section className="main-menu-screen">
       <img
@@ -1796,33 +1825,58 @@ function MainMenu({
       />
       <div className="main-menu-shade" />
       <span className="game-version">Version {GAME_VERSION}</span>
-      <button className="main-account-button" onClick={() => setAccountOpen(true)}>
-        <UserRound size={16} />
-        {accountLoading ? "Account" : account?.displayName ?? "Sign in"}
-      </button>
+      <div className="main-account-area">
+        <button
+          className="main-account-button"
+          disabled={accountLoading}
+          aria-haspopup={account ? "menu" : "dialog"}
+          aria-expanded={account ? accountMenuOpen : undefined}
+          onClick={() => {
+            if (account) setAccountMenuOpen((open) => !open);
+            else setAccountModalMode("auth");
+          }}
+        >
+          <UserRound size={16} />
+          {accountLoading ? "Account" : account?.displayName ?? "Sign in"}
+        </button>
+        {account && accountMenuOpen && (
+          <div className="main-account-menu" role="menu" aria-label="Account options">
+            <button
+              role="menuitem"
+              onClick={() => {
+                setAccountMenuOpen(false);
+                setAccountModalMode("name");
+              }}
+            >
+              <Pencil size={15} />
+              Change name
+            </button>
+            <button role="menuitem" disabled={accountWorking} onClick={() => void signOut()}>
+              <LogOut size={15} />
+              Sign out
+            </button>
+          </div>
+        )}
+      </div>
       <div className="main-menu-actions">
         <p className="eyebrow">THE DIVINE GAME</p>
         <button className="primary-button main-start-button" onClick={onStart}>
           Start
         </button>
-        <button className="secondary-button main-roster-button" onClick={onOpenRoster}>
-          <BookOpen size={17} />
-          Roster
-        </button>
         {saveError && <p className="main-menu-error" role="alert">{saveError}</p>}
       </div>
-      {accountOpen && (
+      {accountModalMode && (
         <AccountModal
           account={account}
           configured={accountConfigured}
           loading={accountLoading}
           working={accountWorking}
           serviceError={accountError}
-          onClose={() => setAccountOpen(false)}
+          onClose={() => setAccountModalMode(undefined)}
           onSignIn={onSignIn}
           onSignUp={onSignUp}
           onSignOut={onSignOut}
-          onUpdateDisplayName={onUpdateDisplayName}
+          onUpdateDisplayName={updateDisplayName}
         />
       )}
     </section>
@@ -1839,6 +1893,7 @@ function PlayMenu({
   onOpenOnline,
   onOpenPuzzles,
   onOpenTutorial,
+  onOpenRoster,
   onOpenLoad,
 }: {
   savedGames: SavedGame[];
@@ -1850,6 +1905,7 @@ function PlayMenu({
   onOpenOnline: () => void;
   onOpenPuzzles: () => void;
   onOpenTutorial: () => void;
+  onOpenRoster: () => void;
   onOpenLoad: () => void;
 }) {
   const loadDescription = savesLoading
@@ -1862,7 +1918,7 @@ function PlayMenu({
       <div className="play-menu-heading">
         <p className="eyebrow">PLAY</p>
         <h1>Choose your path.</h1>
-        <p>Learn the game, begin a match, meet online, solve a puzzle, or continue a saved game.</p>
+        <p>Learn the game, browse the divine roster, begin a match, solve a puzzle, or continue a saved game.</p>
       </div>
       <div className="play-menu-grid" role="group" aria-label="Play options">
         <button onClick={onOpenLocal}>
@@ -1880,6 +1936,10 @@ function PlayMenu({
         <button onClick={onOpenTutorial}>
           <GraduationCap size={30} />
           <strong>Tutorial</strong>
+        </button>
+        <button onClick={onOpenRoster}>
+          <BookOpen size={30} />
+          <strong>Roster</strong>
         </button>
         <button
           onClick={onOpenLoad}
@@ -4584,7 +4644,6 @@ export default function App() {
         accountWorking={accountService.working}
         accountError={accountService.error}
         onStart={() => setStartView("play")}
-        onOpenRoster={() => setStartView("roster")}
         onSignIn={accountService.signIn}
         onSignUp={accountService.signUp}
         onSignOut={accountService.signOut}
@@ -4594,7 +4653,7 @@ export default function App() {
   }
 
   if (startView === "roster") {
-    return <RosterScreen onBack={() => setStartView("menu")} />;
+    return <RosterScreen onBack={() => setStartView("play")} />;
   }
 
   if (startView === "play") {
@@ -4609,6 +4668,7 @@ export default function App() {
         onOpenOnline={() => openStartFlow("online", undefined, "play")}
         onOpenPuzzles={() => setStartView("puzzles")}
         onOpenTutorial={() => setStartView("tutorial")}
+        onOpenRoster={() => setStartView("roster")}
         onOpenLoad={() => setStartView("load")}
       />
     );
