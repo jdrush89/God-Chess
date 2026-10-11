@@ -40,6 +40,10 @@ import {
   threePlayerTravelPaths,
 } from "./threePlayerDivineGeometry";
 import { prepareThreePlayerState } from "./threePlayerPersistence";
+import {
+  isGodSkinFor,
+  isGodSkinUnlocked,
+} from "../godSkins";
 import { getThreePlayerTopology } from "./threePlayerTopology";
 import {
   THREE_PLAYER_SEATS,
@@ -738,6 +742,7 @@ export const createThreePlayerGame = (
     control: clone(config.seats[seat].control),
     eliminated: false,
     gods: [],
+    godSkins: {},
     orbs: { light: 0, dark: 0 },
     graveyard: [],
     upgrades: {},
@@ -793,12 +798,16 @@ export const createThreePlayerGame = (
 
 const reduceDraft = (
   state: ThreePlayerState,
-  godId: Extract<ThreePlayerAction, { type: "draft" }>["godId"],
+  action: Extract<ThreePlayerAction, { type: "draft" }>,
 ) => {
+  const { godId, skinId = "base" } = action;
   if (!state.draft.available.includes(godId)) return false;
+  if (!isGodSkinFor(godId, skinId) || !isGodSkinUnlocked(godId, skinId)) return false;
   const seat = state.draft.order[state.draft.pickIndex];
   if (seat !== state.activeSeat) return false;
   state.players[seat].gods.push(godId);
+  state.players[seat].godSkins ??= {};
+  state.players[seat].godSkins[godId] = skinId;
   state.draft.available = state.draft.available.filter(
     (available) => available !== godId,
   );
@@ -4343,7 +4352,7 @@ export const threePlayerReducer = (
   const boardBefore = JSON.stringify(state.board);
   const actorTurns = state.completedTurns[actor];
   if (action.type === "draft" && next.phase === "draft") {
-    reduceDraft(next, action.godId);
+    reduceDraft(next, action);
   } else if (
     action.type === "commit-move-first" &&
     next.phase === "play"

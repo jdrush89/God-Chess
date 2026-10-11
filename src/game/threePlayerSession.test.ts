@@ -31,6 +31,16 @@ describe("three-player session boundaries", () => {
     })).toEqual({ type: "draft", godId: GODS[0].id });
     expect(normalizeThreePlayerAction({
       type: "draft",
+      godId: "salem",
+      skinId: "chonk",
+    })).toEqual({ type: "draft", godId: "salem", skinId: "chonk" });
+    expect(normalizeThreePlayerAction({
+      type: "draft",
+      godId: "anubis",
+      skinId: "tightrope",
+    })).toBeUndefined();
+    expect(normalizeThreePlayerAction({
+      type: "draft",
       godId: GODS[0].id,
       extra: true,
     })).toBeUndefined();
@@ -325,6 +335,15 @@ describe("three-player session boundaries", () => {
       state.players.white.gods = [godId, remaining[0], remaining[1]];
       state.players.red.gods = remaining.slice(2, 5);
       state.players.black.gods = remaining.slice(5, 8);
+      state.players.white.godSkins = Object.fromEntries(
+        state.players.white.gods.map((id) => [id, "base"]),
+      );
+      state.players.red.godSkins = Object.fromEntries(
+        state.players.red.gods.map((id) => [id, "base"]),
+      );
+      state.players.black.godSkins = Object.fromEntries(
+        state.players.black.gods.map((id) => [id, "base"]),
+      );
       state.draft.unused = remaining.slice(8);
       state.activeSeat = "white";
     };

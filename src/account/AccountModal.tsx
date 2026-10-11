@@ -80,14 +80,14 @@ export function AccountModal({
         ) : account ? (
           <>
             <UserRound className="account-hero-icon" size={32} />
-            <h2>{account.displayName}</h2>
+            <h2>{account.needsDisplayName ? "Choose a display name" : account.displayName}</h2>
             <p className="account-email">{account.email}</p>
             <form className="account-form" onSubmit={(event) => {
               event.preventDefault();
               void run(() => onUpdateDisplayName(displayName));
             }}>
               <label>
-                Saved display name
+                {account.needsDisplayName ? "Display name" : "Saved display name"}
                 <input
                   maxLength={24}
                   value={displayName}
@@ -97,7 +97,7 @@ export function AccountModal({
               </label>
               <button className="primary-button" disabled={working || !displayName.trim()}>
                 {working ? <LoaderCircle className="spin" size={17} /> : <UserRound size={17} />}
-                Save name
+                {account.needsDisplayName ? "Save display name" : "Save name"}
               </button>
             </form>
             <button className="secondary-button account-signout" disabled={working} onClick={() => void run(onSignOut)}>

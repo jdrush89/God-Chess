@@ -17,8 +17,10 @@ import {
   History,
   Info,
   LoaderCircle,
+  LogOut,
   Magnet,
   Menu,
+  Pencil,
   Coins,
   Rabbit,
   RotateCcw,
@@ -105,6 +107,16 @@ import {
   GodPortrait,
   PlayerAbilityCard as AbilityCard,
 } from "./PlayerGodPanel";
+import { GodSkinPicker } from "./GodSkinPicker";
+import {
+  draftedGodSkin,
+  favoriteGodSkin,
+  isGodSkinUnlocked,
+  loadFavoriteGodSkins,
+  persistFavoriteGodSkins,
+  type GodSkinId,
+  type GodSkinSelections,
+} from "./godSkins";
 import {
   installGlobalDiagnostics,
   recordActionTransition,
@@ -400,7 +412,15 @@ function Brand() {
   );
 }
 
-function GodSigil({ godId, size = "normal" }: { godId: GodId; size?: "small" | "normal" | "large" }) {
+function GodSigil({
+  godId,
+  skinId = "base",
+  size = "normal",
+}: {
+  godId: GodId;
+  skinId?: GodSkinId;
+  size?: "small" | "normal" | "large";
+}) {
   const god = GOD_BY_ID[godId];
   return (
     <span
@@ -408,7 +428,7 @@ function GodSigil({ godId, size = "normal" }: { godId: GodId; size?: "small" | "
       style={{ "--accent": god.accent } as React.CSSProperties}
       aria-hidden="true"
     >
-      <GodPortrait godId={godId} />
+      <GodPortrait godId={godId} skinId={skinId} />
     </span>
   );
 }
@@ -430,11 +450,17 @@ function DraftScreen({
 }) {
   const [inspected, setInspected] = useState<GodId>(state.draft.available[0]);
   const [godPreviewLevel, setGodPreviewLevel] = useState<number>();
+  const [favorites] = useState<GodSkinSelections>(loadFavoriteGodSkins);
+  const [selectedSkinId, setSelectedSkinId] = useState<GodSkinId>(() =>
+    favoriteGodSkin(favorites, state.draft.available[0])
+  );
   const activePlayer = state.players[state.activeColor];
   const currentGod = GOD_BY_ID[inspected];
+  const selectedSkinUnlocked = isGodSkinUnlocked(currentGod.id, selectedSkinId);
 
   useEffect(() => {
     setGodPreviewLevel(undefined);
+    setSelectedSkinId(favoriteGodSkin(favorites, inspected));
   }, [inspected]);
 
   useEffect(() => {
@@ -467,10 +493,15 @@ function DraftScreen({
           <button
             className="auto-draft-button"
             disabled={inputDisabled || state.draft.pickIndex >= state.draft.order.length}
-            onClick={() => dispatch({
-              type: "auto-draft",
-              godId: shuffled(state.draft.available)[0],
-            })}
+            onClick={() => {
+              const godId = shuffled(state.draft.available)[0];
+              if (!godId) return;
+              dispatch({
+                type: "auto-draft",
+                godId,
+                skinId: favoriteGodSkin(favorites, godId),
+              });
+            }}
           >
             <Sparkles size={15} />
             Auto-pick random god
@@ -504,6 +535,9 @@ function DraftScreen({
               : state.players.black.gods.includes(god.id)
                 ? "black"
                 : undefined;
+            const skinId = owner
+              ? draftedGodSkin(state.players[owner].godSkins, god.id)
+              : favoriteGodSkin(favorites, god.id);
             return (
               <button
                 className={`draft-card ${inspected === god.id ? "inspected" : ""} ${owner ? "claimed" : ""}`}
@@ -511,7 +545,7 @@ function DraftScreen({
                 onClick={() => setInspected(god.id)}
                 style={{ "--accent": god.accent } as React.CSSProperties}
               >
-                <GodPortrait godId={god.id} className="god-card-portrait" />
+                <GodPortrait godId={god.id} skinId={skinId} className="god-card-portrait" />
                 <span className="draft-card-copy">
                   <strong>{god.name}</strong>
                   <small>{god.domain}</small>
@@ -524,7 +558,11 @@ function DraftScreen({
 
         <aside className="god-inspector" style={{ "--accent": currentGod.accent } as React.CSSProperties}>
           <div className="inspector-heading">
-            <GodPortrait godId={currentGod.id} className="god-hero-portrait" />
+            <GodPortrait
+              godId={currentGod.id}
+              skinId={selectedSkinId}
+              className="god-hero-portrait"
+            />
             <div>
               <p>{currentGod.domain}</p>
               <h2>{currentGod.name}</h2>
@@ -554,12 +592,28 @@ function DraftScreen({
               </div>
             ))}
           </div>
+          <GodSkinPicker
+            godId={currentGod.id}
+            selectedSkinId={selectedSkinId}
+            onSelect={setSelectedSkinId}
+          />
           <button
             className="primary-button"
-            onClick={() => dispatch({ type: "draft", godId: currentGod.id })}
-            disabled={inputDisabled || !state.draft.available.includes(currentGod.id)}
+            onClick={() => dispatch({
+              type: "draft",
+              godId: currentGod.id,
+              skinId: selectedSkinId,
+            })}
+            disabled={
+              inputDisabled ||
+              !state.draft.available.includes(currentGod.id) ||
+              !selectedSkinUnlocked
+            }
           >
-            Claim {currentGod.name}<ChevronRight size={17} />
+            {selectedSkinUnlocked
+              ? `Claim ${currentGod.name}`
+              : `${currentGod.name} skin locked`}
+            {selectedSkinUnlocked && <ChevronRight size={17} />}
           </button>
         </aside>
       </section>
@@ -571,7 +625,14 @@ function DraftScreen({
             <strong>{state.players[color].name}</strong>
             <small>{color}</small>
             <div>
-              {state.players[color].gods.map((godId) => <GodSigil godId={godId} size="small" key={godId} />)}
+              {state.players[color].gods.map((godId) => (
+                <GodSigil
+                  godId={godId}
+                  skinId={draftedGodSkin(state.players[color].godSkins, godId)}
+                  size="small"
+                  key={godId}
+                />
+              ))}
               {Array.from({ length: 3 - state.players[color].gods.length }).map((_, index) => <i className="empty-sigil" key={index} />)}
             </div>
           </div>
@@ -584,11 +645,25 @@ function DraftScreen({
 function RosterScreen({ onBack }: { onBack: () => void }) {
   const [inspected, setInspected] = useState<GodId>(GODS[0].id);
   const [previewLevel, setPreviewLevel] = useState(1);
+  const [favorites, setFavorites] = useState<GodSkinSelections>(loadFavoriteGodSkins);
+  const [selectedSkinId, setSelectedSkinId] = useState<GodSkinId>(() =>
+    favoriteGodSkin(favorites, GODS[0].id)
+  );
   const currentGod = GOD_BY_ID[inspected];
 
   useEffect(() => {
     setPreviewLevel(1);
+    setSelectedSkinId(favoriteGodSkin(favorites, inspected));
   }, [inspected]);
+
+  const toggleFavorite = (skinId: GodSkinId) => {
+    if (!isGodSkinUnlocked(inspected, skinId)) return;
+    const next = { ...favorites };
+    if (next[inspected] === skinId) delete next[inspected];
+    else next[inspected] = skinId;
+    persistFavoriteGodSkins(next);
+    setFavorites(next);
+  };
 
   return (
     <main className="draft-page roster-page">
@@ -601,7 +676,7 @@ function RosterScreen({ onBack }: { onBack: () => void }) {
         <div className="header-actions">
           <button onClick={onBack}>
             <ArrowLeft size={18} />
-            <span>Back to title</span>
+            <span>Back to play</span>
           </button>
         </div>
       </header>
@@ -622,7 +697,11 @@ function RosterScreen({ onBack }: { onBack: () => void }) {
               style={{ "--accent": god.accent } as React.CSSProperties}
               aria-pressed={inspected === god.id}
             >
-              <GodPortrait godId={god.id} className="god-card-portrait" />
+              <GodPortrait
+                godId={god.id}
+                skinId={favoriteGodSkin(favorites, god.id)}
+                className="god-card-portrait"
+              />
               <span className="draft-card-copy">
                 <strong>{god.name}</strong>
                 <small>{god.domain}</small>
@@ -633,7 +712,11 @@ function RosterScreen({ onBack }: { onBack: () => void }) {
 
         <aside className="god-inspector" style={{ "--accent": currentGod.accent } as React.CSSProperties}>
           <div className="inspector-heading">
-            <GodPortrait godId={currentGod.id} className="god-hero-portrait" />
+            <GodPortrait
+              godId={currentGod.id}
+              skinId={selectedSkinId}
+              className="god-hero-portrait"
+            />
             <div>
               <p>{currentGod.domain}</p>
               <h2>{currentGod.name}</h2>
@@ -663,6 +746,13 @@ function RosterScreen({ onBack }: { onBack: () => void }) {
               </div>
             ))}
           </div>
+          <GodSkinPicker
+            godId={currentGod.id}
+            selectedSkinId={selectedSkinId}
+            favoriteSkinId={favorites[currentGod.id]}
+            onSelect={setSelectedSkinId}
+            onFavorite={toggleFavorite}
+          />
         </aside>
       </section>
     </main>
@@ -754,7 +844,11 @@ function PlayerBar({
                   }}
                   key={godId}
                 >
-                  <GodSigil godId={godId} size="small" />
+                  <GodSigil
+                    godId={godId}
+                    skinId={draftedGodSkin(player.godSkins, godId)}
+                    size="small"
+                  />
                 </button>
               );
             })}
@@ -1231,7 +1325,11 @@ export function ActionPanel({
                   onClick={() => resting ? onInspectGod(godId) : dispatch({ type: "select-god", godId })}
                   style={{ "--accent": god.accent } as React.CSSProperties}
                 >
-                  <GodPortrait godId={godId} className="god-row-portrait" />
+                  <GodPortrait
+                    godId={godId}
+                    skinId={draftedGodSkin(player.godSkins, godId)}
+                    className="god-row-portrait"
+                  />
                   <span className="god-row-copy"><strong>{god.name}</strong><small>{resting ? "RESTING · VIEW" : god.domain}</small></span>
                   {resting ? <i className="rest-token">Z</i> : <ChevronRight size={17} />}
                 </button>
@@ -1255,7 +1353,11 @@ export function ActionPanel({
             className={`chosen-god ${presentation?.kind === "god" ? "opponent-selecting" : ""}`}
             style={{ "--accent": selectedGod.accent } as React.CSSProperties}
           >
-            <GodPortrait godId={selectedGod.id} className="god-hero-portrait" />
+            <GodPortrait
+              godId={selectedGod.id}
+              skinId={draftedGodSkin(presentedPlayer.godSkins, selectedGod.id)}
+              className="god-hero-portrait"
+            />
             <div><span>{selectedGod.domain}</span><h3>{selectedGod.name}</h3><p>{selectedGod.epithet}</p></div>
             <button
               className="god-back-button"
@@ -1400,7 +1502,10 @@ function UpgradePanel({
               return (
                 <section key={godId}>
                   <div className="four-panel-god-heading">
-                    <GodPortrait godId={godId} />
+                    <GodPortrait
+                      godId={godId}
+                      skinId={draftedGodSkin(activePlayer.godSkins, godId)}
+                    />
                     <strong>{god.name}</strong>
                     <small>{god.domain}</small>
                   </div>
@@ -1455,7 +1560,11 @@ function UpgradePanel({
             className={`chosen-god ${presentation && !presentation.abilityId ? "opponent-selecting" : ""}`}
             style={{ "--accent": selectedGod.accent } as React.CSSProperties}
           >
-            <GodPortrait godId={selectedGod.id} className="god-hero-portrait" />
+            <GodPortrait
+              godId={selectedGod.id}
+              skinId={draftedGodSkin(selectedPlayer.godSkins, selectedGod.id)}
+              className="god-hero-portrait"
+            />
             <div><span>{selectedGod.domain}</span><h3>{selectedGod.name}</h3><p>{selectedGod.epithet}</p></div>
             <button
               className="god-back-button"
@@ -1653,7 +1762,6 @@ function MainMenu({
   accountWorking,
   accountError,
   onStart,
-  onOpenRoster,
   onSignIn,
   onSignUp,
   onSignOut,
@@ -1666,13 +1774,41 @@ function MainMenu({
   accountWorking: boolean;
   accountError?: string;
   onStart: () => void;
-  onOpenRoster: () => void;
   onSignIn: (email: string, password: string) => Promise<string>;
   onSignUp: (email: string, password: string, displayName: string) => Promise<string>;
   onSignOut: () => Promise<void>;
   onUpdateDisplayName: (displayName: string) => Promise<string>;
 }) {
-  const [accountOpen, setAccountOpen] = useState(false);
+  const [accountModalMode, setAccountModalMode] = useState<"auth" | "name">();
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (!account) {
+      setAccountMenuOpen(false);
+      return;
+    }
+    if (account.needsDisplayName) {
+      setAccountModalMode("name");
+    } else if (accountModalMode === "auth") {
+      setAccountModalMode(undefined);
+    }
+  }, [account, accountModalMode]);
+
+  const signOut = async () => {
+    setAccountMenuOpen(false);
+    try {
+      await onSignOut();
+    } catch (error) {
+      console.error("God Chess sign-out failed.", error);
+    }
+  };
+
+  const updateDisplayName = async (displayName: string) => {
+    const message = await onUpdateDisplayName(displayName);
+    setAccountModalMode(undefined);
+    return message;
+  };
+
   return (
     <section className="main-menu-screen">
       <img
@@ -1689,33 +1825,58 @@ function MainMenu({
       />
       <div className="main-menu-shade" />
       <span className="game-version">Version {GAME_VERSION}</span>
-      <button className="main-account-button" onClick={() => setAccountOpen(true)}>
-        <UserRound size={16} />
-        {accountLoading ? "Account" : account?.displayName ?? "Sign in"}
-      </button>
+      <div className="main-account-area">
+        <button
+          className="main-account-button"
+          disabled={accountLoading}
+          aria-haspopup={account ? "menu" : "dialog"}
+          aria-expanded={account ? accountMenuOpen : undefined}
+          onClick={() => {
+            if (account) setAccountMenuOpen((open) => !open);
+            else setAccountModalMode("auth");
+          }}
+        >
+          <UserRound size={16} />
+          {accountLoading ? "Account" : account?.displayName ?? "Sign in"}
+        </button>
+        {account && accountMenuOpen && (
+          <div className="main-account-menu" role="menu" aria-label="Account options">
+            <button
+              role="menuitem"
+              onClick={() => {
+                setAccountMenuOpen(false);
+                setAccountModalMode("name");
+              }}
+            >
+              <Pencil size={15} />
+              Change name
+            </button>
+            <button role="menuitem" disabled={accountWorking} onClick={() => void signOut()}>
+              <LogOut size={15} />
+              Sign out
+            </button>
+          </div>
+        )}
+      </div>
       <div className="main-menu-actions">
         <p className="eyebrow">THE DIVINE GAME</p>
         <button className="primary-button main-start-button" onClick={onStart}>
           Start
         </button>
-        <button className="secondary-button main-roster-button" onClick={onOpenRoster}>
-          <BookOpen size={17} />
-          Roster
-        </button>
         {saveError && <p className="main-menu-error" role="alert">{saveError}</p>}
       </div>
-      {accountOpen && (
+      {accountModalMode && (
         <AccountModal
           account={account}
           configured={accountConfigured}
           loading={accountLoading}
           working={accountWorking}
           serviceError={accountError}
-          onClose={() => setAccountOpen(false)}
+          onClose={() => setAccountModalMode(undefined)}
           onSignIn={onSignIn}
           onSignUp={onSignUp}
           onSignOut={onSignOut}
-          onUpdateDisplayName={onUpdateDisplayName}
+          onUpdateDisplayName={updateDisplayName}
         />
       )}
     </section>
@@ -1732,6 +1893,7 @@ function PlayMenu({
   onOpenOnline,
   onOpenPuzzles,
   onOpenTutorial,
+  onOpenRoster,
   onOpenLoad,
 }: {
   savedGames: SavedGame[];
@@ -1743,6 +1905,7 @@ function PlayMenu({
   onOpenOnline: () => void;
   onOpenPuzzles: () => void;
   onOpenTutorial: () => void;
+  onOpenRoster: () => void;
   onOpenLoad: () => void;
 }) {
   const loadDescription = savesLoading
@@ -1755,7 +1918,7 @@ function PlayMenu({
       <div className="play-menu-heading">
         <p className="eyebrow">PLAY</p>
         <h1>Choose your path.</h1>
-        <p>Learn the game, begin a match, meet online, solve a puzzle, or continue a saved game.</p>
+        <p>Learn the game, browse the divine roster, begin a match, solve a puzzle, or continue a saved game.</p>
       </div>
       <div className="play-menu-grid" role="group" aria-label="Play options">
         <button onClick={onOpenLocal}>
@@ -1773,6 +1936,10 @@ function PlayMenu({
         <button onClick={onOpenTutorial}>
           <GraduationCap size={30} />
           <strong>Tutorial</strong>
+        </button>
+        <button onClick={onOpenRoster}>
+          <BookOpen size={30} />
+          <strong>Roster</strong>
         </button>
         <button
           onClick={onOpenLoad}
@@ -1860,7 +2027,11 @@ function SavedGameLibrary({
                               aria-label={GOD_BY_ID[godId].name}
                               key={godId}
                             >
-                              <GodSigil godId={godId} size="small" />
+                              <GodSigil
+                                godId={godId}
+                                skinId={draftedGodSkin(player.godSkins, godId)}
+                                size="small"
+                              />
                             </span>
                           ))
                           : <em>No gods drafted</em>}
@@ -1887,7 +2058,11 @@ function SavedGameLibrary({
                           {player.gods.length
                             ? player.gods.map((godId) => (
                               <span className="saved-god" title={GOD_BY_ID[godId].name} key={godId}>
-                                <GodSigil godId={godId} size="small" />
+                                <GodSigil
+                                  godId={godId}
+                                  skinId={draftedGodSkin(player.godSkins, godId)}
+                                  size="small"
+                                />
                               </span>
                             ))
                             : <em>No gods drafted</em>}
@@ -1911,7 +2086,11 @@ function SavedGameLibrary({
                           aria-label={GOD_BY_ID[godId].name}
                           key={godId}
                         >
-                          <GodSigil godId={godId} size="small" />
+                          <GodSigil
+                            godId={godId}
+                            skinId={draftedGodSkin(game.state.players[color].godSkins, godId)}
+                            size="small"
+                          />
                         </span>
                       ))
                       : <em>No gods drafted</em>}
@@ -3824,11 +4003,16 @@ export default function App() {
     ) return;
     quickDraftPending.current = true;
     aiPlan.current = [];
+    const favorites = loadFavoriteGodSkins();
     try {
       while (stateRef.current.phase === "draft") {
         const godId = randomItem(stateRef.current.draft.available);
         if (!godId) break;
-        dispatch({ type: "draft", godId });
+        dispatch({
+          type: "draft",
+          godId,
+          skinId: favoriteGodSkin(favorites, godId),
+        });
       }
     } finally {
       quickDraftPending.current = false;
@@ -4460,7 +4644,6 @@ export default function App() {
         accountWorking={accountService.working}
         accountError={accountService.error}
         onStart={() => setStartView("play")}
-        onOpenRoster={() => setStartView("roster")}
         onSignIn={accountService.signIn}
         onSignUp={accountService.signUp}
         onSignOut={accountService.signOut}
@@ -4470,7 +4653,7 @@ export default function App() {
   }
 
   if (startView === "roster") {
-    return <RosterScreen onBack={() => setStartView("menu")} />;
+    return <RosterScreen onBack={() => setStartView("play")} />;
   }
 
   if (startView === "play") {
@@ -4485,6 +4668,7 @@ export default function App() {
         onOpenOnline={() => openStartFlow("online", undefined, "play")}
         onOpenPuzzles={() => setStartView("puzzles")}
         onOpenTutorial={() => setStartView("tutorial")}
+        onOpenRoster={() => setStartView("roster")}
         onOpenLoad={() => setStartView("load")}
       />
     );

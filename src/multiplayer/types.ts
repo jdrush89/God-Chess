@@ -31,6 +31,10 @@ import {
 import { GODS } from "../game/gods";
 import type { Color, GameMode, GameState, GodId } from "../game/types";
 import {
+  isGodSkinFor,
+  isGodSkinUnlocked,
+} from "../godSkins";
+import {
   isStrictOnlineTwoPlayerGameState,
   prepareTwoPlayerState,
 } from "../saves";
@@ -292,9 +296,22 @@ const normalizeGameAction = (value: unknown): GameAction | undefined => {
   if (!isRecord(value) || typeof value.type !== "string") return undefined;
   switch (value.type) {
     case "draft":
-      return hasExactKeys(value, ["type", "godId"]) && isGodId(value.godId)
-        ? { type: "draft", godId: value.godId }
-        : undefined;
+      if (
+        !hasExactKeys(value, ["type", "godId"], ["skinId"]) ||
+        !isGodId(value.godId) ||
+        (
+          value.skinId !== undefined &&
+          (
+            !isGodSkinFor(value.godId, value.skinId) ||
+            !isGodSkinUnlocked(value.godId, value.skinId)
+          )
+        )
+      ) return undefined;
+      return {
+        type: "draft",
+        godId: value.godId,
+        ...(value.skinId === undefined ? {} : { skinId: value.skinId }),
+      };
     case "auto-draft":
       return hasExactKeys(value, ["type", "godId"]) && isGodId(value.godId)
         ? { type: "auto-draft", godId: value.godId }

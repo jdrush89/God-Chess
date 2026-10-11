@@ -13,6 +13,10 @@ import {
 import { fourPlayerSquares } from "./fourPlayerChess";
 import { GODS } from "./gods";
 import type { GodId, Square } from "./types";
+import {
+  isGodSkinFor,
+  isGodSkinUnlocked,
+} from "../godSkins";
 
 export interface FourPlayerActionEnvelope {
   revision: number;
@@ -73,11 +77,27 @@ export const normalizeFourPlayerAction = (
 ): FourPlayerAction | undefined => {
   if (!isRecord(value) || typeof value.type !== "string") return undefined;
   switch (value.type) {
-    case "draft":
     case "select-god":
       return hasExactKeys(value, ["type", "godId"]) && isGodId(value.godId)
         ? { type: value.type, godId: value.godId }
         : undefined;
+    case "draft":
+      if (
+        !hasExactKeys(value, ["type", "godId"], ["skinId"]) ||
+        !isGodId(value.godId) ||
+        (
+          value.skinId !== undefined &&
+          (
+            !isGodSkinFor(value.godId, value.skinId) ||
+            !isGodSkinUnlocked(value.godId, value.skinId)
+          )
+        )
+      ) return undefined;
+      return {
+        type: "draft",
+        godId: value.godId,
+        ...(value.skinId === undefined ? {} : { skinId: value.skinId }),
+      };
     case "clear-god":
     case "confirm-ability":
     case "pass":

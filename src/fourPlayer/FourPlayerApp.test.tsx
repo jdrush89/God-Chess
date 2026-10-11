@@ -948,7 +948,11 @@ describe("four-player app integration", () => {
     expect(screen.queryByRole("button", { name: /save & quit/i })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /ares conflict/i }));
     fireEvent.click(screen.getByRole("button", { name: /claim ares/i }));
-    expect(onAction).toHaveBeenCalledWith({ type: "draft", godId: "ares" });
+    expect(onAction).toHaveBeenCalledWith({
+      type: "draft",
+      godId: "ares",
+      skinId: "base",
+    });
   });
 
   it("shows host replacement controls while a disconnected online seat is paused", () => {

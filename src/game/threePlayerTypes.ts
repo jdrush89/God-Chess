@@ -4,6 +4,7 @@ import type {
   MoveFirstMove,
   PieceType,
 } from "./types";
+import type { GodSkinId, GodSkinSelections } from "../godSkins";
 
 export const THREE_PLAYER_SEATS = ["white", "red", "black"] as const;
 export type ThreePlayerSeat = (typeof THREE_PLAYER_SEATS)[number];
@@ -84,6 +85,7 @@ export interface ThreePlayerSeatState {
   eliminated: boolean;
   eliminatedBy?: ThreePlayerSeat;
   gods: GodId[];
+  godSkins?: GodSkinSelections;
   orbs: Record<ThreePlayerOrbAffinity, number>;
   graveyard: ThreePlayerGravePiece[];
   upgrades: Record<string, 1 | 2 | 3>;
@@ -263,7 +265,7 @@ export type ThreePlayerMoveFirstCandidate = MoveFirstCandidate<
 >;
 
 export type ThreePlayerAction =
-  | { type: "draft"; godId: GodId }
+  | { type: "draft"; godId: GodId; skinId?: GodSkinId }
   | { type: "select-god"; godId: GodId }
   | { type: "clear-god" }
   | { type: "select-ability"; abilityId: string }

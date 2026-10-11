@@ -19,6 +19,10 @@ import {
 } from "./threePlayerTypes";
 import { GODS } from "./gods";
 import type { GodId } from "./types";
+import {
+  isGodSkinFor,
+  isGodSkinUnlocked,
+} from "../godSkins";
 
 export interface ThreePlayerActionEnvelope {
   revision: number;
@@ -104,9 +108,22 @@ export const normalizeThreePlayerAction = (
 ): ThreePlayerAction | undefined => {
   if (!isRecord(value) || typeof value.type !== "string") return undefined;
   if (value.type === "draft") {
-    return hasExactKeys(value, ["type", "godId"]) && isGodId(value.godId)
-      ? { type: "draft", godId: value.godId }
-      : undefined;
+    if (
+      !hasExactKeys(value, ["type", "godId"], ["skinId"]) ||
+      !isGodId(value.godId) ||
+      (
+        value.skinId !== undefined &&
+        (
+          !isGodSkinFor(value.godId, value.skinId) ||
+          !isGodSkinUnlocked(value.godId, value.skinId)
+        )
+      )
+    ) return undefined;
+    return {
+      type: "draft",
+      godId: value.godId,
+      ...(value.skinId === undefined ? {} : { skinId: value.skinId }),
+    };
   }
   if (value.type === "select-god") {
     return hasExactKeys(value, ["type", "godId"]) && isGodId(value.godId)
@@ -329,9 +346,12 @@ export const canParticipantSubmitThreePlayerAction = (
       action.expectedRevision === state.revision &&
       threePlayerReducer(state, action) !== state;
   }
-  if (!availableThreePlayerActions(state).some(
+  if (
+    action.type !== "draft" &&
+    !availableThreePlayerActions(state).some(
     (available) => JSON.stringify(available) === JSON.stringify(action),
-  )) return false;
+    )
+  ) return false;
   return threePlayerReducer(state, action) !== state;
 };
 

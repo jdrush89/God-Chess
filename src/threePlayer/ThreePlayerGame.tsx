@@ -26,6 +26,15 @@ import {
   GodPortrait,
   PlayerAbilityCard,
 } from "../PlayerGodPanel";
+import { GodSkinPicker } from "../GodSkinPicker";
+import {
+  draftedGodSkin,
+  favoriteGodSkin,
+  isGodSkinUnlocked,
+  loadFavoriteGodSkins,
+  type GodSkinId,
+  type GodSkinSelections,
+} from "../godSkins";
 import { LevelSelector } from "../UpgradePreview";
 import {
   recordActionTransition,
@@ -104,21 +113,6 @@ type UiState = Omit<
   stealth?: unknown;
   orbAnimations?: unknown[];
   presentationEvents?: unknown[];
-};
-
-const GOD_PORTRAITS: Record<GodId, string> = {
-  quetzacoatl: new URL("../assets/gods/quetzacoatl.jpg", import.meta.url).href,
-  chiron: new URL("../assets/gods/chiron.jpg", import.meta.url).href,
-  anubis: new URL("../assets/gods/anubis.jpg", import.meta.url).href,
-  teles: new URL("../assets/gods/teles.jpg", import.meta.url).href,
-  artemis: new URL("../assets/gods/artemis.jpg", import.meta.url).href,
-  kangus: new URL("../assets/gods/kangus.jpg", import.meta.url).href,
-  death: new URL("../assets/gods/death.jpg", import.meta.url).href,
-  leonidas: new URL("../assets/gods/leonidas.jpg", import.meta.url).href,
-  medusa: new URL("../assets/gods/medusa.jpg", import.meta.url).href,
-  salem: new URL("../assets/gods/salem.jpg", import.meta.url).href,
-  midas: new URL("../assets/gods/midas.jpg", import.meta.url).href,
-  ares: new URL("../assets/gods/ares.jpg", import.meta.url).href,
 };
 
 const clone = <T,>(value: T): T => structuredClone(value);
@@ -222,22 +216,23 @@ const statusOwner = (
 
 function DraftGodPortrait({
   godId,
+  skinId = "base",
   className = "",
 }: {
   godId: GodId;
+  skinId?: GodSkinId;
   className?: string;
 }) {
-  return (
-    <img
-      className={`god-portrait ${className}`}
-      src={GOD_PORTRAITS[godId]}
-      alt=""
-      decoding="async"
-    />
-  );
+  return <GodPortrait godId={godId} skinId={skinId} className={className} />;
 }
 
-function DraftGodSigil({ godId }: { godId: GodId }) {
+function DraftGodSigil({
+  godId,
+  skinId = "base",
+}: {
+  godId: GodId;
+  skinId?: GodSkinId;
+}) {
   const god = GOD_BY_ID[godId];
   return (
     <span
@@ -245,7 +240,7 @@ function DraftGodSigil({ godId }: { godId: GodId }) {
       style={{ "--accent": god.accent } as React.CSSProperties}
       aria-hidden="true"
     >
-      <DraftGodPortrait godId={godId} />
+      <DraftGodPortrait godId={godId} skinId={skinId} />
     </span>
   );
 }
@@ -335,6 +330,10 @@ function ThreePlayerDraft({
 }) {
   const [inspected, setInspected] = useState<GodId>(GODS[0].id);
   const [level, setLevel] = useState(1);
+  const [favorites] = useState<GodSkinSelections>(loadFavoriteGodSkins);
+  const [selectedSkinId, setSelectedSkinId] = useState<GodSkinId>(() =>
+    favoriteGodSkin(favorites, GODS[0].id)
+  );
   const pantheonGridRef = useRef<HTMLDivElement>(null);
   const inspectorRef = useRef<HTMLElement>(null);
   const claimed = new Map<GodId, ThreePlayerSeat>();
@@ -345,6 +344,7 @@ function ThreePlayerDraft({
   const activePlayer = state.players[currentSeat];
   const currentGod = GOD_BY_ID[inspected];
   const currentOwner = claimed.get(inspected);
+  const selectedSkinUnlocked = isGodSkinUnlocked(inspected, selectedSkinId);
   const draftAction = actions.find(
     (action) => action.type === "draft" &&
       actionValue<GodId>(action, "godId") === inspected,
@@ -352,6 +352,7 @@ function ThreePlayerDraft({
 
   useEffect(() => {
     setLevel(1);
+    setSelectedSkinId(favoriteGodSkin(favorites, inspected));
   }, [inspected]);
 
   useEffect(() => {
@@ -457,6 +458,9 @@ function ThreePlayerDraft({
         <div className="pantheon-grid" ref={pantheonGridRef}>
           {GODS.map((god) => {
             const owner = claimed.get(god.id);
+            const skinId = owner
+              ? draftedGodSkin(state.players[owner].godSkins, god.id)
+              : favoriteGodSkin(favorites, god.id);
             return (
               <button
                 type="button"
@@ -466,7 +470,11 @@ function ThreePlayerDraft({
                 style={{ "--accent": god.accent } as React.CSSProperties}
                 aria-label={`Inspect ${god.name}${owner ? `, claimed by ${THREE_PLAYER_SEAT_LABELS[owner]}` : ""}`}
               >
-                <DraftGodPortrait godId={god.id} className="god-card-portrait" />
+                <DraftGodPortrait
+                  godId={god.id}
+                  skinId={skinId}
+                  className="god-card-portrait"
+                />
                 <span className="draft-card-copy">
                   <strong>{god.name}</strong>
                   <small>{god.domain}</small>
@@ -491,7 +499,11 @@ function ThreePlayerDraft({
           style={{ "--accent": currentGod.accent } as React.CSSProperties}
         >
           <div className="inspector-heading">
-            <DraftGodPortrait godId={currentGod.id} className="god-hero-portrait" />
+            <DraftGodPortrait
+              godId={currentGod.id}
+              skinId={selectedSkinId}
+              className="god-hero-portrait"
+            />
             <div>
               <p>{currentGod.domain}</p>
               <h2>{currentGod.name}</h2>
@@ -531,16 +543,31 @@ function ThreePlayerDraft({
               </div>
             ))}
           </div>
+          <GodSkinPicker
+            godId={currentGod.id}
+            selectedSkinId={selectedSkinId}
+            onSelect={setSelectedSkinId}
+          />
           <button
             type="button"
             className="primary-button three-draft-claim"
-            onClick={() => draftAction && onAction(draftAction)}
-            disabled={inputDisabled || Boolean(currentOwner) || !draftAction}
+            onClick={() => draftAction && onAction({
+              ...draftAction,
+              skinId: selectedSkinId,
+            })}
+            disabled={
+              inputDisabled ||
+              Boolean(currentOwner) ||
+              !draftAction ||
+              !selectedSkinUnlocked
+            }
           >
             {currentOwner
               ? `Claimed by ${THREE_PLAYER_SEAT_LABELS[currentOwner]}`
-              : `Claim ${currentGod.name}`}
-            {!currentOwner && <ChevronRight size={17} />}
+              : selectedSkinUnlocked
+                ? `Claim ${currentGod.name}`
+                : `${currentGod.name} skin locked`}
+            {!currentOwner && selectedSkinUnlocked && <ChevronRight size={17} />}
           </button>
         </aside>
       </section>
@@ -558,7 +585,11 @@ function ThreePlayerDraft({
             <small>{THREE_PLAYER_SEAT_LABELS[seat]}</small>
             <div>
               {state.players[seat].gods.map((godId) => (
-                <DraftGodSigil godId={godId} key={godId} />
+                <DraftGodSigil
+                  godId={godId}
+                  skinId={draftedGodSkin(state.players[seat].godSkins, godId)}
+                  key={godId}
+                />
               ))}
               {Array.from({ length: 3 - state.players[seat].gods.length }).map((_, index) => (
                 <i className="empty-sigil" key={index} />
@@ -623,7 +654,11 @@ function PlayerPanel({
             title={`${GOD_BY_ID[godId].name}${state.rested.includes(godId) ? " resting" : ""}`}
             key={godId}
           >
-            <img src={GOD_PORTRAITS[godId]} alt={GOD_BY_ID[godId].name} />
+            <GodPortrait
+              godId={godId}
+              skinId={draftedGodSkin(player.godSkins, godId)}
+              alt={GOD_BY_ID[godId].name}
+            />
           </span>
         ))}
       </div>
@@ -1124,9 +1159,13 @@ export function ThreePlayerGame({
     if (!draftActions.length) return;
     const action = randomItem(draftActions);
     if (!action) return;
+    const favorites = loadFavoriteGodSkins();
     autoDraftPendingRef.current = true;
     setAutoDraftPending(true);
-    dispatchAction(action);
+    dispatchAction({
+      ...action,
+      skinId: favoriteGodSkin(favorites, action.godId),
+    });
   };
 
   const quickDraft = () => {
@@ -1141,6 +1180,7 @@ export function ThreePlayerGame({
     setAutoDraftPending(true);
     aiPlan.current = [];
     aiRequestRevision.current = undefined;
+    const favorites = loadFavoriteGodSkins();
     try {
       while (stateRef.current.phase === "draft") {
         const action = randomItem(availableThreePlayerActions(
@@ -1150,7 +1190,10 @@ export function ThreePlayerGame({
             candidate.type === "draft",
         ));
         if (!action) break;
-        dispatchAction(action, "human", true);
+        dispatchAction({
+          ...action,
+          skinId: favoriteGodSkin(favorites, action.godId),
+        }, "human", true);
       }
     } finally {
       quickDraftPendingRef.current = false;
@@ -1502,6 +1545,12 @@ export function ThreePlayerGame({
   const selectedGodDefinition = selectedGod ? GOD_BY_ID[selectedGod] : undefined;
   const readOnlyGod = Boolean(inspectedGod && !state.selectedGod);
   const activePlayer = state.players[state.activeSeat];
+  const selectedGodOwner = selectedGod
+    ? THREE_PLAYER_SEATS.find((seat) => state.players[seat].gods.includes(selectedGod))
+    : undefined;
+  const selectedGodPlayer = selectedGodOwner
+    ? state.players[selectedGodOwner]
+    : activePlayer;
   const committedAbility = Boolean(state.selectedAbility && state.pending);
   const defaultPreviewLevel = selectedGodDefinition
     ? Math.min(...selectedGodDefinition.abilities.map((ability) =>
@@ -1687,7 +1736,10 @@ export function ThreePlayerGame({
                   return (
                     <section key={godId}>
                       <div className="three-panel-god-heading">
-                        <GodPortrait godId={godId} />
+                        <GodPortrait
+                          godId={godId}
+                          skinId={draftedGodSkin(activePlayer.godSkins, godId)}
+                        />
                         <strong>{god.name}</strong>
                         <small>{god.domain}</small>
                       </div>
@@ -1788,7 +1840,11 @@ export function ThreePlayerGame({
                         style={{ "--accent": god.accent } as React.CSSProperties}
                         key={godId}
                       >
-                        <GodPortrait godId={godId} className="god-row-portrait" />
+                        <GodPortrait
+                          godId={godId}
+                          skinId={draftedGodSkin(activePlayer.godSkins, godId)}
+                          className="god-row-portrait"
+                        />
                         <span className="god-row-copy">
                           <strong>{god.name}</strong>
                           <small>{resting ? "RESTING · VIEW" : god.domain}</small>
@@ -1808,6 +1864,10 @@ export function ThreePlayerGame({
               >
                 <GodPortrait
                   godId={selectedGodDefinition.id}
+                  skinId={draftedGodSkin(
+                    selectedGodPlayer.godSkins,
+                    selectedGodDefinition.id,
+                  )}
                   className="god-hero-portrait"
                 />
                 <div>

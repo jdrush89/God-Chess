@@ -6,10 +6,30 @@ export interface AccountProfile {
   userId: string;
   email: string;
   displayName: string;
+  needsDisplayName?: boolean;
 }
 
-const defaultDisplayName = (user: User) =>
-  String(user.user_metadata.display_name || user.email?.split("@")[0] || "Player").slice(0, 24);
+const normalizedDisplayName = (value: unknown) =>
+  typeof value === "string" ? value.trim().slice(0, 24) : "";
+
+export const resolveDisplayName = (
+  savedValue: unknown,
+  metadataValue: unknown,
+  email?: string,
+) => {
+  const savedDisplayName = normalizedDisplayName(savedValue);
+  const metadataDisplayName = normalizedDisplayName(metadataValue);
+  return {
+    savedDisplayName,
+    metadataDisplayName,
+    displayName:
+      savedDisplayName ||
+      metadataDisplayName ||
+      normalizedDisplayName(email?.split("@")[0]) ||
+      "Player",
+    needsDisplayName: !savedDisplayName && !metadataDisplayName,
+  };
+};
 
 export const resolveAuthRedirectUrl = (
   href = window.location.href,
@@ -24,17 +44,27 @@ const loadProfile = async (user: User): Promise<AccountProfile> => {
     .eq("id", user.id)
     .maybeSingle();
   if (error) throw error;
-  const displayName = String(data?.display_name || defaultDisplayName(user)).slice(0, 24);
-  if (!data) {
+  const {
+    savedDisplayName,
+    metadataDisplayName,
+    displayName,
+    needsDisplayName,
+  } = resolveDisplayName(
+    data?.display_name,
+    user.user_metadata.display_name,
+    user.email,
+  );
+  if ((!data || !savedDisplayName) && metadataDisplayName) {
     const { error: createError } = await supabase
       .from("profiles")
-      .upsert({ id: user.id, display_name: displayName });
+      .upsert({ id: user.id, display_name: metadataDisplayName });
     if (createError) throw createError;
   }
   return {
     userId: user.id,
     email: user.email ?? "",
     displayName,
+    needsDisplayName,
   };
 };
 
@@ -132,6 +162,9 @@ export function useAccount() {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
       setError(undefined);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Unable to sign out.");
+      throw error;
     } finally {
       setWorking(false);
     }
@@ -145,10 +178,13 @@ export function useAccount() {
     try {
       const { error } = await supabase
         .from("profiles")
-        .update({ display_name: normalized, updated_at: new Date().toISOString() })
-        .eq("id", account.userId);
+        .upsert({
+          id: account.userId,
+          display_name: normalized,
+          updated_at: new Date().toISOString(),
+        });
       if (error) throw error;
-      setAccount({ ...account, displayName: normalized });
+      setAccount({ ...account, displayName: normalized, needsDisplayName: false });
       setError(undefined);
       return "Display name updated.";
     } finally {

@@ -18,7 +18,7 @@ const threeOnlineHarness = vi.hoisted(() => ({
 
 const accountHarness = vi.hoisted(() => ({
   account: undefined as
-    | { userId: string; email: string; displayName: string }
+    | { userId: string; email: string; displayName: string; needsDisplayName?: boolean }
     | undefined,
   configured: false,
   loading: false,
@@ -397,7 +397,7 @@ describe("game startup", () => {
     expect(screen.getByText("Version dev")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /settings/i })).toBeNull();
     expect(screen.getByRole("button", { name: /^start$/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /^roster$/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^roster$/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /^local$/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /^online$/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /^puzzles$/i })).toBeNull();
@@ -408,7 +408,7 @@ describe("game startup", () => {
       within(screen.getByRole("group", { name: /play options/i }))
         .getAllByRole("button")
         .map((button) => button.getAttribute("aria-label") ?? button.textContent?.trim()),
-    ).toEqual(["Local", "Online", "Puzzles", "Tutorial", "Load"]);
+    ).toEqual(["Local", "Online", "Puzzles", "Tutorial", "Roster", "Load"]);
     fireEvent.click(screen.getByRole("button", { name: /^load$/i }));
     expect(screen.getByRole("heading", { name: /load game/i })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /back to play/i }));
@@ -432,6 +432,7 @@ describe("game startup", () => {
 
   it("opens a read-only roster with every God and level preview", () => {
     render(<App />);
+    openPlayMenu();
     fireEvent.click(screen.getByRole("button", { name: /^roster$/i }));
 
     expect(screen.getByRole("heading", { name: /know your gods/i })).toBeTruthy();
@@ -456,8 +457,92 @@ describe("game startup", () => {
         .getAttribute("aria-pressed"),
     ).toBe("false");
 
-    fireEvent.click(screen.getByRole("button", { name: /back to title/i }));
-    expect(screen.getByRole("button", { name: /^start$/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /back to play/i }));
+    expect(screen.getByRole("button", { name: /^local$/i })).toBeTruthy();
+  });
+
+  it("browses skin unlocks in the roster and saves Salem's Chonk favorite", () => {
+    render(<App />);
+    openPlayMenu();
+    fireEvent.click(screen.getByRole("button", { name: /^roster$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /salem/i }));
+
+    const chonk = screen.getByRole("button", { name: /^chonk unlocked$/i });
+    fireEvent.click(chonk);
+    expect(chonk.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: /set chonk as favorite/i }));
+    expect(JSON.parse(
+      window.localStorage.getItem("god-chess-favorite-skins-v1") ?? "{}",
+    )).toEqual({ salem: "chonk" });
+    expect(screen.getByRole("button", { name: /remove chonk as favorite/i })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /^ares/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^businessman locked$/i }));
+    expect(screen.getByText(/must be unlocked before it can be drafted/i)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /businessman as favorite/i })).toBeNull();
+  });
+
+  it("defaults drafts to a favorite skin, permits overrides, and blocks locked skins", () => {
+    window.localStorage.setItem(
+      "god-chess-favorite-skins-v1",
+      JSON.stringify({ salem: "chonk" }),
+    );
+    const { container } = render(<App />);
+    openPlayOption("Local");
+    fireEvent.click(screen.getByRole("button", { name: /^2 player$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /begin local duel/i }));
+
+    fireEvent.click(screen.getByRole("button", { name: /salem/i }));
+    expect(
+      screen.getByRole("button", { name: /^chonk unlocked$/i }).getAttribute("aria-pressed"),
+    ).toBe("true");
+
+    fireEvent.click(screen.getByRole("button", { name: /^base unlocked$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^claim salem$/i }));
+    expect(
+      container.querySelector<HTMLImageElement>(".draft-roster .god-portrait")?.src,
+    ).toMatch(/\/salem(?:-[A-Za-z0-9_-]+)?\.jpg$/);
+
+    fireEvent.click(screen.getByRole("button", { name: /^ares/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^businessman locked$/i }));
+    const lockedClaim = screen.getByRole("button", { name: /^ares skin locked$/i });
+    expect((lockedClaim as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("closes sign-in for an existing profile and opens name editing from the account menu", async () => {
+    accountHarness.configured = true;
+    const { rerender } = render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /^sign in$/i }));
+    expect(screen.getByRole("button", { name: /close account/i })).toBeTruthy();
+
+    accountHarness.account = {
+      userId: "account-1",
+      email: "player@example.com",
+      displayName: "Athena",
+    };
+    rerender(<App />);
+
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: /close account/i })).toBeNull();
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^athena$/i }));
+    expect(screen.getByRole("menu", { name: /account options/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("menuitem", { name: /change name/i }));
+    expect(screen.getByLabelText(/saved display name/i)).toBeTruthy();
+  });
+
+  it("prompts for a display name when the signed-in profile has none", async () => {
+    accountHarness.configured = true;
+    accountHarness.account = {
+      userId: "account-1",
+      email: "new-player@example.com",
+      displayName: "new-player",
+      needsDisplayName: true,
+    };
+    render(<App />);
+
+    expect(await screen.findByLabelText(/^display name$/i)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /save display name/i })).toBeTruthy();
   });
 
   it("routes Online player counts to Host/Join and Puzzles directly", () => {
