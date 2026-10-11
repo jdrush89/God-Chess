@@ -167,7 +167,8 @@ const PIECES: Record<Color, Record<Piece["type"], string>> = {
   black: { king: "♚", queen: "♛", rook: "♜", bishop: "♝", knight: "♞", pawn: "♟" },
 };
 
-const TITLE_ART = new URL("./assets/title/god-chess-title.jpg", import.meta.url).href;
+const TITLE_ART_AVIF = `${import.meta.env.BASE_URL}god-chess-title.avif`;
+const TITLE_ART_WEBP = `${import.meta.env.BASE_URL}god-chess-title.webp`;
 const GAME_VERSION = import.meta.env.VITE_GAME_VERSION || "dev";
 
 type OrbTotals = Record<Color, Record<OrbColor, number>>;
@@ -1674,7 +1675,18 @@ function MainMenu({
   const [accountOpen, setAccountOpen] = useState(false);
   return (
     <section className="main-menu-screen">
-      <img className="main-menu-art" src={TITLE_ART} alt="God Chess" />
+      <img
+        className="main-menu-art"
+        src={TITLE_ART_AVIF}
+        alt="God Chess"
+        decoding="async"
+        fetchPriority="high"
+        onError={(event) => {
+          if (!event.currentTarget.src.endsWith("god-chess-title.webp")) {
+            event.currentTarget.src = TITLE_ART_WEBP;
+          }
+        }}
+      />
       <div className="main-menu-shade" />
       <span className="game-version">Version {GAME_VERSION}</span>
       <button className="main-account-button" onClick={() => setAccountOpen(true)}>

@@ -389,7 +389,11 @@ describe("game startup", () => {
     }));
 
     render(<App />);
-    expect(screen.getByRole("img", { name: /god chess/i })).toBeTruthy();
+    const titleArt = screen.getByRole("img", { name: /god chess/i });
+    expect(titleArt.getAttribute("src")).toMatch(/god-chess-title\.avif$/);
+    expect(titleArt.getAttribute("fetchpriority")).toBe("high");
+    fireEvent.error(titleArt);
+    expect(titleArt.getAttribute("src")).toMatch(/god-chess-title\.webp$/);
     expect(screen.getByText("Version dev")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /settings/i })).toBeNull();
     expect(screen.getByRole("button", { name: /^start$/i })).toBeTruthy();
