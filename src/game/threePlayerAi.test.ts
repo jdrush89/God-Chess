@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { createDefaultThreePlayerConfig } from "./threePlayerConfig";
-import { chooseThreePlayerAiPlan } from "./threePlayerAi";
+import {
+  chooseThreePlayerAiPlan,
+  evaluateThreePlayerState,
+} from "./threePlayerAi";
 import {
   createThreePlayerGame,
   threePlayerReducer,
@@ -68,5 +71,24 @@ describe("three-player AI", () => {
       }
       expect(isCompleteThreePlayerPlan(state, result)).toBe(true);
     }
+  });
+
+  it("values an allied challenge victory as its own", () => {
+    const config = createDefaultThreePlayerConfig();
+    config.teams = {
+      white: "player",
+      red: "allied-ai",
+      black: "allied-ai",
+    };
+    const state = createThreePlayerGame(config);
+    state.phase = "gameover";
+    state.result = {
+      kind: "winner",
+      seat: "red",
+      reason: "last-survivor",
+    };
+
+    expect(evaluateThreePlayerState(state, "black")).toBe(1_000_000);
+    expect(evaluateThreePlayerState(state, "white")).toBe(-1_000_000);
   });
 });

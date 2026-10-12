@@ -65,6 +65,35 @@ describe("three-player ordinary chess", () => {
     }
   });
 
+  it("does not allow allied challenge seats to attack or capture each other", () => {
+    const state = stateFor("three-player");
+    const topology = getThreePlayerTopology("three-player");
+    const origin = topology.cells.find((cell) =>
+      topology.rookRays(cell).some((ray) => ray.cells.length >= 3)
+    )!;
+    const ray = topology.rookRays(origin).find(
+      (candidate) => candidate.cells.length >= 3,
+    )!;
+    const alliedCell = ray.cells[1];
+    const hostileCell = ray.cells[2];
+    state.config.teams = {
+      white: "player",
+      red: "allied-ai",
+      black: "allied-ai",
+    };
+    state.activeSeat = "red";
+    state.board = {
+      [origin]: piece("red-rook", "rook", "red"),
+      [alliedCell]: piece("black-pawn", "pawn", "black"),
+      [hostileCell]: piece("white-pawn", "pawn", "white"),
+    };
+
+    expect(threePlayerPseudoTargets(state, origin)).not.toContain(alliedCell);
+    expect(threePlayerPseudoTargets(state, origin)).not.toContain(hostileCell);
+    delete state.board[alliedCell];
+    expect(threePlayerPseudoTargets(state, origin)).toContain(hostileCell);
+  });
+
   it("uses topology rays for blockers and alternative movement families", () => {
     for (const variant of THREE_PLAYER_BOARD_VARIANTS) {
       const topology = getThreePlayerTopology(variant);

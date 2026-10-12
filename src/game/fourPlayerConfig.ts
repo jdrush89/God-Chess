@@ -48,9 +48,11 @@ export const validateFourPlayerConfig = (config: FourPlayerConfig) => {
   }
   if (config.mode === "teams") {
     if (!config.teams) throw new Error("Team mode requires a team assignment for every seat.");
-    for (const team of ["team-a", "team-b"] as TeamId[]) {
-      if (FOUR_PLAYER_SEATS.filter((seat) => config.teams?.[seat] === team).length !== 2) {
-        throw new Error("Team mode requires exactly two seats on each team.");
+    if (!config.allowUnevenTeams) {
+      for (const team of ["team-a", "team-b"] as TeamId[]) {
+        if (FOUR_PLAYER_SEATS.filter((seat) => config.teams?.[seat] === team).length !== 2) {
+          throw new Error("Team mode requires exactly two seats on each team.");
+        }
       }
     }
   } else if (config.turnPolicy === "alternate-teams") {

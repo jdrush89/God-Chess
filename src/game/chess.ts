@@ -301,7 +301,10 @@ export function ordinaryAttackedPieceSquares(
 }
 
 export const kingSquare = (board: Record<Square, Piece>, color: Color) =>
-  Object.entries(board).find(([, piece]) => piece.type === "king" && piece.controller === color)?.[0];
+  Object.entries(board).find(([, piece]) =>
+    (piece.type === "king" || piece.status.challengeRoyal) &&
+    piece.controller === color
+  )?.[0];
 
 export const isInCheck = (board: Record<Square, Piece>, color: Color, bananas: Banana[] = []) => {
   const king = kingSquare(board, color);

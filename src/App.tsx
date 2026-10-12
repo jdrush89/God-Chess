@@ -55,9 +55,17 @@ import {
   createGame,
   gameReducer,
   hasCommittedClassicAction,
+  isClassicGodResting,
   type GameAction,
 } from "./game/engine";
 import { createFourPlayerGame } from "./game/fourPlayerEngine";
+import {
+  CHALLENGE_BY_ID,
+  CHALLENGES,
+  createClassicChallenge,
+  createGangUpChallenge,
+  createJumpedChallenge,
+} from "./game/challenges";
 import {
   FOUR_PLAYER_SEATS,
   type FourPlayerConfig,
@@ -76,14 +84,22 @@ import {
   THREE_PLAYER_PUZZLES,
 } from "./game/threePlayerPuzzles";
 import { randomItem } from "./game/random";
-import type { Ability, ActionPresentation, CaptureAnimation, ClassicMoveFirstCandidate, ClassicMoveFirstMove, Color, GameMode, GameState, GodId, OrbAnimation, OrbColor, Piece, PuzzleId, Square, ThreePlayerPuzzleId } from "./game/types";
+import type { Ability, ActionPresentation, CaptureAnimation, ChallengeId, ClassicMoveFirstCandidate, ClassicMoveFirstMove, Color, GameMode, GameState, GodId, OrbAnimation, OrbColor, Piece, PuzzleId, Square, ThreePlayerPuzzleId } from "./game/types";
 import { AccountModal } from "./account/AccountModal";
 import { deleteCloudSavedGame, loadCloudSavedGames, upsertCloudSavedGame } from "./account/cloudSaves";
 import {
   loadCloudCompletedPuzzles,
   upsertCloudCompletedPuzzles,
 } from "./account/cloudPuzzleProgress";
+import {
+  loadCloudCompletedChallenges,
+  upsertCloudCompletedChallenges,
+} from "./account/cloudChallengeProgress";
 import { useAccount, type AccountProfile } from "./account/useAccount";
+import {
+  loadLocalCompletedChallenges,
+  persistLocalCompletedChallenges,
+} from "./challengeProgress";
 import {
   loadCloudAchievementProgress,
   upsertCloudAchievementProgress,
@@ -189,6 +205,7 @@ interface FourPlayerSession {
   state: FourPlayerState;
   undoHistory: FourPlayerState[];
   turnStart?: FourPlayerState;
+  challengeId?: ChallengeId;
 }
 
 interface ThreePlayerSession {
@@ -197,6 +214,7 @@ interface ThreePlayerSession {
   undoHistory: ThreePlayerState[];
   turnStart?: ThreePlayerState;
   puzzleId?: ThreePlayerPuzzleId;
+  challengeId?: ChallengeId;
 }
 
 const PIECES: Record<Color, Record<Piece["type"], string>> = {
@@ -650,12 +668,12 @@ function DraftScreen({
             <strong>{state.players[color].name}</strong>
             <small>{color}</small>
             <div>
-              {state.players[color].gods.map((godId) => (
+              {state.players[color].gods.map((godId, index) => (
                 <GodSigil
                   godId={godId}
                   skinId={draftedGodSkin(state.players[color].godSkins, godId)}
                   size="small"
-                  key={godId}
+                  key={`${godId}-${index}`}
                 />
               ))}
               {Array.from({ length: 3 - state.players[color].gods.length }).map((_, index) => <i className="empty-sigil" key={index} />)}
@@ -856,8 +874,8 @@ function PlayerBar({
             <b>{displayedGraveyardCount}</b>
           </button>
           <div className="mini-pantheon">
-            {player.gods.map((godId) => {
-              const resting = state.rested.includes(godId);
+            {player.gods.map((godId, index) => {
+              const resting = isClassicGodResting(state, color, godId);
               const interactive = isActive && !resting;
               return (
                 <button
@@ -867,7 +885,7 @@ function PlayerBar({
                     setToolsOpen(false);
                     onGodClick(godId, color);
                   }}
-                  key={godId}
+                  key={`${godId}-${index}`}
                 >
                   <GodSigil
                     godId={godId}
@@ -885,13 +903,14 @@ function PlayerBar({
 }
 
 function PieceView({ piece }: { piece: Piece }) {
+  const displayType = piece.status.challengeRoyal ? "queen" : piece.type;
   const statuses = statusMarkers.filter(({ key }) => Boolean(piece.status[key]));
   return (
     <span
       className={`chess-piece ${piece.color} ${piece.status.hired ? "hired" : ""}`}
       data-piece-id={piece.id}
     >
-      {PIECES[piece.color][piece.type]}
+      {PIECES[piece.color][displayType]}
       {statuses.length > 0 && (
         <span className="status-markers" title={statuses.map(({ label }) => label).join(", ")}>
           {statuses.map(({ key, label, icon: Icon }) => (
@@ -1279,7 +1298,10 @@ export function ActionPanel({
     (inspectedGodId && state.players.black.gods.includes(inspectedGodId) ? "black" : "white");
   const presentedPlayer = inspectedGodId || presentation ? state.players[inspectedOwner] : player;
   const readOnly = Boolean(inspectedGodId || presentation);
-  const presentedGodResting = Boolean(selectedGod && state.rested.includes(selectedGod.id));
+  const presentedGodResting = Boolean(
+    selectedGod &&
+    isClassicGodResting(state, inspectedOwner, selectedGod.id),
+  );
   const inspectingOwnGod = readOnly && inspectedOwner === state.activeColor;
   const [godPreviewLevel, setGodPreviewLevel] = useState<number>();
   const defaultGodPreviewLevel = selectedGod
@@ -1349,13 +1371,17 @@ export function ActionPanel({
       ) : !selectedGod ? (
         <>
           <div className="god-list">
-            {player.gods.map((godId) => {
+            {player.gods.map((godId, index) => {
               const god = GOD_BY_ID[godId];
-              const resting = state.rested.includes(godId);
+              const resting = isClassicGodResting(
+                state,
+                player.color,
+                godId,
+              );
               return (
                 <button
                   className={`god-row ${resting ? "resting" : ""}`}
-                  key={godId}
+                  key={`${godId}-${index}`}
                   data-god-id={godId}
                   onClick={() => resting ? onInspectGod(godId) : dispatch({ type: "select-god", godId })}
                   style={{ "--accent": god.accent } as React.CSSProperties}
@@ -1532,10 +1558,10 @@ function UpgradePanel({
             className="god-level-selector"
           />
           <div className="classic-upgrade-list" data-upgrade-layout="single-column">
-            {activePlayer.gods.map((godId) => {
+            {activePlayer.gods.map((godId, index) => {
               const god = GOD_BY_ID[godId];
               return (
-                <section key={godId}>
+                <section key={`${godId}-${index}`}>
                   <div className="four-panel-god-heading">
                     <GodPortrait
                       godId={godId}
@@ -2553,24 +2579,28 @@ function StartGamePrompt({
 
 function PuzzleSelectScreen({
   completedPuzzles,
+  completedChallenges,
   progressLoading,
   progressError,
   onStartPuzzle,
+  onStartChallenge,
   onBack,
   onDismissError,
 }: {
   completedPuzzles: Set<PuzzleId>;
+  completedChallenges: Set<ChallengeId>;
   progressLoading: boolean;
   progressError?: string;
   onStartPuzzle: (puzzleId: PuzzleId) => void;
+  onStartChallenge: (challengeId: ChallengeId) => void;
   onBack: () => void;
   onDismissError: () => void;
 }) {
-  type PuzzleCategory = PuzzleDifficulty | "three-player";
+  type PuzzleCategory = PuzzleDifficulty | "three-player" | "challenges";
   const [difficulty, setDifficulty] = useState<PuzzleCategory>();
   const visiblePuzzles = difficulty === "three-player"
     ? THREE_PLAYER_PUZZLES
-    : difficulty
+    : difficulty && difficulty !== "challenges"
       ? PUZZLES.filter((puzzle) => puzzle.difficulty === difficulty)
       : [];
   const completedInDifficulty = visiblePuzzles.filter((puzzle) => completedPuzzles.has(puzzle.id)).length;
@@ -2596,7 +2626,7 @@ function PuzzleSelectScreen({
           <>
             <h1>Choose a difficulty</h1>
             <p className="puzzle-select-intro">
-              Solve classic Divine tactics or checkmate two rivals on the three-player boards.
+              Solve Divine tactics, face unusual rule-bending challenges, or checkmate two rivals on the three-player boards.
             </p>
             <div className="puzzle-difficulty-grid">
               {([
@@ -2624,11 +2654,25 @@ function PuzzleSelectScreen({
                   description: "Checkmate both rivals in two divine turns.",
                   icon: Users,
                 },
+                {
+                  id: "challenges",
+                  title: "Challenges",
+                  description: "Bend the normal rules against level 10 Divine AI.",
+                  icon: Trophy,
+                },
               ] as const).map((option) => {
-                const puzzles = option.id === "three-player"
+                const puzzles = option.id === "challenges"
+                  ? CHALLENGES
+                  : option.id === "three-player"
                   ? THREE_PLAYER_PUZZLES
                   : PUZZLES.filter((puzzle) => puzzle.difficulty === option.id);
-                const completed = puzzles.filter((puzzle) => completedPuzzles.has(puzzle.id)).length;
+                const completed = option.id === "challenges"
+                  ? CHALLENGES.filter((challenge) =>
+                    completedChallenges.has(challenge.id)
+                  ).length
+                  : puzzles.filter((puzzle) =>
+                    completedPuzzles.has(puzzle.id as PuzzleId)
+                  ).length;
                 const Icon = option.icon;
                 return (
                   <button
@@ -2649,20 +2693,45 @@ function PuzzleSelectScreen({
           <>
             <h1>
               {difficulty === "easy"
-                ? "Easy"
+                ? "Easy puzzles"
                 : difficulty === "medium"
-                  ? "Medium"
+                  ? "Medium puzzles"
                   : difficulty === "hard"
-                    ? "Hard"
-                    : "Three Player"} puzzles
+                    ? "Hard puzzles"
+                      : difficulty === "three-player"
+                        ? "Three Player puzzles"
+                        : "Special challenges"}
             </h1>
             <p className="puzzle-select-intro">
               {progressLoading
                 ? "Loading completion history..."
-                : `${completedInDifficulty} of ${visiblePuzzles.length} positions completed`}
+                : difficulty === "challenges"
+                    ? `${completedChallenges.size} of ${CHALLENGES.length} challenges completed`
+                    : `${completedInDifficulty} of ${visiblePuzzles.length} positions completed`}
             </p>
             <div className="puzzle-select-grid">
-              {visiblePuzzles.map((puzzle) => {
+              {difficulty === "challenges"
+                ? CHALLENGES.map((challenge, index) => {
+                    const completed = completedChallenges.has(challenge.id);
+                    return (
+                      <button
+                        className={`puzzle-select-card challenge-select-card${completed ? " completed" : ""}`}
+                        key={challenge.id}
+                        onClick={() => onStartChallenge(challenge.id)}
+                        aria-label={`Challenge ${index + 1}, ${challenge.title}${completed ? ", completed" : ""}`}
+                      >
+                        {completed && (
+                          <span className="puzzle-complete-badge" aria-hidden="true">
+                            <Check size={22} strokeWidth={3} />
+                          </span>
+                        )}
+                        <span>CHALLENGE {index + 1}</span>
+                        <strong>{challenge.title}</strong>
+                        <small>{challenge.description}</small>
+                      </button>
+                    );
+                })
+                : visiblePuzzles.map((puzzle) => {
                 const index = difficulty === "three-player"
                   ? visiblePuzzles.findIndex((candidate) => candidate.id === puzzle.id)
                   : PUZZLES.findIndex((candidate) => candidate.id === puzzle.id);
@@ -2752,7 +2821,7 @@ export function GameScreen({
 }: {
   state: GameState;
   dispatch: GameDispatch;
-  onSaveAndQuit: () => void;
+  onSaveAndQuit?: () => void;
   onRestart: () => void;
   onRestartPuzzle: () => void;
   onNextPuzzle: () => void;
@@ -2777,6 +2846,9 @@ export function GameScreen({
   const [resultOpen, setResultOpen] = useState(gameFinished);
   const kingInCheck = state.phase === "play" && isInCheck(state.board, state.activeColor, state.bananas);
   const puzzle = state.puzzleId ? PUZZLE_BY_ID[state.puzzleId] : undefined;
+  const challenge = state.challengeId
+    ? CHALLENGE_BY_ID[state.challengeId]
+    : undefined;
   const difficultyPuzzles = puzzle
     ? PUZZLES.filter((candidate) => candidate.difficulty === puzzle.difficulty)
     : [];
@@ -3134,7 +3206,10 @@ export function GameScreen({
       setInspectedGodId(godId);
       return;
     }
-    if (color === state.activeColor && !state.rested.includes(godId)) {
+    if (
+      color === state.activeColor &&
+      !isClassicGodResting(state, color, godId)
+    ) {
       setInspectedGodId(undefined);
       gameDispatch({ type: "select-god", godId });
       return;
@@ -3169,7 +3244,7 @@ export function GameScreen({
     });
   };
   return (
-    <main className={`game-page ${puzzle ? "puzzle-mode" : ""} ${state.lastAction ? "has-last-action" : ""} ${gameFinished ? "finished-view" : ""} ${inputDisabled || opponentPresentation ? "input-locked" : ""}`}>
+    <main className={`game-page ${puzzle ? "puzzle-mode" : ""} ${challenge ? "challenge-mode" : ""} ${state.lastAction ? "has-last-action" : ""} ${gameFinished ? "finished-view" : ""} ${inputDisabled || opponentPresentation ? "input-locked" : ""}`}>
       <header className="topbar">
         <Brand />
         <div className="game-meta" data-tutorial="round-and-turn">
@@ -3189,7 +3264,9 @@ export function GameScreen({
               <span>Undo</span>
             </button>
           )}
-          {state.gameMode !== "online" && state.gameMode !== "puzzle" && (
+          {onSaveAndQuit &&
+            state.gameMode !== "online" &&
+            state.gameMode !== "puzzle" && (
             <button onClick={onSaveAndQuit}>
               <Save size={18} />
               <span>Save & quit</span>
@@ -3202,7 +3279,7 @@ export function GameScreen({
           )}
           <button onClick={onRestart}>
             <RotateCcw size={18} />
-            <span>{puzzle ? "Puzzles" : "New game"}</span>
+            <span>{puzzle ? "Puzzles" : challenge ? "Restart" : "New game"}</span>
           </button>
         </div>
       </header>
@@ -3223,6 +3300,22 @@ export function GameScreen({
             <button onClick={onRestartPuzzle}><RotateCcw size={15} />Restart</button>
           </div>
           {puzzleHintOpen && <small>{puzzle.hint}</small>}
+        </section>
+      )}
+      {challenge && (
+        <section className="puzzle-banner challenge-banner">
+          <div className="puzzle-banner-title">
+            <Trophy size={18} />
+            <span>SPECIAL CHALLENGE</span>
+            <strong>{challenge.title}</strong>
+          </div>
+          <p>{challenge.description}</p>
+          <div className="puzzle-banner-actions">
+            <button onClick={onRestart}>
+              <RotateCcw size={15} />
+              Restart
+            </button>
+          </div>
         </section>
       )}
 
@@ -3426,7 +3519,9 @@ export function GameScreen({
             : state.winner
               ? `${state.players[state.winner].name} has conquered the opposing pantheon.`
               : "The active pantheon has no complete legal turn while its King is safe."}
-          newGameLabel="Begin a new game"
+          newGameLabel={
+            state.challengeId ? "Retry challenge" : "Begin a new game"
+          }
           undoEnabled={undoEnabled}
           canUndo={canUndo}
           onOpenChange={setResultOpen}
@@ -3848,6 +3943,15 @@ export default function App() {
     completed: PuzzleId[];
   }>({ completed: [] });
   const [puzzleProgressLoading, setPuzzleProgressLoading] = useState(false);
+  const [localCompletedChallenges, setLocalCompletedChallenges] = useState(
+    loadLocalCompletedChallenges,
+  );
+  const [cloudChallengeProgress, setCloudChallengeProgress] = useState<{
+    userId?: string;
+    completed: ChallengeId[];
+  }>({ completed: [] });
+  const [challengeProgressLoading, setChallengeProgressLoading] =
+    useState(false);
   const [achievementProgress, setAchievementProgress] = useState(
     loadLocalAchievementProgress,
   );
@@ -3866,6 +3970,12 @@ export default function App() {
       : []
     : localCompletedPuzzles;
   const completedPuzzles = new Set(completedPuzzleIds);
+  const completedChallengeIds = accountService.account
+    ? cloudChallengeProgress.userId === accountService.account.userId
+      ? cloudChallengeProgress.completed
+      : []
+    : localCompletedChallenges;
+  const completedChallenges = new Set(completedChallengeIds);
   const completedPuzzleCounts = useMemo(
     () =>
       completedPuzzleIds.reduce(
@@ -4052,6 +4162,107 @@ export default function App() {
     };
   }, [accountService.account?.userId]);
 
+  useEffect(() => {
+    const account = accountService.account;
+    if (!account) {
+      setCloudChallengeProgress({ completed: [] });
+      setChallengeProgressLoading(false);
+      return;
+    }
+    let active = true;
+    setChallengeProgressLoading(true);
+    void loadCloudCompletedChallenges(account.userId)
+      .then((completed) => {
+        if (active) {
+          const merged = [...new Set([
+            ...loadLocalCompletedChallenges(),
+            ...completed,
+          ])];
+          setCloudChallengeProgress({
+            userId: account.userId,
+            completed: merged,
+          });
+          void upsertCloudCompletedChallenges(account.userId, merged).catch(
+            (error) => {
+              console.error("Unable to merge challenge progress.", error);
+              if (active) {
+                setSaveError(
+                  error instanceof Error
+                    ? error.message
+                    : "Unable to merge challenge progress.",
+                );
+              }
+            },
+          );
+        }
+      })
+      .catch((error) => {
+        console.error("Unable to load cloud challenge progress.", error);
+        if (active) {
+          setSaveError(
+            error instanceof Error
+              ? error.message
+              : "Unable to load challenge progress.",
+          );
+          setCloudChallengeProgress({ completed: [] });
+        }
+      })
+      .finally(() => {
+        if (active) setChallengeProgressLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [accountService.account?.userId]);
+
+  const recordChallengeCompletion = useCallback((challengeId: ChallengeId) => {
+    const account = accountService.account;
+    if (account) {
+      if (
+        cloudChallengeProgress.userId !== account.userId ||
+        challengeProgressLoading
+      ) return false;
+      if (cloudChallengeProgress.completed.includes(challengeId)) return true;
+      const previous = cloudChallengeProgress.completed;
+      const completed = [...previous, challengeId];
+      setCloudChallengeProgress({ userId: account.userId, completed });
+      void upsertCloudCompletedChallenges(account.userId, completed).catch(
+        (error) => {
+          console.error("Unable to save cloud challenge progress.", error);
+          setCloudChallengeProgress({
+            userId: account.userId,
+            completed: previous,
+          });
+          setSaveError(
+            error instanceof Error
+              ? error.message
+              : "Unable to save challenge progress.",
+          );
+        },
+      );
+      return true;
+    }
+    if (localCompletedChallenges.includes(challengeId)) return true;
+    const completed = [...localCompletedChallenges, challengeId];
+    try {
+      persistLocalCompletedChallenges(completed);
+      setLocalCompletedChallenges(completed);
+    } catch (error) {
+      console.error("Unable to save local challenge progress.", error);
+      setSaveError(
+        error instanceof Error
+          ? error.message
+          : "Unable to save challenge progress.",
+      );
+    }
+    return true;
+  }, [
+    accountService.account,
+    challengeProgressLoading,
+    cloudChallengeProgress,
+    localCompletedChallenges,
+  ]);
+
   const recordPuzzleCompletion = useCallback((puzzleId: PuzzleId) => {
     const account = accountService.account;
     if (account) {
@@ -4085,6 +4296,23 @@ export default function App() {
     cloudPuzzleProgress,
     localCompletedPuzzles,
     puzzleProgressLoading,
+  ]);
+
+  useEffect(() => {
+    if (
+      state.challengeId &&
+      state.phase === "gameover" &&
+      state.winner &&
+      state.winner !== state.aiColor
+    ) {
+      recordChallengeCompletion(state.challengeId);
+    }
+  }, [
+    recordChallengeCompletion,
+    state.aiColor,
+    state.challengeId,
+    state.phase,
+    state.winner,
   ]);
 
   useEffect(() => {
@@ -4415,7 +4643,8 @@ export default function App() {
       threePlayerSession ||
       threeOnlineActive ||
       state.gameMode === "online" ||
-      state.gameMode === "puzzle"
+      state.gameMode === "puzzle" ||
+      state.challengeId
     ) return;
     void saveCurrentGame();
   }, [
@@ -4834,6 +5063,42 @@ export default function App() {
     setSettingsOpen(false);
     setStartView("none");
   };
+  const beginChallenge = (challengeId: ChallengeId) => {
+    onlineActions.disconnect();
+    fourOnlineActions.disconnect();
+    threeOnlineActions.disconnect();
+    activeSaveId.current = undefined;
+    clearUndoHistory();
+    aiPlan.current = [];
+    setSettingsOpen(false);
+    if (challengeId === "gang-up") {
+      setFourPlayerSession(undefined);
+      setThreePlayerSession({
+        key: `challenge-${challengeId}-${saveId()}`,
+        state: createGangUpChallenge(accountService.account?.displayName),
+        undoHistory: [],
+        challengeId,
+      });
+    } else if (challengeId === "jumped") {
+      setThreePlayerSession(undefined);
+      setFourPlayerSession({
+        key: `challenge-${challengeId}-${saveId()}`,
+        state: createJumpedChallenge(accountService.account?.displayName),
+        undoHistory: [],
+        challengeId,
+      });
+    } else {
+      setFourPlayerSession(undefined);
+      setThreePlayerSession(undefined);
+      const next = createClassicChallenge(
+        challengeId,
+        accountService.account?.displayName,
+      );
+      resetUndoTracking(next);
+      receiveState(next);
+    }
+    setStartView("none");
+  };
   const startHostedGame = () => {
     if (!online.guest) return;
     fourOnlineActions.disconnect();
@@ -4852,6 +5117,10 @@ export default function App() {
   };
   const openNewGame = () => {
     if (threePlayerSession) {
+      if (threePlayerSession.challengeId) {
+        beginChallenge(threePlayerSession.challengeId);
+        return;
+      }
       setThreePlayerSession(undefined);
       setSetupCategory("local");
       setSetupPlayerCount(undefined);
@@ -4860,11 +5129,19 @@ export default function App() {
       return;
     }
     if (fourPlayerSession) {
+      if (fourPlayerSession.challengeId) {
+        beginChallenge(fourPlayerSession.challengeId);
+        return;
+      }
       setFourPlayerSession(undefined);
       setSetupCategory("local");
       setSetupPlayerCount(undefined);
       setSetupReturnView("play");
       setStartView("four-setup");
+      return;
+    }
+    if (state.challengeId) {
+      beginChallenge(state.challengeId);
       return;
     }
     if (state.gameMode === "online") {
@@ -5041,9 +5318,11 @@ export default function App() {
     return (
       <PuzzleSelectScreen
         completedPuzzles={completedPuzzles}
-        progressLoading={puzzleProgressLoading}
+        completedChallenges={completedChallenges}
+        progressLoading={puzzleProgressLoading || challengeProgressLoading}
         progressError={saveError}
         onStartPuzzle={beginPuzzle}
+        onStartChallenge={beginChallenge}
         onBack={() => setStartView("play")}
         onDismissError={() => setSaveError(undefined)}
       />
@@ -5315,12 +5594,21 @@ export default function App() {
           initialTurnStart={fourPlayerSession.turnStart}
           undoPreferred={undoPreferred}
           onUndoPreferenceChange={changeUndoPreference}
-          onPersist={persistFourPlayerGame}
+          onPersist={fourPlayerSession.challengeId
+            ? undefined
+            : persistFourPlayerGame}
+          onChallengeComplete={recordChallengeCompletion}
           onQuit={() => {
             setFourPlayerSession(undefined);
-            setStartView("menu");
+            setStartView(
+              fourPlayerSession.challengeId ? "puzzles" : "menu",
+            );
           }}
           onNewGame={() => {
+            if (fourPlayerSession.challengeId) {
+              beginChallenge(fourPlayerSession.challengeId);
+              return;
+            }
             setFourPlayerSession(undefined);
             setSetupCategory("local");
             setSetupPlayerCount(undefined);
@@ -5361,7 +5649,9 @@ export default function App() {
         initialTurnStart={threePlayerSession.turnStart}
         undoPreferred={undoPreferred}
         onUndoPreferenceChange={changeUndoPreference}
-        onPersist={threePlayerPuzzle ? undefined : persistThreePlayerGame}
+        onPersist={threePlayerPuzzle || threePlayerSession.challengeId
+          ? undefined
+          : persistThreePlayerGame}
         puzzle={threePlayerPuzzle}
         onPuzzleComplete={recordPuzzleCompletion}
         onRestartPuzzle={threePlayerPuzzle
@@ -5370,11 +5660,20 @@ export default function App() {
         onNextPuzzle={threePlayerPuzzle
           ? () => nextThreePlayerPuzzle(threePlayerPuzzle.id)
           : undefined}
+        onChallengeComplete={recordChallengeCompletion}
         onQuit={() => {
           setThreePlayerSession(undefined);
-          setStartView(threePlayerPuzzle ? "puzzles" : "menu");
+          setStartView(
+            threePlayerPuzzle || threePlayerSession.challengeId
+              ? "puzzles"
+              : "menu",
+          );
         }}
         onNewGame={() => {
+          if (threePlayerSession.challengeId) {
+            beginChallenge(threePlayerSession.challengeId);
+            return;
+          }
           setThreePlayerSession(undefined);
           setSetupCategory("local");
           setSetupPlayerCount(undefined);
@@ -5400,7 +5699,9 @@ export default function App() {
             dispatch={dispatch}
             onQuickDraft={state.gameMode === "online" ? undefined : quickDraft}
             inputDisabled={inputDisabled}
-            onSaveAndQuit={state.gameMode === "online" ? undefined : saveAndQuit}
+            onSaveAndQuit={state.gameMode === "online" || state.challengeId
+              ? undefined
+              : saveAndQuit}
             onOpenSettings={() => setSettingsOpen(true)}
           />
         )
@@ -5419,7 +5720,7 @@ export default function App() {
             onRestart={openNewGame}
             onRestartPuzzle={restartPuzzle}
             onNextPuzzle={nextPuzzle}
-            onSaveAndQuit={saveAndQuit}
+            onSaveAndQuit={state.challengeId ? undefined : saveAndQuit}
           />
         )}
       {settingsOpen && (
@@ -5437,13 +5738,17 @@ export default function App() {
           onOpenSettings={state.gameMode === "puzzle"
             ? undefined
             : () => setSettingsOpen(true)}
-          onLeave={state.gameMode === "online" || state.gameMode === "puzzle"
-            ? openNewGame
+          onLeave={state.challengeId
+            ? () => setStartView("puzzles")
+            : state.gameMode === "online" || state.gameMode === "puzzle"
+              ? openNewGame
             : () => void saveAndQuit()}
           leaveLabel={state.gameMode === "online"
             ? "Leave room"
             : state.gameMode === "puzzle"
               ? "Leave puzzle"
+              : state.challengeId
+                ? "Leave challenge"
               : "Save & quit"}
         />
       )}

@@ -1626,13 +1626,14 @@ export interface FourPlayerGameProps {
   initialTurnStart?: FourPlayerState;
   undoPreferred: boolean;
   onUndoPreferenceChange: (enabled: boolean) => void;
-  onPersist: (
+  onPersist?: (
     state: FourPlayerState,
     undoHistory: FourPlayerState[],
     turnStart?: FourPlayerState,
   ) => Promise<boolean>;
   onQuit: () => void;
   onNewGame: () => void;
+  onChallengeComplete?: (challengeId: NonNullable<FourPlayerState["challengeId"]>) => void;
   onlineSession?: FourPlayerOnlineSession;
   onAchievementTransition?: (
     before: FourPlayerState,
@@ -1651,6 +1652,7 @@ export function FourPlayerGame({
   onPersist,
   onQuit,
   onNewGame,
+  onChallengeComplete,
   onlineSession,
   onAchievementTransition,
 }: FourPlayerGameProps) {
@@ -1703,6 +1705,7 @@ export function FourPlayerGame({
   ));
   const positionKey = boardPositionSignature(state);
   const previousOnlineState = useRef<FourPlayerState | undefined>(undefined);
+  const challengeCompletionReported = useRef(false);
 
   const updateUndoDepth = () => setUndoDepth(undoStack.current.length);
   const receiveState = (next: FourPlayerState) => {
@@ -1755,6 +1758,26 @@ export function FourPlayerGame({
   useEffect(() => {
     setResultOpen(state.phase === "gameover");
   }, [state]);
+  useEffect(() => {
+    if (
+      !state.challengeId ||
+      !state.winner ||
+      challengeCompletionReported.current
+    ) return;
+    const localSeats = FOUR_PLAYER_SEATS.filter((seat) => {
+      const control = state.players[seat].control;
+      return control.kind === "human" && control.local;
+    });
+    const localWon = state.winner.seat
+      ? localSeats.includes(state.winner.seat)
+      : Boolean(
+        state.winner.team &&
+        localSeats.some((seat) => state.players[seat].team === state.winner?.team),
+      );
+    if (!localWon) return;
+    challengeCompletionReported.current = true;
+    onChallengeComplete?.(state.challengeId);
+  }, [onChallengeComplete, state]);
   const scheduleAnimationUnlock = (duration = 480) => {
     if (animationTimer.current) window.clearTimeout(animationTimer.current);
     if (reducedMotion()) {
@@ -2141,7 +2164,7 @@ export function FourPlayerGame({
   ]);
 
   useEffect(() => {
-    if (onlineSession) return;
+    if (onlineSession || !onPersist) return;
     const timer = window.setTimeout(() => {
       void onPersist(
         prepareFourPlayerState(state),
@@ -2154,6 +2177,10 @@ export function FourPlayerGame({
 
   const saveAndQuit = async () => {
     if (onlineSession) return;
+    if (!onPersist) {
+      onQuit();
+      return;
+    }
     const saved = await onPersist(
       prepareFourPlayerState(stateRef.current),
       undoStack.current.map(prepareFourPlayerState),
@@ -2203,13 +2230,21 @@ export function FourPlayerGame({
           onQuickDraft={onlineSession ? undefined : quickDraft}
           canUndo={canUndo}
           onUndo={applyUndo}
-          onSaveAndQuit={onlineSession ? undefined : () => void saveAndQuit()}
+          onSaveAndQuit={onlineSession || !onPersist
+            ? undefined
+            : () => void saveAndQuit()}
           onOpenSettings={() => setSettingsOpen(true)}
         />
         <MatchEscapeMenu
           onOpenSettings={() => setSettingsOpen(true)}
-          onLeave={() => void saveAndQuit()}
-          leaveLabel={onlineSession ? "Leave room" : "Save & quit"}
+          onLeave={() => onPersist ? void saveAndQuit() : onQuit()}
+          leaveLabel={
+            onlineSession
+              ? "Leave room"
+              : onPersist
+                ? "Save & quit"
+                : "Leave challenge"
+          }
         />
         {settingsOpen && (
           <FourSettingsModal
@@ -2321,13 +2356,16 @@ export function FourPlayerGame({
           >
             <Undo2 size={18} /><span>Undo</span>
           </button>
-          {!onlineSession && (
+          {!onlineSession && onPersist && (
             <button onClick={() => void saveAndQuit()}><Save size={18} /><span>Save & quit</span></button>
           )}
           <button onClick={() => setHistoryOpen(true)}><History size={18} /><span>History</span></button>
           <button onClick={() => setRulesOpen(true)}><BookOpen size={18} /><span>Rules</span></button>
           <button onClick={() => setSettingsOpen(true)}><Settings size={18} /><span>Settings</span></button>
-          <button onClick={onNewGame}><RotateCcw size={18} /><span>New setup</span></button>
+          <button onClick={onNewGame}>
+            <RotateCcw size={18} />
+            <span>{state.challengeId ? "Restart" : "New setup"}</span>
+          </button>
         </div>
       </header>
 
@@ -2466,7 +2504,9 @@ export function FourPlayerGame({
               : state.winner
                 ? "The last surviving player controls the cross-board."
                 : "Every living seat was stalemated in the same unchanged position."}
-          newGameLabel="Begin a new setup"
+          newGameLabel={
+            state.challengeId ? "Retry challenge" : "Begin a new setup"
+          }
           undoEnabled={onlineSession?.undoConsent ?? undoPreferred}
           canUndo={canUndo}
           onOpenChange={setResultOpen}
@@ -2495,8 +2535,14 @@ export function FourPlayerGame({
       )}
       <MatchEscapeMenu
         onOpenSettings={() => setSettingsOpen(true)}
-        onLeave={() => void saveAndQuit()}
-        leaveLabel={onlineSession ? "Leave room" : "Save & quit"}
+        onLeave={() => onPersist ? void saveAndQuit() : onQuit()}
+        leaveLabel={
+          onlineSession
+            ? "Leave room"
+            : onPersist
+              ? "Save & quit"
+              : "Leave challenge"
+        }
       />
     </main>
   );

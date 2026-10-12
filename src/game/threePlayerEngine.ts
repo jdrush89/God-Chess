@@ -4,6 +4,7 @@ import {
   createThreePlayerTurnOrder,
   nextThreePlayerSeat,
   threePlayerPieceAffinity,
+  threePlayerSeatsAreAllies,
   threePlayerSeatsAreHostile,
   validateThreePlayerConfig,
 } from "./threePlayerConfig";
@@ -11,7 +12,6 @@ import {
   createThreePlayerInitialBoard,
   createThreePlayerInitialCastlingRights,
   threePlayerApplyMove,
-  threePlayerCanOrdinarilyCapture,
   threePlayerCheckingSeats,
   threePlayerIsInCheck,
   threePlayerIsSquareAttacked,
@@ -96,7 +96,14 @@ const levelFor = (
 const alliedPiece = (
   state: ThreePlayerState,
   piece: ThreePlayerPiece | undefined,
-) => Boolean(piece?.controller === state.activeSeat);
+) => Boolean(
+  piece?.controller &&
+  threePlayerSeatsAreAllies(
+    state.config,
+    state.activeSeat,
+    piece.controller,
+  ),
+);
 
 const hostilePiece = (
   state: ThreePlayerState,
@@ -104,7 +111,11 @@ const hostilePiece = (
 ) => Boolean(
   piece && (
     piece.controller === null ||
-    threePlayerSeatsAreHostile(state.activeSeat, piece.controller)
+    threePlayerSeatsAreHostile(
+      state.config,
+      state.activeSeat,
+      piece.controller,
+    )
   ),
 );
 
@@ -353,7 +364,10 @@ const setResult = (
 const evaluateLastSurvivor = (state: ThreePlayerState) => {
   if (state.result) return;
   const survivors = livingSeats(state);
-  if (survivors.length === 1) {
+  const survivingTeams = new Set(
+    survivors.map((seat) => state.config.teams?.[seat] ?? seat),
+  );
+  if (survivingTeams.size === 1 && survivors.length) {
     setResult(state, {
       kind: "winner",
       seat: survivors[0],
@@ -506,7 +520,7 @@ const captureAt = (
   ) return undefined;
   if (
     !explicitFriendly &&
-    piece.controller === state.activeSeat
+    alliedPiece(state, piece)
   ) return undefined;
   delete state.board[cell];
   capturePiece(state, piece, state.activeSeat);
@@ -530,7 +544,11 @@ const bananaOnPath = (
 ].find((cell) =>
   state.bananas!.some((banana) =>
     banana.cell === cell &&
-    banana.owner !== state.activeSeat
+    threePlayerSeatsAreHostile(
+      state.config,
+      state.activeSeat,
+      banana.owner,
+    )
   )
 );
 
@@ -1348,6 +1366,7 @@ const safeTeleportTargets = (
   targets: string[],
 ) => targets.filter((target) => {
   if (state.board[target]?.type === "king") return false;
+  if (alliedPiece(state, state.board[target])) return false;
   const simulated = clone(state);
   const piece = simulated.board[source];
   const captured = simulated.board[target];
@@ -1434,7 +1453,7 @@ const escortPlan = (
       if (
         occupying?.status.hardened ||
         occupying?.type === "king" ||
-        occupying?.controller === state.activeSeat
+        alliedPiece(state, occupying)
       ) {
         legal = false;
         break;
@@ -1646,6 +1665,15 @@ const stoneGazeTargets = (state: ThreePlayerState) => {
   const queenIds = new Set(queens.map(([, piece]) => piece.id));
   const targets = Object.entries(state.board).filter(([cell, piece]) =>
     !queenIds.has(piece.id) &&
+    !(
+      piece.controller &&
+      piece.controller !== state.activeSeat &&
+      threePlayerSeatsAreAllies(
+        state.config,
+        state.activeSeat,
+        piece.controller,
+      )
+    ) &&
     queens.some(([queen]) =>
       threePlayerLineOfSight(state, queen, cell)
     )
@@ -1943,7 +1971,14 @@ const hostileControllersAdjacentTo = (
   threePlayerAdjacentCells(state, cell)
     .map((adjacent) => state.board[adjacent]?.controller)
     .filter((seat): seat is ThreePlayerSeat =>
-      Boolean(seat && seat !== state.activeSeat)
+      Boolean(
+        seat &&
+        threePlayerSeatsAreHostile(
+          state.config,
+          state.activeSeat,
+          seat,
+        ),
+      )
     ),
 )];
 
@@ -2589,8 +2624,18 @@ const resolveRage = (
 ) => {
   for (const cell of threePlayerAdjacentCells(state, center)) {
     const victim = state.board[cell];
+    const alliedTeammate = Boolean(
+      victim?.controller &&
+      victim.controller !== state.activeSeat &&
+      threePlayerSeatsAreAllies(
+        state.config,
+        state.activeSeat,
+        victim.controller,
+      ),
+    );
     if (
       !victim ||
+      alliedTeammate ||
       (spareAllies && alliedPiece(state, victim))
     ) continue;
     captureAt(state, cell, true);

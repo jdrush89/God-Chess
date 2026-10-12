@@ -217,6 +217,24 @@ describe("three-player turn-start resolution", () => {
     });
   });
 
+  it("ends when only one challenge team remains", () => {
+    mockedChess.mode = "white-mated";
+    const config = createThreePlayerGame().config;
+    config.teams = {
+      white: "player",
+      red: "allied-ai",
+      black: "allied-ai",
+    };
+    const state = finishDraft(createThreePlayerGame(config));
+
+    expect(state.players.white.eliminated).toBe(true);
+    expect(state.result).toEqual({
+      kind: "winner",
+      seat: "red",
+      reason: "last-survivor",
+    });
+  });
+
   it("resolves checkmate before exposing the first turn of a new round", () => {
     let state = finishDraft();
     state.phase = "upgrade";

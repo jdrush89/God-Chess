@@ -338,6 +338,40 @@ const sendCapturedPieceToGraveyard = (state: GameState, piece: Piece, source: Sq
   state.captureAnimations = state.captureAnimations.slice(-12);
 };
 
+const resolveRoyalCapture = (
+  state: GameState,
+  piece: Piece,
+  captor: Color,
+) => {
+  if (
+    state.challengeId === "regicide" &&
+    piece.status.challengeRoyal &&
+    piece.controller === "black"
+  ) {
+    delete piece.status.challengeRoyal;
+    const successor = Object.values(state.board).find((candidate) =>
+      candidate.controller === "black" &&
+      candidate.type === "queen" &&
+      !candidate.status.challengeRoyal
+    );
+    if (successor) {
+      successor.status.challengeRoyal = true;
+      log(
+        state,
+        "The first royal Queen fell. The surviving Medusa Queen now carries the crown.",
+      );
+      return false;
+    }
+    setClassicWinner(state, captor, "king-death");
+    return true;
+  }
+  if (piece.type === "king") {
+    setClassicWinner(state, captor, "king-death");
+    return true;
+  }
+  return false;
+};
+
 const captureAt = (
   state: GameState,
   square: Square,
@@ -362,9 +396,7 @@ const captureAt = (
     addOrbs(state, piece.status.ritual.owner, reward, reward);
     log(state, `${colorName(piece.status.ritual.owner)}'s ritual returns ${reward} of each orb.`);
   }
-  if (piece.type === "king") {
-    setClassicWinner(state, captor, "king-death");
-  }
+  resolveRoyalCapture(state, piece, captor);
   return piece;
 };
 
@@ -405,9 +437,7 @@ const moveDirect = (state: GameState, from: Square, requestedTo: Square, telepor
       const reward = ritualLevel >= 3 ? 3 : 2;
       addOrbs(state, result.captured.status.ritual.owner, reward, reward);
     }
-    if (result.captured.type === "king") {
-      setClassicWinner(state, moving.controller, "king-death");
-    }
+    resolveRoyalCapture(state, result.captured, moving.controller);
   }
   if (peel) {
     const banana = state.bananas.find((candidate) => candidate.square === peel);
@@ -600,15 +630,75 @@ const hasUpgradeableAbility = (state: GameState, color: Color) =>
     )
   );
 
+const challengeGodUseCount = (
+  state: GameState,
+  color: Color,
+  godId: GodId,
+) => state.challengeGodUses?.[color]?.[godId] ?? 0;
+
+export const isClassicGodResting = (
+  state: GameState,
+  color: Color,
+  godId: GodId,
+) => {
+  if (!state.challengeGodUses) return state.rested.includes(godId);
+  const copies = state.players[color].gods.filter(
+    (candidate) => candidate === godId,
+  ).length;
+  return challengeGodUseCount(state, color, godId) >= copies;
+};
+
+const markChallengeGodUsed = (
+  state: GameState,
+  color: Color,
+  godId: GodId | undefined,
+) => {
+  if (!state.challengeGodUses || !godId) return;
+  state.challengeGodUses[color] ??= {};
+  state.challengeGodUses[color][godId] =
+    challengeGodUseCount(state, color, godId) + 1;
+};
+
+const challengePantheonsResting = (state: GameState) =>
+  Boolean(
+    state.challengeGodUses &&
+    (["white", "black"] as Color[]).every((color) =>
+      Object.values(state.challengeGodUses![color]).reduce(
+        (total, uses) => total + (uses ?? 0),
+        0,
+      ) >= state.players[color].gods.length
+    ),
+  );
+
 const startNextRound = (state: GameState) => {
   state.phase = "play";
   state.round += 1;
   state.rested = [];
   state.upgradeQueue = [];
+  if (state.challengeGodUses) {
+    state.challengeGodUses = { white: {}, black: {} };
+  }
   state.activeColor = "white";
   state.turn += 1;
   state.notice = `Round ${state.round}. White to act.`;
   resolveStartOfTurn(state);
+};
+
+const resumeOneGodChallenge = (state: GameState) => {
+  const nextColor = state.challengeUpgradeResumeColor;
+  if (!nextColor) return false;
+  state.phase = "play";
+  state.upgradeQueue = [];
+  state.upgradePreview = undefined;
+  state.challengeUpgradeResumeColor = undefined;
+  state.challengeGodUses = { white: {}, black: {} };
+  state.rested = [];
+  if (nextColor === "white") state.round += 1;
+  state.turn += 1;
+  state.activeColor = nextColor;
+  state.notice = `${colorName(nextColor)} to act with Kangus.`;
+  resolveStartOfTurn(state);
+  return true;
 };
 
 const advanceUpgradeQueue = (state: GameState) => {
@@ -616,6 +706,10 @@ const advanceUpgradeQueue = (state: GameState) => {
     hasUpgradeableAbility(state, color)
   );
   if (!state.upgradeQueue.length) {
+    if (
+      state.challengeId === "there-can-only-be-one" &&
+      resumeOneGodChallenge(state)
+    ) return;
     startNextRound(state);
     return;
   }
@@ -626,6 +720,7 @@ const advanceUpgradeQueue = (state: GameState) => {
 const finishTurn = (state: GameState, description: string) => {
   if (state.selectedGod === "death") resolveMarkedForDeath(state);
   const actingGod = state.selectedGod;
+  markChallengeGodUsed(state, state.activeColor, actingGod);
   if (state.selectedGod && !state.rested.includes(state.selectedGod)) state.rested.push(state.selectedGod);
   log(state, description);
   state.lastAction = description;
@@ -666,8 +761,29 @@ const finishTurn = (state: GameState, description: string) => {
     state.rested = state.rested.filter((godId) => godId !== actingGod);
   }
   expireStatuses(state, endingColor);
+  if (state.challengeId === "there-can-only-be-one") {
+    const nextColor = opposite(endingColor);
+    if (hasUpgradeableAbility(state, endingColor)) {
+      state.phase = "upgrade";
+      state.upgradeQueue = [endingColor];
+      state.challengeUpgradeResumeColor = nextColor;
+      state.activeColor = endingColor;
+      state.notice = `${colorName(endingColor)} upgrades Kangus before the next turn.`;
+    } else {
+      state.challengeUpgradeResumeColor = nextColor;
+      resumeOneGodChallenge(state);
+    }
+    return;
+  }
   const drafted = [...state.players.white.gods, ...state.players.black.gods];
-  if (drafted.length === 6 && drafted.every((god) => state.rested.includes(god))) {
+  if (
+    drafted.length === 6 &&
+    (
+      state.challengeGodUses
+        ? challengePantheonsResting(state)
+        : drafted.every((god) => state.rested.includes(god))
+    )
+  ) {
     state.phase = "upgrade";
     state.upgradeQueue = ["white", "black"];
     advanceUpgradeQueue(state);
@@ -1562,9 +1678,7 @@ const activateAbility = (state: GameState, abilityId: string) => {
 
 const recordMoveCapture = (state: GameState, captured: Piece | undefined) => {
   if (!captured) return;
-  if (captured.type === "king") {
-    setClassicWinner(state, state.activeColor, "king-death");
-  }
+  resolveRoyalCapture(state, captured, state.activeColor);
 };
 
 const resolveMoveEffect = (
@@ -2829,7 +2943,10 @@ const selectGod = (state: GameState, godId: GodId) => {
     state.pending?.abilityId === "stealth-return"
   ) return;
   if (state.pending?.step === "enchant-followup-move") return;
-  if (!state.players[state.activeColor].gods.includes(godId) || state.rested.includes(godId)) return;
+  if (
+    !state.players[state.activeColor].gods.includes(godId) ||
+    isClassicGodResting(state, state.activeColor, godId)
+  ) return;
   if (state.selectedAbility) refundCost(state);
   state.selectedGod = godId;
   state.selectedAbility = undefined;
@@ -3021,7 +3138,9 @@ export const availableClassicActions = (state: GameState): GameAction[] => {
   }
   if (!state.selectedGod) {
     return state.players[state.activeColor].gods
-      .filter((godId) => !state.rested.includes(godId))
+      .filter((godId) =>
+        !isClassicGodResting(state, state.activeColor, godId)
+      )
       .map((godId) => ({ type: "select-god", godId }));
   }
   if (!state.selectedAbility) {
@@ -3057,7 +3176,11 @@ export const canStartClassicMoveFirst = (state: GameState) =>
     !state.selectedGod ||
     (
       state.players[state.activeColor].gods.includes(state.selectedGod) &&
-      !state.rested.includes(state.selectedGod)
+      !isClassicGodResting(
+        state,
+        state.activeColor,
+        state.selectedGod,
+      )
     )
   ) &&
   !state.selectedAbility &&
@@ -3137,7 +3260,7 @@ const applyMoveFirstCommit = (
     !god ||
     god.abilities[0].id !== action.abilityId ||
     !state.players[state.activeColor].gods.includes(action.godId) ||
-    state.rested.includes(action.godId) ||
+    isClassicGodResting(state, state.activeColor, action.godId) ||
     (state.selectedGod !== undefined && state.selectedGod !== action.godId) ||
     !firstAbilityNormalMoveTargets(state, action.move.from).includes(action.move.to)
   ) return false;
@@ -3193,7 +3316,7 @@ export const classicMoveFirstCandidates = (
   return GODS
     .filter((god) =>
       state.players[state.activeColor].gods.includes(god.id) &&
-      !state.rested.includes(god.id) &&
+      !isClassicGodResting(state, state.activeColor, god.id) &&
       (!state.selectedGod || god.id === state.selectedGod)
     )
     .map((god) => {
@@ -3342,8 +3465,14 @@ const adjudicateClassicNoTurn = (state: GameState) => {
     const piece = state.board[king];
     delete state.board[king];
     sendCapturedPieceToGraveyard(state, piece, king);
-    setClassicWinner(state, winner, "checkmate");
-    const message = `${colorName(color)} was checkmated by ${colorName(winner)}.`;
+    const regicideRoyal = state.challengeId === "regicide" &&
+      Boolean(piece.status.challengeRoyal);
+    const ended = regicideRoyal
+      ? resolveRoyalCapture(state, piece, winner)
+      : (setClassicWinner(state, winner, "checkmate"), true);
+    const message = ended
+      ? `${colorName(color)} was checkmated by ${colorName(winner)}.`
+      : "The first royal Queen was checkmated. The surviving Queen takes the crown.";
     log(state, message);
     state.lastAction = message;
     state.notice = message;

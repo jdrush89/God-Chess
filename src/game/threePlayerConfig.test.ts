@@ -5,6 +5,8 @@ import {
   createThreePlayerTurnOrder,
   nextThreePlayerSeat,
   threePlayerOwnerAffinity,
+  threePlayerSeatsAreAllies,
+  threePlayerSeatsAreHostile,
   validateThreePlayerConfig,
 } from "./threePlayerConfig";
 
@@ -49,5 +51,19 @@ describe("three-player configuration", () => {
     expect(threePlayerOwnerAffinity("red", 0)).toBe("light");
     expect(threePlayerOwnerAffinity("red", 1)).toBe("dark");
     expect(threePlayerOwnerAffinity("red", 2)).toBe("light");
+  });
+
+  it("validates and resolves optional challenge teams", () => {
+    const config = createDefaultThreePlayerConfig();
+    config.teams = {
+      white: "player",
+      red: "allied-ai",
+      black: "allied-ai",
+    };
+
+    expect(validateThreePlayerConfig(config)).toBe(config);
+    expect(threePlayerSeatsAreAllies(config, "red", "black")).toBe(true);
+    expect(threePlayerSeatsAreHostile(config, "white", "red")).toBe(true);
+    expect(threePlayerSeatsAreHostile(config, "red", "black")).toBe(false);
   });
 });

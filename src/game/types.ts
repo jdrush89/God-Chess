@@ -1,5 +1,14 @@
 export type Color = "white" | "black";
 export type GameMode = "local" | "ai" | "online" | "puzzle";
+export type ChallengeId =
+  | "phalanx"
+  | "there-can-only-be-one"
+  | "underdog"
+  | "underest-dog"
+  | "regicide"
+  | "littering-and"
+  | "gang-up"
+  | "jumped";
 export type OrbColor = Color;
 export type PieceType = "king" | "queen" | "rook" | "bishop" | "knight" | "pawn";
 export type Square = string;
@@ -104,6 +113,7 @@ export interface PieceStatus {
   hired?: boolean;
   movedThisTurn?: boolean;
   chargeUntil?: number | "god";
+  challengeRoyal?: boolean;
 }
 
 export interface Piece {
@@ -259,6 +269,9 @@ export interface GameState {
   puzzleId?: ClassicPuzzleId;
   puzzlePlayerTurnsRemaining?: number;
   puzzleFailed?: boolean;
+  challengeId?: ChallengeId;
+  challengeGodUses?: Record<Color, Partial<Record<GodId, number>>>;
+  challengeUpgradeResumeColor?: Color;
   board: Record<Square, Piece>;
   players: Record<Color, PlayerState>;
   activeColor: Color;
