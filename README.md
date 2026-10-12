@@ -191,7 +191,7 @@ mode chooser.
 
 ## Puzzle mode
 
-Puzzle mode has a dedicated difficulty browser with five Easy positions won in
+Puzzle mode has a dedicated difficulty browser with ten Easy positions won in
 one divine turn, ten Medium positions won across two player turns, and ten Hard
 positions won across three player turns. A separate Three Player set includes
 ten last-survivor positions, two on each supported three-player board, where
@@ -201,6 +201,15 @@ restart and next-puzzle controls, and level 10 Divine AI responses between playe
 Completion check marks are stored in local storage while signed out and in the
 player's account while signed in; puzzle positions themselves are not added to
 local or cloud saves.
+
+## Achievements
+
+The Play menu includes a 50-item achievement gallery with completion states and
+progress bars for cumulative goals. Progress is recorded from canonical game
+transitions in classic, three-player, and four-player matches. Signed-out
+progress is stored in the browser; signing in merges that progress into the
+player's account and future progress is saved there. Cryptologist requires all
+ten Easy, ten Medium, and ten Hard classic puzzles.
 
 ### Puzzle god index
 
@@ -236,6 +245,11 @@ must update this documentation.
 | Position Twenty-Three | Anubis, Quetzacoatl, Leonidas | Ares, Chiron, Salem | Anubis (construction); Quetzacoatl (air-lift); Leonidas (escort) |
 | Position Twenty-Four | Medusa, Quetzacoatl, Kangus Kong | Ares, Chiron, Anubis | Medusa (captivate); Quetzacoatl (flight); Kangus Kong (rage) |
 | Position Twenty-Five | Salem, Ares, Chiron | Artemis, Anubis, Medusa | Salem (hex); Ares (pick-a-fight); Chiron (charge) |
+| Position Twenty-Six | Chiron, Teles, Midas | Ares, Chiron, Anubis | Chiron (charge) |
+| Position Twenty-Seven | Kangus Kong, Teles, Death | Ares, Chiron, Anubis | Kangus Kong (rage) |
+| Position Twenty-Eight | Death, Midas, Salem | Ares, Chiron, Anubis | Death (resurrect) |
+| Position Twenty-Nine | Leonidas, Teles, Midas | Ares, Chiron, Anubis | Leonidas (escort) |
+| Position Thirty | Quetzacoatl, Teles, Salem | Ares, Chiron, Anubis | Quetzacoatl (air-strike) |
 
 ## Accounts and cloud saves
 

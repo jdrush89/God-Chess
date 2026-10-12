@@ -166,11 +166,11 @@ const countDistinctWinningLines = (
 };
 
 describe("puzzle mode", () => {
-  it("includes five Easy, ten Medium, and ten Hard positions", () => {
-    expect(PUZZLES.filter((puzzle) => puzzle.playerTurns === 1)).toHaveLength(5);
+  it("includes ten Easy, ten Medium, and ten Hard positions", () => {
+    expect(PUZZLES.filter((puzzle) => puzzle.playerTurns === 1)).toHaveLength(10);
     expect(PUZZLES.filter((puzzle) => puzzle.playerTurns === 2)).toHaveLength(10);
     expect(PUZZLES.filter((puzzle) => puzzle.playerTurns === 3)).toHaveLength(10);
-    expect(PUZZLES.filter((puzzle) => puzzle.difficulty === "easy")).toHaveLength(5);
+    expect(PUZZLES.filter((puzzle) => puzzle.difficulty === "easy")).toHaveLength(10);
     expect(PUZZLES.filter((puzzle) => puzzle.difficulty === "medium")).toHaveLength(10);
     expect(HARD_PUZZLES).toHaveLength(10);
     expect(HARD_PUZZLES.every((puzzle) => puzzle.playerTurns === 3)).toBe(true);
