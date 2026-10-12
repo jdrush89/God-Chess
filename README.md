@@ -193,9 +193,11 @@ mode chooser.
 
 Puzzle mode has a dedicated difficulty browser with five Easy positions won in
 one divine turn, ten Medium positions won across two player turns, and ten Hard
-positions won across three player turns. The puzzle cards do not reveal the
-intended god or ability. Each position includes an optional hint, restart and
-next-puzzle controls, and level 10 Divine AI responses between player turns.
+positions won across three player turns. A separate Three Player set includes
+ten last-survivor positions, two on each supported three-player board, where
+both rival Kings must be checkmated within two player turns. The puzzle cards do
+not reveal the intended god or ability. Each position includes an optional hint,
+restart and next-puzzle controls, and level 10 Divine AI responses between player turns.
 Completion check marks are stored in local storage while signed out and in the
 player's account while signed in; puzzle positions themselves are not added to
 local or cloud saves.

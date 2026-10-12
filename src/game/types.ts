@@ -3,7 +3,7 @@ export type GameMode = "local" | "ai" | "online" | "puzzle";
 export type OrbColor = Color;
 export type PieceType = "king" | "queen" | "rook" | "bishop" | "knight" | "pawn";
 export type Square = string;
-export type PuzzleId =
+export type ClassicPuzzleId =
   | "centaurs-lance"
   | "circle-of-rage"
   | "hidden-reserve"
@@ -29,6 +29,18 @@ export type PuzzleId =
   | "opened-throne"
   | "pinned-serpent"
   | "hexed-provocation";
+export type ThreePlayerPuzzleId =
+  | "three-frontier-fork"
+  | "three-distant-rampart"
+  | "hexagonal-crossfire"
+  | "hexagonal-last-gate"
+  | "triad-pincer"
+  | "triad-long-march"
+  | "circular-convergence"
+  | "circular-outer-ring"
+  | "half-board-siege"
+  | "half-board-final-file";
+export type PuzzleId = ClassicPuzzleId | ThreePlayerPuzzleId;
 export type GodId =
   | "quetzacoatl"
   | "chiron"
@@ -239,7 +251,7 @@ export interface GameState {
   aiDifficulty: number;
   aiColor?: Color;
   onlineHostColor?: Color;
-  puzzleId?: PuzzleId;
+  puzzleId?: ClassicPuzzleId;
   puzzlePlayerTurnsRemaining?: number;
   puzzleFailed?: boolean;
   board: Record<Square, Piece>;

@@ -2,19 +2,19 @@ import { createGame, type GameAction } from "./engine";
 import { GODS } from "./gods";
 import type {
   Color,
+  ClassicPuzzleId,
   GameState,
   GodId,
   Piece,
   PieceStatus,
   PieceType,
-  PuzzleId,
   Square,
 } from "./types";
 
 export type PuzzleDifficulty = "easy" | "medium" | "hard";
 
 export interface PuzzleDefinition {
-  id: PuzzleId;
+  id: ClassicPuzzleId;
   title: string;
   difficulty: PuzzleDifficulty;
   objective: string;
@@ -26,7 +26,7 @@ export interface PuzzleDefinition {
 }
 
 export interface PuzzleGodUsage {
-  puzzleId: PuzzleId;
+  puzzleId: ClassicPuzzleId;
   title: string;
   playerGods: GodId[];
   opponentGods: GodId[];
@@ -35,10 +35,10 @@ export interface PuzzleGodUsage {
 }
 
 export interface GodPuzzleIndexEntry {
-  playerIn: PuzzleId[];
-  opponentIn: PuzzleId[];
-  requiredBy: PuzzleId[];
-  solutionAbilitiesByPuzzle: Partial<Record<PuzzleId, string[]>>;
+  playerIn: ClassicPuzzleId[];
+  opponentIn: ClassicPuzzleId[];
+  requiredBy: ClassicPuzzleId[];
+  solutionAbilitiesByPuzzle: Partial<Record<ClassicPuzzleId, string[]>>;
 }
 
 const piece = (
@@ -56,7 +56,7 @@ const piece = (
 });
 
 const preparePuzzle = (
-  id: PuzzleId,
+  id: ClassicPuzzleId,
   title: string,
   objective: string,
   gods: [GodId, GodId, GodId],
@@ -162,7 +162,7 @@ const enableBestDefense = (state: GameState) => {
 
 const deriveHardPuzzle = (
   source: (playerName?: string) => GameState,
-  id: PuzzleId,
+  id: ClassicPuzzleId,
   title: string,
   gods: [GodId, GodId, GodId],
   playerName?: string,
@@ -1862,7 +1862,7 @@ export const PUZZLES: PuzzleDefinition[] = [
 
 export const PUZZLE_BY_ID = Object.fromEntries(
   PUZZLES.map((puzzle) => [puzzle.id, puzzle]),
-) as Record<PuzzleId, PuzzleDefinition>;
+) as Record<ClassicPuzzleId, PuzzleDefinition>;
 
 const puzzleGodUsage = (puzzle: PuzzleDefinition): PuzzleGodUsage => {
   const state = puzzle.createState();
@@ -1897,7 +1897,7 @@ export const PUZZLE_GOD_USAGE = PUZZLES.map(puzzleGodUsage);
 
 export const PUZZLE_GOD_USAGE_BY_ID = Object.fromEntries(
   PUZZLE_GOD_USAGE.map((usage) => [usage.puzzleId, usage]),
-) as Record<PuzzleId, PuzzleGodUsage>;
+) as Record<ClassicPuzzleId, PuzzleGodUsage>;
 
 export const PUZZLE_GOD_INDEX = Object.fromEntries(
   GODS.map((god) => {
@@ -1915,7 +1915,7 @@ export const PUZZLE_GOD_INDEX = Object.fromEntries(
         const abilities = usage.solutionAbilities[god.id];
         return abilities ? [[usage.puzzleId, abilities]] : [];
       }),
-    ) as Partial<Record<PuzzleId, string[]>>;
+    ) as Partial<Record<ClassicPuzzleId, string[]>>;
     return [god.id, {
       playerIn,
       opponentIn,
@@ -1925,5 +1925,5 @@ export const PUZZLE_GOD_INDEX = Object.fromEntries(
   }),
 ) as Record<GodId, GodPuzzleIndexEntry>;
 
-export const createPuzzleGame = (puzzleId: PuzzleId, playerName?: string) =>
+export const createPuzzleGame = (puzzleId: ClassicPuzzleId, playerName?: string) =>
   PUZZLE_BY_ID[puzzleId].createState(playerName);
