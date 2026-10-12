@@ -31,6 +31,7 @@ import {
   Snowflake,
   Sparkles,
   Swords,
+  Trophy,
   Trash2,
   Undo2,
   UserRound,
@@ -83,6 +84,24 @@ import {
   upsertCloudCompletedPuzzles,
 } from "./account/cloudPuzzleProgress";
 import { useAccount, type AccountProfile } from "./account/useAccount";
+import {
+  loadCloudAchievementProgress,
+  upsertCloudAchievementProgress,
+} from "./account/cloudAchievementProgress";
+import {
+  completedAchievementIds,
+  loadLocalAchievementProgress,
+  mergeNormalizedAchievementProgress,
+  persistLocalAchievementProgress,
+} from "./achievementProgress";
+import {
+  ACHIEVEMENT_DEFINITIONS,
+  achievementProgressValue,
+  applyAchievementTransition,
+  completeCryptologistIfEligible,
+  type AchievementProgress,
+  type AchievementTransition,
+} from "./achievements";
 import {
   onlinePlayerColor,
   onlineTurnInputDisabled,
@@ -1910,6 +1929,7 @@ function PlayMenu({
   onOpenPuzzles,
   onOpenTutorial,
   onOpenRoster,
+  onOpenAchievements,
   onOpenLoad,
 }: {
   savedGames: SavedGame[];
@@ -1922,6 +1942,7 @@ function PlayMenu({
   onOpenPuzzles: () => void;
   onOpenTutorial: () => void;
   onOpenRoster: () => void;
+  onOpenAchievements: () => void;
   onOpenLoad: () => void;
 }) {
   const loadDescription = savesLoading
@@ -1957,6 +1978,10 @@ function PlayMenu({
           <BookOpen size={30} />
           <strong>Roster</strong>
         </button>
+        <button onClick={onOpenAchievements}>
+          <Trophy size={30} />
+          <strong>Achievements</strong>
+        </button>
         <button
           onClick={onOpenLoad}
           disabled={savesLoading || savedGames.length === 0}
@@ -1971,6 +1996,89 @@ function PlayMenu({
         {loadDescription}
       </p>
       {saveError && <p className="main-menu-error" role="alert">{saveError}</p>}
+    </SetupNavigationShell>
+  );
+}
+
+function AchievementsScreen({
+  progress,
+  account,
+  loading,
+  puzzleCounts,
+  onBack,
+}: {
+  progress: AchievementProgress;
+  account?: AccountProfile;
+  loading: boolean;
+  puzzleCounts: Record<PuzzleDifficulty, number>;
+  onBack: () => void;
+}) {
+  const completed = new Set(completedAchievementIds(progress));
+  return (
+    <SetupNavigationShell backLabel="Back to Play" onBack={onBack}>
+      <section className="achievements-page">
+        <header className="achievements-heading">
+          <div>
+            <p className="eyebrow">ACHIEVEMENTS</p>
+            <h1>Chronicle of legends</h1>
+            <p>
+              {account
+                ? "Progress is saved to your account."
+                : "Progress is saved on this device until you sign in."}
+            </p>
+          </div>
+          <strong>{completed.size} / {ACHIEVEMENT_DEFINITIONS.length}</strong>
+        </header>
+        {loading ? (
+          <div className="achievements-loading">
+            <LoaderCircle className="spin" size={24} />
+            <span>Restoring achievement progress</span>
+          </div>
+        ) : (
+          <div className="achievement-grid">
+            {ACHIEVEMENT_DEFINITIONS.map((achievement, index) => {
+              const done = completed.has(achievement.id);
+              const value = achievementProgressValue(
+                progress,
+                achievement.id,
+                puzzleCounts,
+              );
+              return (
+                <article
+                  className={`achievement-card${done ? " completed" : ""}`}
+                  key={achievement.id}
+                >
+                  <span className="achievement-number">{index + 1}</span>
+                  <div className="achievement-icon" aria-hidden="true">
+                    {done ? <Check size={20} /> : <Trophy size={20} />}
+                  </div>
+                  <div>
+                    <h2>{achievement.title}</h2>
+                    <p>{achievement.description}</p>
+                    {achievement.goal && (
+                      <div className="achievement-progress">
+                        <div>
+                          <i
+                            style={{
+                              width: `${
+                                Math.min(100, Math.round(
+                                  (Math.min(value ?? 0, achievement.goal) /
+                                    achievement.goal) * 100,
+                                ))
+                              }%`,
+                            }}
+                          />
+                        </div>
+                        <span>{Math.min(value ?? 0, achievement.goal)} / {achievement.goal}</span>
+                      </div>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
     </SetupNavigationShell>
   );
 }
@@ -3740,6 +3848,13 @@ export default function App() {
     completed: PuzzleId[];
   }>({ completed: [] });
   const [puzzleProgressLoading, setPuzzleProgressLoading] = useState(false);
+  const [achievementProgress, setAchievementProgress] = useState(
+    loadLocalAchievementProgress,
+  );
+  const [achievementProgressLoadedFor, setAchievementProgressLoadedFor] =
+    useState<string>();
+  const [achievementProgressLoading, setAchievementProgressLoading] =
+    useState(false);
   const savedGames = accountService.account ? cloudSavedGames : localSavedGames;
   const savesHydrating = Boolean(
     accountService.account &&
@@ -3751,10 +3866,22 @@ export default function App() {
       : []
     : localCompletedPuzzles;
   const completedPuzzles = new Set(completedPuzzleIds);
+  const completedPuzzleCounts = useMemo(
+    () =>
+      completedPuzzleIds.reduce(
+        (result, puzzleId) => {
+          const puzzle = PUZZLE_BY_ID[puzzleId as keyof typeof PUZZLE_BY_ID];
+          if (puzzle) result[puzzle.difficulty] += 1;
+          return result;
+        },
+        { easy: 0, medium: 0, hard: 0 } as Record<PuzzleDifficulty, number>,
+      ),
+    [completedPuzzleIds],
+  );
   const savedGamesRef = useRef(savedGames);
   savedGamesRef.current = savedGames;
   const activeSaveId = useRef<string | undefined>(undefined);
-  const [startView, setStartView] = useState<"menu" | "roster" | "play" | "load" | "setup" | "three-setup" | "four-setup" | "puzzles" | "tutorial" | "none">("menu");
+  const [startView, setStartView] = useState<"menu" | "roster" | "achievements" | "play" | "load" | "setup" | "three-setup" | "four-setup" | "puzzles" | "tutorial" | "none">("menu");
   const [setupReturnView, setSetupReturnView] = useState<"menu" | "play" | "none">("menu");
   const [setupCategory, setSetupCategory] = useState<StartCategory>("local");
   const [setupPlayerCount, setSetupPlayerCount] = useState<PlayerCount>();
@@ -3775,6 +3902,7 @@ export default function App() {
   const undoDepthRef = useRef(0);
   const turnStart = useRef<GameState | undefined>(undefined);
   const cloudSaveQueue = useRef<Promise<void>>(Promise.resolve());
+  const cloudAchievementQueue = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
     activeSaveId.current = undefined;
@@ -3805,6 +3933,96 @@ export default function App() {
       active = false;
     };
   }, [accountService.account?.userId]);
+
+  useEffect(() => {
+    const account = accountService.account;
+    if (!account) {
+      setAchievementProgressLoadedFor(undefined);
+      setAchievementProgressLoading(false);
+      setAchievementProgress(loadLocalAchievementProgress());
+      return;
+    }
+    let active = true;
+    setAchievementProgressLoading(true);
+    void loadCloudAchievementProgress(account.userId)
+      .then((cloudProgress) => {
+        if (!active) return;
+        const merged = mergeNormalizedAchievementProgress(
+          loadLocalAchievementProgress(),
+          cloudProgress,
+        );
+        setAchievementProgress(merged);
+        setAchievementProgressLoadedFor(account.userId);
+        cloudAchievementQueue.current = cloudAchievementQueue.current
+          .then(() => upsertCloudAchievementProgress(account.userId, merged))
+          .catch((error) => {
+            console.error("Unable to merge achievement progress.", error);
+            setSaveError(
+              error instanceof Error
+                ? error.message
+                : "Unable to save achievement progress.",
+            );
+          });
+      })
+      .catch((error) => {
+        console.error("Unable to load cloud achievement progress.", error);
+        if (active) {
+          setSaveError(
+            error instanceof Error
+              ? error.message
+              : "Unable to load achievement progress.",
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setAchievementProgressLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [accountService.account?.userId]);
+
+  const saveAchievementProgress = useCallback((
+    update: (current: AchievementProgress) => AchievementProgress,
+  ) => {
+    setAchievementProgress((current) => {
+      const next = update(current);
+      if (next === current) return current;
+      const account = accountService.account;
+      if (
+        account &&
+        achievementProgressLoadedFor === account.userId &&
+        !achievementProgressLoading
+      ) {
+        cloudAchievementQueue.current = cloudAchievementQueue.current
+          .then(() => upsertCloudAchievementProgress(account.userId, next))
+          .catch((error) => {
+            console.error("Unable to save cloud achievement progress.", error);
+            setSaveError(
+              error instanceof Error
+                ? error.message
+                : "Unable to save achievement progress.",
+            );
+          });
+      } else {
+        try {
+          persistLocalAchievementProgress(next);
+        } catch (error) {
+          console.error("Unable to save local achievement progress.", error);
+          setSaveError(
+            error instanceof Error
+              ? error.message
+              : "Unable to save achievement progress.",
+          );
+        }
+      }
+      return next;
+    });
+  }, [
+    accountService.account,
+    achievementProgressLoadedFor,
+    achievementProgressLoading,
+  ]);
 
   useEffect(() => {
     const account = accountService.account;
@@ -3888,6 +4106,29 @@ export default function App() {
     state.winner,
   ]);
 
+  useEffect(() => {
+    saveAchievementProgress((current) =>
+      completeCryptologistIfEligible(current, completedPuzzleCounts)
+    );
+  }, [completedPuzzleCounts, saveAchievementProgress]);
+
+  const recordAchievementTransition = (
+    transition: AchievementTransition,
+  ) => {
+    saveAchievementProgress((current) =>
+      applyAchievementTransition(current, transition).progress
+    );
+  };
+
+  const classicLocalActors = (current: GameState): Color[] => {
+    if (current.gameMode === "local") return ["white", "black"];
+    if (current.gameMode === "online") {
+      const localColor = onlinePlayerColor(online, current.onlineHostColor);
+      return localColor ? [localColor] : [];
+    }
+    return [current.aiColor === "white" ? "black" : "white"];
+  };
+
   const receiveState = (next: GameState) => {
     stateRef.current = next;
     baseDispatch({ type: "load-game", state: next });
@@ -3958,6 +4199,19 @@ export default function App() {
       before: current as unknown as Record<string, unknown>,
       after: next as unknown as Record<string, unknown>,
     });
+    if (current.gameMode !== "puzzle") {
+      recordAchievementTransition({
+        variant: "classic",
+        matchId: activeSaveId.current ??
+          (current.gameMode === "online" && online.roomCode
+            ? `online-classic:${online.roomCode}`
+            : `classic:${current.gameMode}`),
+        localActors: classicLocalActors(current),
+        before: current,
+        after: next,
+        action,
+      });
+    }
     return next;
   };
   const canApplyUndo = () => {
@@ -4555,9 +4809,9 @@ export default function App() {
     fourOnlineActions.disconnect();
     threeOnlineActions.disconnect();
     setFourPlayerSession(undefined);
-    activeSaveId.current = undefined;
+    const id = saveId();
+    activeSaveId.current = id;
     if (isThreePlayerPuzzleId(puzzleId)) {
-      const id = saveId();
       setThreePlayerSession({
         key: id,
         state: THREE_PLAYER_PUZZLE_BY_ID[puzzleId].createState(
@@ -4735,6 +4989,18 @@ export default function App() {
     return <RosterScreen onBack={() => setStartView("play")} />;
   }
 
+  if (startView === "achievements") {
+    return (
+      <AchievementsScreen
+        progress={achievementProgress}
+        account={accountService.account}
+        loading={achievementProgressLoading}
+        puzzleCounts={completedPuzzleCounts}
+        onBack={() => setStartView("play")}
+      />
+    );
+  }
+
   if (startView === "play") {
     return (
       <PlayMenu
@@ -4748,6 +5014,7 @@ export default function App() {
         onOpenPuzzles={() => setStartView("puzzles")}
         onOpenTutorial={() => setStartView("tutorial")}
         onOpenRoster={() => setStartView("roster")}
+        onOpenAchievements={() => setStartView("achievements")}
         onOpenLoad={() => setStartView("load")}
       />
     );
@@ -4919,6 +5186,17 @@ export default function App() {
       <ThreePlayerGame
         key={`online-three-${threeOnline.roomCode}`}
         initialState={threeOnlineCanonical.state}
+        onAchievementTransition={(before, after, action) => {
+          const localSeat = threePlayerOnlineLocalSeat(threeOnline);
+          recordAchievementTransition({
+            variant: "three-player",
+            matchId: `online-three:${threeOnline.roomCode}`,
+            localActors: localSeat ? [localSeat] : [],
+            before,
+            after,
+            action,
+          });
+        }}
         onQuit={() => {
           threeOnlineActions.disconnect();
           setStartView("menu");
@@ -4959,6 +5237,17 @@ export default function App() {
       <FourPlayerGame
         key={`online-${fourOnline.roomCode}`}
         initialState={fourOnlineCanonical.state}
+        onAchievementTransition={(before, after, action) => {
+          const localSeat = fourPlayerOnlineLocalSeat(fourOnline);
+          recordAchievementTransition({
+            variant: "four-player",
+            matchId: `online-four:${fourOnline.roomCode}`,
+            localActors: localSeat ? [localSeat] : [],
+            before,
+            after,
+            action,
+          });
+        }}
         undoPreferred={fourOnline.snapshot.localUndoConsent}
         onUndoPreferenceChange={fourOnlineActions.setUndoConsent}
         onPersist={async () => false}
@@ -5008,6 +5297,20 @@ export default function App() {
         <FourPlayerGame
           key={fourPlayerSession.key}
           initialState={fourPlayerSession.state}
+          onAchievementTransition={(before, after, action) => {
+            const localActors = FOUR_PLAYER_SEATS.filter((seat) => {
+              const control = before.players[seat].control;
+              return control.kind === "human" && control.local !== false;
+            });
+            recordAchievementTransition({
+              variant: "four-player",
+              matchId: fourPlayerSession.key,
+              localActors,
+              before,
+              after,
+              action,
+            });
+          }}
           initialUndoHistory={fourPlayerSession.undoHistory}
           initialTurnStart={fourPlayerSession.turnStart}
           undoPreferred={undoPreferred}
@@ -5037,6 +5340,23 @@ export default function App() {
       <ThreePlayerGame
         key={threePlayerSession.key}
         initialState={threePlayerSession.state}
+        onAchievementTransition={(before, after, action) => {
+          if (threePlayerPuzzle) return;
+          const localActors = (["white", "red", "black"] as const).filter(
+            (seat) => {
+              const control = before.players[seat].control;
+              return control.kind === "human" && control.local !== false;
+            },
+          );
+          recordAchievementTransition({
+            variant: "three-player",
+            matchId: threePlayerSession.key,
+            localActors,
+            before,
+            after,
+            action,
+          });
+        }}
         initialUndoHistory={threePlayerSession.undoHistory}
         initialTurnStart={threePlayerSession.turnStart}
         undoPreferred={undoPreferred}

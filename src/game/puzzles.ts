@@ -1194,6 +1194,21 @@ const hexedProvocation = (playerName?: string) => {
   return state;
 };
 
+const easyVariant = (
+  source: (playerName?: string) => GameState,
+  id: ClassicPuzzleId,
+  title: string,
+  addedSquare: Square,
+  addedPiece: Piece,
+  playerName?: string,
+) => {
+  const state = source(playerName);
+  state.puzzleId = id;
+  state.board[addedSquare] = addedPiece;
+  state.history = [`Puzzle: ${title}`];
+  return state;
+};
+
 export const PUZZLES: PuzzleDefinition[] = [
   {
     id: "centaurs-lance",
@@ -1857,6 +1872,128 @@ export const PUZZLES: PuzzleDefinition[] = [
       ],
     ],
     createState: hexedProvocation,
+  },
+  {
+    id: "lances-second-line",
+    title: "Position Twenty-Six",
+    difficulty: "easy",
+    objective: "Capture the black King in one divine turn.",
+    hint: "A knight can become a long-range weapon without changing files.",
+    solutionSummary: "Use Chiron's Charge to send the knight from e2 to e8 like a rook.",
+    playerTurns: 1,
+    solutionTurns: [[
+      { type: "select-god", godId: "chiron" },
+      { type: "select-ability", abilityId: "charge" },
+      { type: "square", square: "e2" },
+      { type: "square", square: "e8" },
+    ]],
+    createState: (playerName) =>
+      easyVariant(
+        centaursLance,
+        "lances-second-line",
+        "Position Twenty-Six",
+        "h6",
+        piece("black-pawn-h6", "pawn", "black"),
+        playerName,
+      ),
+  },
+  {
+    id: "crowded-fury",
+    title: "Position Twenty-Seven",
+    difficulty: "easy",
+    objective: "Capture the black King in one divine turn.",
+    hint: "The knight can destroy adjacent pieces without moving.",
+    solutionSummary: "Use Kangus Kong's Rage on the knight at e7 to engulf the King at e8.",
+    playerTurns: 1,
+    solutionTurns: [[
+      { type: "select-god", godId: "kangus" },
+      { type: "select-ability", abilityId: "rage" },
+      { type: "square", square: "e7" },
+    ]],
+    createState: (playerName) =>
+      easyVariant(
+        circleOfRage,
+        "crowded-fury",
+        "Position Twenty-Seven",
+        "a6",
+        piece("black-pawn-a6", "pawn", "black"),
+        playerName,
+      ),
+  },
+  {
+    id: "buried-crown",
+    title: "Position Twenty-Eight",
+    difficulty: "easy",
+    objective: "Capture the black King in one divine turn.",
+    hint: "The decisive piece is waiting in your graveyard.",
+    solutionSummary: "Use Death's level 3 Resurrect to revive the Queen from the graveyard directly onto the King at e4.",
+    playerTurns: 1,
+    solutionTurns: [[
+      { type: "select-god", godId: "death" },
+      { type: "select-ability", abilityId: "resurrect" },
+      { type: "grave", pieceId: "white-queen" },
+      { type: "square", square: "e4" },
+    ]],
+    createState: (playerName) =>
+      easyVariant(
+        hiddenReserve,
+        "buried-crown",
+        "Position Twenty-Eight",
+        "h6",
+        piece("black-pawn-h6", "pawn", "black"),
+        playerName,
+      ),
+  },
+  {
+    id: "kings-procession",
+    title: "Position Twenty-Nine",
+    difficulty: "easy",
+    objective: "Capture the black King in one divine turn.",
+    hint: "Move the King so the escorted bishop reaches the enemy King.",
+    solutionSummary: "Escort the bishop beside the King, then move the King from c2 to d2 so the bishop lands on e2.",
+    playerTurns: 1,
+    solutionTurns: [[
+      { type: "select-god", godId: "leonidas" },
+      { type: "select-ability", abilityId: "escort" },
+      { type: "square", square: "c2" },
+      { type: "square", square: "d2" },
+      { type: "square", square: "d2" },
+    ]],
+    createState: (playerName) =>
+      easyVariant(
+        royalEscort,
+        "kings-procession",
+        "Position Twenty-Nine",
+        "a6",
+        piece("black-pawn-a6", "pawn", "black"),
+        playerName,
+      ),
+  },
+  {
+    id: "stormborne-pawn",
+    title: "Position Thirty",
+    difficulty: "easy",
+    objective: "Capture the black King in one divine turn.",
+    hint: "Carry the b-file pawn over the blocked a-file and drop it on the first enemy crossed.",
+    solutionSummary: "Use level 2 Air Strike with the rook on a1, carry the pawn from b1, land on a8, and drop the pawn onto a5.",
+    playerTurns: 1,
+    solutionTurns: [[
+      { type: "select-god", godId: "quetzacoatl" },
+      { type: "select-ability", abilityId: "air-strike" },
+      { type: "square", square: "a1" },
+      { type: "square", square: "b1" },
+      { type: "square", square: "a8" },
+      { type: "square", square: "a5" },
+    ]],
+    createState: (playerName) =>
+      easyVariant(
+        serpentsDelivery,
+        "stormborne-pawn",
+        "Position Thirty",
+        "h6",
+        piece("black-pawn-h6", "pawn", "black"),
+        playerName,
+      ),
   },
 ];
 

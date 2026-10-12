@@ -1142,6 +1142,117 @@ span.move-target-dot {
 .play-menu-grid > button:disabled { color: #66676d; cursor: not-allowed; opacity: .62; }
 .play-menu-grid svg { color: var(--gold-bright); }
 .play-menu-grid strong { font: 600 clamp(17px, 2vw, 23px) "Cinzel"; }
+.achievements-page {
+  width: min(1180px, calc(100% - 32px));
+  margin: 28px auto 64px;
+}
+.achievements-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  align-items: end;
+  margin-bottom: 24px;
+}
+.achievements-heading h1 {
+  margin: 6px 0 8px;
+  font: 600 clamp(28px, 4vw, 48px) "Cinzel";
+}
+.achievements-heading p:last-child {
+  margin: 0;
+  color: #8d8e95;
+  font-size: 12px;
+}
+.achievements-heading > strong {
+  flex: none;
+  color: var(--gold-bright);
+  font: 600 20px "Cinzel";
+}
+.achievement-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.achievement-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 42px 1fr;
+  gap: 13px;
+  min-height: 126px;
+  padding: 18px;
+  overflow: hidden;
+  border: 1px solid #34363d;
+  background: linear-gradient(145deg, rgba(31, 32, 37, .96), rgba(19, 20, 24, .98));
+  color: #8f9198;
+}
+.achievement-card.completed {
+  border-color: rgba(214, 173, 76, .58);
+  background: linear-gradient(145deg, rgba(57, 47, 25, .68), rgba(24, 23, 21, .98));
+  color: #d5d0c2;
+}
+.achievement-number {
+  position: absolute;
+  top: 8px;
+  right: 11px;
+  color: #5f6067;
+  font: 600 10px "Cinzel";
+}
+.achievement-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid #42444c;
+  border-radius: 50%;
+  color: #686a72;
+}
+.achievement-card.completed .achievement-icon {
+  border-color: var(--gold);
+  color: var(--gold-bright);
+}
+.achievement-card h2 {
+  margin: 1px 24px 6px 0;
+  color: #c9c9cd;
+  font: 600 15px "Cinzel";
+}
+.achievement-card.completed h2 { color: #f0dfb0; }
+.achievement-card p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.achievement-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+.achievement-progress > div {
+  flex: 1;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #35363c;
+}
+.achievement-progress i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--gold);
+}
+.achievement-progress span {
+  min-width: 48px;
+  color: #a8a9ae;
+  font-size: 10px;
+  text-align: right;
+}
+.achievements-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  min-height: 240px;
+  color: #9a9ba1;
+}
 .play-load-status {
   min-height: 18px; margin: 16px auto 42px; padding: 0 18px; color: #7c7d83;
   font-size: 9px; letter-spacing: .08em; text-align: center; text-transform: uppercase;
@@ -2688,6 +2799,7 @@ span.move-target-dot {
 
 @media (max-width: 980px) {
   .play-menu-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .achievement-grid { grid-template-columns: 1fr; }
   .four-game-page .header-actions span { display: none; }
   .four-seat-setup-grid { grid-template-columns: 1fr 1fr; }
   .four-online-seats { grid-template-columns: 1fr 1fr; }
@@ -2719,6 +2831,9 @@ span.move-target-dot {
   .play-menu-heading { margin: 34px auto 24px; }
   .play-menu-grid { grid-template-columns: 1fr; width: calc(100% - 24px); gap: 10px; }
   .play-menu-grid > button { min-height: 112px; flex-direction: row; gap: 12px; }
+  .achievements-page { width: calc(100% - 24px); margin-top: 20px; }
+  .achievements-heading { align-items: start; }
+  .achievements-heading > strong { font-size: 16px; }
   .tutorial-highlight { border-radius: 4px; }
   .tutorial-card,
   .tutorial-card.side-left {

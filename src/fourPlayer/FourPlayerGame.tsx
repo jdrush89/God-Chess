@@ -1634,6 +1634,12 @@ export interface FourPlayerGameProps {
   onQuit: () => void;
   onNewGame: () => void;
   onlineSession?: FourPlayerOnlineSession;
+  onAchievementTransition?: (
+    before: FourPlayerState,
+    after: FourPlayerState,
+    action: FourPlayerAction | undefined,
+    source: "human" | "ai" | "online",
+  ) => void;
 }
 
 export function FourPlayerGame({
@@ -1646,6 +1652,7 @@ export function FourPlayerGame({
   onQuit,
   onNewGame,
   onlineSession,
+  onAchievementTransition,
 }: FourPlayerGameProps) {
   const [state, baseDispatch] = useReducer(
     fourPlayerReducer,
@@ -1695,6 +1702,7 @@ export function FourPlayerGame({
     Object.entries(state.board).map(([square, piece]) => [piece.id, square]),
   ));
   const positionKey = boardPositionSignature(state);
+  const previousOnlineState = useRef<FourPlayerState | undefined>(undefined);
 
   const updateUndoDepth = () => setUndoDepth(undoStack.current.length);
   const receiveState = (next: FourPlayerState) => {
@@ -1706,6 +1714,21 @@ export function FourPlayerGame({
   useEffect(() => {
     if (onlineSession) receiveState(prepareFourPlayerState(initialState));
   }, [initialState, onlineSession?.roomCode]);
+  useEffect(() => {
+    if (!onlineSession) {
+      previousOnlineState.current = undefined;
+      return;
+    }
+    const previous = previousOnlineState.current;
+    if (previous && stateSignature(previous) !== stateSignature(initialState)) {
+      onAchievementTransition?.(previous, initialState, undefined, "online");
+    }
+    previousOnlineState.current = prepareFourPlayerState(initialState);
+  }, [
+    initialState,
+    onlineSession,
+    onAchievementTransition,
+  ]);
   useEffect(() => {
     const activeControl = state.players[state.activeSeat].control;
     const authorized = onlineSession
@@ -1792,6 +1815,7 @@ export function FourPlayerGame({
   ) => {
     const current = stateRef.current;
     const next = fourPlayerReducer(current, action);
+    onAchievementTransition?.(current, next, action, source);
     recordActionTransition({
       variant: "four-player",
       mode: current.config.mode,

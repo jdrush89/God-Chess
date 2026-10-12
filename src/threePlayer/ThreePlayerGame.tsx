@@ -999,6 +999,12 @@ export interface ThreePlayerGameProps {
   onRestartPuzzle?: () => void;
   onNextPuzzle?: () => void;
   onlineSession?: ThreePlayerOnlineSession;
+  onAchievementTransition?: (
+    before: ThreePlayerState,
+    after: ThreePlayerState,
+    action: ThreePlayerAction | undefined,
+    source: "human" | "ai" | "online",
+  ) => void;
 }
 
 export function ThreePlayerGame({
@@ -1015,6 +1021,7 @@ export function ThreePlayerGame({
   onRestartPuzzle,
   onNextPuzzle,
   onlineSession,
+  onAchievementTransition,
 }: ThreePlayerGameProps) {
   const [state, setState] = useState<UiState>(() => clone(initialState) as UiState);
   const stateRef = useRef(state);
@@ -1071,6 +1078,7 @@ export function ThreePlayerGame({
     ? Math.max(0, puzzle.playerTurns - state.completedTurns.white)
     : undefined;
   const completionReported = useRef(false);
+  const previousOnlineState = useRef<ThreePlayerState | undefined>(undefined);
   const onlineControl = onlineSession?.participantSeat
     ? state.players[onlineSession.participantSeat].control
     : undefined;
@@ -1165,6 +1173,12 @@ export function ThreePlayerGame({
       current as ThreePlayerState,
       action as ThreePlayerAction,
     ) as UiState;
+    onAchievementTransition?.(
+      current as ThreePlayerState,
+      next as ThreePlayerState,
+      action as ThreePlayerAction,
+      source,
+    );
     recordActionTransition({
       variant: "three-player",
       mode: "local",
@@ -1186,6 +1200,21 @@ export function ThreePlayerGame({
       setUndoDepth(undoStack.current.length);
     }
   };
+  useEffect(() => {
+    if (!onlineSession) {
+      previousOnlineState.current = undefined;
+      return;
+    }
+    const previous = previousOnlineState.current;
+    if (previous && previous.revision !== initialState.revision) {
+      onAchievementTransition?.(previous, initialState, undefined, "online");
+    }
+    previousOnlineState.current = clone(initialState);
+  }, [
+    initialState,
+    onlineSession,
+    onAchievementTransition,
+  ]);
 
   const autoDraft = () => {
     if (

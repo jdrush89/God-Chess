@@ -113,6 +113,14 @@ vi.mock("./account/cloudPuzzleProgress", () => ({
   upsertCloudCompletedPuzzles: vi.fn(async () => undefined),
 }));
 
+vi.mock("./account/cloudAchievementProgress", async () => {
+  const { createAchievementProgress } = await import("./achievements");
+  return {
+    loadCloudAchievementProgress: vi.fn(async () => createAchievementProgress()),
+    upsertCloudAchievementProgress: vi.fn(async () => undefined),
+  };
+});
+
 vi.mock("./game/ai", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./game/ai")>();
   return {
@@ -408,7 +416,15 @@ describe("game startup", () => {
       within(screen.getByRole("group", { name: /play options/i }))
         .getAllByRole("button")
         .map((button) => button.getAttribute("aria-label") ?? button.textContent?.trim()),
-    ).toEqual(["Local", "Online", "Puzzles", "Tutorial", "Roster", "Load"]);
+    ).toEqual([
+      "Local",
+      "Online",
+      "Puzzles",
+      "Tutorial",
+      "Roster",
+      "Achievements",
+      "Load",
+    ]);
     fireEvent.click(screen.getByRole("button", { name: /^load$/i }));
     expect(screen.getByRole("heading", { name: /load game/i })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /back to play/i }));
@@ -456,6 +472,26 @@ describe("game startup", () => {
         .getByRole("button", { name: /^lv 2$/i })
         .getAttribute("aria-pressed"),
     ).toBe("false");
+
+    fireEvent.click(screen.getByRole("button", { name: /back to play/i }));
+    expect(screen.getByRole("button", { name: /^local$/i })).toBeTruthy();
+  });
+
+  it("opens the achievement gallery from the Play menu", () => {
+    render(<App />);
+    openPlayMenu();
+    fireEvent.click(screen.getByRole("button", { name: /^achievements$/i }));
+
+    expect(
+      screen.getByRole("heading", { name: /chronicle of legends/i }),
+    ).toBeTruthy();
+    expect(
+      within(document.querySelector(".achievements-heading")!)
+        .getByText("0 / 50"),
+    ).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /^it begins$/i })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /^borbs$/i })).toBeTruthy();
+    expect(screen.getByText(/saved on this device/i)).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: /back to play/i }));
     expect(screen.getByRole("button", { name: /^local$/i })).toBeTruthy();
@@ -835,7 +871,7 @@ describe("game startup", () => {
 
     expect(screen.getByRole("heading", { name: /choose a difficulty/i })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /^easy/i }));
-    expect(screen.getAllByRole("button", { name: /puzzle \d/i })).toHaveLength(5);
+    expect(screen.getAllByRole("button", { name: /puzzle \d/i })).toHaveLength(10);
     fireEvent.click(screen.getByRole("button", { name: /difficulties/i }));
     fireEvent.click(screen.getByRole("button", { name: /^medium/i }));
     expect(screen.getAllByRole("button", { name: /puzzle \d/i })).toHaveLength(10);
@@ -968,7 +1004,7 @@ describe("game startup", () => {
     const { container } = render(<App />);
     openPlayOption("Puzzles");
 
-    expect(screen.getByRole("button", { name: /^easy.*1 of 5 completed/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^easy.*1 of 10 completed/i })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /^easy/i }));
     expect(screen.getByRole("button", { name: /puzzle 1.*completed/i })).toBeTruthy();
     expect(container.querySelector(".puzzle-complete-badge svg")).toBeTruthy();
