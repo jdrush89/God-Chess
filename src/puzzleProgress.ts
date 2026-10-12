@@ -1,4 +1,5 @@
 import { PUZZLE_BY_ID } from "./game/puzzles";
+import { THREE_PLAYER_PUZZLE_BY_ID } from "./game/threePlayerPuzzles";
 import type { PuzzleId } from "./game/types";
 
 export const PUZZLE_PROGRESS_KEY = "god-chess-puzzle-progress-v1";
@@ -7,7 +8,11 @@ export const normalizeCompletedPuzzles = (value: unknown): PuzzleId[] => {
   if (!Array.isArray(value)) return [];
   return [...new Set(value.filter(
     (candidate): candidate is PuzzleId =>
-      typeof candidate === "string" && candidate in PUZZLE_BY_ID,
+      typeof candidate === "string" &&
+      (
+        candidate in PUZZLE_BY_ID ||
+        candidate in THREE_PLAYER_PUZZLE_BY_ID
+      ),
   ))];
 };
 

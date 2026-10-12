@@ -4,8 +4,10 @@ import {
   BookOpen,
   Check,
   ChevronRight,
+  Crosshair,
   Crown,
   History,
+  Info,
   LoaderCircle,
   RotateCcw,
   Save,
@@ -72,9 +74,13 @@ import {
   type ThreePlayerSeat,
   type ThreePlayerState,
 } from "../game/threePlayerTypes";
+import {
+  THREE_PLAYER_PUZZLES,
+  type ThreePlayerPuzzleDefinition,
+} from "../game/threePlayerPuzzles";
 import { abilityLevel, GOD_BY_ID, GODS } from "../game/gods";
 import { randomItem } from "../game/random";
-import type { GodId } from "../game/types";
+import type { GodId, PuzzleId } from "../game/types";
 import { ThreePlayerBoard } from "./ThreePlayerBoard";
 import { getThreePlayerTopology } from "../game/threePlayerTopology";
 import {
@@ -988,6 +994,10 @@ export interface ThreePlayerGameProps {
   ) => boolean | Promise<boolean>;
   onQuit: () => void;
   onNewGame: () => void;
+  puzzle?: ThreePlayerPuzzleDefinition;
+  onPuzzleComplete?: (puzzleId: PuzzleId) => boolean | void;
+  onRestartPuzzle?: () => void;
+  onNextPuzzle?: () => void;
   onlineSession?: ThreePlayerOnlineSession;
 }
 
@@ -1000,6 +1010,10 @@ export function ThreePlayerGame({
   onPersist,
   onQuit,
   onNewGame,
+  puzzle,
+  onPuzzleComplete,
+  onRestartPuzzle,
+  onNextPuzzle,
   onlineSession,
 }: ThreePlayerGameProps) {
   const [state, setState] = useState<UiState>(() => clone(initialState) as UiState);
@@ -1012,6 +1026,7 @@ export function ThreePlayerGame({
   const [inspectedGod, setInspectedGod] = useState<GodId>();
   const [selectedUpgradeAbility, setSelectedUpgradeAbility] = useState<string>();
   const [helpOpen, setHelpOpen] = useState(false);
+  const [puzzleHintOpen, setPuzzleHintOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [resultOpen, setResultOpen] = useState(initialState.phase === "gameover");
@@ -1035,10 +1050,31 @@ export function ThreePlayerGame({
     () => availableThreePlayerActions(state as ThreePlayerState) as UiAction[],
     [state],
   );
+  const puzzleSolved = Boolean(
+    puzzle &&
+    state.phase === "gameover" &&
+    state.result?.kind === "winner" &&
+    state.result.seat === "white",
+  );
+  const puzzleFailed = Boolean(
+    puzzle &&
+    !puzzleSolved &&
+    (
+      state.phase === "gameover" ||
+      state.completedTurns.white >= puzzle.playerTurns
+    ),
+  );
+  const puzzleIndex = puzzle
+    ? THREE_PLAYER_PUZZLES.findIndex((candidate) => candidate.id === puzzle.id)
+    : -1;
+  const puzzleTurnsRemaining = puzzle
+    ? Math.max(0, puzzle.playerTurns - state.completedTurns.white)
+    : undefined;
+  const completionReported = useRef(false);
   const onlineControl = onlineSession?.participantSeat
     ? state.players[onlineSession.participantSeat].control
     : undefined;
-  const inputDisabled = autoDraftPending || (onlineSession
+  const inputDisabled = puzzleFailed || autoDraftPending || (onlineSession
     ? (
       state.phase === "gameover" ||
       onlineSession.status !== "playing" ||
@@ -1248,8 +1284,15 @@ export function ThreePlayerGame({
   ]);
 
   useEffect(() => {
-    setResultOpen(state.phase === "gameover");
-  }, [state]);
+    setResultOpen(state.phase === "gameover" || puzzleFailed);
+  }, [puzzleFailed, state.phase]);
+
+  useEffect(() => {
+    if (!puzzleSolved || !puzzle || completionReported.current) return;
+    if (onPuzzleComplete?.(puzzle.id) !== false) {
+      completionReported.current = true;
+    }
+  }, [onPuzzleComplete, puzzle, puzzleSolved]);
 
   useEffect(() => {
     setPreviewLevel(undefined);
@@ -1318,6 +1361,11 @@ export function ThreePlayerGame({
       aiRequestRevision.current = undefined;
       return;
     }
+    if (puzzleFailed) {
+      aiPlan.current = [];
+      aiRequestRevision.current = undefined;
+      return;
+    }
     if (!isThreePlayerAiTurn(state as ThreePlayerState)) {
       aiPlan.current = [];
       aiRequestRevision.current = undefined;
@@ -1373,7 +1421,7 @@ export function ThreePlayerGame({
       reducedMotion() ? 0 : 180,
     );
     return () => window.clearTimeout(timer);
-  }, [aiPlanReady, onlineSession, state.phase, state.revision]);
+  }, [aiPlanReady, onlineSession, puzzleFailed, state.phase, state.revision]);
 
   useEffect(() => {
     if (onlineSession || !onPersist || !isStableState(state)) return;
@@ -1489,7 +1537,9 @@ export function ThreePlayerGame({
     if (persisted) onQuit();
   };
 
-  const canUndo = onlineSession
+  const canUndo = puzzle
+    ? false
+    : onlineSession
     ? (
       onlineSession.undoAvailable &&
       onlineSession.status !== "paused" &&
@@ -1600,7 +1650,7 @@ export function ThreePlayerGame({
     state.config.boardVariant,
   );
   return (
-    <main className={`three-game-page ${state.phase === "gameover" ? "finished-view" : ""} ${inputDisabled ? "input-gated" : ""}`}>
+    <main className={`three-game-page ${puzzle ? "puzzle-mode" : ""} ${state.phase === "gameover" || puzzleFailed ? "finished-view" : ""} ${inputDisabled ? "input-gated" : ""}`}>
       <header className="three-game-topbar">
         <div>
           <p className="eyebrow">{variant?.name ?? "THREE-PLAYER"}</p>
@@ -1612,18 +1662,41 @@ export function ThreePlayerGame({
         <div className="three-game-actions">
           <button onClick={() => setHelpOpen(true)} aria-label="Help"><BookOpen size={17} /></button>
           <button onClick={() => setHistoryOpen(true)} aria-label="History"><History size={17} /></button>
-          {!onlineSession && (
+          {!onlineSession && !puzzle && (
             <button onClick={() => setSettingsOpen(true)} aria-label="Settings"><Settings size={17} /></button>
           )}
-          <button
-            disabled={!canUndo}
-            onClick={undo}
-            aria-label="Undo"
-          >
-            <Undo2 size={17} />
-          </button>
+          {!puzzle && (
+            <button
+              disabled={!canUndo}
+              onClick={undo}
+              aria-label="Undo"
+            >
+              <Undo2 size={17} />
+            </button>
+          )}
         </div>
       </header>
+
+      {puzzle && (
+        <section className="puzzle-banner three-player-puzzle-banner">
+          <div className="puzzle-banner-title">
+            <Crosshair size={18} />
+            <span>THREE-PLAYER PUZZLE {puzzleIndex + 1} OF {THREE_PLAYER_PUZZLES.length}</span>
+            <strong>{puzzle.title}</strong>
+          </div>
+          <p>
+            {puzzle.objective} {puzzleTurnsRemaining} divine turn{puzzleTurnsRemaining === 1 ? "" : "s"} remaining.
+          </p>
+          <div className="puzzle-banner-actions">
+            <button onClick={() => setPuzzleHintOpen((open) => !open)}>
+              <Info size={15} />
+              {puzzleHintOpen ? "Hide hint" : "Show hint"}
+            </button>
+            <button onClick={onRestartPuzzle}><RotateCcw size={15} />Restart</button>
+          </div>
+          {puzzleHintOpen && <small>{puzzle.hint}</small>}
+        </section>
+      )}
 
       <section className="three-game-layout">
         <div className="three-player-panels">
@@ -1981,21 +2054,35 @@ export function ThreePlayerGame({
         </aside>
       )}
 
-      {state.phase === "gameover" && (
+      {(state.phase === "gameover" || puzzleFailed) && (
         <GameResultPresentation
           open={resultOpen}
-          eyebrow="MATCH COMPLETE"
-          title={state.result?.kind === "winner"
-            ? `${state.players[state.result.seat].name} wins`
-            : "Draw"}
-          description={state.result?.reason.replaceAll("-", " ") ?? "The match is complete."}
-          newGameLabel="New three-player game"
-          undoEnabled={onlineSession ? true : undoEnabled}
+          eyebrow={puzzle ? puzzleSolved ? "PUZZLE COMPLETE" : "PUZZLE FAILED" : "MATCH COMPLETE"}
+          title={puzzle
+            ? puzzleSolved
+              ? "Both rivals checkmated"
+              : state.completedTurns.white >= puzzle.playerTurns
+                ? "Two turns exhausted"
+                : "Puzzle failed"
+            : state.result?.kind === "winner"
+              ? `${state.players[state.result.seat].name} wins`
+              : "Draw"}
+          description={puzzle
+            ? puzzleSolved
+              ? puzzle.solutionSummary
+              : "Checkmate both rival Kings before the second divine turn ends."
+            : state.result?.reason.replaceAll("-", " ") ?? "The match is complete."}
+          newGameLabel={puzzle ? puzzleSolved ? "Next puzzle" : "Retry puzzle" : "New three-player game"}
+          undoEnabled={puzzle ? true : onlineSession ? true : undoEnabled}
           canUndo={canUndo}
           onOpenChange={setResultOpen}
           onUndo={undo}
-          onOpenUndoSettings={onlineSession ? undefined : () => setSettingsOpen(true)}
-          onNewGame={onNewGame}
+          onOpenUndoSettings={onlineSession || puzzle ? undefined : () => setSettingsOpen(true)}
+          onNewGame={puzzle
+            ? puzzleSolved
+              ? onNextPuzzle ?? onQuit
+              : onRestartPuzzle ?? onQuit
+            : onNewGame}
         />
       )}
       {helpOpen && <HelpModal onClose={() => setHelpOpen(false)} />}
@@ -2024,19 +2111,21 @@ export function ThreePlayerGame({
         />
       )}
       <MatchEscapeMenu
-        onOpenSettings={onlineSession ? undefined : () => setSettingsOpen(true)}
-        onLeave={() => void saveAndQuit()}
-        leaveLabel={onlineSession ? "Leave room" : "Save & quit"}
+        onOpenSettings={onlineSession || puzzle ? undefined : () => setSettingsOpen(true)}
+        onLeave={puzzle ? onQuit : () => void saveAndQuit()}
+        leaveLabel={puzzle ? "Back to puzzles" : onlineSession ? "Leave room" : "Save & quit"}
         additionalActions={[
           ...(!onlineSession ? [{
             label: "Restart",
             icon: <RotateCcw size={16} />,
-            onSelect: () => dispatchAction({ type: "restart" }),
+            onSelect: puzzle
+              ? onRestartPuzzle ?? onQuit
+              : () => dispatchAction({ type: "restart" }),
           }] : []),
           {
-            label: onlineSession ? "New online room" : "New setup",
+            label: puzzle ? "Next puzzle" : onlineSession ? "New online room" : "New setup",
             icon: <Crown size={16} />,
-            onSelect: onNewGame,
+            onSelect: puzzle ? onNextPuzzle ?? onQuit : onNewGame,
           },
         ]}
       />

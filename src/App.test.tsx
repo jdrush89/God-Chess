@@ -987,6 +987,27 @@ describe("game startup", () => {
     expect(screen.getAllByText(/win in three divine turns/i)).toHaveLength(10);
   });
 
+  it("lists and starts the ten three-player puzzles", () => {
+    render(<App />);
+    openPlayOption("Puzzles");
+
+    expect(screen.getByRole("button", {
+      name: /^three player.*0 of 10 completed/i,
+    })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^three player/i }));
+
+    expect(screen.getByRole("heading", { name: /three player puzzles/i }))
+      .toBeTruthy();
+    expect(screen.getAllByText(/checkmate both rivals in two divine turns/i))
+      .toHaveLength(10);
+    fireEvent.click(screen.getByRole("button", {
+      name: /puzzle 1.*frontier fork/i,
+    }));
+
+    expect(screen.getByText("Frontier Fork")).toBeTruthy();
+    expect(screen.getByText(/three-player puzzle 1 of 10/i)).toBeTruthy();
+  });
+
   it("waits for the captured King animation before showing puzzle victory", async () => {
     const puzzle = PUZZLES[0];
     let solvedState = puzzle.createState("Solver");

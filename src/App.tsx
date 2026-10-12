@@ -69,8 +69,13 @@ import {
   PUZZLES,
   type PuzzleDifficulty,
 } from "./game/puzzles";
+import {
+  isThreePlayerPuzzleId,
+  THREE_PLAYER_PUZZLE_BY_ID,
+  THREE_PLAYER_PUZZLES,
+} from "./game/threePlayerPuzzles";
 import { randomItem } from "./game/random";
-import type { Ability, ActionPresentation, CaptureAnimation, ClassicMoveFirstCandidate, ClassicMoveFirstMove, Color, GameMode, GameState, GodId, OrbAnimation, OrbColor, Piece, PuzzleId, Square } from "./game/types";
+import type { Ability, ActionPresentation, CaptureAnimation, ClassicMoveFirstCandidate, ClassicMoveFirstMove, Color, GameMode, GameState, GodId, OrbAnimation, OrbColor, Piece, PuzzleId, Square, ThreePlayerPuzzleId } from "./game/types";
 import { AccountModal } from "./account/AccountModal";
 import { deleteCloudSavedGame, loadCloudSavedGames, upsertCloudSavedGame } from "./account/cloudSaves";
 import {
@@ -172,6 +177,7 @@ interface ThreePlayerSession {
   state: ThreePlayerState;
   undoHistory: ThreePlayerState[];
   turnStart?: ThreePlayerState;
+  puzzleId?: ThreePlayerPuzzleId;
 }
 
 const PIECES: Record<Color, Record<Piece["type"], string>> = {
@@ -2452,10 +2458,13 @@ function PuzzleSelectScreen({
   onBack: () => void;
   onDismissError: () => void;
 }) {
-  const [difficulty, setDifficulty] = useState<PuzzleDifficulty>();
-  const visiblePuzzles = difficulty
-    ? PUZZLES.filter((puzzle) => puzzle.difficulty === difficulty)
-    : [];
+  type PuzzleCategory = PuzzleDifficulty | "three-player";
+  const [difficulty, setDifficulty] = useState<PuzzleCategory>();
+  const visiblePuzzles = difficulty === "three-player"
+    ? THREE_PLAYER_PUZZLES
+    : difficulty
+      ? PUZZLES.filter((puzzle) => puzzle.difficulty === difficulty)
+      : [];
   const completedInDifficulty = visiblePuzzles.filter((puzzle) => completedPuzzles.has(puzzle.id)).length;
 
   return (
@@ -2479,7 +2488,7 @@ function PuzzleSelectScreen({
           <>
             <h1>Choose a difficulty</h1>
             <p className="puzzle-select-intro">
-              Capture the opposing King while a level 10 Divine AI searches for its best response.
+              Solve classic Divine tactics or checkmate two rivals on the three-player boards.
             </p>
             <div className="puzzle-difficulty-grid">
               {([
@@ -2487,27 +2496,39 @@ function PuzzleSelectScreen({
                   id: "easy",
                   title: "Easy",
                   description: "Win in one divine turn.",
+                  icon: Crosshair,
                 },
                 {
                   id: "medium",
                   title: "Medium",
                   description: "Build a winning line across two divine turns.",
+                  icon: Crosshair,
                 },
                 {
                   id: "hard",
                   title: "Hard",
                   description: "Build a winning line across three divine turns.",
+                  icon: Crosshair,
+                },
+                {
+                  id: "three-player",
+                  title: "Three Player",
+                  description: "Checkmate both rivals in two divine turns.",
+                  icon: Users,
                 },
               ] as const).map((option) => {
-                const puzzles = PUZZLES.filter((puzzle) => puzzle.difficulty === option.id);
+                const puzzles = option.id === "three-player"
+                  ? THREE_PLAYER_PUZZLES
+                  : PUZZLES.filter((puzzle) => puzzle.difficulty === option.id);
                 const completed = puzzles.filter((puzzle) => completedPuzzles.has(puzzle.id)).length;
+                const Icon = option.icon;
                 return (
                   <button
                     className="puzzle-difficulty-card"
                     key={option.id}
                     onClick={() => setDifficulty(option.id)}
                   >
-                    <Crosshair size={28} />
+                    <Icon size={28} />
                     <strong>{option.title}</strong>
                     <span>{option.description}</span>
                     <small>{progressLoading ? "Loading progress" : `${completed} of ${puzzles.length} completed`}</small>
@@ -2518,7 +2539,15 @@ function PuzzleSelectScreen({
           </>
         ) : (
           <>
-            <h1>{difficulty === "easy" ? "Easy" : difficulty === "medium" ? "Medium" : "Hard"} puzzles</h1>
+            <h1>
+              {difficulty === "easy"
+                ? "Easy"
+                : difficulty === "medium"
+                  ? "Medium"
+                  : difficulty === "hard"
+                    ? "Hard"
+                    : "Three Player"} puzzles
+            </h1>
             <p className="puzzle-select-intro">
               {progressLoading
                 ? "Loading completion history..."
@@ -2526,7 +2555,9 @@ function PuzzleSelectScreen({
             </p>
             <div className="puzzle-select-grid">
               {visiblePuzzles.map((puzzle) => {
-                const index = PUZZLES.findIndex((candidate) => candidate.id === puzzle.id);
+                const index = difficulty === "three-player"
+                  ? visiblePuzzles.findIndex((candidate) => candidate.id === puzzle.id)
+                  : PUZZLES.findIndex((candidate) => candidate.id === puzzle.id);
                 const completed = completedPuzzles.has(puzzle.id);
                 return (
                   <button
@@ -2543,7 +2574,9 @@ function PuzzleSelectScreen({
                     <span>PUZZLE {index + 1}</span>
                     <strong>{puzzle.title}</strong>
                     <small>
-                      Win in {puzzle.playerTurns === 1 ? "one" : puzzle.playerTurns === 2 ? "two" : "three"} divine turn{puzzle.playerTurns === 1 ? "" : "s"}
+                      {difficulty === "three-player"
+                        ? "Checkmate both rivals in two divine turns"
+                        : `Win in ${puzzle.playerTurns === 1 ? "one" : puzzle.playerTurns === 2 ? "two" : "three"} divine turn${puzzle.playerTurns === 1 ? "" : "s"}`}
                     </small>
                   </button>
                 );
@@ -3801,6 +3834,41 @@ export default function App() {
     };
   }, [accountService.account?.userId]);
 
+  const recordPuzzleCompletion = useCallback((puzzleId: PuzzleId) => {
+    const account = accountService.account;
+    if (account) {
+      if (cloudPuzzleProgress.userId !== account.userId || puzzleProgressLoading) {
+        return false;
+      }
+      if (cloudPuzzleProgress.completed.includes(puzzleId)) return true;
+      const previous = cloudPuzzleProgress.completed;
+      const completed = [...previous, puzzleId];
+      setCloudPuzzleProgress({ userId: account.userId, completed });
+      void upsertCloudCompletedPuzzles(account.userId, completed).catch((error) => {
+        console.error("Unable to save cloud puzzle progress.", error);
+        setCloudPuzzleProgress({ userId: account.userId, completed: previous });
+        setSaveError(error instanceof Error ? error.message : "Unable to save puzzle progress.");
+      });
+      return true;
+    }
+
+    if (localCompletedPuzzles.includes(puzzleId)) return true;
+    const completed = [...localCompletedPuzzles, puzzleId];
+    try {
+      persistLocalCompletedPuzzles(completed);
+      setLocalCompletedPuzzles(completed);
+    } catch (error) {
+      console.error("Unable to save local puzzle progress.", error);
+      setSaveError(error instanceof Error ? error.message : "Unable to save puzzle progress.");
+    }
+    return true;
+  }, [
+    accountService.account,
+    cloudPuzzleProgress,
+    localCompletedPuzzles,
+    puzzleProgressLoading,
+  ]);
+
   useEffect(() => {
     const puzzleId = state.puzzleId;
     const solved =
@@ -3810,36 +3878,9 @@ export default function App() {
       state.winner &&
       state.winner !== state.aiColor;
     if (!solved || !puzzleId) return;
-
-    const account = accountService.account;
-    if (account) {
-      if (cloudPuzzleProgress.userId !== account.userId || puzzleProgressLoading) return;
-      if (cloudPuzzleProgress.completed.includes(puzzleId)) return;
-      const previous = cloudPuzzleProgress.completed;
-      const completed = [...previous, puzzleId];
-      setCloudPuzzleProgress({ userId: account.userId, completed });
-      void upsertCloudCompletedPuzzles(account.userId, completed).catch((error) => {
-        console.error("Unable to save cloud puzzle progress.", error);
-        setCloudPuzzleProgress({ userId: account.userId, completed: previous });
-        setSaveError(error instanceof Error ? error.message : "Unable to save puzzle progress.");
-      });
-      return;
-    }
-
-    if (localCompletedPuzzles.includes(puzzleId)) return;
-    const completed = [...localCompletedPuzzles, puzzleId];
-    try {
-      persistLocalCompletedPuzzles(completed);
-      setLocalCompletedPuzzles(completed);
-    } catch (error) {
-      console.error("Unable to save local puzzle progress.", error);
-      setSaveError(error instanceof Error ? error.message : "Unable to save puzzle progress.");
-    }
+    recordPuzzleCompletion(puzzleId);
   }, [
-    accountService.account?.userId,
-    cloudPuzzleProgress,
-    localCompletedPuzzles,
-    puzzleProgressLoading,
+    recordPuzzleCompletion,
     state.aiColor,
     state.gameMode,
     state.phase,
@@ -4514,8 +4555,24 @@ export default function App() {
     fourOnlineActions.disconnect();
     threeOnlineActions.disconnect();
     setFourPlayerSession(undefined);
-    setThreePlayerSession(undefined);
     activeSaveId.current = undefined;
+    if (isThreePlayerPuzzleId(puzzleId)) {
+      const id = saveId();
+      setThreePlayerSession({
+        key: id,
+        state: THREE_PLAYER_PUZZLE_BY_ID[puzzleId].createState(
+          accountService.account?.displayName,
+        ),
+        undoHistory: [],
+        puzzleId,
+      });
+      clearUndoHistory();
+      aiPlan.current = [];
+      setSettingsOpen(false);
+      setStartView("none");
+      return;
+    }
+    setThreePlayerSession(undefined);
     const next = createPuzzleGame(puzzleId, accountService.account?.displayName);
     resetUndoTracking(next);
     receiveState(next);
@@ -4588,6 +4645,18 @@ export default function App() {
     if (next) {
       beginPuzzle(next.id);
     } else {
+      setStartView("puzzles");
+    }
+  };
+  const nextThreePlayerPuzzle = (puzzleId: ThreePlayerPuzzleId) => {
+    const index = THREE_PLAYER_PUZZLES.findIndex(
+      (puzzle) => puzzle.id === puzzleId,
+    );
+    const next = THREE_PLAYER_PUZZLES[index + 1];
+    if (next) {
+      beginPuzzle(next.id);
+    } else {
+      setThreePlayerSession(undefined);
       setStartView("puzzles");
     }
   };
@@ -4961,6 +5030,9 @@ export default function App() {
   }
 
   if (startView === "none" && threePlayerSession) {
+    const threePlayerPuzzle = threePlayerSession.puzzleId
+      ? THREE_PLAYER_PUZZLE_BY_ID[threePlayerSession.puzzleId]
+      : undefined;
     return (
       <ThreePlayerGame
         key={threePlayerSession.key}
@@ -4969,8 +5041,19 @@ export default function App() {
         initialTurnStart={threePlayerSession.turnStart}
         undoPreferred={undoPreferred}
         onUndoPreferenceChange={changeUndoPreference}
-        onPersist={persistThreePlayerGame}
-        onQuit={() => setStartView("menu")}
+        onPersist={threePlayerPuzzle ? undefined : persistThreePlayerGame}
+        puzzle={threePlayerPuzzle}
+        onPuzzleComplete={recordPuzzleCompletion}
+        onRestartPuzzle={threePlayerPuzzle
+          ? () => beginPuzzle(threePlayerPuzzle.id)
+          : undefined}
+        onNextPuzzle={threePlayerPuzzle
+          ? () => nextThreePlayerPuzzle(threePlayerPuzzle.id)
+          : undefined}
+        onQuit={() => {
+          setThreePlayerSession(undefined);
+          setStartView(threePlayerPuzzle ? "puzzles" : "menu");
+        }}
         onNewGame={() => {
           setThreePlayerSession(undefined);
           setSetupCategory("local");

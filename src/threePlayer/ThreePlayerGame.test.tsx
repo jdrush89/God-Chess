@@ -20,6 +20,7 @@ import {
   THREE_PLAYER_BOARD_VARIANTS,
   THREE_PLAYER_SEATS,
 } from "../game/threePlayerTypes";
+import { THREE_PLAYER_PUZZLES } from "../game/threePlayerPuzzles";
 import {
   ThreePlayerGame,
   type ThreePlayerOnlineSession,
@@ -128,6 +129,50 @@ const installDeterministicAiWorker = () => {
 };
 
 describe("ThreePlayerGame", () => {
+  it("shows three-player puzzle objectives and reports a solved position", async () => {
+    const puzzle = THREE_PLAYER_PUZZLES[0];
+    const solved = puzzle.solutionTurns
+      .flatMap((turn) => turn)
+      .reduce(threePlayerReducer, puzzle.createState());
+    const onPuzzleComplete = vi.fn();
+
+    render(
+      <ThreePlayerGame
+        initialState={solved}
+        puzzle={puzzle}
+        onPuzzleComplete={onPuzzleComplete}
+        onQuit={() => undefined}
+        onNewGame={() => undefined}
+      />,
+    );
+
+    expect(screen.getByText("Frontier Fork")).toBeTruthy();
+    expect(screen.getByText(/checkmate both rival kings within two divine turns/i))
+      .toBeTruthy();
+    expect(screen.getByText("Both rivals checkmated")).toBeTruthy();
+    await waitFor(() => expect(onPuzzleComplete).toHaveBeenCalledWith(puzzle.id));
+  });
+
+  it("locks a three-player puzzle after the second unsuccessful turn", () => {
+    const puzzle = THREE_PLAYER_PUZZLES[0];
+    const failed = puzzle.createState();
+    failed.completedTurns.white = 2;
+
+    const { container } = render(
+      <ThreePlayerGame
+        initialState={failed}
+        puzzle={puzzle}
+        onQuit={() => undefined}
+        onNewGame={() => undefined}
+      />,
+    );
+
+    expect(screen.getByText("Two turns exhausted")).toBeTruthy();
+    expect(container.querySelector(".three-game-page")?.classList.contains("input-gated"))
+      .toBe(true);
+    expect(screen.getByRole("button", { name: /retry puzzle/i })).toBeTruthy();
+  });
+
   it.each(THREE_PLAYER_BOARD_VARIANTS)(
     "renders the provisional move-first chooser on %s without mutating the board",
     (boardVariant) => {

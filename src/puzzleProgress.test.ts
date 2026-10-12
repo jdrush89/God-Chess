@@ -16,13 +16,26 @@ describe("puzzle progress", () => {
       "centaurs-lance",
       "centaurs-lance",
       "opened-file",
+      "three-frontier-fork",
       "unknown-position",
-    ])).toEqual(["centaurs-lance", "opened-file"]);
+    ])).toEqual([
+      "centaurs-lance",
+      "opened-file",
+      "three-frontier-fork",
+    ]);
   });
 
   it("persists completed puzzles locally", () => {
-    persistLocalCompletedPuzzles(["centaurs-lance", "opened-file"]);
-    expect(loadLocalCompletedPuzzles()).toEqual(["centaurs-lance", "opened-file"]);
+    persistLocalCompletedPuzzles([
+      "centaurs-lance",
+      "opened-file",
+      "three-frontier-fork",
+    ]);
+    expect(loadLocalCompletedPuzzles()).toEqual([
+      "centaurs-lance",
+      "opened-file",
+      "three-frontier-fork",
+    ]);
     expect(window.localStorage.getItem(PUZZLE_PROGRESS_KEY)).toBeTruthy();
   });
 });
