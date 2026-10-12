@@ -113,6 +113,11 @@ vi.mock("./account/cloudPuzzleProgress", () => ({
   upsertCloudCompletedPuzzles: vi.fn(async () => undefined),
 }));
 
+vi.mock("./account/cloudChallengeProgress", () => ({
+  loadCloudCompletedChallenges: vi.fn(async () => []),
+  upsertCloudCompletedChallenges: vi.fn(async () => undefined),
+}));
+
 vi.mock("./account/cloudAchievementProgress", async () => {
   const { createAchievementProgress } = await import("./achievements");
   return {
@@ -1021,6 +1026,35 @@ describe("game startup", () => {
     expect(screen.getByRole("button", { name: /puzzle 16.*position sixteen/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /puzzle 25.*position twenty-five/i })).toBeTruthy();
     expect(screen.getAllByText(/win in three divine turns/i)).toHaveLength(10);
+  });
+
+  it("lists special challenges, marks progress, and starts Phalanx", () => {
+    window.localStorage.setItem(
+      "god-chess-challenges-v1",
+      JSON.stringify(["phalanx"]),
+    );
+    render(<App />);
+    openPlayOption("Puzzles");
+
+    expect(screen.getByRole("button", {
+      name: /^challenges.*1 of 8 completed/i,
+    })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^challenges/i }));
+
+    expect(screen.getByRole("heading", { name: /special challenges/i }))
+      .toBeTruthy();
+    expect(screen.getByRole("button", {
+      name: /challenge 1, phalanx, completed/i,
+    })).toBeTruthy();
+    expect(screen.getByRole("button", {
+      name: /challenge 8, jumped/i,
+    })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", {
+      name: /challenge 1, phalanx, completed/i,
+    }));
+    expect(screen.getByRole("heading", { name: /choose your gods/i }))
+      .toBeTruthy();
   });
 
   it("lists and starts the ten three-player puzzles", () => {

@@ -1,4 +1,5 @@
 import type {
+  ChallengeId,
   GodId,
   MoveFirstCandidate,
   MoveFirstMove,
@@ -37,6 +38,7 @@ export interface ThreePlayerConfig {
   boardVariant: ThreePlayerBoardVariant;
   victoryMode: ThreePlayerVictoryMode;
   takeover: boolean;
+  teams?: Partial<Record<ThreePlayerSeat, string>>;
   seats: Record<ThreePlayerSeat, ThreePlayerSeatConfig>;
 }
 
@@ -200,6 +202,7 @@ export type ThreePlayerResult =
 
 export interface ThreePlayerState {
   variant: "three-player";
+  challengeId?: ChallengeId;
   schemaVersion: 2;
   phase: ThreePlayerPhase;
   config: ThreePlayerConfig;

@@ -1,4 +1,5 @@
 import type {
+  ChallengeId,
   GodId,
   MoveFirstCandidate,
   MoveFirstMove,
@@ -35,6 +36,7 @@ export interface FourPlayerConfig {
   victoryMode: VictoryMode;
   takeover: boolean;
   startingSeat: Seat;
+  allowUnevenTeams?: boolean;
   seats: Record<Seat, FourPlayerSeatConfig>;
 }
 
@@ -166,6 +168,7 @@ export interface FourPlayerPassCycle {
 
 export interface FourPlayerState {
   variant: "four-player";
+  challengeId?: ChallengeId;
   phase: FourPlayerPhase;
   config: FourPlayerConfig;
   board: Record<Square, FourPlayerPiece>;

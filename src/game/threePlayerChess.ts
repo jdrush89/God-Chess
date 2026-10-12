@@ -1,5 +1,9 @@
 import { getThreePlayerTopology } from "./threePlayerTopology";
 import {
+  threePlayerSeatsAreAllies,
+  threePlayerSeatsAreHostile,
+} from "./threePlayerConfig";
+import {
   THREE_PLAYER_SEATS,
   type ThreePlayerBanana,
   type ThreePlayerBoardVariant,
@@ -43,12 +47,14 @@ const topologyFor = (state: Pick<ThreePlayerState, "config">) =>
   getThreePlayerTopology(state.config.boardVariant);
 
 const canTarget = (
+  state: Pick<ThreePlayerState, "config">,
   actor: ThreePlayerSeat,
   target: ThreePlayerPiece,
   attacksOnly = false,
   includeAlliedTargets = false,
 ) => {
-  const hostile = target.controller === null || target.controller !== actor ||
+  const hostile = target.controller === null ||
+    threePlayerSeatsAreHostile(state.config, actor, target.controller) ||
     includeAlliedTargets;
   if (!hostile) return false;
   if (target.type === "king") return attacksOnly;
@@ -56,11 +62,13 @@ const canTarget = (
 };
 
 const stoppedByBanana = (
+  state: Pick<ThreePlayerState, "config">,
   bananas: readonly ThreePlayerBanana[],
   target: ThreePlayerCell,
   actor: ThreePlayerSeat,
 ) => bananas.some((banana) =>
-  banana.cell === target && banana.owner !== actor
+  banana.cell === target &&
+  threePlayerSeatsAreHostile(state.config, actor, banana.owner)
 );
 
 const uniqueCells = (cells: ThreePlayerCell[]) => [...new Set(cells)];
@@ -117,6 +125,7 @@ const rayTargets = (
       if (target === from) break;
       const occupying = state.board[target];
       const banana = stoppedByBanana(
+        state,
         options.bananas ?? state.bananas ?? [],
         target,
         actor,
@@ -129,6 +138,7 @@ const rayTargets = (
       if (
         !options.noCapture &&
         canTarget(
+          state,
           actor,
           occupying,
           Boolean(options.attacksOnly),
@@ -159,6 +169,7 @@ const pawnTargets = (
       : undefined;
     if (
       occupying && canTarget(
+        state,
         actor,
         occupying,
         false,
@@ -166,7 +177,13 @@ const pawnTargets = (
       ) ||
       enPassantPawn &&
         enPassantPawn.type === "pawn" &&
-        canTarget(actor, enPassantPawn, false, options.includeAlliedTargets)
+        canTarget(
+          state,
+          actor,
+          enPassantPawn,
+          false,
+          options.includeAlliedTargets,
+        )
     ) targets.push(capture.to);
   }
   for (const advance of rules.advances) {
@@ -177,7 +194,12 @@ const pawnTargets = (
     if (state.board[advance.to]) continue;
     if (
       advance.path.some((cell) =>
-        stoppedByBanana(options.bananas ?? state.bananas ?? [], cell, actor)
+        stoppedByBanana(
+          state,
+          options.bananas ?? state.bananas ?? [],
+          cell,
+          actor,
+        )
       )
     ) continue;
     targets.push(advance.to);
@@ -328,6 +350,7 @@ export const threePlayerPseudoTargets = (
       (
         !options.noCapture &&
         canTarget(
+          state,
           actor,
           occupying,
           Boolean(options.attacksOnly),
@@ -379,7 +402,7 @@ export const threePlayerIsSquareAttacked = (
   cell: ThreePlayerCell,
   defender: ThreePlayerSeat,
 ) => THREE_PLAYER_SEATS.some((attacker) =>
-  attacker !== defender &&
+  threePlayerSeatsAreHostile(state.config, attacker, defender) &&
   !state.players[attacker].eliminated &&
   threePlayerIsSquareAttackedBy(state, cell, attacker)
 );
@@ -391,7 +414,7 @@ export const threePlayerCheckingSeats = (
   const king = threePlayerKingCell(state, defender);
   if (!king) return [];
   return THREE_PLAYER_SEATS.filter((attacker) =>
-    attacker !== defender &&
+    threePlayerSeatsAreHostile(state.config, attacker, defender) &&
     !state.players[attacker].eliminated &&
     threePlayerIsSquareAttackedBy(state, king, attacker)
   );
@@ -600,17 +623,23 @@ export const threePlayerPieceValue = (type: ThreePlayerPiece["type"]) =>
   ({ pawn: 1, knight: 3, bishop: 3, rook: 5, queen: 9, king: 100 })[type];
 
 export const threePlayerCanOrdinarilyCapture = (
+  state: Pick<ThreePlayerState, "config">,
   actor: ThreePlayerSeat,
   target: ThreePlayerPiece,
-) => canTarget(actor, target);
+) => canTarget(state, actor, target);
 
 export const threePlayerPiecesAreAllied = (
+  state: Pick<ThreePlayerState, "config">,
   first: ThreePlayerPiece,
   second: ThreePlayerPiece,
 ) => Boolean(
   first.controller &&
   second.controller &&
-  first.controller === second.controller
+  threePlayerSeatsAreAllies(
+    state.config,
+    first.controller,
+    second.controller,
+  )
 );
 
 export const threePlayerSimulateMove = (

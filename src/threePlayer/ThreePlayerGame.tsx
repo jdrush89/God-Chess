@@ -998,6 +998,7 @@ export interface ThreePlayerGameProps {
   onPuzzleComplete?: (puzzleId: PuzzleId) => boolean | void;
   onRestartPuzzle?: () => void;
   onNextPuzzle?: () => void;
+  onChallengeComplete?: (challengeId: NonNullable<ThreePlayerState["challengeId"]>) => void;
   onlineSession?: ThreePlayerOnlineSession;
   onAchievementTransition?: (
     before: ThreePlayerState,
@@ -1020,6 +1021,7 @@ export function ThreePlayerGame({
   onPuzzleComplete,
   onRestartPuzzle,
   onNextPuzzle,
+  onChallengeComplete,
   onlineSession,
   onAchievementTransition,
 }: ThreePlayerGameProps) {
@@ -1078,6 +1080,7 @@ export function ThreePlayerGame({
     ? Math.max(0, puzzle.playerTurns - state.completedTurns.white)
     : undefined;
   const completionReported = useRef(false);
+  const challengeCompletionReported = useRef(false);
   const previousOnlineState = useRef<ThreePlayerState | undefined>(undefined);
   const onlineControl = onlineSession?.participantSeat
     ? state.players[onlineSession.participantSeat].control
@@ -1097,6 +1100,19 @@ export function ThreePlayerGame({
     )
     : state.phase === "gameover" ||
       isThreePlayerAiTurn(state as ThreePlayerState));
+  useEffect(() => {
+    const challengeId = state.challengeId;
+    const winningControl = state.result?.kind === "winner"
+      ? state.players[state.result.seat].control
+      : undefined;
+    const won = challengeId &&
+      state.phase === "gameover" &&
+      winningControl?.kind === "human" &&
+      winningControl.local;
+    if (!won || challengeCompletionReported.current) return;
+    challengeCompletionReported.current = true;
+    onChallengeComplete?.(challengeId);
+  }, [onChallengeComplete, state]);
   const selectedCell = state.selectedCell ?? localSelectedCell;
   const moveFirstEnabled = !inputDisabled &&
     canStartThreePlayerMoveFirst(state as ThreePlayerState);
@@ -1588,7 +1604,13 @@ export function ThreePlayerGame({
           onAutoDraft={autoDraft}
           onQuickDraft={onlineSession ? undefined : quickDraft}
           onExit={() => void saveAndQuit()}
-          exitLabel={onlineSession ? "Leave room" : "Save & quit"}
+          exitLabel={
+            onlineSession
+              ? "Leave room"
+              : state.challengeId
+                ? "Leave challenge"
+                : "Save & quit"
+          }
           canUndo={canUndo}
           onUndo={undo}
           roomCode={onlineSession?.roomCode}
@@ -1596,7 +1618,13 @@ export function ThreePlayerGame({
         <MatchEscapeMenu
           onOpenSettings={onlineSession ? undefined : () => setSettingsOpen(true)}
           onLeave={() => void saveAndQuit()}
-          leaveLabel={onlineSession ? "Leave room" : "Save & quit"}
+          leaveLabel={
+            onlineSession
+              ? "Leave room"
+              : state.challengeId
+                ? "Leave challenge"
+                : "Save & quit"
+          }
         />
         {settingsOpen && !onlineSession && (
           <SettingsModal
@@ -2101,7 +2129,13 @@ export function ThreePlayerGame({
               ? puzzle.solutionSummary
               : "Checkmate both rival Kings before the second divine turn ends."
             : state.result?.reason.replaceAll("-", " ") ?? "The match is complete."}
-          newGameLabel={puzzle ? puzzleSolved ? "Next puzzle" : "Retry puzzle" : "New three-player game"}
+          newGameLabel={
+            puzzle
+              ? puzzleSolved ? "Next puzzle" : "Retry puzzle"
+              : state.challengeId
+                ? "Retry challenge"
+                : "New three-player game"
+          }
           undoEnabled={puzzle ? true : onlineSession ? true : undoEnabled}
           canUndo={canUndo}
           onOpenChange={setResultOpen}
@@ -2141,20 +2175,40 @@ export function ThreePlayerGame({
       )}
       <MatchEscapeMenu
         onOpenSettings={onlineSession || puzzle ? undefined : () => setSettingsOpen(true)}
-        onLeave={puzzle ? onQuit : () => void saveAndQuit()}
-        leaveLabel={puzzle ? "Back to puzzles" : onlineSession ? "Leave room" : "Save & quit"}
+        onLeave={puzzle || state.challengeId ? onQuit : () => void saveAndQuit()}
+        leaveLabel={
+          puzzle
+            ? "Back to puzzles"
+            : onlineSession
+              ? "Leave room"
+              : state.challengeId
+                ? "Leave challenge"
+                : "Save & quit"
+        }
         additionalActions={[
           ...(!onlineSession ? [{
             label: "Restart",
             icon: <RotateCcw size={16} />,
             onSelect: puzzle
               ? onRestartPuzzle ?? onQuit
-              : () => dispatchAction({ type: "restart" }),
+              : state.challengeId
+                ? onNewGame
+                : () => dispatchAction({ type: "restart" }),
           }] : []),
           {
-            label: puzzle ? "Next puzzle" : onlineSession ? "New online room" : "New setup",
+            label: puzzle
+              ? "Next puzzle"
+              : onlineSession
+                ? "New online room"
+                : state.challengeId
+                  ? "Challenges"
+                  : "New setup",
             icon: <Crown size={16} />,
-            onSelect: puzzle ? onNextPuzzle ?? onQuit : onNewGame,
+            onSelect: puzzle
+              ? onNextPuzzle ?? onQuit
+              : state.challengeId
+                ? onQuit
+                : onNewGame,
           },
         ]}
       />

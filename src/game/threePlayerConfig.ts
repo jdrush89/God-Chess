@@ -57,6 +57,12 @@ export const validateThreePlayerConfig = (config: ThreePlayerConfig) => {
       throw new Error(`AI difficulty for ${seat} must be an integer from 1 to 10.`);
     }
   }
+  if (
+    config.teams &&
+    THREE_PLAYER_SEATS.some((seat) => !config.teams?.[seat]?.trim())
+  ) {
+    throw new Error("Every three-player seat requires a team assignment.");
+  }
   return config;
 };
 
@@ -88,10 +94,21 @@ export const nextThreePlayerSeat = (
   return seat;
 };
 
-export const threePlayerSeatsAreHostile = (
+export const threePlayerSeatsAreAllies = (
+  config: Pick<ThreePlayerConfig, "teams">,
   first: ThreePlayerSeat,
   second: ThreePlayerSeat,
-) => first !== second;
+) => first === second ||
+  Boolean(
+    config.teams?.[first] &&
+    config.teams[first] === config.teams?.[second],
+  );
+
+export const threePlayerSeatsAreHostile = (
+  config: Pick<ThreePlayerConfig, "teams">,
+  first: ThreePlayerSeat,
+  second: ThreePlayerSeat,
+) => !threePlayerSeatsAreAllies(config, first, second);
 
 export const threePlayerOwnerAffinity = (
   owner: ThreePlayerSeat,

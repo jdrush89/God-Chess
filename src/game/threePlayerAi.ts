@@ -4,6 +4,7 @@ import {
   threePlayerPseudoTargets,
 } from "./threePlayerChess";
 import { availableThreePlayerActions } from "./threePlayerEngine";
+import { threePlayerSeatsAreAllies } from "./threePlayerConfig";
 import { getThreePlayerTopology } from "./threePlayerTopology";
 import {
   enumerateCompleteThreePlayerPlans,
@@ -81,16 +82,26 @@ export const evaluateThreePlayerState = (
   state: ThreePlayerState,
   perspectiveSeat: ThreePlayerSeat,
 ) => {
+  const sideFor = (seat: ThreePlayerSeat) => {
+    if (seat === perspectiveSeat) return 1;
+    return state.config.teams
+      ? (threePlayerSeatsAreAllies(state.config, perspectiveSeat, seat) ? 1 : -1)
+      : -0.5;
+  };
   if (state.phase === "gameover") {
     return state.result?.kind === "winner" &&
-        state.result.seat === perspectiveSeat
+        threePlayerSeatsAreAllies(
+          state.config,
+          state.result.seat,
+          perspectiveSeat,
+        )
       ? 1_000_000
       : -1_000_000;
   }
   let score = 0;
   for (const seat of THREE_PLAYER_SEATS) {
     const player = state.players[seat];
-    const side = seat === perspectiveSeat ? 1 : -0.5;
+    const side = sideFor(seat);
     if (player.eliminated) score -= side * 2_500;
     score += side * (player.orbs.light * 0.72 + player.orbs.dark * 0.88);
     score += side * Object.values(player.upgrades)
@@ -110,11 +121,11 @@ export const evaluateThreePlayerState = (
   }
   for (const [cell, piece] of Object.entries(state.board)) {
     if (!piece.controller) {
-      const side = piece.owner === perspectiveSeat ? -1 : 0.5;
+      const side = -sideFor(piece.owner);
       score += side * threePlayerPieceValue(piece.type) * 0.18;
       continue;
     }
-    const side = piece.controller === perspectiveSeat ? 1 : -0.5;
+    const side = sideFor(piece.controller);
     const value = piece.type === "king"
       ? 120
       : threePlayerPieceValue(piece.type);
@@ -125,7 +136,7 @@ export const evaluateThreePlayerState = (
   }
   score += (state.bananas ?? []).reduce(
     (total, banana) =>
-      total + (banana.owner === perspectiveSeat ? 0.45 : -0.225),
+      total + sideFor(banana.owner) * 0.45,
     0,
   );
   if (state.activeSeat === perspectiveSeat) score += 0.2;
