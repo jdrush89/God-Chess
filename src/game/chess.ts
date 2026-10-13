@@ -408,7 +408,10 @@ export const applyMove = (
     }
   }
   let type = moving.type;
-  if (type === "pawn" && (move.to[1] === "8" || move.to[1] === "1")) type = move.promotion ?? "queen";
+  const promotionRank = moving.color === "white" ? "8" : "1";
+  if (type === "pawn" && move.to[1] === promotionRank) {
+    type = move.promotion ?? "queen";
+  }
   next[move.to] = { ...moving, type, hasMoved: true, status: { ...moving.status, movedThisTurn: true } };
 
   if (

@@ -121,6 +121,32 @@ describe("three-player God catalog", () => {
     expect(unsupportedThreePlayerAbilities()).toEqual([]);
   });
 
+  it.each([
+    ["chiron", "gallop"],
+    ["teles", "resonance"],
+  ] as const)(
+    "only advertises movable Three Half sources for %s's %s",
+    (godId, abilityId) => {
+      let state = abilityState(godId, 1, "three-half");
+      state = threePlayerReducer(state, { type: "select-god", godId });
+      state = threePlayerReducer(state, {
+        type: "select-ability",
+        abilityId,
+      });
+      const sourceActions = availableThreePlayerActions(state)
+        .filter((action) => action.type === "cell");
+
+      expect(sourceActions.length).toBeGreaterThan(0);
+      for (const action of sourceActions) {
+        const selected = threePlayerReducer(state, action);
+        expect(selected).not.toBe(state);
+        expect(selected.selectedCell).toBe(action.cell);
+        expect(selected.legalCells.length).toBeGreaterThan(0);
+        expect(selected.notice).toMatch(/choose a destination/i);
+      }
+    },
+  );
+
   for (const god of GODS) {
     for (const ability of god.abilities) {
       it.each([1, 2, 3] as const)(
@@ -222,6 +248,45 @@ describe("three-player God catalog", () => {
     expect(moved.pending?.step).toBe("slither");
     expect(moved.notice).toMatch(/^Serpentine Step/);
     expect(moved.notice).not.toMatch(/^Slither/);
+  });
+
+  it("limits each three-player Serpentine Step pawn move to one diagonal cell", () => {
+    const state = abilityState("medusa", 1);
+    const topology = getThreePlayerTopology(state.config.boardVariant);
+    state.board = {};
+    const source = topology.cells.find((cell) =>
+      topology.bishopRays(cell).some((ray) => ray.cells.length >= 2)
+    )!;
+    const firstRay = topology.bishopRays(source).find(
+      (ray) => ray.cells.length >= 2,
+    )!;
+    const destination = firstRay.cells[0];
+    state.board[source] = piece("medusa-pawn", "pawn", "white");
+    addSafeWhiteKing(state, new Set([
+      source,
+      destination,
+      ...topology.kingNeighbors(source),
+      ...topology.kingNeighbors(destination),
+    ]));
+
+    let moved = threePlayerReducer(state, {
+      type: "select-god",
+      godId: "medusa",
+    });
+    moved = threePlayerReducer(moved, {
+      type: "select-ability",
+      abilityId: "slither",
+    });
+    moved = threePlayerReducer(moved, { type: "cell", cell: source });
+    expect(moved.legalCells).toContain(destination);
+    expect(moved.legalCells.every((cell) => topology.distance(source, cell) === 1))
+      .toBe(true);
+
+    moved = threePlayerReducer(moved, { type: "cell", cell: destination });
+    expect(moved.pending?.step).toBe("slither");
+    expect(moved.legalCells.every(
+      (cell) => topology.distance(destination, cell) === 1,
+    )).toBe(true);
   });
 
   it("grants Marked rewards only when the Mark or immediate execution kills the piece", () => {

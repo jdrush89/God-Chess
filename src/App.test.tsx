@@ -41,6 +41,7 @@ const cloudSaveHarness = vi.hoisted(() => ({
   load: vi.fn(),
   upsert: vi.fn(async () => undefined),
   remove: vi.fn(async () => undefined),
+  removeAll: vi.fn(async () => undefined),
 }));
 
 const cloudProgressHarness = vi.hoisted(() => ({
@@ -124,6 +125,7 @@ vi.mock("./account/cloudSaves", () => ({
   loadCloudSavedGames: cloudSaveHarness.load,
   upsertCloudSavedGame: cloudSaveHarness.upsert,
   deleteCloudSavedGame: cloudSaveHarness.remove,
+  deleteAllCloudSavedGames: cloudSaveHarness.removeAll,
 }));
 
 vi.mock("./account/cloudPuzzleProgress", () => ({
@@ -169,6 +171,7 @@ import { createThreePlayerStateEnvelope } from "./game/threePlayerSession";
 import { PUZZLES } from "./game/puzzles";
 import {
   createSavedGame,
+  loadLocalSavedGames,
   persistLocalSavedGames,
   prepareSavedState,
 } from "./saves";
@@ -342,6 +345,7 @@ beforeEach(() => {
   cloudSaveHarness.load.mockResolvedValue([]);
   cloudSaveHarness.upsert.mockClear();
   cloudSaveHarness.remove.mockClear();
+  cloudSaveHarness.removeAll.mockClear();
   cloudProgressHarness.loadPuzzles.mockReset();
   cloudProgressHarness.loadPuzzles.mockResolvedValue([]);
   cloudProgressHarness.upsertPuzzles.mockClear();
@@ -1620,6 +1624,28 @@ describe("game startup", () => {
     expect(window.localStorage.getItem(SAVE_KEY)).toBeTruthy();
   });
 
+  it("moves Rules into the match menu and quits without changing the saved game", async () => {
+    const saved = createSavedGame("quit-unsaved", completeClassicDraft(), []);
+    window.localStorage.setItem(SAVE_KEY, JSON.stringify([saved]));
+
+    render(<App />);
+    openPlayOption("Load");
+    fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
+    const storedBeforeQuit = window.localStorage.getItem(SAVE_KEY);
+
+    expect(screen.queryByRole("button", { name: /^rules$/i })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /open match menu/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^rules$/i }));
+    expect(screen.getByRole("heading", { name: /laws of god chess/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /close rules/i }));
+
+    fireEvent.click(screen.getByRole("button", { name: /open match menu/i }));
+    fireEvent.click(screen.getByRole("button", { name: /quit without saving/i }));
+
+    expect(await screen.findByRole("button", { name: /^start$/i })).toBeTruthy();
+    expect(window.localStorage.getItem(SAVE_KEY)).toBe(storedBeforeQuit);
+  });
+
   it("explains when account services have not been configured", () => {
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
@@ -2077,5 +2103,71 @@ describe("game startup", () => {
     fireEvent.click(screen.getAllByRole("button", { name: /delete saved game/i })[0]);
     expect(screen.getAllByRole("button", { name: /load saved game/i })).toHaveLength(1);
     expect(JSON.parse(window.localStorage.getItem(SAVE_KEY) ?? "[]")).toHaveLength(1);
+  });
+
+  it("confirms before deleting every saved game", async () => {
+    window.localStorage.setItem(SAVE_KEY, JSON.stringify([
+      createSavedGame("save-one", createGame(1), []),
+      createSavedGame("save-two", createGame(2, { mode: "ai" }), []),
+    ]));
+
+    render(<App />);
+    openPlayOption("Load");
+
+    fireEvent.click(screen.getByRole("button", { name: /^delete all$/i }));
+    const confirmation = screen.getByRole("dialog", {
+      name: /delete all saved games/i,
+    });
+    expect(within(confirmation).getByText(/permanently deletes all 2 saved games/i))
+      .toBeTruthy();
+    fireEvent.click(within(confirmation).getByRole("button", {
+      name: /cancel/i,
+    }));
+    expect(screen.getAllByRole("button", { name: /load saved game/i }))
+      .toHaveLength(2);
+
+    fireEvent.click(screen.getByRole("button", { name: /^delete all$/i }));
+    fireEvent.click(within(
+      screen.getByRole("dialog", { name: /delete all saved games/i }),
+    ).getByRole("button", { name: /^delete all$/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: /load saved game/i }))
+        .toBeNull();
+    });
+    expect(JSON.parse(window.localStorage.getItem(SAVE_KEY) ?? "[]"))
+      .toEqual([]);
+  });
+
+  it("deletes all saves from the signed-in account without changing local saves", async () => {
+    const localSave = createSavedGame("local-save", createGame(1), []);
+    const cloudSaves = [
+      createSavedGame("cloud-one", createGame(1), []),
+      createSavedGame("cloud-two", createGame(2, { mode: "ai" }), []),
+    ];
+    persistLocalSavedGames([localSave]);
+    accountHarness.account = {
+      userId: "account-1",
+      email: "player@example.com",
+      displayName: "Player",
+    };
+    accountHarness.configured = true;
+    cloudSaveHarness.load.mockResolvedValue(cloudSaves);
+
+    render(<App />);
+    openPlayMenu();
+    const load = screen.getByRole("button", { name: /^load$/i });
+    await waitFor(() => expect((load as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(load);
+    fireEvent.click(screen.getByRole("button", { name: /^delete all$/i }));
+    fireEvent.click(within(
+      screen.getByRole("dialog", { name: /delete all saved games/i }),
+    ).getByRole("button", { name: /^delete all$/i }));
+
+    await waitFor(() => {
+      expect(cloudSaveHarness.removeAll).toHaveBeenCalledWith("account-1");
+    });
+    expect(screen.queryByRole("button", { name: /load saved game/i })).toBeNull();
+    expect(loadLocalSavedGames()).toEqual([localSave]);
   });
 });

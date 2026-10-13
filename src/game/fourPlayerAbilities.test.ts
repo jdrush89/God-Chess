@@ -886,4 +886,18 @@ describe("four-player ability safety regressions", () => {
     expect(state.legalTargets).toEqual([]);
     expect(state.board.g12?.id).toBe("slithering-queen");
   });
+
+  it("limits each four-player Serpentine Step pawn move to one diagonal square", () => {
+    let state = gameFor("medusa");
+    state.board.h11 = piece(state, "pawn", "north", "stepping-pawn");
+    state = activate(state, "medusa", "slither");
+    state = fourPlayerReducer(state, { type: "square", square: "h11" });
+    expect(state.legalTargets).toContain("g12");
+    expect(state.legalTargets).not.toContain("f13");
+
+    state = fourPlayerReducer(state, { type: "square", square: "g12" });
+    expect(state.pending?.step).toBe("slither");
+    expect(state.legalTargets).toContain("f13");
+    expect(state.legalTargets).not.toContain("e14");
+  });
 });

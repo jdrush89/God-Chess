@@ -72,6 +72,32 @@ const completeFourPlayerDraft = (
 };
 
 describe("four-player app integration", () => {
+  it("moves Rules into the match menu and offers local quit without saving", () => {
+    const onQuit = vi.fn();
+    render(
+      <FourPlayerGame
+        initialState={completeFourPlayerDraft()}
+        undoPreferred={false}
+        onUndoPreferenceChange={vi.fn()}
+        onPersist={vi.fn(async () => true)}
+        onQuit={onQuit}
+        onNewGame={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: /^rules$/i })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /open match menu/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^rules$/i }));
+    expect(screen.getByRole("heading", {
+      name: /four pantheons, one cross-board/i,
+    })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /close rules/i }));
+
+    fireEvent.click(screen.getByRole("button", { name: /open match menu/i }));
+    fireEvent.click(screen.getByRole("button", { name: /quit without saving/i }));
+    expect(onQuit).toHaveBeenCalledTimes(1);
+  });
+
   it("integrates the shared zoom viewport with the four-player board", () => {
     const { container } = render(
       <FourPlayerGame
