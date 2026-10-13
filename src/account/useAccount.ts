@@ -7,6 +7,7 @@ export interface AccountProfile {
   email: string;
   displayName: string;
   needsDisplayName?: boolean;
+  needsLocalDataImport?: boolean;
 }
 
 const normalizedDisplayName = (value: unknown) =>
@@ -35,6 +36,14 @@ export const resolveAuthRedirectUrl = (
   href = window.location.href,
   baseUrl = import.meta.env.BASE_URL,
 ) => new URL(baseUrl, href).href;
+
+export const resolveLocalDataImportPending = (value: unknown) =>
+  value === true;
+
+export const createSignUpMetadata = (displayName: string) => ({
+  display_name: displayName.trim().slice(0, 24),
+  local_data_import_pending: true,
+});
 
 const loadProfile = async (user: User): Promise<AccountProfile> => {
   if (!supabase) throw new Error("Account services are not configured.");
@@ -65,6 +74,9 @@ const loadProfile = async (user: User): Promise<AccountProfile> => {
     email: user.email ?? "",
     displayName,
     needsDisplayName,
+    needsLocalDataImport: resolveLocalDataImportPending(
+      user.user_metadata.local_data_import_pending,
+    ),
   };
 };
 
@@ -141,7 +153,7 @@ export function useAccount() {
         email,
         password,
         options: {
-          data: { display_name: displayName.trim().slice(0, 24) },
+          data: createSignUpMetadata(displayName),
           emailRedirectTo: resolveAuthRedirectUrl(),
         },
       });
@@ -192,6 +204,26 @@ export function useAccount() {
     }
   };
 
+  const completeLocalDataImportDecision = async () => {
+    if (!supabase || !account) {
+      throw new Error("You must be signed in to finish account setup.");
+    }
+    setWorking(true);
+    try {
+      const { error } = await supabase.auth.updateUser({
+        data: {
+          local_data_import_pending: false,
+          local_data_import_resolved_at: new Date().toISOString(),
+        },
+      });
+      if (error) throw error;
+      setAccount({ ...account, needsLocalDataImport: false });
+      setError(undefined);
+    } finally {
+      setWorking(false);
+    }
+  };
+
   return {
     account,
     configured: accountsConfigured,
@@ -202,5 +234,6 @@ export function useAccount() {
     signUp,
     signOut,
     updateDisplayName,
+    completeLocalDataImportDecision,
   };
 }
