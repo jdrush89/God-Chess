@@ -1118,13 +1118,24 @@ export function ThreePlayerGame({
         .filter((action) => action.type === "cell")
         .map(actionCell)
         .filter((cell): cell is string => Boolean(cell))
-    : moveFirstDraft
-      ? moveFirstTargets
+    : moveFirstEnabled
+      ? moveFirstDraft
+        ? moveFirstTargets
+        : [...moveFirstSources]
     : selectedCell
       ? moveActions
         .filter((action) => actionValue<string>(action, "from") === selectedCell)
         .map((action) => actionValue<string>(action, "to"))
         .filter((cell): cell is string => Boolean(cell))
+      : [];
+  const sourceCells = moveFirstEnabled && !moveFirstDraft
+    ? [...moveFirstSources]
+    : !selectedCell && (
+        state.pending?.step === "source" ||
+        state.pending?.step === "enchant-enemy-move" ||
+        state.pending?.step === "enchant-followup-move"
+      )
+      ? legalCells
       : [];
 
   const dispatchAction = (
@@ -1800,6 +1811,7 @@ export function ThreePlayerGame({
                 provisionalSource={moveFirstDraft?.source}
                 provisionalDestination={moveFirstDraft?.destination}
                 legalCells={legalCells}
+                sourceCells={sourceCells}
                 pathCells={pathCells(state)}
                 disabled={inputDisabled}
                 onCell={selectCell}

@@ -147,6 +147,7 @@ export interface ThreePlayerBoardProps {
   provisionalSource?: ThreePlayerCell;
   provisionalDestination?: ThreePlayerCell;
   legalCells?: readonly ThreePlayerCell[];
+  sourceCells?: readonly ThreePlayerCell[];
   pathCells?: readonly ThreePlayerCell[];
   disabled?: boolean;
   preview?: boolean;
@@ -160,6 +161,7 @@ export function ThreePlayerBoard({
   provisionalSource,
   provisionalDestination,
   legalCells = [],
+  sourceCells = [],
   pathCells = [],
   disabled = false,
   preview = false,
@@ -178,6 +180,7 @@ export function ThreePlayerBoard({
     height: bounds.height + RENDER_PADDING * 2,
   };
   const legal = new Set(legalCells);
+  const sources = new Set(sourceCells);
   const path = new Set(pathCells);
   const variant = state.config.boardVariant;
   const enchantSourceChoice = (
@@ -201,6 +204,10 @@ export function ThreePlayerBoard({
         const isLegal = legal.has(descriptor.id);
         const isEffectPreview = previewingEffect && isLegal;
         const isMoveTarget = isLegal && !isEffectPreview;
+        const isSource = isMoveTarget && (
+          sources.has(descriptor.id) ||
+          (sources.size === 0 && enchantSourceChoice)
+        );
         const isSelected = descriptor.id === selectedCell;
         const isProvisionalSource = descriptor.id === provisionalSource;
         const isProvisionalDestination = descriptor.id === provisionalDestination;
@@ -218,8 +225,8 @@ export function ThreePlayerBoard({
           visualClass,
           isMoveTarget ? "legal" : "",
           piece && isMoveTarget ? "legal-occupied" : "",
-          isMoveTarget && enchantSourceChoice ? "legal-source" : "",
-          isMoveTarget && !enchantSourceChoice ? "legal-destination" : "",
+          isSource ? "legal-source" : "",
+          isMoveTarget && !isSource ? "legal-destination" : "",
           isEffectPreview ? "effect-preview" : "",
           isSelected ? "selected" : "",
           isProvisionalSource ? "provisional-source" : "",
@@ -231,6 +238,7 @@ export function ThreePlayerBoard({
           piece ? pieceName(piece) : undefined,
           statusLabels.length ? statusLabels.join(", ") : undefined,
           banana ? `banana placed by ${banana.owner}` : undefined,
+          isSource ? "legal move source" : undefined,
           isProvisionalSource ? "provisional move source" : undefined,
           isProvisionalDestination
             ? "provisional move destination, not committed"

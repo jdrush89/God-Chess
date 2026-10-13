@@ -187,6 +187,7 @@ describe("ThreePlayerGame", () => {
       const source = container.querySelector(`[data-cell="${from}"]`)!;
       const destination = container.querySelector(`[data-cell="${to}"]`)!;
 
+      expect(source.classList.contains("legal-source")).toBe(true);
       fireEvent.click(source);
       expect(source.classList.contains("provisional-source")).toBe(true);
       expect(screen.getByText(
@@ -238,6 +239,33 @@ describe("ThreePlayerGame", () => {
       ".move-first-ability-list .ability-card",
     )).toHaveLength(1);
     expect(screen.getByText("CONFIRM MOVE")).toBeTruthy();
+  });
+
+  it("highlights movable Three Half sources after selecting a God ability", () => {
+    const config = createDefaultThreePlayerConfig();
+    config.boardVariant = "three-half";
+    const state = completeDraft(createThreePlayerGame(config));
+    state.players.white.gods = ["chiron"];
+    state.players.red.gods = ["ares"];
+    state.players.black.gods = ["medusa"];
+    state.activeSeat = "white";
+    state.rested = [];
+    const { container } = renderGame(state);
+
+    fireEvent.click(screen.getByRole("button", { name: /chiron/i }));
+    fireEvent.click(
+      screen.getByText("Gallop").closest(".ability-card-main") as HTMLElement,
+    );
+
+    const sources = container.querySelectorAll(
+      ".three-board-cell.legal-source",
+    );
+    expect(sources.length).toBeGreaterThan(0);
+    fireEvent.click(sources[0]);
+    expect(container.querySelector(".three-board-cell.selected")).toBeTruthy();
+    expect(container.querySelectorAll(
+      ".three-board-cell.legal-destination",
+    ).length).toBeGreaterThan(0);
   });
 
   it("suppresses the board tap after a zoomed drag", () => {
