@@ -18,7 +18,13 @@ const threeOnlineHarness = vi.hoisted(() => ({
 
 const accountHarness = vi.hoisted(() => ({
   account: undefined as
-    | { userId: string; email: string; displayName: string; needsDisplayName?: boolean }
+    | {
+      userId: string;
+      email: string;
+      displayName: string;
+      needsDisplayName?: boolean;
+      needsLocalDataImport?: boolean;
+    }
     | undefined,
   configured: false,
   loading: false,
@@ -28,12 +34,22 @@ const accountHarness = vi.hoisted(() => ({
   signUp: vi.fn(async () => "Account created."),
   signOut: vi.fn(async () => undefined),
   updateDisplayName: vi.fn(async () => "Display name updated."),
+  completeLocalDataImportDecision: vi.fn(async () => undefined),
 }));
 
 const cloudSaveHarness = vi.hoisted(() => ({
   load: vi.fn(),
   upsert: vi.fn(async () => undefined),
   remove: vi.fn(async () => undefined),
+}));
+
+const cloudProgressHarness = vi.hoisted(() => ({
+  loadPuzzles: vi.fn(),
+  upsertPuzzles: vi.fn(async () => undefined),
+  loadChallenges: vi.fn(),
+  upsertChallenges: vi.fn(async () => undefined),
+  loadAchievements: vi.fn(),
+  upsertAchievements: vi.fn(async () => undefined),
 }));
 
 const aiHarness = vi.hoisted(() => ({
@@ -99,6 +115,8 @@ vi.mock("./account/useAccount", () => ({
     signUp: accountHarness.signUp,
     signOut: accountHarness.signOut,
     updateDisplayName: accountHarness.updateDisplayName,
+    completeLocalDataImportDecision:
+      accountHarness.completeLocalDataImportDecision,
   }),
 }));
 
@@ -109,22 +127,19 @@ vi.mock("./account/cloudSaves", () => ({
 }));
 
 vi.mock("./account/cloudPuzzleProgress", () => ({
-  loadCloudCompletedPuzzles: vi.fn(async () => []),
-  upsertCloudCompletedPuzzles: vi.fn(async () => undefined),
+  loadCloudCompletedPuzzles: cloudProgressHarness.loadPuzzles,
+  upsertCloudCompletedPuzzles: cloudProgressHarness.upsertPuzzles,
 }));
 
 vi.mock("./account/cloudChallengeProgress", () => ({
-  loadCloudCompletedChallenges: vi.fn(async () => []),
-  upsertCloudCompletedChallenges: vi.fn(async () => undefined),
+  loadCloudCompletedChallenges: cloudProgressHarness.loadChallenges,
+  upsertCloudCompletedChallenges: cloudProgressHarness.upsertChallenges,
 }));
 
-vi.mock("./account/cloudAchievementProgress", async () => {
-  const { createAchievementProgress } = await import("./achievements");
-  return {
-    loadCloudAchievementProgress: vi.fn(async () => createAchievementProgress()),
-    upsertCloudAchievementProgress: vi.fn(async () => undefined),
-  };
-});
+vi.mock("./account/cloudAchievementProgress", () => ({
+  loadCloudAchievementProgress: cloudProgressHarness.loadAchievements,
+  upsertCloudAchievementProgress: cloudProgressHarness.upsertAchievements,
+}));
 
 vi.mock("./game/ai", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./game/ai")>();
@@ -138,6 +153,9 @@ vi.mock("./game/ai", async (importOriginal) => {
 });
 
 import App, { ActionPanel, ChessBoard, GameScreen } from "./App";
+import { persistLocalAchievementProgress } from "./achievementProgress";
+import { createAchievementProgress } from "./achievements";
+import { persistLocalCompletedChallenges } from "./challengeProgress";
 import { chooseAiPlan } from "./game/ai";
 import {
   classicMoveFirstCandidates,
@@ -149,7 +167,12 @@ import { createDefaultThreePlayerConfig } from "./game/threePlayerConfig";
 import { createThreePlayerGame, threePlayerReducer } from "./game/threePlayerEngine";
 import { createThreePlayerStateEnvelope } from "./game/threePlayerSession";
 import { PUZZLES } from "./game/puzzles";
-import { createSavedGame, prepareSavedState } from "./saves";
+import {
+  createSavedGame,
+  persistLocalSavedGames,
+  prepareSavedState,
+} from "./saves";
+import { persistLocalCompletedPuzzles } from "./puzzleProgress";
 
 const SAVE_KEY = "god-chess-saves-v2";
 const LEGACY_SAVE_KEY = "god-chess-save-v1";
@@ -314,10 +337,22 @@ beforeEach(() => {
   accountHarness.signUp.mockClear();
   accountHarness.signOut.mockClear();
   accountHarness.updateDisplayName.mockClear();
+  accountHarness.completeLocalDataImportDecision.mockClear();
   cloudSaveHarness.load.mockReset();
   cloudSaveHarness.load.mockResolvedValue([]);
   cloudSaveHarness.upsert.mockClear();
   cloudSaveHarness.remove.mockClear();
+  cloudProgressHarness.loadPuzzles.mockReset();
+  cloudProgressHarness.loadPuzzles.mockResolvedValue([]);
+  cloudProgressHarness.upsertPuzzles.mockClear();
+  cloudProgressHarness.loadChallenges.mockReset();
+  cloudProgressHarness.loadChallenges.mockResolvedValue([]);
+  cloudProgressHarness.upsertChallenges.mockClear();
+  cloudProgressHarness.loadAchievements.mockReset();
+  cloudProgressHarness.loadAchievements.mockResolvedValue(
+    createAchievementProgress(),
+  );
+  cloudProgressHarness.upsertAchievements.mockClear();
   threeOnlineHarness.state = {
     role: "none",
     connecting: false,
@@ -584,6 +619,125 @@ describe("game startup", () => {
 
     expect(await screen.findByLabelText(/^display name$/i)).toBeTruthy();
     expect(screen.getByRole("button", { name: /save display name/i })).toBeTruthy();
+  });
+
+  it("offers a one-time import and uploads every local progress category", async () => {
+    const localSave = createSavedGame("local-save", createGame(1), []);
+    persistLocalSavedGames([localSave]);
+    persistLocalCompletedPuzzles(["centaurs-lance"]);
+    persistLocalCompletedChallenges(["phalanx"]);
+    const localAchievements = createAchievementProgress();
+    localAchievements.completed["it-begins"] = "2026-10-12T12:00:00.000Z";
+    persistLocalAchievementProgress(localAchievements);
+    accountHarness.configured = true;
+    accountHarness.account = {
+      userId: "new-account",
+      email: "new@example.com",
+      displayName: "New Player",
+      needsLocalDataImport: true,
+    };
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", {
+      name: /import this device's progress/i,
+    })).toBeTruthy();
+    const importButton = screen.getByRole("button", {
+      name: /import local data/i,
+    }) as HTMLButtonElement;
+    await waitFor(() => expect(importButton.disabled).toBe(false));
+    fireEvent.click(importButton);
+
+    await waitFor(() => {
+      expect(accountHarness.completeLocalDataImportDecision)
+        .toHaveBeenCalledTimes(1);
+    });
+    expect(cloudSaveHarness.upsert).toHaveBeenCalledWith(
+      "new-account",
+      expect.objectContaining({ id: "local-save" }),
+    );
+    expect(cloudProgressHarness.upsertPuzzles)
+      .toHaveBeenCalledWith("new-account", ["centaurs-lance"]);
+    expect(cloudProgressHarness.upsertChallenges)
+      .toHaveBeenCalledWith("new-account", ["phalanx"]);
+    expect(cloudProgressHarness.upsertAchievements).toHaveBeenCalledWith(
+      "new-account",
+      expect.objectContaining({
+        completed: expect.objectContaining({
+          "it-begins": "2026-10-12T12:00:00.000Z",
+        }),
+      }),
+    );
+  });
+
+  it("starts a new account fresh when local import is declined", async () => {
+    persistLocalSavedGames([
+      createSavedGame("local-save", createGame(1), []),
+    ]);
+    persistLocalCompletedPuzzles(["centaurs-lance"]);
+    persistLocalCompletedChallenges(["phalanx"]);
+    accountHarness.configured = true;
+    accountHarness.account = {
+      userId: "new-account",
+      email: "new@example.com",
+      displayName: "New Player",
+      needsLocalDataImport: true,
+    };
+
+    render(<App />);
+    const startFresh = await screen.findByRole("button", {
+      name: /start fresh/i,
+    });
+    await waitFor(() =>
+      expect((startFresh as HTMLButtonElement).disabled).toBe(false)
+    );
+    fireEvent.click(startFresh);
+
+    await waitFor(() => {
+      expect(accountHarness.completeLocalDataImportDecision)
+        .toHaveBeenCalledTimes(1);
+    });
+    expect(cloudSaveHarness.upsert).not.toHaveBeenCalled();
+    expect(cloudProgressHarness.upsertPuzzles).not.toHaveBeenCalled();
+    expect(cloudProgressHarness.upsertChallenges).not.toHaveBeenCalled();
+    expect(cloudProgressHarness.upsertAchievements).not.toHaveBeenCalled();
+  });
+
+  it("uses only account data after sign-in unless import was accepted", async () => {
+    persistLocalSavedGames([
+      createSavedGame("local-save", createGame(1), []),
+    ]);
+    persistLocalCompletedPuzzles(["centaurs-lance"]);
+    persistLocalCompletedChallenges(["phalanx"]);
+    const localAchievements = createAchievementProgress();
+    localAchievements.completed["it-begins"] = "2026-10-12T12:00:00.000Z";
+    persistLocalAchievementProgress(localAchievements);
+    accountHarness.configured = true;
+    accountHarness.account = {
+      userId: "existing-account",
+      email: "existing@example.com",
+      displayName: "Existing Player",
+    };
+
+    render(<App />);
+    await waitFor(() => {
+      expect(cloudProgressHarness.loadAchievements)
+        .toHaveBeenCalledWith("existing-account");
+    });
+
+    expect(screen.queryByText(/import this device's progress/i)).toBeNull();
+    expect(cloudSaveHarness.upsert).not.toHaveBeenCalled();
+    expect(cloudProgressHarness.upsertPuzzles).not.toHaveBeenCalled();
+    expect(cloudProgressHarness.upsertChallenges).not.toHaveBeenCalled();
+    expect(cloudProgressHarness.upsertAchievements).not.toHaveBeenCalled();
+
+    openPlayOption("Puzzles");
+    expect(screen.getByRole("button", {
+      name: /^easy.*0 of 10 completed/i,
+    })).toBeTruthy();
+    expect(screen.getByRole("button", {
+      name: /^challenges.*0 of 8 completed/i,
+    })).toBeTruthy();
   });
 
   it("routes Online player counts to Host/Join and Puzzles directly", () => {

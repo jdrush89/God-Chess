@@ -115,6 +115,7 @@ import {
   achievementProgressValue,
   applyAchievementTransition,
   completeCryptologistIfEligible,
+  createAchievementProgress,
   type AchievementProgress,
   type AchievementTransition,
 } from "./achievements";
@@ -169,6 +170,7 @@ import {
   persistLocalSavedGames,
   prepareSavedState,
   saveId,
+  sortSavedGames,
   isFourPlayerSavedGame,
   isThreePlayerSavedGame,
   type SavedGame,
@@ -1815,6 +1817,58 @@ function SettingsModal({
   );
 }
 
+function LocalDataImportModal({
+  loading,
+  working,
+  error,
+  onImport,
+  onStartFresh,
+}: {
+  loading: boolean;
+  working: boolean;
+  error?: string;
+  onImport: () => Promise<void>;
+  onStartFresh: () => Promise<void>;
+}) {
+  return (
+    <div className="modal-backdrop">
+      <section className="account-modal" aria-modal="true" role="dialog">
+        <p className="eyebrow">NEW ACCOUNT</p>
+        <Download className="account-hero-icon" size={32} />
+        <h2>Import this device's progress?</h2>
+        <p>
+          You can copy local saved games, puzzle progress, achievements, and
+          completed challenges into your new account.
+        </p>
+        <p className="settings-note">
+          This choice is only offered once. While signed in, account data always
+          takes priority over data stored locally on this device.
+        </p>
+        <div className="account-import-actions">
+          <button
+            className="primary-button"
+            disabled={loading || working}
+            onClick={() => void onImport()}
+          >
+            {loading || working
+              ? <LoaderCircle className="spin" size={17} />
+              : <Download size={17} />}
+            {loading ? "Loading account data" : "Import local data"}
+          </button>
+          <button
+            className="secondary-button"
+            disabled={loading || working}
+            onClick={() => void onStartFresh()}
+          >
+            Start fresh
+          </button>
+        </div>
+        {error && <p className="account-error" role="alert">{error}</p>}
+      </section>
+    </div>
+  );
+}
+
 function MainMenu({
   saveError,
   account,
@@ -1822,11 +1876,16 @@ function MainMenu({
   accountLoading,
   accountWorking,
   accountError,
+  accountDataLoading,
+  accountImportWorking,
+  accountImportError,
   onStart,
   onSignIn,
   onSignUp,
   onSignOut,
   onUpdateDisplayName,
+  onImportLocalData,
+  onStartAccountFresh,
 }: {
   saveError?: string;
   account?: AccountProfile;
@@ -1834,13 +1893,19 @@ function MainMenu({
   accountLoading: boolean;
   accountWorking: boolean;
   accountError?: string;
+  accountDataLoading: boolean;
+  accountImportWorking: boolean;
+  accountImportError?: string;
   onStart: () => void;
   onSignIn: (email: string, password: string) => Promise<string>;
   onSignUp: (email: string, password: string, displayName: string) => Promise<string>;
   onSignOut: () => Promise<void>;
   onUpdateDisplayName: (displayName: string) => Promise<string>;
+  onImportLocalData: () => Promise<void>;
+  onStartAccountFresh: () => Promise<void>;
 }) {
-  const [accountModalMode, setAccountModalMode] = useState<"auth" | "name">();
+  const [accountModalMode, setAccountModalMode] =
+    useState<"auth" | "name" | "import">();
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -1850,7 +1915,12 @@ function MainMenu({
     }
     if (account.needsDisplayName) {
       setAccountModalMode("name");
-    } else if (accountModalMode === "auth") {
+    } else if (account.needsLocalDataImport) {
+      setAccountModalMode("import");
+    } else if (
+      accountModalMode === "auth" ||
+      accountModalMode === "import"
+    ) {
       setAccountModalMode(undefined);
     }
   }, [account, accountModalMode]);
@@ -1926,7 +1996,16 @@ function MainMenu({
         </button>
         {saveError && <p className="main-menu-error" role="alert">{saveError}</p>}
       </div>
-      {accountModalMode && (
+      {accountModalMode === "import" && (
+        <LocalDataImportModal
+          loading={accountDataLoading}
+          working={accountImportWorking || accountWorking}
+          error={accountImportError}
+          onImport={onImportLocalData}
+          onStartFresh={onStartAccountFresh}
+        />
+      )}
+      {accountModalMode && accountModalMode !== "import" && (
         <AccountModal
           account={account}
           configured={accountConfigured}
@@ -3959,7 +4038,13 @@ export default function App() {
     useState<string>();
   const [achievementProgressLoading, setAchievementProgressLoading] =
     useState(false);
-  const savedGames = accountService.account ? cloudSavedGames : localSavedGames;
+  const [accountImportWorking, setAccountImportWorking] = useState(false);
+  const [accountImportError, setAccountImportError] = useState<string>();
+  const savedGames = accountService.account
+    ? cloudSavesLoadedFor === accountService.account.userId
+      ? cloudSavedGames
+      : []
+    : localSavedGames;
   const savesHydrating = Boolean(
     accountService.account &&
     cloudSavesLoadedFor !== accountService.account.userId
@@ -3976,6 +4061,20 @@ export default function App() {
       : []
     : localCompletedChallenges;
   const completedChallenges = new Set(completedChallengeIds);
+  const accountDataLoading = Boolean(
+    accountService.account &&
+    (
+      cloudSavesLoadedFor !== accountService.account.userId ||
+      cloudPuzzleProgress.userId !== accountService.account.userId ||
+      cloudChallengeProgress.userId !== accountService.account.userId ||
+      achievementProgressLoadedFor !== accountService.account.userId
+    )
+  );
+  const visibleAchievementProgress =
+    accountService.account &&
+      achievementProgressLoadedFor !== accountService.account.userId
+      ? createAchievementProgress()
+      : achievementProgress;
   const completedPuzzleCounts = useMemo(
     () =>
       completedPuzzleIds.reduce(
@@ -4053,30 +4152,20 @@ export default function App() {
       return;
     }
     let active = true;
+    setAchievementProgressLoadedFor(undefined);
     setAchievementProgressLoading(true);
+    setAchievementProgress(createAchievementProgress());
     void loadCloudAchievementProgress(account.userId)
       .then((cloudProgress) => {
         if (!active) return;
-        const merged = mergeNormalizedAchievementProgress(
-          loadLocalAchievementProgress(),
-          cloudProgress,
-        );
-        setAchievementProgress(merged);
+        setAchievementProgress(cloudProgress);
         setAchievementProgressLoadedFor(account.userId);
-        cloudAchievementQueue.current = cloudAchievementQueue.current
-          .then(() => upsertCloudAchievementProgress(account.userId, merged))
-          .catch((error) => {
-            console.error("Unable to merge achievement progress.", error);
-            setSaveError(
-              error instanceof Error
-                ? error.message
-                : "Unable to save achievement progress.",
-            );
-          });
       })
       .catch((error) => {
         console.error("Unable to load cloud achievement progress.", error);
         if (active) {
+          setAchievementProgress(createAchievementProgress());
+          setAchievementProgressLoadedFor(account.userId);
           setSaveError(
             error instanceof Error
               ? error.message
@@ -4085,7 +4174,10 @@ export default function App() {
         }
       })
       .finally(() => {
-        if (active) setAchievementProgressLoading(false);
+        if (active) {
+          setAchievementProgressLoadedFor(account.userId);
+          setAchievementProgressLoading(false);
+        }
       });
     return () => {
       active = false;
@@ -4114,7 +4206,7 @@ export default function App() {
                 : "Unable to save achievement progress.",
             );
           });
-      } else {
+      } else if (!account) {
         try {
           persistLocalAchievementProgress(next);
         } catch (error) {
@@ -4151,7 +4243,10 @@ export default function App() {
         console.error("Unable to load cloud puzzle progress.", error);
         if (active) {
           setSaveError(error instanceof Error ? error.message : "Unable to load puzzle progress.");
-          setCloudPuzzleProgress({ completed: [] });
+          setCloudPuzzleProgress({
+            userId: account.userId,
+            completed: [],
+          });
         }
       })
       .finally(() => {
@@ -4174,26 +4269,10 @@ export default function App() {
     void loadCloudCompletedChallenges(account.userId)
       .then((completed) => {
         if (active) {
-          const merged = [...new Set([
-            ...loadLocalCompletedChallenges(),
-            ...completed,
-          ])];
           setCloudChallengeProgress({
             userId: account.userId,
-            completed: merged,
+            completed,
           });
-          void upsertCloudCompletedChallenges(account.userId, merged).catch(
-            (error) => {
-              console.error("Unable to merge challenge progress.", error);
-              if (active) {
-                setSaveError(
-                  error instanceof Error
-                    ? error.message
-                    : "Unable to merge challenge progress.",
-                );
-              }
-            },
-          );
         }
       })
       .catch((error) => {
@@ -4204,7 +4283,10 @@ export default function App() {
               ? error.message
               : "Unable to load challenge progress.",
           );
-          setCloudChallengeProgress({ completed: [] });
+          setCloudChallengeProgress({
+            userId: account.userId,
+            completed: [],
+          });
         }
       })
       .finally(() => {
@@ -4214,6 +4296,89 @@ export default function App() {
       active = false;
     };
   }, [accountService.account?.userId]);
+
+  useEffect(() => {
+    setAccountImportError(undefined);
+  }, [accountService.account?.userId]);
+
+  const finishLocalDataImportDecision = useCallback(async (
+    importLocalData: boolean,
+  ) => {
+    const account = accountService.account;
+    if (!account || accountImportWorking) return;
+    if (accountDataLoading) {
+      setAccountImportError(
+        "Wait for the account data to finish loading, then try again.",
+      );
+      return;
+    }
+    setAccountImportWorking(true);
+    setAccountImportError(undefined);
+    try {
+      if (importLocalData) {
+        const cloudSaveIds = new Set(cloudSavedGames.map((game) => game.id));
+        const importedSaves = sortSavedGames([
+          ...loadLocalSavedGames().filter((game) => !cloudSaveIds.has(game.id)),
+          ...cloudSavedGames,
+        ]);
+        const importedPuzzles = [...new Set([
+          ...cloudPuzzleProgress.completed,
+          ...loadLocalCompletedPuzzles(),
+        ])];
+        const importedChallenges = [...new Set([
+          ...cloudChallengeProgress.completed,
+          ...loadLocalCompletedChallenges(),
+        ])];
+        const importedAchievements = mergeNormalizedAchievementProgress(
+          achievementProgress,
+          loadLocalAchievementProgress(),
+        );
+
+        await Promise.all([
+          ...importedSaves.map((game) =>
+            upsertCloudSavedGame(account.userId, game)
+          ),
+          upsertCloudCompletedPuzzles(account.userId, importedPuzzles),
+          upsertCloudCompletedChallenges(account.userId, importedChallenges),
+          upsertCloudAchievementProgress(
+            account.userId,
+            importedAchievements,
+          ),
+        ]);
+
+        setCloudSavedGames(importedSaves);
+        setCloudSavesLoadedFor(account.userId);
+        setCloudPuzzleProgress({
+          userId: account.userId,
+          completed: importedPuzzles,
+        });
+        setCloudChallengeProgress({
+          userId: account.userId,
+          completed: importedChallenges,
+        });
+        setAchievementProgress(importedAchievements);
+        setAchievementProgressLoadedFor(account.userId);
+      }
+      await accountService.completeLocalDataImportDecision();
+    } catch (error) {
+      console.error("Unable to finish local data import.", error);
+      setAccountImportError(
+        error instanceof Error
+          ? error.message
+          : "Unable to finish account setup.",
+      );
+    } finally {
+      setAccountImportWorking(false);
+    }
+  }, [
+    accountDataLoading,
+    accountImportWorking,
+    accountService,
+    achievementProgress,
+    cloudChallengeProgress.completed,
+    cloudPuzzleProgress.completed,
+    cloudSavedGames,
+  ]);
 
   const recordChallengeCompletion = useCallback((challengeId: ChallengeId) => {
     const account = accountService.account;
@@ -5253,11 +5418,16 @@ export default function App() {
         accountLoading={accountService.loading}
         accountWorking={accountService.working}
         accountError={accountService.error}
+        accountDataLoading={accountDataLoading}
+        accountImportWorking={accountImportWorking}
+        accountImportError={accountImportError}
         onStart={() => setStartView("play")}
         onSignIn={accountService.signIn}
         onSignUp={accountService.signUp}
         onSignOut={accountService.signOut}
         onUpdateDisplayName={accountService.updateDisplayName}
+        onImportLocalData={() => finishLocalDataImportDecision(true)}
+        onStartAccountFresh={() => finishLocalDataImportDecision(false)}
       />
     );
   }
@@ -5269,7 +5439,7 @@ export default function App() {
   if (startView === "achievements") {
     return (
       <AchievementsScreen
-        progress={achievementProgress}
+        progress={visibleAchievementProgress}
         account={accountService.account}
         loading={achievementProgressLoading}
         puzzleCounts={completedPuzzleCounts}

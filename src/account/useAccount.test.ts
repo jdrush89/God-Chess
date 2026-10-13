@@ -1,7 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { resolveAuthRedirectUrl, resolveDisplayName } from "./useAccount";
+import {
+  createSignUpMetadata,
+  resolveAuthRedirectUrl,
+  resolveDisplayName,
+  resolveLocalDataImportPending,
+} from "./useAccount";
 
 describe("resolveAuthRedirectUrl", () => {
+  it("only requests local-data import for the explicit signup marker", () => {
+    expect(resolveLocalDataImportPending(true)).toBe(true);
+    expect(resolveLocalDataImportPending(false)).toBe(false);
+    expect(resolveLocalDataImportPending(undefined)).toBe(false);
+    expect(resolveLocalDataImportPending("true")).toBe(false);
+  });
+
+  it("marks newly created accounts for the one-time import decision", () => {
+    expect(createSignUpMetadata("  Athena  ")).toEqual({
+      display_name: "Athena",
+      local_data_import_pending: true,
+    });
+  });
+
   it("preserves the GitHub Pages project path for a relative Vite base", () => {
     expect(
       resolveAuthRedirectUrl(
