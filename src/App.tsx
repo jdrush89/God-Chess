@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   ArrowLeft,
   Bot,
@@ -1874,25 +1883,7 @@ function LocalDataImportModal({
   );
 }
 
-function MainMenu({
-  saveError,
-  account,
-  accountConfigured,
-  accountLoading,
-  accountWorking,
-  accountError,
-  accountDataLoading,
-  accountImportWorking,
-  accountImportError,
-  onStart,
-  onSignIn,
-  onSignUp,
-  onSignOut,
-  onUpdateDisplayName,
-  onImportLocalData,
-  onStartAccountFresh,
-}: {
-  saveError?: string;
+interface AccountControlProps {
   account?: AccountProfile;
   accountConfigured: boolean;
   accountLoading: boolean;
@@ -1901,14 +1892,32 @@ function MainMenu({
   accountDataLoading: boolean;
   accountImportWorking: boolean;
   accountImportError?: string;
-  onStart: () => void;
   onSignIn: (email: string, password: string) => Promise<string>;
   onSignUp: (email: string, password: string, displayName: string) => Promise<string>;
   onSignOut: () => Promise<void>;
   onUpdateDisplayName: (displayName: string) => Promise<string>;
   onImportLocalData: () => Promise<void>;
   onStartAccountFresh: () => Promise<void>;
-}) {
+  className?: string;
+}
+
+function AccountControl({
+  account,
+  accountConfigured,
+  accountLoading,
+  accountWorking,
+  accountError,
+  accountDataLoading,
+  accountImportWorking,
+  accountImportError,
+  onSignIn,
+  onSignUp,
+  onSignOut,
+  onUpdateDisplayName,
+  onImportLocalData,
+  onStartAccountFresh,
+  className = "",
+}: AccountControlProps) {
   const [accountModalMode, setAccountModalMode] =
     useState<"auth" | "name" | "import">();
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
@@ -1946,22 +1955,8 @@ function MainMenu({
   };
 
   return (
-    <section className="main-menu-screen">
-      <img
-        className="main-menu-art"
-        src={TITLE_ART_AVIF}
-        alt="God Chess"
-        decoding="async"
-        fetchPriority="high"
-        onError={(event) => {
-          if (!event.currentTarget.src.endsWith("god-chess-title.webp")) {
-            event.currentTarget.src = TITLE_ART_WEBP;
-          }
-        }}
-      />
-      <div className="main-menu-shade" />
-      <span className="game-version">Version {GAME_VERSION}</span>
-      <div className="main-account-area">
+    <>
+      <div className={`main-account-area ${className}`.trim()}>
         <button
           className="main-account-button"
           disabled={accountLoading}
@@ -1994,13 +1989,6 @@ function MainMenu({
           </div>
         )}
       </div>
-      <div className="main-menu-actions">
-        <p className="eyebrow">THE DIVINE GAME</p>
-        <button className="primary-button main-start-button" onClick={onStart}>
-          Start
-        </button>
-        {saveError && <p className="main-menu-error" role="alert">{saveError}</p>}
-      </div>
       {accountModalMode === "import" && (
         <LocalDataImportModal
           loading={accountDataLoading}
@@ -2024,6 +2012,42 @@ function MainMenu({
           onUpdateDisplayName={updateDisplayName}
         />
       )}
+    </>
+  );
+}
+
+function MainMenu({
+  saveError,
+  onStart,
+  ...accountProps
+}: AccountControlProps & {
+  saveError?: string;
+  onStart: () => void;
+}) {
+  return (
+    <section className="main-menu-screen">
+      <img
+        className="main-menu-art"
+        src={TITLE_ART_AVIF}
+        alt="God Chess"
+        decoding="async"
+        fetchPriority="high"
+        onError={(event) => {
+          if (!event.currentTarget.src.endsWith("god-chess-title.webp")) {
+            event.currentTarget.src = TITLE_ART_WEBP;
+          }
+        }}
+      />
+      <div className="main-menu-shade" />
+      <span className="game-version">Version {GAME_VERSION}</span>
+      <AccountControl {...accountProps} />
+      <div className="main-menu-actions">
+        <p className="eyebrow">THE DIVINE GAME</p>
+        <button className="primary-button main-start-button" onClick={onStart}>
+          Start
+        </button>
+        {saveError && <p className="main-menu-error" role="alert">{saveError}</p>}
+      </div>
     </section>
   );
 }
@@ -2033,6 +2057,7 @@ function PlayMenu({
   savesLoading,
   saveError,
   account,
+  accountControl,
   onBack,
   onOpenLocal,
   onOpenOnline,
@@ -2046,6 +2071,7 @@ function PlayMenu({
   savesLoading: boolean;
   saveError?: string;
   account?: AccountProfile;
+  accountControl: ReactNode;
   onBack: () => void;
   onOpenLocal: () => void;
   onOpenOnline: () => void;
@@ -2061,7 +2087,11 @@ function PlayMenu({
       ? "No saved games available."
       : `${savedGames.length} ${account ? "cloud " : ""}saved game${savedGames.length === 1 ? "" : "s"} available.`;
   return (
-    <SetupNavigationShell backLabel="Back to title" onBack={onBack}>
+    <SetupNavigationShell
+      backLabel="Back to title"
+      onBack={onBack}
+      headerAction={accountControl}
+    >
       <div className="play-menu-heading">
         <p className="eyebrow">PLAY</p>
         <h1>Choose your path.</h1>
@@ -5575,6 +5605,25 @@ export default function App() {
         savesLoading={savesLoading || savesHydrating}
         saveError={saveError}
         account={accountService.account}
+        accountControl={(
+          <AccountControl
+            account={accountService.account}
+            accountConfigured={accountService.configured}
+            accountLoading={accountService.loading}
+            accountWorking={accountService.working}
+            accountError={accountService.error}
+            accountDataLoading={accountDataLoading}
+            accountImportWorking={accountImportWorking}
+            accountImportError={accountImportError}
+            onSignIn={accountService.signIn}
+            onSignUp={accountService.signUp}
+            onSignOut={accountService.signOut}
+            onUpdateDisplayName={accountService.updateDisplayName}
+            onImportLocalData={() => finishLocalDataImportDecision(true)}
+            onStartAccountFresh={() => finishLocalDataImportDecision(false)}
+            className="setup-account-area"
+          />
+        )}
         onBack={() => setStartView("menu")}
         onOpenLocal={() => openStartFlow("local", undefined, "play")}
         onOpenOnline={() => openStartFlow("online", undefined, "play")}
