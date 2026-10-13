@@ -1545,6 +1545,7 @@ const sourceTargets = (state: ThreePlayerState, cell: string): string[] => {
       cell,
       threePlayerLegalTargets(state, cell, {
         forceType: "bishop",
+        maxDistance: piece.type === "pawn" ? 1 : undefined,
         noCapture: true,
       }),
     );
@@ -1868,7 +1869,7 @@ const activateAbility = (
           !piece.status.hexedBy
         )
         .map(([cell]) => cell);
-      state.notice = "Choose a piece to Hex, or pass after the first.";
+      state.notice = "Choose a highlighted enemy piece to Hex, or pass after the first.";
       return;
     }
   }
@@ -2564,6 +2565,7 @@ const executeMovement = (
       state.selectedCell = result.to;
       state.legalCells = threePlayerLegalTargets(state, result.to, {
         forceType: "bishop",
+        maxDistance: moving.type === "pawn" ? 1 : undefined,
         noCapture: true,
       });
       state.notice = unlimited
@@ -3698,6 +3700,10 @@ const handleCell = (state: ThreePlayerState, cell: string) => {
         state.selectedCell = cell;
         state.pending.source = cell;
         state.legalCells = targets;
+        state.notice = `Choose a destination for the ${state.board[cell].type}.`;
+      } else {
+        state.notice =
+          `That ${state.board[cell].type} has no legal destination for this ability. Choose another piece.`;
       }
     }
     return;
@@ -3720,10 +3726,15 @@ const handleCell = (state: ThreePlayerState, cell: string) => {
     return;
   }
   const targets = sourceTargets(state, cell);
-  if (!targets.length) return;
+  if (!targets.length) {
+    state.notice =
+      `That ${state.board[cell].type} has no legal destination for this ability. Choose another piece.`;
+    return;
+  }
   state.selectedCell = cell;
   state.pending.source = cell;
   state.legalCells = targets;
+  state.notice = `Choose a destination for the ${state.board[cell].type}.`;
 };
 
 const handlePath = (state: ThreePlayerState, pathId: string) => {
@@ -4375,7 +4386,10 @@ export const availableThreePlayerActions = (
     state.pending?.step === "source"
   ) {
     actions.push(...Object.keys(state.board)
-      .filter((cell) => sourceIsAllowed(state, cell))
+      .filter((cell) =>
+        sourceIsAllowed(state, cell) &&
+        sourceTargets(state, cell).length > 0
+      )
       .map((cell) => ({ type: "cell", cell } as ThreePlayerAction)));
   }
   if (canPassAction(state)) actions.push({ type: "pass" });

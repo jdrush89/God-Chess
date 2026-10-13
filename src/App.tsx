@@ -86,7 +86,12 @@ import {
 import { randomItem } from "./game/random";
 import type { Ability, ActionPresentation, CaptureAnimation, ChallengeId, ClassicMoveFirstCandidate, ClassicMoveFirstMove, Color, GameMode, GameState, GodId, OrbAnimation, OrbColor, Piece, PuzzleId, Square, ThreePlayerPuzzleId } from "./game/types";
 import { AccountModal } from "./account/AccountModal";
-import { deleteCloudSavedGame, loadCloudSavedGames, upsertCloudSavedGame } from "./account/cloudSaves";
+import {
+  deleteAllCloudSavedGames,
+  deleteCloudSavedGame,
+  loadCloudSavedGames,
+  upsertCloudSavedGame,
+} from "./account/cloudSaves";
 import {
   loadCloudCompletedPuzzles,
   upsertCloudCompletedPuzzles,
@@ -1712,7 +1717,7 @@ function RulesModal({ onClose }: { onClose: () => void }) {
   return (
     <div className="modal-backdrop rules-backdrop" onMouseDown={onClose}>
       <section className="rules-modal" onMouseDown={(event) => event.stopPropagation()}>
-        <button className="close-button" onClick={onClose}><X size={20} /></button>
+        <button className="close-button" onClick={onClose} aria-label="Close rules"><X size={20} /></button>
         <p className="eyebrow">HOW TO PLAY</p>
         <h2>The laws of God Chess</h2>
         <div className="rule-columns">
@@ -2193,16 +2198,40 @@ function SavedGameLibrary({
   savesLoading,
   onLoad,
   onDelete,
+  onDeleteAll,
 }: {
   savedGames: SavedGame[];
   savesLoading: boolean;
   onLoad: (game: SavedGame) => void;
   onDelete: (id: string) => void;
+  onDeleteAll: () => Promise<boolean>;
 }) {
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
+  const [deletingAll, setDeletingAll] = useState(false);
+
+  const deleteAll = async () => {
+    setDeletingAll(true);
+    const deleted = await onDeleteAll();
+    setDeletingAll(false);
+    if (deleted) setConfirmDeleteAll(false);
+  };
+
   return (
     <section className="load-game-library shell-library">
       <p className="eyebrow">SAVED PANTHEONS</p>
       <h2>Load game</h2>
+      {!savesLoading && savedGames.length > 0 && (
+        <div className="saved-game-toolbar">
+          <button
+            type="button"
+            className="danger-button delete-all-saves-button"
+            onClick={() => setConfirmDeleteAll(true)}
+          >
+            <Trash2 size={15} />
+            Delete all
+          </button>
+        </div>
+      )}
       <div className="saved-game-list">
         {savesLoading && (
           <div className="saved-games-loading">
@@ -2341,6 +2370,44 @@ function SavedGameLibrary({
           <p className="saved-games-empty">No saved games are stored in this account yet.</p>
         )}
       </div>
+      {confirmDeleteAll && (
+        <div
+          className="delete-all-saves-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-all-saves-title"
+        >
+          <div className="delete-all-saves-confirmation">
+            <Trash2 size={28} />
+            <h3 id="delete-all-saves-title">Delete all saved games?</h3>
+            <p>
+              This permanently deletes all {savedGames.length} saved game
+              {savedGames.length === 1 ? "" : "s"} in this library.
+            </p>
+            <div>
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={deletingAll}
+                onClick={() => setConfirmDeleteAll(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="danger-button"
+                disabled={deletingAll}
+                onClick={() => void deleteAll()}
+              >
+                {deletingAll
+                  ? <LoaderCircle className="spin" size={15} />
+                  : <Trash2 size={15} />}
+                Delete all
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -2896,6 +2963,9 @@ export function GameScreen({
   canUndo,
   onUndo,
   onOpenSettings,
+  onLeave,
+  leaveLabel,
+  onQuitWithoutSaving,
   moveFirstDisabled = false,
 }: {
   state: GameState;
@@ -2912,6 +2982,9 @@ export function GameScreen({
   canUndo: boolean;
   onUndo: () => void;
   onOpenSettings: () => void;
+  onLeave?: () => void;
+  leaveLabel?: string;
+  onQuitWithoutSaving?: () => void;
   moveFirstDisabled?: boolean;
 }) {
   const [rulesOpen, setRulesOpen] = useState(false);
@@ -3352,7 +3425,6 @@ export function GameScreen({
             </button>
           )}
           <button onClick={() => setHistoryOpen(!historyOpen)}><History size={18} /><span>History</span></button>
-          <button onClick={() => setRulesOpen(true)}><BookOpen size={18} /><span>Rules</span></button>
           {state.gameMode !== "puzzle" && (
             <button onClick={onOpenSettings}><Settings size={18} /><span>Settings</span></button>
           )}
@@ -3553,6 +3625,15 @@ export function GameScreen({
         <GraveyardModal state={state} color={graveyardColor} onClose={() => setGraveyardColor(undefined)} />
       )}
       {rulesOpen && <RulesModal onClose={() => setRulesOpen(false)} />}
+      <MatchEscapeMenu
+        onOpenRules={() => setRulesOpen(true)}
+        onOpenSettings={state.gameMode === "puzzle"
+          ? undefined
+          : onOpenSettings}
+        onLeave={onLeave}
+        leaveLabel={leaveLabel}
+        onQuitWithoutSaving={onQuitWithoutSaving}
+      />
       {puzzleSolved && puzzleVictoryReady && puzzle && (
         <div className="modal-backdrop">
           <section className="gameover-modal">
@@ -3654,7 +3735,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
   },
   {
     title: "Use the match controls",
-    body: "History reviews completed actions, Rules opens the reference guide, and Settings controls options such as undo. Save & quit preserves local matches so you can continue later.",
+    body: "History reviews completed actions, Settings controls options such as undo, and Save & quit preserves local matches so you can continue later. Open the pause menu for Rules or to leave the match.",
     target: "match-controls",
     cardSide: "left",
   },
@@ -3983,6 +4064,8 @@ function TutorialScreen({ onExit }: { onExit: () => void }) {
         canUndo={false}
         onUndo={() => undefined}
         onOpenSettings={() => undefined}
+        onLeave={onExit}
+        leaveLabel="Exit tutorial"
         onRestart={onExit}
         onRestartPuzzle={() => undefined}
         onNextPuzzle={() => undefined}
@@ -4801,6 +4884,13 @@ export default function App() {
     setStartView("menu");
   };
 
+  const quitWithoutSaving = () => {
+    aiPlan.current = [];
+    clearUndoHistory();
+    activeSaveId.current = undefined;
+    setStartView("menu");
+  };
+
   useEffect(() => {
     if (
       startView !== "none" ||
@@ -5122,7 +5212,11 @@ export default function App() {
     const account = accountService.account;
     try {
       if (account) {
-        await deleteCloudSavedGame(account.userId, id);
+        const queuedDelete = cloudSaveQueue.current.then(() =>
+          deleteCloudSavedGame(account.userId, id)
+        );
+        cloudSaveQueue.current = queuedDelete.catch(() => undefined);
+        await queuedDelete;
         setCloudSavedGames(next);
       } else {
         persistLocalSavedGames(next);
@@ -5134,6 +5228,32 @@ export default function App() {
     } catch (error) {
       console.error("Unable to delete the saved God Chess game.", error);
       setSaveError(error instanceof Error ? error.message : "Unable to delete the saved game.");
+    }
+  };
+  const deleteAllSavedGames = async () => {
+    const account = accountService.account;
+    try {
+      if (account) {
+        const queuedDelete = cloudSaveQueue.current.then(() =>
+          deleteAllCloudSavedGames(account.userId)
+        );
+        cloudSaveQueue.current = queuedDelete.catch(() => undefined);
+        await queuedDelete;
+        setCloudSavedGames([]);
+      } else {
+        persistLocalSavedGames([]);
+        setLocalSavedGames([]);
+      }
+      setSaveError(undefined);
+      savedGamesRef.current = [];
+      activeSaveId.current = undefined;
+      return true;
+    } catch (error) {
+      console.error("Unable to delete all saved God Chess games.", error);
+      setSaveError(
+        error instanceof Error ? error.message : "Unable to delete all saved games.",
+      );
+      return false;
     }
   };
   const openStartFlow = (
@@ -5479,6 +5599,7 @@ export default function App() {
           savesLoading={savesLoading || savesHydrating}
           onLoad={loadGame}
           onDelete={(id) => void deleteSavedGame(id)}
+          onDeleteAll={deleteAllSavedGames}
         />
       </SetupNavigationShell>
     );
@@ -5887,6 +6008,23 @@ export default function App() {
             canUndo={canUndo}
             onUndo={requestUndo}
             onOpenSettings={() => setSettingsOpen(true)}
+            onLeave={state.challengeId
+              ? () => setStartView("puzzles")
+              : state.gameMode === "online" || state.gameMode === "puzzle"
+                ? openNewGame
+                : () => void saveAndQuit()}
+            leaveLabel={state.gameMode === "online"
+              ? "Leave room"
+              : state.gameMode === "puzzle"
+                ? "Leave puzzle"
+                : state.challengeId
+                  ? "Leave challenge"
+                  : "Save & quit"}
+            onQuitWithoutSaving={
+              state.gameMode === "local" && !state.challengeId
+                ? quitWithoutSaving
+                : undefined
+            }
             onRestart={openNewGame}
             onRestartPuzzle={restartPuzzle}
             onNextPuzzle={nextPuzzle}
@@ -5903,7 +6041,7 @@ export default function App() {
           onClose={() => setSettingsOpen(false)}
         />
       )}
-      {startView === "none" && (
+      {startView === "none" && state.phase === "draft" && (
         <MatchEscapeMenu
           onOpenSettings={state.gameMode === "puzzle"
             ? undefined
@@ -5920,6 +6058,11 @@ export default function App() {
               : state.challengeId
                 ? "Leave challenge"
               : "Save & quit"}
+          onQuitWithoutSaving={
+            state.gameMode === "local" && !state.challengeId
+                ? quitWithoutSaving
+                : undefined
+          }
         />
       )}
     </>

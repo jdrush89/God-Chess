@@ -1350,7 +1350,13 @@ const sourceTargets = (state: GameState, square: Square) => {
     );
   }
   if (abilityId === "slither") {
-    return constrainLure(pseudoTargets(state.board, square, { forceType: "bishop", noCapture: true, ignoreCheck: true, bananas: state.bananas }));
+    return constrainLure(pseudoTargets(state.board, square, {
+      forceType: "bishop",
+      maxDistance: piece.type === "pawn" ? 1 : undefined,
+      noCapture: true,
+      ignoreCheck: true,
+      bananas: state.bananas,
+    }));
   }
   if (abilityId === "pick-a-fight") {
     const eligible = level >= 3 || piece.type === "knight" || piece.type === "bishop";
@@ -2116,7 +2122,12 @@ const executeMovement = (state: GameState, from: Square, to: Square) => {
     if (unlimited || remaining > 0) {
       state.pending = { godId: state.selectedGod!, abilityId, step: "slither", source: result.to, movedPieceId: moving.id, movesRemaining: remaining };
       state.selectedSquare = result.to;
-      state.legalTargets = pseudoTargets(state.board, result.to, { forceType: "bishop", noCapture: true, ignoreCheck: true });
+      state.legalTargets = pseudoTargets(state.board, result.to, {
+        forceType: "bishop",
+        maxDistance: moving.type === "pawn" ? 1 : undefined,
+        noCapture: true,
+        ignoreCheck: true,
+      });
       state.notice = unlimited
         ? "Serpentine Step may continue any number of times. Pass to stop."
         : `Serpentine Step may continue (${remaining} move${remaining === 1 ? "" : "s"} remaining). Pass to stop.`;

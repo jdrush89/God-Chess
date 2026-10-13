@@ -228,6 +228,7 @@ body::before {
   color: #8a8b91; font-size: 8px; line-height: 1.4;
 }
 .action-panel > .god-level-selector,
+.three-action-panel > .god-level-selector,
 .four-action-panel > .god-level-selector { padding-inline: 14px; background: rgba(255,255,255,.012); }
 .mini-cost { display: flex; gap: 5px; }
 .primary-button {
@@ -987,6 +988,8 @@ span.move-target-dot {
 }
 .load-game-library > .eyebrow { margin: 0; text-align: center; }
 .load-game-library h2 { margin: 8px 0 22px; font: 600 28px "Cinzel"; text-align: center; }
+.saved-game-toolbar { display: flex; justify-content: flex-end; margin: -10px 0 12px; }
+.delete-all-saves-button { min-height: 34px; display: inline-flex; align-items: center; gap: 7px; padding: 0 11px; }
 .saved-game-list { display: grid; gap: 10px; max-height: calc(100dvh - 180px); overflow: auto; padding-right: 4px; }
 .saved-games-loading, .saved-games-empty {
   min-height: 120px; display: flex; align-items: center; justify-content: center; gap: 9px;
@@ -1013,6 +1016,23 @@ span.move-target-dot {
 .delete-save-button {
   position: absolute; top: 12px; right: 12px; width: 32px; height: 32px; display: grid; place-items: center;
   padding: 0; color: #8b6761; background: rgba(151,55,40,.08); border: 1px solid transparent; cursor: pointer;
+}
+.delete-all-saves-backdrop {
+  position: absolute; z-index: 8; inset: 0; display: grid; place-items: center; padding: 22px;
+  background: rgba(5,6,9,.84); backdrop-filter: blur(6px);
+}
+.delete-all-saves-confirmation {
+  width: min(390px, 100%); padding: 28px; text-align: center;
+  color: #b87970; background: #12141a; border: 1px solid rgba(169,72,59,.48);
+  box-shadow: 0 24px 70px rgba(0,0,0,.55);
+}
+.delete-all-saves-confirmation h3 { margin: 12px 0 8px; color: #eee6dc; font: 600 18px "Cinzel"; }
+.delete-all-saves-confirmation p { margin: 0; color: #8f9096; font-size: 11px; line-height: 1.55; }
+.delete-all-saves-confirmation > div {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 22px;
+}
+.delete-all-saves-confirmation button {
+  min-height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 7px;
 }
 .delete-save-button:hover { color: #efb0a4; border-color: rgba(190,76,58,.5); background: rgba(151,55,40,.18); }
 .rules-modal, .gameover-modal, .save-game-modal, .graveyard-modal, .start-game-modal, .settings-modal, .account-modal {
@@ -2147,11 +2167,76 @@ span.move-target-dot {
     max-height: 624px;
     overflow-y: auto;
     overscroll-behavior: contain;
-    scrollbar-gutter: stable;
+    scrollbar-gutter: auto;
   }
   .three-god-inspector {
     height: auto;
     display: block;
+  }
+
+  .action-panel,
+  .three-action-panel,
+  .four-action-panel,
+  .three-draft-abilities,
+  .history-drawer-body,
+  .draft-layout > .god-inspector {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+    scrollbar-gutter: auto;
+  }
+  .action-panel:hover,
+  .action-panel:focus-within,
+  .three-action-panel:hover,
+  .three-action-panel:focus-within,
+  .four-action-panel:hover,
+  .four-action-panel:focus-within,
+  .three-draft-abilities:hover,
+  .three-draft-abilities:focus-within,
+  .history-drawer-body:hover,
+  .history-drawer-body:focus-within,
+  .draft-layout > .god-inspector:hover,
+  .draft-layout > .god-inspector:focus-within {
+    scrollbar-color: rgba(210, 204, 190, .3) transparent;
+  }
+  .action-panel::-webkit-scrollbar,
+  .three-action-panel::-webkit-scrollbar,
+  .four-action-panel::-webkit-scrollbar,
+  .three-draft-abilities::-webkit-scrollbar,
+  .history-drawer-body::-webkit-scrollbar,
+  .draft-layout > .god-inspector::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  .action-panel::-webkit-scrollbar-track,
+  .three-action-panel::-webkit-scrollbar-track,
+  .four-action-panel::-webkit-scrollbar-track,
+  .three-draft-abilities::-webkit-scrollbar-track,
+  .history-drawer-body::-webkit-scrollbar-track,
+  .draft-layout > .god-inspector::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .action-panel::-webkit-scrollbar-thumb,
+  .three-action-panel::-webkit-scrollbar-thumb,
+  .four-action-panel::-webkit-scrollbar-thumb,
+  .three-draft-abilities::-webkit-scrollbar-thumb,
+  .history-drawer-body::-webkit-scrollbar-thumb,
+  .draft-layout > .god-inspector::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 999px;
+  }
+  .action-panel:hover::-webkit-scrollbar-thumb,
+  .action-panel:focus-within::-webkit-scrollbar-thumb,
+  .three-action-panel:hover::-webkit-scrollbar-thumb,
+  .three-action-panel:focus-within::-webkit-scrollbar-thumb,
+  .four-action-panel:hover::-webkit-scrollbar-thumb,
+  .four-action-panel:focus-within::-webkit-scrollbar-thumb,
+  .three-draft-abilities:hover::-webkit-scrollbar-thumb,
+  .three-draft-abilities:focus-within::-webkit-scrollbar-thumb,
+  .history-drawer-body:hover::-webkit-scrollbar-thumb,
+  .history-drawer-body:focus-within::-webkit-scrollbar-thumb,
+  .draft-layout > .god-inspector:hover::-webkit-scrollbar-thumb,
+  .draft-layout > .god-inspector:focus-within::-webkit-scrollbar-thumb {
+    background: rgba(210, 204, 190, .3);
   }
   .three-draft-abilities {
     overflow: visible;

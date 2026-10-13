@@ -269,46 +269,6 @@ function DraftOrbCost({
   );
 }
 
-function DraftLevelSelector({
-  level,
-  onChange,
-}: {
-  level: number;
-  onChange: (level: number) => void;
-}) {
-  const selectLevel = (
-    event: React.MouseEvent<HTMLButtonElement>,
-    nextLevel: number,
-  ) => {
-    event.stopPropagation();
-    onChange(nextLevel);
-  };
-
-  return (
-    <div className="level-selector god-level-selector" aria-label="All abilities levels">
-      <span>All abilities</span>
-      <button
-        type="button"
-        aria-pressed={level >= 2}
-        className={level >= 2 ? "active" : ""}
-        onClick={(event) => selectLevel(event, level >= 2 ? 1 : 2)}
-        onKeyDown={(event) => event.stopPropagation()}
-      >
-        <i /> Lv 2
-      </button>
-      <button
-        type="button"
-        aria-pressed={level >= 3}
-        className={level >= 3 ? "active" : ""}
-        onClick={(event) => selectLevel(event, level >= 3 ? 2 : 3)}
-        onKeyDown={(event) => event.stopPropagation()}
-      >
-        <i /> Lv 3
-      </button>
-    </div>
-  );
-}
-
 function ThreePlayerDraft({
   state,
   actions,
@@ -521,7 +481,12 @@ function ThreePlayerDraft({
             selectedSkinId={selectedSkinId}
             onSelect={setSelectedSkinId}
           />
-          <DraftLevelSelector level={level} onChange={setLevel} />
+          <LevelSelector
+            level={level}
+            onChange={setLevel}
+            label="All abilities"
+            className="god-level-selector"
+          />
           <div
             className="draft-abilities three-draft-abilities"
             role="region"
@@ -1381,6 +1346,9 @@ export function ThreePlayerGame({
     };
     worker.onerror = (event) => {
       aiRequestRevision.current = undefined;
+      aiPlan.current = [];
+      worker.terminate();
+      if (aiWorker.current === worker) aiWorker.current = undefined;
       recordDiagnostic({
         category: "error",
         event: "three-player-worker-error",
@@ -1392,6 +1360,7 @@ export function ThreePlayerGame({
           column: event.colno,
         },
       });
+      setAiPlanReady((value) => value + 1);
     };
     aiWorker.current = worker;
     return () => {
@@ -1616,6 +1585,7 @@ export function ThreePlayerGame({
           roomCode={onlineSession?.roomCode}
         />
         <MatchEscapeMenu
+          onOpenRules={() => setHelpOpen(true)}
           onOpenSettings={onlineSession ? undefined : () => setSettingsOpen(true)}
           onLeave={() => void saveAndQuit()}
           leaveLabel={
@@ -1624,6 +1594,11 @@ export function ThreePlayerGame({
               : state.challengeId
                 ? "Leave challenge"
                 : "Save & quit"
+          }
+          onQuitWithoutSaving={
+            !onlineSession && !state.challengeId && onPersist
+              ? onQuit
+              : undefined
           }
         />
         {settingsOpen && !onlineSession && (
@@ -1717,7 +1692,6 @@ export function ThreePlayerGame({
           </strong>
         </div>
         <div className="three-game-actions">
-          <button onClick={() => setHelpOpen(true)} aria-label="Help"><BookOpen size={17} /></button>
           <button onClick={() => setHistoryOpen(true)} aria-label="History"><History size={17} /></button>
           {!onlineSession && !puzzle && (
             <button onClick={() => setSettingsOpen(true)} aria-label="Settings"><Settings size={17} /></button>
@@ -2174,6 +2148,7 @@ export function ThreePlayerGame({
         />
       )}
       <MatchEscapeMenu
+        onOpenRules={() => setHelpOpen(true)}
         onOpenSettings={onlineSession || puzzle ? undefined : () => setSettingsOpen(true)}
         onLeave={puzzle || state.challengeId ? onQuit : () => void saveAndQuit()}
         leaveLabel={
@@ -2184,6 +2159,11 @@ export function ThreePlayerGame({
               : state.challengeId
                 ? "Leave challenge"
                 : "Save & quit"
+        }
+        onQuitWithoutSaving={
+          !onlineSession && !puzzle && !state.challengeId && onPersist
+            ? onQuit
+            : undefined
         }
         additionalActions={[
           ...(!onlineSession ? [{

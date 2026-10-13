@@ -52,3 +52,12 @@ export const deleteCloudSavedGame = async (userId: string, id: string) => {
     .eq("id", id);
   if (error) throw error;
 };
+
+export const deleteAllCloudSavedGames = async (userId: string) => {
+  if (!supabase) throw new Error("Account services are not configured.");
+  const { error } = await supabase
+    .from("game_saves")
+    .delete()
+    .eq("user_id", userId);
+  if (error) throw error;
+};

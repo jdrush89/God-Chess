@@ -527,7 +527,8 @@ describe("ThreePlayerGame", () => {
     expect(Array.from(drawer.querySelectorAll("p")).map(
       (entry) => entry.lastChild?.textContent,
     )).toEqual(["White moved.", "Red captured.", "Black upgraded."]);
-    expect(screen.getByRole("button", { name: /^help$/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^help$/i })).toBeNull();
+    expect(screen.getByRole("button", { name: /open match menu/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /^settings$/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /^undo$/i })).toBeTruthy();
     fireEvent.click(within(drawer).getByRole("button", { name: /close history/i }));
@@ -685,6 +686,39 @@ describe("ThreePlayerGame", () => {
       .toContain("6W");
     unmount();
     expect(terminateWorker).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to main-thread drafting when the AI worker fails", async () => {
+    class FailingAiWorker {
+      onmessage = null;
+      onerror:
+        | ((event: ErrorEvent) => void)
+        | null = null;
+
+      postMessage() {
+        queueMicrotask(() => {
+          this.onerror?.(new ErrorEvent("error", {
+            message: "Worker failed.",
+          }));
+        });
+      }
+
+      terminate() {}
+    }
+    vi.stubGlobal("Worker", FailingAiWorker);
+    vi.spyOn(window, "matchMedia").mockImplementation(matchMedia(true));
+    const config = createDefaultThreePlayerConfig();
+    config.seats.white.control = { kind: "ai", difficulty: 10 };
+    config.seats.red.control = { kind: "human", local: true };
+    config.seats.black.control = { kind: "human", local: true };
+    const { container } = renderGame(createThreePlayerGame(config));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Red · Red picks/i)).toBeTruthy();
+      expect(container.querySelectorAll(
+        ".three-draft-progress .draft-pip.done",
+      )).toHaveLength(1);
+    });
   });
 
   it("disables or hides auto-pick when draft input is not authorized", () => {
@@ -923,23 +957,36 @@ describe("ThreePlayerGame", () => {
     expect(screen.getByText(/Round 1 · Turn 1/i)).toBeTruthy();
   });
 
-  it("reaches primitive cell gameplay through God and ability actions", () => {
-    const state = completeDraft();
-    const { container } = renderGame(state);
-    const firstGod = state.players.white.gods[0];
-    fireEvent.click(screen.getByRole("button", { name: new RegExp(firstGod, "i") }));
+  it.each(["three-player", "three-half"] as const)(
+    "reaches primitive cell gameplay through God and ability actions on %s",
+    (boardVariant) => {
+      const config = createDefaultThreePlayerConfig();
+      config.boardVariant = boardVariant;
+      const state = completeDraft(createThreePlayerGame(config));
+      const { container } = renderGame(state);
+      const firstGod = state.players.white.gods[0];
+      fireEvent.click(screen.getByRole("button", {
+        name: new RegExp(firstGod, "i"),
+      }));
 
-    const ability = screen.getAllByRole("button").find((button) =>
-      button.closest(".ability-list") && !button.hasAttribute("aria-disabled")
-    );
-    expect(ability).toBeTruthy();
-    fireEvent.click(ability!);
+      const ability = screen.getAllByRole("button").find((button) =>
+        button.closest(".ability-list") &&
+        !button.hasAttribute("aria-disabled")
+      );
+      expect(ability).toBeTruthy();
+      fireEvent.click(ability!);
 
-    const legalCell = container.querySelector(".three-board-cell.legal")?.getAttribute("data-cell");
-    expect(legalCell).toBeTruthy();
-    fireEvent.click(screen.getByRole("gridcell", { name: new RegExp(`^${legalCell}`) }));
-    expect(container.querySelector(".three-board-cell.selected, .three-board-cell.legal")).toBeTruthy();
-  });
+      const legalCell = container.querySelector(".three-board-cell.legal")
+        ?.getAttribute("data-cell");
+      expect(legalCell).toBeTruthy();
+      fireEvent.click(screen.getByRole("gridcell", {
+        name: new RegExp(`^${legalCell}`),
+      }));
+      expect(container.querySelector(
+        ".three-board-cell.selected, .three-board-cell.legal",
+      )).toBeTruthy();
+    },
+  );
 
   it("uses the shared God rows, chosen-God header, and ability cards", () => {
     const state = completeDraft();
@@ -1126,6 +1173,30 @@ describe("ThreePlayerGame", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Save & quit/i }));
     await waitFor(() => expect(onQuit).not.toHaveBeenCalled());
+  });
+
+  it("moves Rules into the match menu and offers local quit without saving", () => {
+    const onQuit = vi.fn();
+    render(
+      <ThreePlayerGame
+        initialState={completeDraft()}
+        onPersist={async () => true}
+        onQuit={onQuit}
+        onNewGame={() => undefined}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: /^rules$/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^help$/i })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /open match menu/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^rules$/i }));
+    expect(screen.getByRole("heading", { name: /one surface, five topologies/i }))
+      .toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /close help/i }));
+
+    fireEvent.click(screen.getByRole("button", { name: /open match menu/i }));
+    fireEvent.click(screen.getByRole("button", { name: /quit without saving/i }));
+    expect(onQuit).toHaveBeenCalledTimes(1);
   });
 
   it("routes authorized online host draft actions and waits for canonical acknowledgement", () => {
@@ -1505,8 +1576,10 @@ describe("ThreePlayerGame", () => {
       .toBeGreaterThan(0);
   });
 
-  it("highlights and selects a hostile King for Salem Hex", () => {
-    let state = completeDraft();
+  it("guides Salem Hex from hostile setup targets to movable Three Half pieces", () => {
+    const config = createDefaultThreePlayerConfig();
+    config.boardVariant = "three-half";
+    let state = completeDraft(createThreePlayerGame(config));
     state.activeSeat = "white";
     state.rested = [];
     state.players.white.gods = ["salem"];
@@ -1529,6 +1602,8 @@ describe("ThreePlayerGame", () => {
     });
 
     const { container } = renderGame(state);
+    expect(screen.getAllByText(/choose a highlighted enemy piece to Hex/i).length)
+      .toBeGreaterThan(0);
     expect(container.querySelector(
       `[data-cell="${redKing}"].legal-destination`,
     )).toBeTruthy();

@@ -1322,6 +1322,7 @@ const sourceTargets = (state: FourPlayerState, square: Square): Square[] => {
       square,
       fourPlayerLegalTargets(state.board, square, state.config, {
         forceType: "bishop",
+        maxDistance: piece.type === "pawn" ? 1 : undefined,
         noCapture: true,
         bananas: state.bananas,
       }),
@@ -2280,6 +2281,7 @@ const executeMovement = (
       state.selectedSquare = result.to;
       state.legalTargets = fourPlayerLegalTargets(state.board, result.to, state.config, {
         forceType: "bishop",
+        maxDistance: moving.type === "pawn" ? 1 : undefined,
         noCapture: true,
         bananas: state.bananas,
       });

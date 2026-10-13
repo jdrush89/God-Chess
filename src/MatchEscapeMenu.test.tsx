@@ -66,6 +66,32 @@ describe("MatchEscapeMenu", () => {
     );
   });
 
+  it("opens Rules and quits without saving from explicit menu actions", () => {
+    const onOpenRules = vi.fn();
+    const onQuitWithoutSaving = vi.fn();
+    const { rerender } = render(
+      <MatchEscapeMenu
+        onOpenRules={onOpenRules}
+        onQuitWithoutSaving={onQuitWithoutSaving}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /open match menu/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^rules$/i }));
+    expect(onOpenRules).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("dialog")).toBeNull();
+
+    rerender(
+      <MatchEscapeMenu
+        onOpenRules={onOpenRules}
+        onQuitWithoutSaving={onQuitWithoutSaving}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /open match menu/i }));
+    fireEvent.click(screen.getByRole("button", { name: /quit without saving/i }));
+    expect(onQuitWithoutSaving).toHaveBeenCalledTimes(1);
+  });
+
   it("opens with Escape, traps/restores focus, and never invokes gameplay controls", async () => {
     const onLeave = vi.fn();
     render(<MatchEscapeMenu onLeave={onLeave} />);

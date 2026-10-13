@@ -44,6 +44,34 @@ describe("three-player AI", () => {
     },
   );
 
+  it("chooses the final draft God without enumerating live play", () => {
+    const config = createDefaultThreePlayerConfig();
+    config.boardVariant = "three-hexagonal";
+    config.seats.black.control = { kind: "ai", difficulty: 10 };
+    let state = createThreePlayerGame(config);
+    for (const god of GODS.slice(0, 8)) {
+      state = threePlayerReducer(state, { type: "draft", godId: god.id });
+    }
+    const [cell, piece] = Object.entries(state.board)[0];
+    let boardCloneCount = 0;
+    Object.defineProperty(state.board, cell, {
+      configurable: true,
+      enumerable: true,
+      get() {
+        boardCloneCount += 1;
+        if (boardCloneCount > 1) {
+          throw new Error("Draft planning continued into live play.");
+        }
+        return piece;
+      },
+    });
+
+    expect(chooseThreePlayerAiPlan(state, 42)).toEqual([
+      { type: "draft", godId: "ares" },
+    ]);
+    expect(boardCloneCount).toBe(1);
+  });
+
   it("plays a complete legal turn on every topology", () => {
     for (const boardVariant of [
       "three-player",

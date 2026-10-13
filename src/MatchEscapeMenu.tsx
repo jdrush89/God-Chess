@@ -1,4 +1,4 @@
-import { Bug, Copy, LogOut, Menu, Settings, X } from "lucide-react";
+import { BookOpen, Bug, Copy, LogOut, Menu, Settings, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
@@ -15,8 +15,10 @@ export interface MatchEscapeMenuAction {
 }
 
 interface MatchEscapeMenuProps {
+  onOpenRules?: () => void;
   onOpenSettings?: () => void;
   onLeave?: () => void;
+  onQuitWithoutSaving?: () => void;
   leaveLabel?: string;
   additionalActions?: readonly MatchEscapeMenuAction[];
 }
@@ -30,8 +32,10 @@ const focusableSelector = [
 ].join(",");
 
 export function MatchEscapeMenu({
+  onOpenRules,
   onOpenSettings,
   onLeave,
+  onQuitWithoutSaving,
   leaveLabel = "Leave match",
   additionalActions = [],
 }: MatchEscapeMenuProps) {
@@ -191,6 +195,17 @@ export function MatchEscapeMenu({
                   >
                     <Bug size={16} /> Report bug
                   </button>
+                  {onOpenRules && (
+                    <button
+                      className="secondary-button"
+                      onClick={() => {
+                        close();
+                        onOpenRules();
+                      }}
+                    >
+                      <BookOpen size={16} /> Rules
+                    </button>
+                  )}
                   {onOpenSettings && (
                     <button
                       className="secondary-button"
@@ -223,6 +238,17 @@ export function MatchEscapeMenu({
                       }}
                     >
                       <LogOut size={16} /> {leaveLabel}
+                    </button>
+                  )}
+                  {onQuitWithoutSaving && (
+                    <button
+                      className="danger-button"
+                      onClick={() => {
+                        close();
+                        onQuitWithoutSaving();
+                      }}
+                    >
+                      <LogOut size={16} /> Quit without saving
                     </button>
                   )}
                 </div>

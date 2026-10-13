@@ -1536,7 +1536,7 @@ function FourRulesModal({ onClose }: { onClose: () => void }) {
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
       <section className="rules-modal" onMouseDown={(event) => event.stopPropagation()}>
-        <button className="close-button" onClick={onClose}><X size={20} /></button>
+        <button className="close-button" onClick={onClose} aria-label="Close rules"><X size={20} /></button>
         <p className="eyebrow">FOUR-PLAYER RULES</p>
         <h2>Four pantheons, one cross-board</h2>
         <div className="rule-columns">
@@ -2236,6 +2236,7 @@ export function FourPlayerGame({
           onOpenSettings={() => setSettingsOpen(true)}
         />
         <MatchEscapeMenu
+          onOpenRules={() => setRulesOpen(true)}
           onOpenSettings={() => setSettingsOpen(true)}
           onLeave={() => onPersist ? void saveAndQuit() : onQuit()}
           leaveLabel={
@@ -2244,6 +2245,11 @@ export function FourPlayerGame({
               : onPersist
                 ? "Save & quit"
                 : "Leave challenge"
+          }
+          onQuitWithoutSaving={
+            !onlineSession && !state.challengeId && onPersist
+              ? onQuit
+              : undefined
           }
         />
         {settingsOpen && (
@@ -2360,7 +2366,6 @@ export function FourPlayerGame({
             <button onClick={() => void saveAndQuit()}><Save size={18} /><span>Save & quit</span></button>
           )}
           <button onClick={() => setHistoryOpen(true)}><History size={18} /><span>History</span></button>
-          <button onClick={() => setRulesOpen(true)}><BookOpen size={18} /><span>Rules</span></button>
           <button onClick={() => setSettingsOpen(true)}><Settings size={18} /><span>Settings</span></button>
           <button onClick={onNewGame}>
             <RotateCcw size={18} />
@@ -2534,6 +2539,7 @@ export function FourPlayerGame({
         />
       )}
       <MatchEscapeMenu
+        onOpenRules={() => setRulesOpen(true)}
         onOpenSettings={() => setSettingsOpen(true)}
         onLeave={() => onPersist ? void saveAndQuit() : onQuit()}
         leaveLabel={
@@ -2542,6 +2548,11 @@ export function FourPlayerGame({
             : onPersist
               ? "Save & quit"
               : "Leave challenge"
+        }
+        onQuitWithoutSaving={
+          !onlineSession && !state.challengeId && onPersist
+            ? onQuit
+            : undefined
         }
       />
     </main>

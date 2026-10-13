@@ -164,6 +164,24 @@ export const chooseThreePlayerAiPlan = (
   const difficulty = control.kind === "ai"
     ? Math.max(1, Math.min(10, Math.round(control.difficulty ?? 5)))
     : 5;
+  if (state.phase === "draft") {
+    const actions = availableThreePlayerActions(state)
+      .filter(
+        (action): action is Extract<ThreePlayerAction, { type: "draft" }> =>
+          action.type === "draft",
+      )
+      .sort((first, second) =>
+        GOD_DRAFT_VALUE[second.godId] - GOD_DRAFT_VALUE[first.godId] ||
+        first.godId.localeCompare(second.godId)
+      );
+    if (!actions.length) return [];
+    if (difficulty >= 10 || actions.length === 1) return [actions[0]];
+    const random = typeof randomOrSeed === "number"
+      ? randomFromSeed(randomOrSeed)
+      : randomOrSeed;
+    const window = Math.min(actions.length, 1 + (10 - difficulty));
+    return [actions[Math.floor(random() * window)] ?? actions[0]];
+  }
   const plans = enumerateCompleteThreePlayerPlans(state, {
     maxDepth: 7 + Math.ceil(difficulty / 2),
     maxStates: 500 + difficulty * 900,

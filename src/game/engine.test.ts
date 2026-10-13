@@ -1299,6 +1299,74 @@ describe("game flow", () => {
     expect(moved.notice).not.toMatch(/^Slither/);
   });
 
+  it("limits each Serpentine Step pawn move to one diagonal square", () => {
+    const state = createGame(1);
+    state.phase = "play";
+    state.activeColor = "white";
+    state.players.white.gods = ["medusa"];
+    state.players.black.gods = ["quetzacoatl"];
+    state.players.white.orbs.white = 1;
+    state.board = {
+      h1: testPiece("king", "white", "white-king"),
+      h8: testPiece("king", "black", "black-king"),
+      c3: testPiece("pawn", "white", "stepping-pawn"),
+    };
+
+    let moved = gameReducer(state, { type: "select-god", godId: "medusa" });
+    moved = gameReducer(moved, { type: "select-ability", abilityId: "slither" });
+    moved = gameReducer(moved, { type: "square", square: "c3" });
+    expect(moved.legalTargets).toContain("d4");
+    expect(moved.legalTargets).not.toContain("e5");
+
+    moved = gameReducer(moved, { type: "square", square: "d4" });
+    expect(moved.legalTargets).toContain("e5");
+    expect(moved.legalTargets).not.toContain("f6");
+  });
+
+  it("only promotes a Serpentine Step pawn on the enemy back rank", () => {
+    const useSerpentineStep = (
+      board: Record<string, Piece>,
+      source: string,
+      middle: string,
+      destination: string,
+    ) => {
+      const state = createGame(1);
+      state.phase = "play";
+      state.activeColor = "white";
+      state.players.white.gods = ["medusa"];
+      state.players.black.gods = ["quetzacoatl"];
+      state.players.white.orbs.white = 1;
+      state.board = board;
+
+      let moved = gameReducer(state, {
+        type: "select-god",
+        godId: "medusa",
+      });
+      moved = gameReducer(moved, {
+        type: "select-ability",
+        abilityId: "slither",
+      });
+      moved = gameReducer(moved, { type: "square", square: source });
+      moved = gameReducer(moved, { type: "square", square: middle });
+      moved = gameReducer(moved, { type: "square", square: destination });
+      return moved;
+    };
+
+    const returnedHome = useSerpentineStep({
+      h1: testPiece("king", "white", "white-king"),
+      h8: testPiece("king", "black", "black-king"),
+      c3: testPiece("pawn", "white", "backward-pawn"),
+    }, "c3", "b2", "a1");
+    expect(returnedHome.board.a1?.type).toBe("pawn");
+
+    const reachedEnemyRank = useSerpentineStep({
+      a1: testPiece("king", "white", "white-king"),
+      a8: testPiece("king", "black", "black-king"),
+      f6: testPiece("pawn", "white", "promoting-pawn"),
+    }, "f6", "g7", "h8");
+    expect(reachedEnemyRank.board.h8?.type).toBe("queen");
+  });
+
   it("limits Pick a Fight to ordinary moves with real combat pressure", () => {
     const targets = (board: Record<string, Piece>) => {
       let state = createGame(1);
