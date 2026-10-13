@@ -883,6 +883,12 @@ span.move-target-dot {
 }
 .main-account-menu button:hover { color: #fff2cf; background: rgba(198,161,91,.1); }
 .main-account-menu button:disabled { cursor: wait; opacity: .55; }
+.setup-account-area {
+  position: relative; z-index: 1; top: auto; right: auto;
+}
+.setup-account-area .main-account-menu {
+  position: absolute; top: 100%; right: 0;
+}
 .main-menu-shade {
   position: absolute; inset: 0;
   background:

@@ -456,6 +456,8 @@ describe("game startup", () => {
     expect(screen.queryByRole("button", { name: /^load$/i })).toBeNull();
 
     openPlayMenu();
+    expect(screen.getByRole("button", { name: /^sign in$/i })).toBeTruthy();
+    expect(screen.queryByText(/^god chess$/i)).toBeNull();
     expect(
       within(screen.getByRole("group", { name: /play options/i }))
         .getAllByRole("button")
@@ -488,6 +490,23 @@ describe("game startup", () => {
     expect(screen.getByRole("button", { name: /^local$/i })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /back to title/i }));
     expect(screen.getByRole("button", { name: /^start$/i })).toBeTruthy();
+  });
+
+  it("shows the signed-in player account menu after leaving the title screen", () => {
+    accountHarness.configured = true;
+    accountHarness.account = {
+      userId: "account-1",
+      email: "player@example.com",
+      displayName: "Athena",
+    };
+
+    render(<App />);
+    openPlayMenu();
+
+    fireEvent.click(screen.getByRole("button", { name: /^athena$/i }));
+    expect(screen.getByRole("menu", { name: /account options/i })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: /change name/i })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: /sign out/i })).toBeTruthy();
   });
 
   it("opens a read-only roster with every God and level preview", () => {
