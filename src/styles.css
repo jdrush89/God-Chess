@@ -1669,6 +1669,24 @@ span.move-target-dot {
 .printable-links a:hover { color: #fff1ca; border-color: var(--gold); background: rgba(198,161,91,.07); }
 .gameover-modal { width: min(500px, 100%); }
 .gameover-modal .primary-button { margin-top: 26px; }
+.simulation-export-backdrop { z-index: 80; }
+.simulation-export-modal { width: min(780px, 100%); }
+.simulation-export-modal .simulation-result-summary {
+  margin: 12px 0 4px; color: #ead7a8; font: 600 15px "Cinzel";
+}
+.simulation-export-data {
+  max-height: min(48vh, 520px); margin: 22px 0 0; padding: 16px; overflow: auto;
+  color: #d7d4ca; background: #0b0d12; border: 1px solid rgba(198,161,91,.22);
+  font: 11px/1.55 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  text-align: left; white-space: pre; user-select: text;
+}
+.simulation-export-actions {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px;
+}
+.simulation-export-actions .primary-button { margin-top: 0; }
+.simulation-export-actions button {
+  min-height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+}
 .puzzle-result-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 26px; }
 .puzzle-result-actions .primary-button { margin-top: 0; }
 .puzzle-result-actions .secondary-button { width: 100%; }
@@ -1846,6 +1864,8 @@ span.move-target-dot {
   .puzzle-banner-title { justify-self: center; }
   .puzzle-banner-actions { justify-content: center; }
   .puzzle-result-actions { grid-template-columns: 1fr; }
+  .simulation-export-actions { grid-template-columns: 1fr; }
+  .simulation-export-data { font-size: 9px; }
   .rule-columns { grid-template-columns: 1fr; }
 }
 

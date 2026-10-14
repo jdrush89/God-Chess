@@ -190,6 +190,7 @@ import {
   isFourPlayerSavedGame,
   isThreePlayerSavedGame,
   type SavedGame,
+  type TwoPlayerSavedGame,
 } from "./saves";
 import {
   loadLocalCompletedPuzzles,
@@ -217,6 +218,96 @@ type MoveFirstDraft = {
 };
 type StartCategory = "local" | "online";
 type PlayerCount = 2 | 3 | 4;
+
+export interface SimulationExportData {
+  resultSummary: string;
+  completedTurns: number;
+  rewindRounds: number;
+  requestedUndoActions: number;
+  appliedUndoActions: number;
+  terminalResult?: GameState["result"];
+  save: TwoPlayerSavedGame;
+}
+
+interface SimulationRewindResult {
+  state: GameState;
+  undoHistory: GameState[];
+  turnStart?: GameState;
+  exportData: SimulationExportData;
+}
+
+const simulationSaveState = (state: GameState) => {
+  const saved = prepareSavedState(state);
+  saved.gameMode = "local";
+  saved.aiColor = undefined;
+  saved.onlineHostColor = undefined;
+  return saved;
+};
+
+const simulationResultSummary = (
+  terminal: GameState,
+  completedTurns: number,
+) => {
+  const turns = `${completedTurns} turn${completedTurns === 1 ? "" : "s"}`;
+  if (terminal.result?.kind === "winner") {
+    const winner = terminal.result.winner === "white" ? "White" : "Black";
+    return terminal.result.reason === "checkmate"
+      ? `${winner} checkmated in ${turns}.`
+      : `${winner} won by king capture in ${turns}.`;
+  }
+  const stalemated = terminal.activeColor === "white" ? "White" : "Black";
+  return `${stalemated} was stalemated after ${turns}.`;
+};
+
+export const rewindSimulationForExport = (
+  terminal: GameState,
+  undoHistory: GameState[],
+  completedTurns: number,
+  random: () => number = Math.random,
+): SimulationRewindResult => {
+  const rewindRounds = 3 + Math.floor(random() * 3);
+  const requestedUndoActions = rewindRounds * 2;
+  const remainingUndoHistory = undoHistory.map((snapshot) =>
+    prepareSavedState(snapshot)
+  );
+  let state = prepareSavedState(terminal);
+  let appliedUndoActions = 0;
+
+  while (
+    appliedUndoActions < requestedUndoActions &&
+    remainingUndoHistory.length
+  ) {
+    state = prepareSavedState(remainingUndoHistory.pop()!);
+    appliedUndoActions += 1;
+  }
+
+  const turnStart = state.phase === "play"
+    ? prepareSavedState(state)
+    : undefined;
+  const save = createSavedGame(
+    `simulation-${Date.now()}`,
+    simulationSaveState(state),
+    remainingUndoHistory.map(simulationSaveState),
+    turnStart ? simulationSaveState(turnStart) : undefined,
+  );
+
+  return {
+    state,
+    undoHistory: remainingUndoHistory,
+    turnStart,
+    exportData: {
+      resultSummary: simulationResultSummary(terminal, completedTurns),
+      completedTurns,
+      rewindRounds,
+      requestedUndoActions,
+      appliedUndoActions,
+      terminalResult: terminal.result
+        ? structuredClone(terminal.result)
+        : undefined,
+      save,
+    },
+  };
+};
 
 interface FourPlayerSession {
   key: string;
@@ -1828,6 +1919,93 @@ function SettingsModal({
   );
 }
 
+export function SimulationExportDialog({
+  data,
+  onQuit,
+}: {
+  data: SimulationExportData;
+  onQuit: () => void;
+}) {
+  const [copyStatus, setCopyStatus] = useState<
+    "idle" | "copying" | "copied" | "failed"
+  >("idle");
+  const exportText = useMemo(() =>
+    JSON.stringify({
+      result: {
+        summary: data.resultSummary,
+        completedTurns: data.completedTurns,
+        terminalResult: data.terminalResult,
+      },
+      rewind: {
+        rounds: data.rewindRounds,
+        requestedUndoActions: data.requestedUndoActions,
+        appliedUndoActions: data.appliedUndoActions,
+      },
+      save: data.save,
+    }, null, 2), [data]);
+
+  const copyExport = async () => {
+    setCopyStatus("copying");
+    try {
+      if (typeof navigator.clipboard?.writeText !== "function") {
+        throw new Error("Clipboard unavailable.");
+      }
+      await navigator.clipboard.writeText(exportText);
+      setCopyStatus("copied");
+    } catch {
+      setCopyStatus("failed");
+    }
+  };
+
+  return (
+    <div className="modal-backdrop simulation-export-backdrop">
+      <section
+        className="gameover-modal simulation-export-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="simulation-export-title"
+      >
+        <p className="eyebrow">SIMULATION CHECKPOINT</p>
+        <h2 id="simulation-export-title">Rewound game state</h2>
+        <p className="simulation-result-summary">{data.resultSummary}</p>
+        <p>
+          Rewound {data.appliedUndoActions} of {data.requestedUndoActions} undo
+          actions ({data.rewindRounds} full rounds).
+        </p>
+        <pre
+          className="simulation-export-data"
+          tabIndex={0}
+          aria-label="Simulation game state and result"
+        >
+          {exportText}
+        </pre>
+        <div className="simulation-export-actions">
+          <button
+            className="primary-button"
+            onClick={() => void copyExport()}
+          >
+            <Copy size={16} /> Copy game state and result
+          </button>
+          <button className="secondary-button" onClick={onQuit}>
+            Quit simulation
+          </button>
+        </div>
+        {copyStatus === "copying" && (
+          <p role="status">Copying game state...</p>
+        )}
+        {copyStatus === "copied" && (
+          <p role="status">Game state and result copied.</p>
+        )}
+        {copyStatus === "failed" && (
+          <p role="alert">
+            Clipboard access failed. Select and copy the game state above.
+          </p>
+        )}
+      </section>
+    </div>
+  );
+}
+
 function LocalDataImportModal({
   loading,
   working,
@@ -3044,7 +3222,6 @@ export function GameScreen({
   leaveLabel,
   onQuitWithoutSaving,
   moveFirstDisabled = false,
-  openHistoryOnGameOver = false,
 }: {
   state: GameState;
   dispatch: GameDispatch;
@@ -3063,7 +3240,6 @@ export function GameScreen({
   leaveLabel?: string;
   onQuitWithoutSaving?: () => void;
   moveFirstDisabled?: boolean;
-  openHistoryOnGameOver?: boolean;
 }) {
   const [rulesOpen, setRulesOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -3073,9 +3249,9 @@ export function GameScreen({
   const [moveFirstDraft, setMoveFirstDraft] = useState<MoveFirstDraft>();
   const [graveyardColor, setGraveyardColor] = useState<Color>();
   const gameFinished = !state.puzzleId && state.phase === "gameover";
-  const [resultOpen, setResultOpen] = useState(
-    gameFinished && !openHistoryOnGameOver,
-  );
+  const showGameResult =
+    gameFinished && state.gameMode !== "simulation";
+  const [resultOpen, setResultOpen] = useState(showGameResult);
   const kingInCheck = state.phase === "play" && isInCheck(state.board, state.activeColor, state.bananas);
   const puzzle = state.puzzleId ? PUZZLE_BY_ID[state.puzzleId] : undefined;
   const challenge = state.challengeId
@@ -3188,17 +3364,8 @@ export function GameScreen({
   }, [state.puzzleId]);
 
   useEffect(() => {
-    if (!gameFinished) {
-      setResultOpen(false);
-      return;
-    }
-    if (openHistoryOnGameOver) {
-      setResultOpen(false);
-      setHistoryOpen(true);
-      return;
-    }
-    setResultOpen(true);
-  }, [gameFinished, openHistoryOnGameOver]);
+    setResultOpen(showGameResult);
+  }, [showGameResult]);
 
   useEffect(() => {
     setPuzzleVictoryReady(false);
@@ -3742,7 +3909,7 @@ export function GameScreen({
           </section>
         </div>
       )}
-      {gameFinished && (
+      {showGameResult && (
         <GameResultPresentation
           open={resultOpen}
           eyebrow="THE DIVINE GAME ENDS"
@@ -4270,6 +4437,8 @@ export default function App() {
     white: 0,
     black: 0,
   });
+  const [simulationExport, setSimulationExport] =
+    useState<SimulationExportData>();
   const quickDraftPending = useRef(false);
   const undoStack = useRef<GameState[]>([]);
   const undoDepthRef = useRef(0);
@@ -4725,7 +4894,11 @@ export default function App() {
         next.phase === "upgrade" ||
         next.phase === "gameover"
       );
-    if (current.gameMode === "simulation" && completedPlayTurn) {
+    if (
+      current.gameMode === "simulation" &&
+      completedPlayTurn &&
+      action.type !== "adjudicate-no-turn"
+    ) {
       simulationCompletedTurns.current[current.activeColor] += 1;
     }
     const completedUpgrade =
@@ -4844,6 +5017,34 @@ export default function App() {
     if (threeOnlineActive) activeSaveId.current = undefined;
   }, [threeOnlineActive]);
 
+  const finalizeSimulation = (terminal: GameState) => {
+    const completedTurns =
+      simulationCompletedTurns.current.white +
+      simulationCompletedTurns.current.black;
+    const rewound = rewindSimulationForExport(
+      terminal,
+      undoStack.current,
+      completedTurns,
+    );
+    undoStack.current = rewound.undoHistory;
+    updateUndoDepth();
+    turnStart.current = rewound.turnStart;
+    aiPlan.current = [];
+    setSimulationExport(rewound.exportData);
+    recordDiagnostic({
+      category: "ui",
+      event: "simulation-export-opened",
+      context: { variant: "classic", mode: "simulation" },
+      data: {
+        completedTurns,
+        rewindRounds: rewound.exportData.rewindRounds,
+        requestedUndoActions: rewound.exportData.requestedUndoActions,
+        appliedUndoActions: rewound.exportData.appliedUndoActions,
+      },
+    });
+    return rewound.state;
+  };
+
   const dispatch: GameDispatch = (action) => {
     const current = stateRef.current;
     if (current.gameMode === "online") {
@@ -4867,7 +5068,11 @@ export default function App() {
       }
       return;
     }
-    const next = applyTrackedAction(current, action);
+    const tracked = applyTrackedAction(current, action);
+    const next =
+      tracked.gameMode === "simulation" && tracked.phase === "gameover"
+        ? finalizeSimulation(tracked)
+        : tracked;
     receiveState(next);
   };
 
@@ -4984,6 +5189,7 @@ export default function App() {
     aiPlan.current = [];
     clearUndoHistory();
     simulationCompletedTurns.current = { white: 0, black: 0 };
+    setSimulationExport(undefined);
     activeSaveId.current = undefined;
     setStartView("menu");
   };
@@ -5013,6 +5219,7 @@ export default function App() {
       fourPlayerSession ||
       threePlayerSession ||
       startView !== "none" ||
+      simulationExport ||
       !isAiTurn(state)
     ) {
       aiPlan.current = [];
@@ -5167,7 +5374,14 @@ export default function App() {
       dispatch(action);
     }, state.gameMode === "simulation" ? 120 : aiActionDelay(action));
     return () => window.clearTimeout(timer);
-  }, [aiPlanReady, fourPlayerSession, threePlayerSession, startView, state]);
+  }, [
+    aiPlanReady,
+    fourPlayerSession,
+    simulationExport,
+    threePlayerSession,
+    startView,
+    state,
+  ]);
 
   useEffect(() => {
     if (online.started) setStartView("none");
@@ -5290,6 +5504,7 @@ export default function App() {
 
   const loadGame = (game: SavedGame) => {
     simulationCompletedTurns.current = { white: 0, black: 0 };
+    setSimulationExport(undefined);
     activeSaveId.current = game.id;
     if (isFourPlayerSavedGame(game)) {
       setFourPlayerSession({
@@ -5381,6 +5596,7 @@ export default function App() {
     returnView: "menu" | "play" | "none" = "menu",
   ) => {
     simulationCompletedTurns.current = { white: 0, black: 0 };
+    setSimulationExport(undefined);
     setSetupCategory(category);
     setSetupPlayerCount(playerCount);
     setSetupReturnView(returnView);
@@ -5395,6 +5611,7 @@ export default function App() {
     threeOnlineActions.disconnect();
     setFourPlayerSession(undefined);
     setThreePlayerSession(undefined);
+    setSimulationExport(undefined);
     activeSaveId.current = saveId();
     const next = createGame(undefined, {
       mode,
@@ -5414,6 +5631,7 @@ export default function App() {
     setThreePlayerSession(undefined);
     activeSaveId.current = undefined;
     simulationCompletedTurns.current = { white: 0, black: 0 };
+    setSimulationExport(undefined);
     const next = createGame(1, {
       mode: "simulation",
       aiDifficulty: 10,
@@ -6220,7 +6438,6 @@ export default function App() {
                 ? quitWithoutSaving
                 : undefined
             }
-            openHistoryOnGameOver={state.gameMode === "simulation"}
             onRestart={openNewGame}
             onRestartPuzzle={restartPuzzle}
             onNextPuzzle={nextPuzzle}
@@ -6234,6 +6451,12 @@ export default function App() {
           remoteConsent={onlineSession ? remoteUndoConsent : false}
           onUndoPreferenceChange={changeUndoPreference}
           onClose={() => setSettingsOpen(false)}
+        />
+      )}
+      {simulationExport && (
+        <SimulationExportDialog
+          data={simulationExport}
+          onQuit={quitWithoutSaving}
         />
       )}
       {startView === "none" && state.phase === "draft" && (
