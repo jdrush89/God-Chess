@@ -53,6 +53,7 @@ import { allSquares, isInCheck } from "./game/chess";
 import {
   classicSimulationPlanStrategy,
   chooseAiPlan,
+  chooseFallbackAiPlan,
   chooseRandomAiPlan,
   isAiTurn,
   type ClassicAiPlanStrategy,
@@ -394,6 +395,8 @@ const aiActionDelay = (action: GameAction) => {
   if (action.type === "square") return 950;
   return 750;
 };
+
+const AI_NON_PLAY_PLAN_TIMEOUT_MS = 2000;
 
 const statusMarkers: {
   key: keyof Piece["status"];
@@ -5241,6 +5244,7 @@ export default function App() {
           : "optimal";
       let worker: Worker | undefined;
       let planningTimer: number | undefined;
+      let planningWatchdog: number | undefined;
       let secondFrame: number | undefined;
       let settled = false;
       let fallbackStarted = false;
@@ -5251,9 +5255,15 @@ export default function App() {
           stateRef.current !== requestedState
         ) return;
         settled = true;
+        if (planningWatchdog !== undefined) {
+          window.clearTimeout(planningWatchdog);
+        }
         worker?.terminate();
         worker = undefined;
-        if (!actions.length && requestedState.phase === "play") {
+        const resolvedActions = actions.length
+          ? actions
+          : chooseFallbackAiPlan(requestedState, strategy);
+        if (!resolvedActions.length && requestedState.phase === "play") {
           dispatch({
             type: "adjudicate-no-turn",
             activeColor: requestedState.activeColor,
@@ -5261,13 +5271,21 @@ export default function App() {
           });
           return;
         }
-        aiPlan.current = actions;
-        aiNoPlanState.current = actions.length ? undefined : requestedState;
+        if (!resolvedActions.length && requestedState.phase === "upgrade") {
+          dispatch({ type: "load-game", state: requestedState });
+          return;
+        }
+        aiPlan.current = resolvedActions;
+        aiNoPlanState.current = resolvedActions.length ? undefined : requestedState;
         recordDiagnostic({
           category: "ai",
           event: "classic-plan-result",
           context: { variant: "classic", mode: requestedState.gameMode },
-          data: { actions, strategy },
+          data: {
+            actions: resolvedActions,
+            strategy,
+            recoveredEmptyPlan: !actions.length && resolvedActions.length > 0,
+          },
         });
         setAiPlanReady((value) => value + 1);
       };
@@ -5348,6 +5366,24 @@ export default function App() {
                 state: requestedState,
                 strategy,
               });
+              if (requestedState.phase !== "play") {
+                planningWatchdog = window.setTimeout(() => {
+                  recordDiagnostic({
+                    category: "error",
+                    event: "classic-plan-timeout",
+                    context: {
+                      variant: "classic",
+                      mode: requestedState.gameMode,
+                    },
+                    data: {
+                      phase: requestedState.phase,
+                      activeColor: requestedState.activeColor,
+                      turn: requestedState.turn,
+                    },
+                  });
+                  acceptPlan(chooseFallbackAiPlan(requestedState, strategy));
+                }, AI_NON_PLAY_PLAN_TIMEOUT_MS);
+              }
             } catch (error) {
               fallbackToMainThread(error);
             }
@@ -5362,6 +5398,9 @@ export default function App() {
         }
         if (planningTimer !== undefined) {
           window.clearTimeout(planningTimer);
+        }
+        if (planningWatchdog !== undefined) {
+          window.clearTimeout(planningWatchdog);
         }
         worker?.terminate();
       };
