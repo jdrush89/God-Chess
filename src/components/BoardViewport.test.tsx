@@ -113,6 +113,8 @@ describe("BoardViewport", () => {
     const { viewport, onCell } = renderViewport();
     fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
     const cell = screen.getByRole("button", { name: "Cell" });
+    const setPointerCapture = vi.mocked(viewport.setPointerCapture);
+    setPointerCapture.mockClear();
 
     fireEvent.pointerDown(cell, {
       pointerId: 1,
@@ -121,6 +123,7 @@ describe("BoardViewport", () => {
       clientX: 200,
       clientY: 150,
     });
+    expect(setPointerCapture).not.toHaveBeenCalled();
     fireEvent.pointerUp(cell, {
       pointerId: 1,
       pointerType: "mouse",
@@ -143,6 +146,7 @@ describe("BoardViewport", () => {
       clientX: 150,
       clientY: 110,
     });
+    expect(setPointerCapture).toHaveBeenCalledWith(2);
     fireEvent.pointerUp(viewport, {
       pointerId: 2,
       pointerType: "mouse",

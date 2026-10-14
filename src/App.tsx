@@ -691,7 +691,13 @@ function DraftScreen({
   );
 }
 
-function RosterScreen({ onBack }: { onBack: () => void }) {
+function RosterScreen({
+  accountControl,
+  onBack,
+}: {
+  accountControl: ReactNode;
+  onBack: () => void;
+}) {
   const [inspected, setInspected] = useState<GodId>(GODS[0].id);
   const [previewLevel, setPreviewLevel] = useState(1);
   const [favorites, setFavorites] = useState<GodSkinSelections>(loadFavoriteGodSkins);
@@ -716,18 +722,16 @@ function RosterScreen({ onBack }: { onBack: () => void }) {
 
   return (
     <main className="draft-page roster-page">
-      <header className="topbar draft-topbar">
-        <Brand />
+      <header className="topbar draft-topbar roster-topbar">
+        <button className="setup-navigation-back" onClick={onBack}>
+          <ArrowLeft size={18} />
+          <span>Back to play</span>
+        </button>
         <div className="draft-turn">
           <BookOpen size={16} />
           Divine roster
         </div>
-        <div className="header-actions">
-          <button onClick={onBack}>
-            <ArrowLeft size={18} />
-            <span>Back to play</span>
-          </button>
-        </div>
+        {accountControl}
       </header>
 
       <section className="draft-hero">
@@ -1911,6 +1915,7 @@ function AccountControl({
   const [accountModalMode, setAccountModalMode] =
     useState<"auth" | "name" | "import">();
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const accountAreaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!account) {
@@ -1929,6 +1934,20 @@ function AccountControl({
     }
   }, [account, accountModalMode]);
 
+  useEffect(() => {
+    if (!accountMenuOpen) return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (
+        event.target instanceof Node &&
+        accountAreaRef.current?.contains(event.target)
+      ) return;
+      setAccountMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    return () =>
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+  }, [accountMenuOpen]);
+
   const signOut = async () => {
     setAccountMenuOpen(false);
     try {
@@ -1946,7 +1965,10 @@ function AccountControl({
 
   return (
     <>
-      <div className={`main-account-area ${className}`.trim()}>
+      <div
+        className={`main-account-area ${className}`.trim()}
+        ref={accountAreaRef}
+      >
         <button
           className="main-account-button"
           disabled={accountLoading}
@@ -2133,19 +2155,25 @@ function PlayMenu({
 function AchievementsScreen({
   progress,
   account,
+  accountControl,
   loading,
   puzzleCounts,
   onBack,
 }: {
   progress: AchievementProgress;
   account?: AccountProfile;
+  accountControl: ReactNode;
   loading: boolean;
   puzzleCounts: Record<PuzzleDifficulty, number>;
   onBack: () => void;
 }) {
   const completed = new Set(completedAchievementIds(progress));
   return (
-    <SetupNavigationShell backLabel="Back to Play" onBack={onBack}>
+    <SetupNavigationShell
+      backLabel="Back to Play"
+      onBack={onBack}
+      headerAction={accountControl}
+    >
       <section className="achievements-page">
         <header className="achievements-heading">
           <div>
@@ -2467,6 +2495,7 @@ function StartGamePrompt({
   fourOnline,
   threeOnline,
   defaultPlayerName,
+  accountControl,
   category,
   initialPlayerCount,
   onStart,
@@ -2494,6 +2523,7 @@ function StartGamePrompt({
   fourOnline: FourPlayerOnlineState;
   threeOnline: ThreePlayerOnlineState;
   defaultPlayerName?: string;
+  accountControl: ReactNode;
   category: StartCategory;
   initialPlayerCount?: PlayerCount;
   onStart: (mode: Exclude<GameMode, "online" | "puzzle">, difficulty: number) => void;
@@ -2552,6 +2582,7 @@ function StartGamePrompt({
     <SetupNavigationShell
       backLabel={playerCount ? `Back to ${category}` : "Back to Play"}
       onBack={back}
+      headerAction={accountControl}
       contentClassName={category === "online" && playerCount ? "online-stage" : ""}
     >
       <section className={`start-game-content ${category === "online" && playerCount ? "online-stage" : ""}`}>
@@ -2746,6 +2777,7 @@ function StartGamePrompt({
 function PuzzleSelectScreen({
   completedPuzzles,
   completedChallenges,
+  accountControl,
   progressLoading,
   progressError,
   onStartPuzzle,
@@ -2755,6 +2787,7 @@ function PuzzleSelectScreen({
 }: {
   completedPuzzles: Set<PuzzleId>;
   completedChallenges: Set<ChallengeId>;
+  accountControl: ReactNode;
   progressLoading: boolean;
   progressError?: string;
   onStartPuzzle: (puzzleId: PuzzleId) => void;
@@ -2780,6 +2813,7 @@ function PuzzleSelectScreen({
         </div>
       )}
       <section className="puzzle-select-screen">
+        {accountControl}
         <button
           className="puzzle-select-back"
           onClick={() => difficulty ? setDifficulty(undefined) : onBack()}
@@ -5534,6 +5568,25 @@ export default function App() {
   };
   const fourOnlineCanonical = fourOnline.snapshot?.canonical;
   const threeOnlineCanonical = threeOnline.snapshot?.canonical;
+  const renderAccountControl = (className = "setup-account-area") => (
+    <AccountControl
+      account={accountService.account}
+      accountConfigured={accountService.configured}
+      accountLoading={accountService.loading}
+      accountWorking={accountService.working}
+      accountError={accountService.error}
+      accountDataLoading={accountDataLoading}
+      accountImportWorking={accountImportWorking}
+      accountImportError={accountImportError}
+      onSignIn={accountService.signIn}
+      onSignUp={accountService.signUp}
+      onSignOut={accountService.signOut}
+      onUpdateDisplayName={accountService.updateDisplayName}
+      onImportLocalData={() => finishLocalDataImportDecision(true)}
+      onStartAccountFresh={() => finishLocalDataImportDecision(false)}
+      className={className}
+    />
+  );
 
   if (startView === "menu") {
     return (
@@ -5559,7 +5612,12 @@ export default function App() {
   }
 
   if (startView === "roster") {
-    return <RosterScreen onBack={() => setStartView("play")} />;
+    return (
+      <RosterScreen
+        accountControl={renderAccountControl()}
+        onBack={() => setStartView("play")}
+      />
+    );
   }
 
   if (startView === "achievements") {
@@ -5567,6 +5625,7 @@ export default function App() {
       <AchievementsScreen
         progress={visibleAchievementProgress}
         account={accountService.account}
+        accountControl={renderAccountControl()}
         loading={achievementProgressLoading}
         puzzleCounts={completedPuzzleCounts}
         onBack={() => setStartView("play")}
@@ -5581,25 +5640,7 @@ export default function App() {
         savesLoading={savesLoading || savesHydrating}
         saveError={saveError}
         account={accountService.account}
-        accountControl={(
-          <AccountControl
-            account={accountService.account}
-            accountConfigured={accountService.configured}
-            accountLoading={accountService.loading}
-            accountWorking={accountService.working}
-            accountError={accountService.error}
-            accountDataLoading={accountDataLoading}
-            accountImportWorking={accountImportWorking}
-            accountImportError={accountImportError}
-            onSignIn={accountService.signIn}
-            onSignUp={accountService.signUp}
-            onSignOut={accountService.signOut}
-            onUpdateDisplayName={accountService.updateDisplayName}
-            onImportLocalData={() => finishLocalDataImportDecision(true)}
-            onStartAccountFresh={() => finishLocalDataImportDecision(false)}
-            className="setup-account-area"
-          />
-        )}
+        accountControl={renderAccountControl()}
         onBack={() => setStartView("menu")}
         onOpenLocal={() => openStartFlow("local", undefined, "play")}
         onOpenOnline={() => openStartFlow("online", undefined, "play")}
@@ -5618,7 +5659,11 @@ export default function App() {
 
   if (startView === "load") {
     return (
-      <SetupNavigationShell backLabel="Back to Play" onBack={() => setStartView("play")}>
+      <SetupNavigationShell
+        backLabel="Back to Play"
+        onBack={() => setStartView("play")}
+        headerAction={renderAccountControl()}
+      >
         <SavedGameLibrary
           savedGames={savedGames}
           savesLoading={savesLoading || savesHydrating}
@@ -5635,6 +5680,7 @@ export default function App() {
       <PuzzleSelectScreen
         completedPuzzles={completedPuzzles}
         completedChallenges={completedChallenges}
+        accountControl={renderAccountControl("puzzle-account-area")}
         progressLoading={puzzleProgressLoading || challengeProgressLoading}
         progressError={saveError}
         onStartPuzzle={beginPuzzle}
@@ -5649,6 +5695,7 @@ export default function App() {
     return (
       <SetupNavigationShell
         backLabel="Back to Local"
+        headerAction={renderAccountControl()}
         onBack={() => {
           setSetupCategory("local");
           setSetupPlayerCount(undefined);
@@ -5673,6 +5720,7 @@ export default function App() {
     return (
       <SetupNavigationShell
         backLabel="Back to Local"
+        headerAction={renderAccountControl()}
         onBack={() => {
           setSetupCategory("local");
           setSetupPlayerCount(undefined);
@@ -5700,6 +5748,7 @@ export default function App() {
         fourOnline={fourOnline}
         threeOnline={threeOnline}
         defaultPlayerName={accountService.account?.displayName}
+        accountControl={renderAccountControl()}
         category={setupCategory}
         initialPlayerCount={setupPlayerCount}
         onStart={beginGame}

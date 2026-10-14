@@ -497,7 +497,7 @@ describe("game startup", () => {
     expect(screen.getByRole("button", { name: /^start$/i })).toBeTruthy();
   });
 
-  it("shows the signed-in player account menu after leaving the title screen", () => {
+  it("closes the signed-in account menu when clicking outside it", () => {
     accountHarness.configured = true;
     accountHarness.account = {
       userId: "account-1",
@@ -512,6 +512,39 @@ describe("game startup", () => {
     expect(screen.getByRole("menu", { name: /account options/i })).toBeTruthy();
     expect(screen.getByRole("menuitem", { name: /change name/i })).toBeTruthy();
     expect(screen.getByRole("menuitem", { name: /sign out/i })).toBeTruthy();
+    fireEvent.pointerDown(screen.getByRole("heading", { name: /choose your path/i }));
+    expect(screen.queryByRole("menu", { name: /account options/i })).toBeNull();
+  });
+
+  it("keeps the account control on every post-title mode screen", () => {
+    accountHarness.configured = true;
+    accountHarness.account = {
+      userId: "account-1",
+      email: "player@example.com",
+      displayName: "Athena",
+    };
+
+    render(<App />);
+    openPlayMenu();
+
+    fireEvent.click(screen.getByRole("button", { name: /^local$/i }));
+    expect(screen.getByRole("button", { name: /^athena$/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /back to play/i }));
+
+    fireEvent.click(screen.getByRole("button", { name: /^online$/i }));
+    expect(screen.getByRole("button", { name: /^athena$/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /back to play/i }));
+
+    fireEvent.click(screen.getByRole("button", { name: /^puzzles$/i }));
+    expect(screen.getByRole("button", { name: /^athena$/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /play menu/i }));
+
+    fireEvent.click(screen.getByRole("button", { name: /^achievements$/i }));
+    expect(screen.getByRole("button", { name: /^athena$/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /back to play/i }));
+
+    fireEvent.click(screen.getByRole("button", { name: /^roster$/i }));
+    expect(screen.getByRole("button", { name: /^athena$/i })).toBeTruthy();
   });
 
   it("opens a read-only roster with every God and level preview", () => {
