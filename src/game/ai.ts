@@ -352,18 +352,31 @@ const withUpgradePreview = (
     : actions;
 };
 
+export const chooseFallbackAiPlan = (
+  state: GameState,
+  strategy: ClassicAiPlanStrategy = "optimal",
+  random: () => number = Math.random,
+): GameAction[] => {
+  if (state.phase !== "draft" && state.phase !== "upgrade") return [];
+  const actions = availableClassicActions(state);
+  const action = strategy === "random"
+    ? actions[Math.floor(random() * actions.length)]
+    : actions[0];
+  return action ? withUpgradePreview(state, [action]) : [];
+};
+
 export const chooseRandomAiPlan = (
   state: GameState,
   random: () => number = Math.random,
 ): GameAction[] => {
   if (state.phase === "draft") {
-    const actions = availableClassicActions(state);
-    const action = actions[Math.floor(random() * actions.length)];
-    return action ? [action] : [];
+    return chooseFallbackAiPlan(state, "random", random);
   }
   const plans = enumerateTurnPlans(state, state.activeColor);
   const plan = plans[Math.floor(random() * plans.length)];
-  return withUpgradePreview(state, plan?.actions ?? []);
+  return plan
+    ? withUpgradePreview(state, plan.actions)
+    : chooseFallbackAiPlan(state, "random", random);
 };
 
 export const chooseAiPlan = (
@@ -374,7 +387,7 @@ export const chooseAiPlan = (
   const plans = enumerateTurnPlans(state, color);
   let actions: GameAction[];
   if (!plans.length) {
-    actions = [];
+    actions = chooseFallbackAiPlan(state, "optimal", random);
   } else {
     const optimalChance = Math.max(0.1, Math.min(1, state.aiDifficulty / 10));
     if (random() < optimalChance || plans.length === 1) {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   chooseAiPlan,
+  chooseFallbackAiPlan,
   chooseRandomAiPlan,
   classicSimulationPlanStrategy,
   enumerateTurnPlans,
@@ -68,6 +69,33 @@ describe("Divine AI", () => {
     for (const action of plan) state = gameReducer(state, action);
     expect(state.turn).toBeGreaterThan(initialTurn);
     expect(state.activeColor).toBe("black");
+  });
+
+  it("always has a direct legal fallback for draft and upgrade phases", () => {
+    let state = createGame(1, {
+      mode: "simulation",
+      aiDifficulty: 10,
+    });
+    expect(chooseFallbackAiPlan(state, "random", () => 0)).toEqual([
+      { type: "draft", godId: "quetzacoatl" },
+    ]);
+
+    (["ares", "medusa", "midas", "death", "artemis", "chiron"] as const)
+      .forEach((godId) => {
+        state = gameReducer(state, { type: "draft", godId });
+      });
+    state.phase = "upgrade";
+    state.activeColor = "white";
+    state.upgradeQueue = ["white", "black"];
+
+    expect(chooseFallbackAiPlan(state)).toEqual([
+      {
+        type: "preview-upgrade",
+        godId: "ares",
+        abilityId: "threaten",
+      },
+      { type: "upgrade", abilityId: "threaten" },
+    ]);
   });
 
   it("always chooses its highest-scoring draft pick at difficulty 10", () => {

@@ -1273,6 +1273,37 @@ describe("game startup", () => {
       .toBeGreaterThan(0);
   });
 
+  it("recovers a stalled AI upgrade when its worker never responds", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("Worker", FakeClassicAiWorker);
+    let savedState = createGame(1, { mode: "ai", aiDifficulty: 10 });
+    for (const godId of ["ares", "medusa", "midas", "death", "artemis", "chiron"] as const) {
+      savedState = gameReducer(savedState, { type: "draft", godId });
+    }
+    savedState.phase = "upgrade";
+    savedState.activeColor = "black";
+    savedState.upgradeQueue = ["black"];
+    window.localStorage.setItem(SAVE_KEY, JSON.stringify([
+      createSavedGame("stalled-upgrade-save", savedState, []),
+    ]));
+
+    render(<App />);
+    openPlayOption("Load");
+    fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(50);
+    });
+    expect(FakeClassicAiWorker.instances).toHaveLength(1);
+
+    for (let index = 0; index < 6; index += 1) {
+      await act(async () => {
+        await vi.runOnlyPendingTimersAsync();
+      });
+    }
+
+    expect(screen.getByText(/Round 2\. White to act/i)).toBeTruthy();
+  });
+
   it("marks locally completed puzzles in the difficulty browser", () => {
     window.localStorage.setItem("god-chess-puzzle-progress-v1", JSON.stringify(["centaurs-lance"]));
 
