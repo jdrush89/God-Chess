@@ -13,7 +13,6 @@ import {
   Menu,
   Rabbit,
   RotateCcw,
-  Save,
   Settings,
   Shield,
   Skull,
@@ -293,8 +292,6 @@ function FourPlayerDraft({
   onQuickDraft,
   canUndo,
   onUndo,
-  onSaveAndQuit,
-  onOpenSettings,
 }: {
   state: FourPlayerState;
   dispatch: FourPlayerDispatch;
@@ -302,8 +299,6 @@ function FourPlayerDraft({
   onQuickDraft?: () => void;
   canUndo: boolean;
   onUndo: () => void;
-  onSaveAndQuit?: () => void;
-  onOpenSettings: () => void;
 }) {
   const [inspected, setInspected] = useState<GodId>(state.draft.available[0]);
   const [godPreviewLevel, setGodPreviewLevel] = useState<number>();
@@ -336,10 +331,6 @@ function FourPlayerDraft({
           <button onClick={onUndo} disabled={!canUndo}>
             <Undo2 size={18} /><span>Undo</span>
           </button>
-          {onSaveAndQuit && (
-            <button onClick={onSaveAndQuit}><Save size={18} /><span>Save & quit</span></button>
-          )}
-          <button onClick={onOpenSettings}><Settings size={18} /><span>Settings</span></button>
         </div>
       </header>
 
@@ -2230,10 +2221,6 @@ export function FourPlayerGame({
           onQuickDraft={onlineSession ? undefined : quickDraft}
           canUndo={canUndo}
           onUndo={applyUndo}
-          onSaveAndQuit={onlineSession || !onPersist
-            ? undefined
-            : () => void saveAndQuit()}
-          onOpenSettings={() => setSettingsOpen(true)}
         />
         <MatchEscapeMenu
           onOpenRules={() => setRulesOpen(true)}
@@ -2362,11 +2349,7 @@ export function FourPlayerGame({
           >
             <Undo2 size={18} /><span>Undo</span>
           </button>
-          {!onlineSession && onPersist && (
-            <button onClick={() => void saveAndQuit()}><Save size={18} /><span>Save & quit</span></button>
-          )}
           <button onClick={() => setHistoryOpen(true)}><History size={18} /><span>History</span></button>
-          <button onClick={() => setSettingsOpen(true)}><Settings size={18} /><span>Settings</span></button>
           <button onClick={onNewGame}>
             <RotateCcw size={18} />
             <span>{state.challengeId ? "Restart" : "New setup"}</span>

@@ -170,16 +170,16 @@ describe("achievement progress", () => {
     expect(progress.completed.goadess).toBeTruthy();
   });
 
-  it("requires ten puzzle completions at every difficulty", () => {
+  it("requires 25 total classic puzzle completions", () => {
     const incomplete = completeCryptologistIfEligible(
       createAchievementProgress(),
-      { easy: 10, medium: 10, hard: 9 },
+      { easy: 5, medium: 10, hard: 9 },
     );
     expect(incomplete.completed.cryptologist).toBeUndefined();
 
     const complete = completeCryptologistIfEligible(
       incomplete,
-      { easy: 10, medium: 10, hard: 10 },
+      { easy: 5, medium: 10, hard: 10 },
     );
     expect(complete.completed.cryptologist).toBeTruthy();
   });

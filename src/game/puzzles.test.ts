@@ -166,14 +166,28 @@ const countDistinctWinningLines = (
 };
 
 describe("puzzle mode", () => {
-  it("includes ten Easy, ten Medium, and ten Hard positions", () => {
-    expect(PUZZLES.filter((puzzle) => puzzle.playerTurns === 1)).toHaveLength(10);
+  it("includes five unique Easy and ten each Medium and Hard positions", () => {
+    expect(PUZZLES).toHaveLength(25);
+    expect(PUZZLES.filter((puzzle) => puzzle.playerTurns === 1)).toHaveLength(5);
     expect(PUZZLES.filter((puzzle) => puzzle.playerTurns === 2)).toHaveLength(10);
     expect(PUZZLES.filter((puzzle) => puzzle.playerTurns === 3)).toHaveLength(10);
-    expect(PUZZLES.filter((puzzle) => puzzle.difficulty === "easy")).toHaveLength(10);
+    expect(PUZZLES.filter((puzzle) => puzzle.difficulty === "easy")).toHaveLength(5);
     expect(PUZZLES.filter((puzzle) => puzzle.difficulty === "medium")).toHaveLength(10);
     expect(HARD_PUZZLES).toHaveLength(10);
     expect(HARD_PUZZLES.every((puzzle) => puzzle.playerTurns === 3)).toBe(true);
+    expect(PUZZLES.map((puzzle) => puzzle.title)).toEqual(
+      Array.from({ length: 25 }, (_, index) => {
+        const number = [
+          "One", "Two", "Three", "Four", "Five",
+          "Six", "Seven", "Eight", "Nine", "Ten",
+          "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen",
+          "Sixteen", "Seventeen", "Eighteen", "Nineteen", "Twenty",
+          "Twenty-One", "Twenty-Two", "Twenty-Three", "Twenty-Four",
+          "Twenty-Five",
+        ][index];
+        return `Position ${number}`;
+      }),
+    );
   });
 
   it("starts every puzzle without unexplained frozen pieces", () => {

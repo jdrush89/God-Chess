@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>God Chess pawn with halo</title>
+  <defs>
+    <linearGradient id="background" x1="8" y1="6" x2="56" y2="60">
+      <stop offset="0" stop-color="#20242e"/>
+      <stop offset="1" stop-color="#07080b"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="16" y1="8" x2="48" y2="56">
+      <stop offset="0" stop-color="#f5dda0"/>
+      <stop offset=".52" stop-color="#d2a94f"/>
+      <stop offset="1" stop-color="#8f6721"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#background)"/>
+  <rect x="3" y="3" width="58" height="58" rx="13" fill="none" stroke="#40351f" stroke-width="2"/>
+  <ellipse cx="32" cy="13" rx="15" ry="5" fill="none" stroke="url(#gold)" stroke-width="4"/>
+  <circle cx="32" cy="26" r="8" fill="#eee8dc" stroke="url(#gold)" stroke-width="2.5"/>
+  <path
+    d="M26 34h12c0 7 2 11 6 15H20c4-4 6-8 6-15Z"
+    fill="#eee8dc"
+    stroke="url(#gold)"
+    stroke-linejoin="round"
+    stroke-width="2.5"
+  />
+  <path
+    d="M18 49h28l4 7H14l4-7Z"
+    fill="#eee8dc"
+    stroke="url(#gold)"
+    stroke-linejoin="round"
+    stroke-width="2.5"
+  />
+</svg>

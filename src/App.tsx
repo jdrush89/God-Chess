@@ -33,7 +33,6 @@ import {
   Coins,
   Rabbit,
   RotateCcw,
-  Save,
   Settings,
   Shield,
   Skull,
@@ -496,15 +495,11 @@ function DraftScreen({
   state,
   dispatch,
   onQuickDraft,
-  onSaveAndQuit,
-  onOpenSettings,
   inputDisabled = false,
 }: {
   state: GameState;
   dispatch: GameDispatch;
   onQuickDraft?: () => void;
-  onSaveAndQuit?: () => void;
-  onOpenSettings: () => void;
   inputDisabled?: boolean;
 }) {
   const [inspected, setInspected] = useState<GodId>(state.draft.available[0]);
@@ -536,12 +531,7 @@ function DraftScreen({
           <span className={`turn-dot ${state.activeColor}`} />
           {activePlayer.name} · {state.activeColor} picks
         </div>
-        <div className="header-actions">
-          {onSaveAndQuit && (
-            <button onClick={onSaveAndQuit}><Save size={18} /><span>Save & quit</span></button>
-          )}
-          <button onClick={onOpenSettings}><Settings size={18} /><span>Settings</span></button>
-        </div>
+        <div className="header-actions" aria-hidden="true" />
       </header>
 
       <section className="draft-hero">
@@ -2981,7 +2971,6 @@ function GraveyardModal({
 export function GameScreen({
   state,
   dispatch,
-  onSaveAndQuit,
   onRestart,
   onRestartPuzzle,
   onNextPuzzle,
@@ -3000,7 +2989,6 @@ export function GameScreen({
 }: {
   state: GameState;
   dispatch: GameDispatch;
-  onSaveAndQuit?: () => void;
   onRestart: () => void;
   onRestartPuzzle: () => void;
   onNextPuzzle: () => void;
@@ -3446,18 +3434,7 @@ export function GameScreen({
               <span>Undo</span>
             </button>
           )}
-          {onSaveAndQuit &&
-            state.gameMode !== "online" &&
-            state.gameMode !== "puzzle" && (
-            <button onClick={onSaveAndQuit}>
-              <Save size={18} />
-              <span>Save & quit</span>
-            </button>
-          )}
           <button onClick={() => setHistoryOpen(!historyOpen)}><History size={18} /><span>History</span></button>
-          {state.gameMode !== "puzzle" && (
-            <button onClick={onOpenSettings}><Settings size={18} /><span>Settings</span></button>
-          )}
           <button onClick={onRestart}>
             <RotateCcw size={18} />
             <span>{puzzle ? "Puzzles" : challenge ? "Restart" : "New game"}</span>
@@ -4099,7 +4076,6 @@ function TutorialScreen({ onExit }: { onExit: () => void }) {
         onRestart={onExit}
         onRestartPuzzle={() => undefined}
         onNextPuzzle={() => undefined}
-        onSaveAndQuit={onExit}
       />
       {mode === "tour" ? (
         <TutorialOverlay
@@ -6039,10 +6015,6 @@ export default function App() {
             dispatch={dispatch}
             onQuickDraft={state.gameMode === "online" ? undefined : quickDraft}
             inputDisabled={inputDisabled}
-            onSaveAndQuit={state.gameMode === "online" || state.challengeId
-              ? undefined
-              : saveAndQuit}
-            onOpenSettings={() => setSettingsOpen(true)}
           />
         )
         : (
@@ -6077,7 +6049,6 @@ export default function App() {
             onRestart={openNewGame}
             onRestartPuzzle={restartPuzzle}
             onNextPuzzle={nextPuzzle}
-            onSaveAndQuit={state.challengeId ? undefined : saveAndQuit}
           />
         )}
       {settingsOpen && (

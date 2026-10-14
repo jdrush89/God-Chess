@@ -2779,6 +2779,19 @@ span.move-target-dot {
 .four-panel-god-heading small { color: #d6c59f; font-size: 8px; text-transform: uppercase; }
 
 /* Shared ability-card readability */
+.draft-page .god-inspector .draft-ability {
+  font-size: 14px;
+  line-height: 1.5;
+}
+.draft-page .god-inspector .draft-ability strong {
+  font-size: large;
+  line-height: 1.25;
+}
+.draft-page .god-inspector .draft-ability p,
+.draft-page .god-inspector .draft-ability .ability-rules > p {
+  font-size: inherit;
+  line-height: inherit;
+}
 .ability-card, .four-ability-card {
   font-size: 14px;
   line-height: 1.5;

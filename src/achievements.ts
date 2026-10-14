@@ -44,7 +44,7 @@ export const ACHIEVEMENTS = [
   ["one-two-punch", "1, 2 Punch", "Win a 3 player game by capturing two Kings on consecutive turns."],
   ["outsmarted", "Outsmarted", "Win a game against a level 10 CPU."],
   ["the-pantheon", "The Pantheon", "Win across multiple games while using each of the 12 original Gods."],
-  ["cryptologist", "Cryptologist", "Complete 10 Easy, 10 Medium, and 10 Hard puzzles."],
+  ["cryptologist", "Cryptologist", "Complete 25 puzzles total."],
   ["i-have-the-power", "I Have the Power", "Use every ability of every original God at least once."],
   ["ascend", "Ascend", "Max out every ability of every God in one match."],
   ["hoarder", "Hoarder", "Have 10 Light and 10 Dark orbs in a match."],
@@ -102,7 +102,7 @@ export interface AchievementDefinition {
 
 const GOALS: Partial<Record<AchievementId, number>> = {
   "the-pantheon": 12,
-  cryptologist: 30,
+  cryptologist: 25,
   "i-have-the-power": 36,
   widowmaker: 5,
   multikill: 5,
@@ -1129,9 +1129,12 @@ export const achievementProgressValue = (
       return progress.collections.wonGods.length;
     case "cryptologist":
       return completedPuzzles
-        ? Math.min(10, completedPuzzles.easy) +
-          Math.min(10, completedPuzzles.medium) +
-          Math.min(10, completedPuzzles.hard)
+        ? Math.min(
+            25,
+            completedPuzzles.easy +
+              completedPuzzles.medium +
+              completedPuzzles.hard,
+          )
         : 0;
     case "i-have-the-power":
       return progress.collections.usedAbilities.length;
@@ -1175,9 +1178,7 @@ export const completeCryptologistIfEligible = (
   counts: { easy: number; medium: number; hard: number },
 ) => {
   if (
-    counts.easy < 10 ||
-    counts.medium < 10 ||
-    counts.hard < 10 ||
+    counts.easy + counts.medium + counts.hard < 25 ||
     source.completed.cryptologist
   ) return source;
   const progress = cloneProgress(source);
