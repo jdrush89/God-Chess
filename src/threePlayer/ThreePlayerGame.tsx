@@ -10,7 +10,6 @@ import {
   Info,
   LoaderCircle,
   RotateCcw,
-  Save,
   Settings,
   Shield,
   Sparkles,
@@ -276,8 +275,6 @@ function ThreePlayerDraft({
   onAction,
   onAutoDraft,
   onQuickDraft,
-  onExit,
-  exitLabel,
   canUndo,
   onUndo,
   roomCode,
@@ -288,8 +285,6 @@ function ThreePlayerDraft({
   onAction: (action: UiAction) => void;
   onAutoDraft: () => void;
   onQuickDraft?: () => void;
-  onExit: () => void;
-  exitLabel: string;
   canUndo: boolean;
   onUndo: () => void;
   roomCode?: string;
@@ -373,9 +368,6 @@ function ThreePlayerDraft({
             aria-label="Undo"
           >
             <Undo2 size={16} />
-          </button>
-          <button className="secondary-button" onClick={onExit}>
-            <Save size={16} /> {exitLabel}
           </button>
         </div>
       </header>
@@ -1583,14 +1575,6 @@ export function ThreePlayerGame({
           onAction={dispatchAction}
           onAutoDraft={autoDraft}
           onQuickDraft={onlineSession ? undefined : quickDraft}
-          onExit={() => void saveAndQuit()}
-          exitLabel={
-            onlineSession
-              ? "Leave room"
-              : state.challengeId
-                ? "Leave challenge"
-                : "Save & quit"
-          }
           canUndo={canUndo}
           onUndo={undo}
           roomCode={onlineSession?.roomCode}
@@ -1704,9 +1688,6 @@ export function ThreePlayerGame({
         </div>
         <div className="three-game-actions">
           <button onClick={() => setHistoryOpen(true)} aria-label="History"><History size={17} /></button>
-          {!onlineSession && !puzzle && (
-            <button onClick={() => setSettingsOpen(true)} aria-label="Settings"><Settings size={17} /></button>
-          )}
           {!puzzle && (
             <button
               disabled={!canUndo}

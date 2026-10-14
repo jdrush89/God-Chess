@@ -238,6 +238,11 @@ const openPlayOption = (name: "Local" | "Online" | "Puzzles" | "Tutorial" | "Loa
   }));
 };
 
+const selectMatchMenuAction = (name: RegExp) => {
+  fireEvent.click(screen.getByRole("button", { name: /open match menu/i }));
+  fireEvent.click(screen.getByRole("button", { name }));
+};
+
 const commitMissedPuzzleMove = () => {
   const { container } = render(<App />);
   openPlayOption("Puzzles");
@@ -756,7 +761,7 @@ describe("game startup", () => {
 
     openPlayOption("Puzzles");
     expect(screen.getByRole("button", {
-      name: /^easy.*0 of 10 completed/i,
+      name: /^easy.*0 of 5 completed/i,
     })).toBeTruthy();
     expect(screen.getByRole("button", {
       name: /^challenges.*0 of 8 completed/i,
@@ -987,7 +992,7 @@ describe("game startup", () => {
       expect(JSON.parse(window.localStorage.getItem(SAVE_KEY) ?? "[]"))
         .toHaveLength(1);
     });
-    fireEvent.click(screen.getByRole("button", { name: /save & quit/i }));
+    selectMatchMenuAction(/save & quit/i);
     await screen.findByRole("button", { name: /^start$/i });
     const existingSave = window.localStorage.getItem(SAVE_KEY);
 
@@ -1053,7 +1058,7 @@ describe("game startup", () => {
 
     expect(screen.getByRole("heading", { name: /choose a difficulty/i })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /^easy/i }));
-    expect(screen.getAllByRole("button", { name: /puzzle \d/i })).toHaveLength(10);
+    expect(screen.getAllByRole("button", { name: /puzzle \d/i })).toHaveLength(5);
     fireEvent.click(screen.getByRole("button", { name: /difficulties/i }));
     fireEvent.click(screen.getByRole("button", { name: /^medium/i }));
     expect(screen.getAllByRole("button", { name: /puzzle \d/i })).toHaveLength(10);
@@ -1186,7 +1191,7 @@ describe("game startup", () => {
     const { container } = render(<App />);
     openPlayOption("Puzzles");
 
-    expect(screen.getByRole("button", { name: /^easy.*1 of 10 completed/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^easy.*1 of 5 completed/i })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /^easy/i }));
     expect(screen.getByRole("button", { name: /puzzle 1.*completed/i })).toBeTruthy();
     expect(container.querySelector(".puzzle-complete-badge svg")).toBeTruthy();
@@ -1636,7 +1641,7 @@ describe("game startup", () => {
     openPlayOption("Local");
     fireEvent.click(screen.getByRole("button", { name: /^2 player$/i }));
     fireEvent.click(screen.getByRole("button", { name: /begin local duel/i }));
-    fireEvent.click(screen.getByRole("button", { name: /save & quit/i }));
+    selectMatchMenuAction(/save & quit/i);
 
     expect(await screen.findByRole("img", { name: /god chess/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /^start$/i })).toBeTruthy();
@@ -1653,7 +1658,13 @@ describe("game startup", () => {
     const storedBeforeQuit = window.localStorage.getItem(SAVE_KEY);
 
     expect(screen.queryByRole("button", { name: /^rules$/i })).toBeNull();
+    const header = document.querySelector(".game-page > .topbar") as HTMLElement;
+    expect(within(header).queryByRole("button", { name: /settings/i })).toBeNull();
+    expect(within(header).queryByRole("button", { name: /save & quit/i })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /open match menu/i }));
+    expect(screen.getByRole("button", { name: /^settings$/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /save & quit/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /quit without saving/i })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /^rules$/i }));
     expect(screen.getByRole("heading", { name: /laws of god chess/i })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /close rules/i }));
@@ -1717,7 +1728,7 @@ describe("game startup", () => {
     fireEvent.click(quickDraft);
     fireEvent.click(quickDraft);
 
-    fireEvent.click(screen.getByRole("button", { name: /save & quit/i }));
+    selectMatchMenuAction(/save & quit/i);
     await waitFor(() => expect(screen.getByRole("button", { name: /^start$/i })).toBeTruthy());
     const saved = JSON.parse(window.localStorage.getItem(SAVE_KEY) ?? "[]")[0].state;
     const drafted = [...saved.players.white.gods, ...saved.players.black.gods];
@@ -1943,7 +1954,7 @@ describe("game startup", () => {
     openPlayOption("Local");
     fireEvent.click(screen.getByRole("button", { name: /^2 player$/i }));
     fireEvent.click(screen.getByRole("button", { name: /begin local duel/i }));
-    fireEvent.click(screen.getByRole("button", { name: /settings/i }));
+    selectMatchMenuAction(/^settings$/i);
     fireEvent.click(screen.getByRole("switch", { name: /allow undo/i }));
     expect(window.localStorage.getItem("god-chess-undo-enabled")).toBe("true");
     fireEvent.click(screen.getByRole("button", { name: /close settings/i }));
@@ -1969,7 +1980,7 @@ describe("game startup", () => {
         (screen.getByRole("button", { name: /^undo$/i }) as HTMLButtonElement).disabled,
       ).toBe(false)
     );
-    fireEvent.click(screen.getByRole("button", { name: /save & quit/i }));
+    selectMatchMenuAction(/save & quit/i);
     await waitFor(() => expect(screen.getByRole("img", { name: /god chess/i })).toBeTruthy());
     await waitFor(() => {
       const storedGames = JSON.parse(window.localStorage.getItem(SAVE_KEY) ?? "[]");

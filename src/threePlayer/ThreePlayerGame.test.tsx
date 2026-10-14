@@ -557,7 +557,7 @@ describe("ThreePlayerGame", () => {
     )).toEqual(["White moved.", "Red captured.", "Black upgraded."]);
     expect(screen.queryByRole("button", { name: /^help$/i })).toBeNull();
     expect(screen.getByRole("button", { name: /open match menu/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /^settings$/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^settings$/i })).toBeNull();
     expect(screen.getByRole("button", { name: /^undo$/i })).toBeTruthy();
     fireEvent.click(within(drawer).getByRole("button", { name: /close history/i }));
     expect(screen.queryByLabelText("Full history")).toBeNull();
@@ -1199,6 +1199,7 @@ describe("ThreePlayerGame", () => {
       />,
     );
 
+    fireEvent.click(screen.getByRole("button", { name: /open match menu/i }));
     fireEvent.click(screen.getByRole("button", { name: /Save & quit/i }));
     await waitFor(() => expect(onQuit).not.toHaveBeenCalled());
   });
@@ -1216,7 +1217,13 @@ describe("ThreePlayerGame", () => {
 
     expect(screen.queryByRole("button", { name: /^rules$/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /^help$/i })).toBeNull();
+    const header = document.querySelector(".three-game-topbar") as HTMLElement;
+    expect(within(header).queryByRole("button", { name: /settings/i })).toBeNull();
+    expect(within(header).queryByRole("button", { name: /save & quit/i })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /open match menu/i }));
+    expect(screen.getByRole("button", { name: /^settings$/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /save & quit/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /quit without saving/i })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /^rules$/i }));
     expect(screen.getByRole("heading", { name: /one surface, five topologies/i }))
       .toBeTruthy();
@@ -1276,6 +1283,8 @@ describe("ThreePlayerGame", () => {
       />,
     );
     expect(screen.getByText(/Red picks/i)).toBeTruthy();
+    expect(screen.queryByText(/Save & quit/i)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /open match menu/i }));
     expect(screen.queryByText(/Save & quit/i)).toBeNull();
     expect(screen.getByText(/Leave room/i)).toBeTruthy();
   });
