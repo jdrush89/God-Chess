@@ -1165,6 +1165,30 @@ describe("game startup", () => {
     expect(screen.queryByRole("button", { name: /save & quit/i })).toBeNull();
   });
 
+  it("starts the generated Daily puzzle from its simulation checkpoint", async () => {
+    vi.stubGlobal("Worker", FakeClassicAiWorker);
+    const { container } = render(<App />);
+    openPlayOption("Puzzles");
+
+    fireEvent.click(screen.getByRole("button", { name: /^daily/i }));
+    expect(screen.getByRole("heading", { name: /daily puzzle/i })).toBeTruthy();
+    expect(screen.getByRole("button", {
+      name: /daily puzzle, october 14, 2026/i,
+    })).toBeTruthy();
+    expect(screen.getByText(
+      /play as white and checkmate black within 5 divine turns/i,
+    )).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", {
+      name: /daily puzzle, october 14, 2026/i,
+    }));
+
+    expect(screen.getByText(/daily · 5 turns/i)).toBeTruthy();
+    expect(screen.getByText("October 14, 2026")).toBeTruthy();
+    expect(container.querySelectorAll(".chess-piece")).toHaveLength(8);
+    expect(FakeClassicAiWorker.instances).toHaveLength(0);
+  });
+
   it("paints a committed puzzle move before AI planning and ignores a stale worker result after restart", async () => {
     vi.stubGlobal("Worker", FakeClassicAiWorker);
     const persist = vi.spyOn(Storage.prototype, "setItem");
@@ -2013,20 +2037,20 @@ describe("game startup", () => {
     });
   });
 
-  it("rewinds twice a random three-to-five round count and builds loadable save data", () => {
+  it("rewinds an odd boundary count so the checkpoint starts on the winning side's turn", () => {
     const base = completeClassicDraft();
     base.gameMode = "simulation";
     base.aiDifficulty = 10;
     const undoHistory = Array.from({ length: 12 }, (_, index) => {
       const snapshot = structuredClone(base);
       snapshot.turn = index + 1;
-      snapshot.activeColor = index % 2 === 0 ? "white" : "black";
+      snapshot.activeColor = index % 2 === 0 ? "black" : "white";
       return snapshot;
     });
     const terminal = structuredClone(base);
     terminal.phase = "gameover";
     terminal.turn = 13;
-    terminal.activeColor = "black";
+    terminal.activeColor = "white";
     terminal.winner = "white";
     terminal.result = {
       kind: "winner",
@@ -2042,15 +2066,16 @@ describe("game startup", () => {
     );
 
     expect(rewound.exportData.rewindRounds).toBe(3);
-    expect(rewound.exportData.requestedUndoActions).toBe(6);
-    expect(rewound.exportData.appliedUndoActions).toBe(6);
-    expect(rewound.state.turn).toBe(7);
-    expect(rewound.undoHistory).toHaveLength(6);
+    expect(rewound.exportData.requestedUndoActions).toBe(5);
+    expect(rewound.exportData.appliedUndoActions).toBe(5);
+    expect(rewound.state.turn).toBe(8);
+    expect(rewound.state.activeColor).toBe("white");
+    expect(rewound.undoHistory).toHaveLength(7);
     expect(rewound.exportData.resultSummary)
       .toBe("White checkmated in 12 turns.");
     expect(rewound.exportData.save.state.gameMode).toBe("local");
-    expect(rewound.exportData.save.state.turn).toBe(7);
-    expect(rewound.exportData.save.undoHistory).toHaveLength(6);
+    expect(rewound.exportData.save.state.turn).toBe(8);
+    expect(rewound.exportData.save.undoHistory).toHaveLength(7);
   });
 
   it("copies the rewound simulation save and original result from its dialog", async () => {
@@ -2080,7 +2105,7 @@ describe("game startup", () => {
       .toBeTruthy();
     expect(screen.getByText("Black was stalemated after 10 turns."))
       .toBeTruthy();
-    expect(screen.getByText(/10 of 10 undo actions \(5 full rounds\)/i))
+    expect(screen.getByText(/9 of 9 undo actions for a 5-turn Daily window/i))
       .toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", {
@@ -2093,8 +2118,8 @@ describe("game startup", () => {
     );
     expect(copied.rewind).toEqual({
       rounds: 5,
-      requestedUndoActions: 10,
-      appliedUndoActions: 10,
+      requestedUndoActions: 9,
+      appliedUndoActions: 9,
     });
     expect(copied.save.state.gameMode).toBe("local");
     expect(screen.getByRole("status").textContent)

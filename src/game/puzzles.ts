@@ -100,7 +100,7 @@ const preparePuzzle = (
   state.players.black.upgrades = {};
   state.draft.pickIndex = state.draft.order.length;
   state.draft.available = [];
-  state.rested = playerTurns === 2 ? restingOpponentGods : [];
+  state.rested = [];
   state.round = 1;
   state.turn = 1;
   state.upgradeQueue = [];
@@ -399,6 +399,7 @@ const openedFile = (playerName?: string) => {
     ["e8", piece("black-king", "king", "black", { movedThisTurn: true })],
     ["a7", piece("black-response-pawn", "pawn", "black", { movedThisTurn: true })],
   );
+  state.players.black.gods = ["quetzacoatl", "artemis", "ares"];
   return state;
 };
 
@@ -803,7 +804,7 @@ const queensCompass = (playerName?: string) => {
     ["e6", piece("black-enchanted-pawn", "pawn", "black")],
     ["a7", piece("black-response-pawn", "pawn", "black")],
   );
-  state.players.black.gods = ["ares", "chiron", "midas"];
+  state.players.black.gods = ["quetzacoatl", "anubis", "ares"];
   state.players.black.orbs = { white: 0, black: 0 };
   state.players.white.orbs.black = 8;
   state.players.white.upgrades = {
@@ -845,6 +846,7 @@ const hexedReserve = (playerName?: string) => {
     piece: piece("white-reserve-queen", "queen", "white"),
     capturedOnTurn: 0,
   }];
+  state.players.black.gods = ["quetzacoatl", "anubis", "medusa"];
   forceOpeningReply(state, "b7");
   state.players.white.orbs.black = 1;
   state.players.white.upgrades = {

@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "generate:daily": "vite-node scripts/generate-daily-puzzle.ts",
     "printables": "node scripts/generate-printables.mjs",
     "test": "vitest run",
     "test:watch": "vitest"

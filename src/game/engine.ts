@@ -103,8 +103,11 @@ const setClassicStalemate = (state: GameState) => {
 
 const colorName = (color: Color) => color[0].toUpperCase() + color.slice(1);
 const pieceName = (piece: Piece) => piece.type[0].toUpperCase() + piece.type.slice(1);
+const usesAuthoredPuzzleRules = (state: GameState) =>
+  state.gameMode === "puzzle" &&
+  !state.puzzleId?.startsWith("daily-");
 const allowsPuzzleKingCapture = (state: GameState) =>
-  state.gameMode === "puzzle";
+  usesAuthoredPuzzleRules(state);
 
 const present = (
   state: GameState,
@@ -749,7 +752,7 @@ const finishTurn = (state: GameState, description: string) => {
     if (state.puzzlePlayerTurnsRemaining === 0) state.puzzleFailed = true;
   }
   if (
-    state.gameMode === "puzzle" &&
+    usesAuthoredPuzzleRules(state) &&
     state.aiColor &&
     endingColor !== state.aiColor &&
     isInCheck(state.board, state.aiColor, state.bananas)
@@ -757,14 +760,6 @@ const finishTurn = (state: GameState, description: string) => {
     for (const piece of Object.values(state.board)) {
       if (piece.controller === state.aiColor) delete piece.status.movedThisTurn;
     }
-  }
-  if (
-    state.gameMode === "puzzle" &&
-    endingColor === state.aiColor &&
-    actingGod &&
-    (state.puzzlePlayerTurnsRemaining ?? 0) > 0
-  ) {
-    state.rested = state.rested.filter((godId) => godId !== actingGod);
   }
   expireStatuses(state, endingColor);
   if (state.challengeId === "there-can-only-be-one") {
@@ -3507,7 +3502,7 @@ const resolveClassicTurnStart = (state: GameState) => {
     completeTurnSearchDepth > 0 ||
     classicTurnResolutionSuppressed > 0 ||
     (
-      state.gameMode === "puzzle" &&
+      usesAuthoredPuzzleRules(state) &&
       !isInCheck(state.board, state.activeColor, state.bananas)
     ) ||
     state.phase !== "play" ||

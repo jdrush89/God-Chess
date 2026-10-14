@@ -1,4 +1,5 @@
 import { PUZZLE_BY_ID } from "./game/puzzles";
+import { DAILY_PUZZLE_BY_ID } from "./game/dailyPuzzles";
 import { THREE_PLAYER_PUZZLE_BY_ID } from "./game/threePlayerPuzzles";
 import type { PuzzleId } from "./game/types";
 
@@ -11,6 +12,7 @@ export const normalizeCompletedPuzzles = (value: unknown): PuzzleId[] => {
       typeof candidate === "string" &&
       (
         candidate in PUZZLE_BY_ID ||
+        candidate in DAILY_PUZZLE_BY_ID ||
         candidate in THREE_PLAYER_PUZZLE_BY_ID
       ),
   ))];
