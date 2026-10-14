@@ -1,0 +1,32 @@
+import { describe, expect, it } from "vitest";
+import { appPathForRoute, appRouteFromPath } from "./navigation";
+
+describe("app navigation", () => {
+  it("maps the Daily deep link to the Daily puzzle page", () => {
+    expect(appRouteFromPath("/daily")).toMatchObject({
+      startView: "puzzles",
+      puzzleCategory: "daily",
+    });
+    expect(appRouteFromPath("/daily/play")).toMatchObject({
+      startView: "puzzles",
+      puzzleCategory: "daily",
+    });
+  });
+
+  it("maps major screens and setup paths in both directions", () => {
+    expect(appRouteFromPath("/puzzles/hard")).toMatchObject({
+      startView: "puzzles",
+      puzzleCategory: "hard",
+    });
+    expect(appRouteFromPath("/local/3").startView).toBe("three-setup");
+    expect(appRouteFromPath("/online/4")).toMatchObject({
+      startView: "setup",
+      setupCategory: "online",
+      setupPlayerCount: 4,
+    });
+    expect(appPathForRoute({
+      startView: "achievements",
+      setupCategory: "local",
+    })).toBe("/achievements");
+  });
+});

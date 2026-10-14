@@ -1,12 +1,21 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createThreePlayerGame } from "../game/threePlayerEngine";
 import { createDefaultThreePlayerConfig } from "../game/threePlayerConfig";
 import { getThreePlayerTopology } from "../game/threePlayerTopology";
 import { THREE_PLAYER_BOARD_VARIANTS } from "../game/threePlayerTypes";
 import { ThreePlayerBoard } from "./ThreePlayerBoard";
+
+beforeAll(() => {
+  if (!window.PointerEvent) {
+    Object.defineProperty(window, "PointerEvent", {
+      writable: true,
+      value: MouseEvent,
+    });
+  }
+});
 
 afterEach(cleanup);
 
@@ -61,6 +70,45 @@ const polygonInradius = (
 }));
 
 describe("ThreePlayerBoard", () => {
+  it("drags a legal source piece to a destination cell", () => {
+    const state = createThreePlayerGame(createDefaultThreePlayerConfig());
+    const source = Object.keys(state.board).find(
+      (cell) => state.board[cell]?.controller === state.activeSeat,
+    )!;
+    const target = getThreePlayerTopology(state.config.boardVariant).cells.find(
+      (cell) => !state.board[cell],
+    )!;
+    const onCell = vi.fn();
+    const { container } = render(
+      <ThreePlayerBoard
+        state={state}
+        legalCells={[source, target]}
+        sourceCells={[source]}
+        onCell={onCell}
+      />,
+    );
+
+    fireEvent.pointerDown(container.querySelector(`[data-cell="${source}"]`)!, {
+      button: 0,
+      pointerId: 1,
+      clientX: 10,
+      clientY: 10,
+    });
+    fireEvent.pointerMove(container.querySelector(`[data-cell="${source}"]`)!, {
+      pointerId: 1,
+      clientX: 30,
+      clientY: 30,
+    });
+    fireEvent.pointerUp(container.querySelector(`[data-cell="${target}"]`)!, {
+      pointerId: 1,
+      clientX: 30,
+      clientY: 30,
+    });
+
+    expect(onCell).toHaveBeenNthCalledWith(1, source);
+    expect(onCell).toHaveBeenNthCalledWith(2, target);
+  });
+
   it.each(THREE_PLAYER_BOARD_VARIANTS)(
     "renders every %s topology cell inside a padded accessible SVG",
     (variant) => {

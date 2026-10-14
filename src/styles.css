@@ -591,6 +591,36 @@ span.move-target-dot {
   position: relative; z-index: 3; font-family: Georgia, serif; font-size: clamp(18px, 9cqi, 65px); line-height: 1;
   filter: drop-shadow(0 4px 2px rgba(0,0,0,.42)); transition: transform .15s;
 }
+
+.chess-piece,
+.three-board-piece {
+  cursor: grab;
+  touch-action: none;
+}
+
+.piece-drag-preview {
+  position: fixed;
+  z-index: 1000;
+  width: 3.25rem;
+  height: 3.25rem;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(1.08);
+  filter: drop-shadow(0 0.6rem 0.8rem rgb(0 0 0 / 45%));
+}
+
+.piece-drag-preview .chess-piece {
+  font-size: 2.7rem;
+  cursor: grabbing;
+}
+
+.three-piece-drag-preview {
+  color: var(--piece-color);
+  font-family: "Noto Sans Symbols 2", "Arial Unicode MS", serif;
+  font-size: 2.8rem;
+  line-height: 1;
+}
 .board-square:hover .chess-piece { transform: translateY(-2px); }
 .chess-piece.white { color: #f5f0e6; -webkit-text-stroke: 1px #6f6557; text-shadow: 0 1px 0 #fff; }
 .chess-piece.black { color: #17191d; -webkit-text-stroke: 1px #060708; text-shadow: 0 1px 0 #5c5e63; }

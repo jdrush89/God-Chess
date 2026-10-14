@@ -6,6 +6,10 @@ export default defineConfig({
   plugins: [react()],
   build: {
     rollupOptions: {
+      input: {
+        main: "index.html",
+        daily: "daily/index.html",
+      },
       output: {
         manualChunks(id) {
           if (id.includes("/node_modules/@supabase/")) return "supabase";

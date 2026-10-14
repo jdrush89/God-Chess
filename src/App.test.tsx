@@ -327,6 +327,12 @@ const activeThreeOnlineState = (
 };
 
 beforeAll(() => {
+  if (!window.PointerEvent) {
+    Object.defineProperty(window, "PointerEvent", {
+      writable: true,
+      value: MouseEvent,
+    });
+  }
   Object.defineProperty(window, "matchMedia", {
     writable: true,
     value: (query: string) => ({
@@ -364,6 +370,7 @@ afterEach(() => {
 });
 
 beforeEach(() => {
+  window.history.replaceState(null, "", "/");
   accountHarness.account = undefined;
   accountHarness.configured = false;
   accountHarness.loading = false;
@@ -402,6 +409,33 @@ beforeEach(() => {
 });
 
 describe("game startup", () => {
+  it("opens the Daily puzzle page directly from /daily", () => {
+    window.history.replaceState(null, "", "/daily");
+    render(<App />);
+
+    expect(screen.getByRole("heading", { name: /daily puzzle/i })).toBeTruthy();
+    expect(screen.getByText(/complete today's daily puzzle/i)).toBeTruthy();
+    expect(window.location.pathname).toBe("/daily");
+  });
+
+  it("updates URLs and restores the prior screen with browser history", async () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: /^start$/i }));
+    await waitFor(() => expect(window.location.pathname).toBe("/play"));
+    fireEvent.click(screen.getByRole("button", { name: /^puzzles$/i }));
+    await waitFor(() => expect(window.location.pathname).toBe("/puzzles"));
+    fireEvent.click(screen.getByRole("button", { name: /^daily/i }));
+    await waitFor(() => expect(window.location.pathname).toBe("/daily"));
+
+    act(() => window.history.back());
+    await waitFor(() => {
+      expect(window.location.pathname).toBe("/puzzles");
+      expect(screen.getByRole("heading", { name: /choose a difficulty/i }))
+        .toBeTruthy();
+    });
+  });
+
   it("keeps Load visible and disabled until cloud save hydration completes", async () => {
     accountHarness.account = {
       userId: "account-1",
@@ -1503,6 +1537,50 @@ describe("game startup", () => {
     expect(emptyTarget?.querySelector(".move-target-dot")).toBeTruthy();
     expect(occupiedTarget?.classList.contains("legal-occupied")).toBe(true);
     expect(occupiedTarget?.querySelector(".move-target-dot")).toBeNull();
+  });
+
+  it("drags a selected ability's piece to its destination", () => {
+    const state = createGame(1);
+    state.phase = "play";
+    state.selectedGod = "chiron";
+    state.selectedAbility = "gallop";
+    state.legalTargets = ["e2"];
+    const dispatch = vi.fn();
+    const { container } = render(
+      <ChessBoard
+        state={state}
+        dispatch={dispatch}
+        onInspectSquare={vi.fn()}
+      />,
+    );
+    const source = container.querySelector('[data-square="e2"]')!;
+    const destination = container.querySelector('[data-square="e4"]')!;
+
+    fireEvent.pointerDown(source, {
+      button: 0,
+      pointerId: 1,
+      clientX: 10,
+      clientY: 10,
+    });
+    fireEvent.pointerMove(source, {
+      pointerId: 1,
+      clientX: 30,
+      clientY: 30,
+    });
+    fireEvent.pointerUp(destination, {
+      pointerId: 1,
+      clientX: 30,
+      clientY: 30,
+    });
+
+    expect(dispatch).toHaveBeenNthCalledWith(1, {
+      type: "square",
+      square: "e2",
+    });
+    expect(dispatch).toHaveBeenNthCalledWith(2, {
+      type: "square",
+      square: "e4",
+    });
   });
 
   it("renders provisional move-first board state without dispatching an engine move", () => {

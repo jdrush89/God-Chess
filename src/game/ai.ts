@@ -3,6 +3,7 @@ import { enumerateCompleteTurnPlans } from "./completeTurnSearch";
 import {
   availableClassicActions,
   classicPlanStateSignature,
+  gameReducer,
   isCompleteClassicTurn,
   simulateClassicAction,
   type GameAction,
@@ -314,7 +315,7 @@ const bestTacticalDefense = (
       !state.puzzleId?.startsWith("daily-")
       ? 3
       : 32;
-  const candidates = plans
+  const ranked = plans
     .map((plan, index) => {
       const king = Object.entries(plan.state.board).find(
         ([, piece]) => piece.controller === color && piece.type === "king",
@@ -333,13 +334,89 @@ const bestTacticalDefense = (
         index,
       };
     })
-    .sort((a, b) => b.priority - a.priority || a.index - b.index)
-    .slice(0, candidateLimit);
+    .sort((a, b) => b.priority - a.priority || a.index - b.index);
+  const candidates = [];
+  const included = new Set<number>();
+  const kingDestinations = new Set<string>();
+  for (const candidate of ranked) {
+    const king = kingSquare(candidate.plan.state.board, color);
+    if (!king || kingDestinations.has(king)) continue;
+    kingDestinations.add(king);
+    included.add(candidate.index);
+    candidates.push(candidate);
+  }
+  for (const candidate of ranked) {
+    if (included.has(candidate.index)) continue;
+    candidates.push(candidate);
+  }
 
-  for (const { plan } of candidates) {
+  for (const { plan } of candidates.slice(0, candidateLimit)) {
     if (!hasImmediateWinningTurn(plan.state, enemy)) return plan;
   }
   return undefined;
+};
+
+const bestSparseMateInTwo = (
+  state: GameState,
+  color: Color,
+  plans: AiTurnPlan[],
+) => {
+  if (
+    state.phase !== "play" ||
+    state.aiDifficulty < 10 ||
+    Object.keys(state.board).length > 12
+  ) return undefined;
+
+  const enemy = opposite(color);
+  const checkingPlans = plans
+    .filter((plan) =>
+      plan.state.phase !== "gameover" &&
+      isInCheck(plan.state.board, enemy, plan.state.bananas)
+    )
+    .slice(0, 12);
+
+  for (const plan of checkingPlans) {
+    const replies = enumerateTurnPlans(plan.state, enemy);
+    if (!replies.length) continue;
+    const reply = bestOptimalPlan(plan.state, enemy, replies, 2);
+    const continuations = enumerateTurnPlans(reply.state, color);
+    if (!continuations.length) continue;
+    const winningContinuation = continuations.find((continuation) => {
+      const resolved = continuation.actions.reduce(gameReducer, reply.state);
+      return resolved.phase === "gameover" && resolved.winner === color;
+    });
+    if (winningContinuation) return plan;
+  }
+  return undefined;
+};
+
+const bestOptimalPlan = (
+  state: GameState,
+  color: Color,
+  plans: AiTurnPlan[],
+  mateSearchDepth = 0,
+) => {
+  const shouldResolvePlans = Object.keys(state.board).length <= 12;
+  const immediateWin = plans.find((plan) => {
+    if (plan.state.phase === "gameover" && plan.state.winner === color) return true;
+    if (!shouldResolvePlans) return false;
+    const resolved = plan.actions.reduce(gameReducer, state);
+    return resolved.phase === "gameover" && resolved.winner === color;
+  });
+  if (immediateWin) return immediateWin;
+  const defense = state.aiDifficulty >= 8
+    ? bestTacticalDefense(state, color, plans)
+    : undefined;
+  if (defense) return defense;
+  if (mateSearchDepth <= 1) {
+    const attack = bestSparseMateInTwo(
+      state,
+      color,
+      plans,
+    );
+    if (attack) return attack;
+  }
+  return plans[0];
 };
 
 const withUpgradePreview = (
@@ -395,11 +472,7 @@ export const chooseAiPlan = (
   } else {
     const optimalChance = Math.max(0.1, Math.min(1, state.aiDifficulty / 10));
     if (random() < optimalChance || plans.length === 1) {
-      actions = (
-        state.aiDifficulty >= 8
-          ? bestTacticalDefense(state, color, plans)
-          : undefined
-      )?.actions ?? plans[0].actions;
+      actions = bestOptimalPlan(state, color, plans).actions;
     } else {
       const alternative = plans[1 + Math.floor(random() * Math.max(1, plans.length - 1))];
       actions = (alternative ?? plans[0]).actions;

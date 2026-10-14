@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
 import {
   createFourPlayerGame,
@@ -22,6 +22,12 @@ import {
 const SAVE_KEY = "god-chess-saves-v2";
 
 beforeAll(() => {
+  if (!window.PointerEvent) {
+    Object.defineProperty(window, "PointerEvent", {
+      writable: true,
+      value: MouseEvent,
+    });
+  }
   Object.defineProperty(window, "matchMedia", {
     writable: true,
     value: (query: string) => ({
@@ -39,6 +45,10 @@ beforeAll(() => {
     writable: true,
     value: () => ({}),
   });
+});
+
+beforeEach(() => {
+  window.history.replaceState(null, "", "/");
 });
 
 afterEach(() => {
@@ -175,6 +185,49 @@ describe("four-player app integration", () => {
     expect(container.querySelector(".provisional-destination")).toBeNull();
     expect(container.querySelector(`[data-piece-id="${pieceId}"]`)
       ?.closest("[data-square]")?.getAttribute("data-square")).toBe(reselectedSource);
+  });
+
+  it("drags a four-player move-first source to a provisional destination", () => {
+    const state = completeFourPlayerDraft();
+    const source = fourPlayerMoveFirstSources(state)[0];
+    const destination = fourPlayerMoveFirstTargets(state, source)[0];
+    const pieceId = state.board[source].id;
+    const { container } = render(
+      <FourPlayerGame
+        initialState={state}
+        undoPreferred={false}
+        onUndoPreferenceChange={vi.fn()}
+        onPersist={vi.fn(async () => false)}
+        onQuit={vi.fn()}
+        onNewGame={vi.fn()}
+      />,
+    );
+    const sourceCell = container.querySelector(`[data-square="${source}"]`)!;
+    const destinationCell = container.querySelector(
+      `[data-square="${destination}"]`,
+    )!;
+
+    fireEvent.pointerDown(sourceCell, {
+      button: 0,
+      pointerId: 1,
+      clientX: 10,
+      clientY: 10,
+    });
+    fireEvent.pointerMove(sourceCell, {
+      pointerId: 1,
+      clientX: 30,
+      clientY: 30,
+    });
+    fireEvent.pointerUp(destinationCell, {
+      pointerId: 1,
+      clientX: 50,
+      clientY: 50,
+    });
+
+    expect(sourceCell.classList.contains("provisional-source")).toBe(true);
+    expect(destinationCell.classList.contains("provisional-destination")).toBe(true);
+    expect(container.querySelector(`[data-piece-id="${pieceId}"]`)
+      ?.closest("[data-square]")?.getAttribute("data-square")).toBe(source);
   });
 
   it("offers only the selected God's first ability for a provisional move", () => {

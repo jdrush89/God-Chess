@@ -37,6 +37,7 @@ import {
 import { GameResultPresentation } from "../GameResultPresentation";
 import { MatchEscapeMenu } from "../MatchEscapeMenu";
 import { BoardViewport } from "../components/BoardViewport";
+import { useBoardDrag } from "../components/useBoardDrag";
 import { GodPortrait } from "../PlayerGodPanel";
 import { GodSkinPicker } from "../GodSkinPicker";
 import {
@@ -629,6 +630,7 @@ function FourPlayerBoard({
   legalTargets = state.legalTargets,
   provisionalSource,
   provisionalDestination,
+  moveFirstSources = [],
 }: {
   state: FourPlayerState;
   onSquare: (square: Square) => void;
@@ -637,6 +639,7 @@ function FourPlayerBoard({
   legalTargets?: Square[];
   provisionalSource?: Square;
   provisionalDestination?: Square;
+  moveFirstSources?: Square[];
 }) {
   const cells = useMemo(() => {
     const result: Array<{ square?: Square; file: number; rank: number }> = [];
@@ -653,6 +656,41 @@ function FourPlayerBoard({
     state.pending?.step === "enchant-enemy-move" ||
     state.pending?.step === "enchant-followup-move"
   ) && !state.selectedSquare;
+  const selectedAbilityKind = state.selectedGod && state.selectedAbility
+    ? GOD_BY_ID[state.selectedGod].abilities.find(
+      (ability) => ability.id === state.selectedAbility,
+    )?.kind
+    : undefined;
+  const moveAbilityActive =
+    selectedAbilityKind === "move" ||
+    selectedAbilityKind === "teleport" ||
+    selectedAbilityKind === "multi-move" ||
+    state.pending?.step === "enchant-enemy-move" ||
+    state.pending?.step === "enchant-followup-move";
+  const activateSquare = (square: Square) => {
+    onInspectSquare(square);
+    onSquare(square);
+  };
+  const drag = useBoardDrag<Square>({
+    attribute: "data-square",
+    canDrag: (square) => {
+      if (!state.board[square]) return false;
+      if (moveFirstSources.length || provisionalSource) {
+        return provisionalSource === square || moveFirstSources.includes(square);
+      }
+      return moveAbilityActive && (
+        state.selectedSquare === square ||
+        legalTargets.includes(square)
+      );
+    },
+    onDragStart: (square) => {
+      if (
+        state.selectedSquare !== square &&
+        provisionalSource !== square
+      ) activateSquare(square);
+    },
+    onDrop: activateSquare,
+  });
   return (
     <BoardViewport
       className="four-board-zoom"
@@ -680,9 +718,11 @@ function FourPlayerBoard({
                   aria-label={`${square}${piece ? `, ${state.players[piece.owner].name} ${piece.type}${piece.controller ? `, controlled by ${state.players[piece.controller].name}` : ", inert"}` : ""}${legal ? ", legal target" : ""}${isProvisionalSource ? ", provisional move source" : ""}${isProvisionalDestination ? ", provisional move destination, not committed" : ""}`}
                   className={`four-board-square ${(file + rank) % 2 ? "light" : "dark"} ${selected ? "selected" : ""} ${legal ? "legal" : ""} ${legal && piece ? "legal-occupied" : ""} ${legal && enchantSourceChoice ? "legal-source" : ""} ${legal && !enchantSourceChoice ? "legal-destination" : ""} ${effectPreview ? "effect-preview" : ""} ${isProvisionalSource ? "provisional-source" : ""} ${isProvisionalDestination ? "provisional-destination" : ""}`}
                   onClick={() => {
-                    onInspectSquare(square);
-                    onSquare(square);
+                    if (drag.consumeClick()) return;
+                    activateSquare(square);
                   }}
+                  onPointerDown={(event) => drag.onPointerDown(square, event)}
+                  {...drag.pointerHandlers}
                   key={square}
                 >
                   {(file === 3 || file === 10) && <span className="rank-label">{rank + 1}</span>}
@@ -698,6 +738,22 @@ function FourPlayerBoard({
             })}
           </div>
         </div>
+        {drag.preview && state.board[drag.preview.source] && (
+          <div
+            className="piece-drag-preview"
+            style={{
+              left: drag.preview.x,
+              top: drag.preview.y,
+            }}
+            aria-hidden="true"
+          >
+            <PieceView
+              piece={state.board[drag.preview.source]}
+              state={state}
+              square={drag.preview.source}
+            />
+          </div>
+        )}
       </div>
     </BoardViewport>
   );
@@ -2403,6 +2459,7 @@ export function FourPlayerGame({
             legalTargets={moveFirstDraft ? moveFirstTargets : state.legalTargets}
             provisionalSource={moveFirstDraft?.source}
             provisionalDestination={moveFirstDraft?.destination}
+            moveFirstSources={[...moveFirstSources]}
           />
           <SquareInfo
             state={state}
