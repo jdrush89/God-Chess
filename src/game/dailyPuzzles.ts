@@ -68,17 +68,6 @@ const objectiveFor = (source: DailyPuzzleSource) => {
     : `Play as ${colorLabel(source.playerColor)} and capture ${possessiveColor(opponent)} King within ${turns}.`;
 };
 
-const completionTextFor = (source: DailyPuzzleSource) => {
-  if (source.targetResult.kind === "draw") {
-    return `You recreated the simulation and stalemated ${colorLabel(
-      source.targetResult.stalematedColor,
-    )}.`;
-  }
-  return source.targetResult.reason === "checkmate"
-    ? `You recreated ${possessiveColor(source.targetResult.winner)} checkmate.`
-    : `You recreated ${possessiveColor(source.targetResult.winner)} King capture.`;
-};
-
 const createDailyState = (
   source: DailyPuzzleSource,
   playerName?: string,
@@ -144,8 +133,8 @@ export const DAILY_PUZZLES: DailyPuzzleDefinition[] = Object.values(modules)
     title: formatDailyDate(source.date),
     difficulty: "daily",
     objective: objectiveFor(source),
-    hint: "A level 10 simulation reached this exact result from the same position. Expect the opponent's strongest replies.",
-    completionText: completionTextFor(source),
+    hint: "Find the strongest continuation and complete the objective within the turn limit.",
+    completionText: "Puzzle complete.",
     playerColor: source.playerColor,
     playerTurns: source.playerTurns,
     targetResult: source.targetResult,

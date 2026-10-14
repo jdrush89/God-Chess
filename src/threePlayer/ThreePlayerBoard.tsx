@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useBoardDrag } from "../components/useBoardDrag";
 import { threePlayerHasAlternatingNeutralCells } from "../game/threePlayerDivineGeometry";
 import {
   getThreePlayerTopology,
@@ -189,15 +190,28 @@ export function ThreePlayerBoard({
   ) && !selectedCell;
   const previewingEffect = state.pending?.step === "confirm-stone-gaze" ||
     state.pending?.step === "confirm-march-home";
+  const drag = useBoardDrag<ThreePlayerCell>({
+    attribute: "data-cell",
+    canDrag: (cell) =>
+      !preview &&
+      !disabled &&
+      Boolean(state.board[cell]) &&
+      (cell === selectedCell || sources.has(cell)),
+    onDragStart: (cell) => {
+      if (cell !== selectedCell) onCell?.(cell);
+    },
+    onDrop: (cell) => onCell?.(cell),
+  });
 
   return (
-    <svg
-      className={`three-board three-board-${variant} ${preview ? "preview" : ""}`}
-      viewBox={`${viewBox.minX} ${viewBox.minY} ${viewBox.width} ${viewBox.height}`}
-      role={preview ? "img" : "grid"}
-      aria-label={`${variant} three-player board`}
-      preserveAspectRatio="xMidYMid meet"
-    >
+    <>
+      <svg
+        className={`three-board three-board-${variant} ${preview ? "preview" : ""}`}
+        viewBox={`${viewBox.minX} ${viewBox.minY} ${viewBox.width} ${viewBox.height}`}
+        role={preview ? "img" : "grid"}
+        aria-label={`${variant} three-player board`}
+        preserveAspectRatio="xMidYMid meet"
+      >
       {topology.cellDescriptors.map((descriptor) => {
         const piece = state.board[descriptor.id];
         const banana = state.bananas.find(({ cell }) => cell === descriptor.id);
@@ -280,10 +294,13 @@ export function ThreePlayerBoard({
             aria-disabled={disabled || (!isLegal && !piece)}
             tabIndex={preview || (disabled && !onInspectCell) ? undefined : 0}
             onClick={() => {
+              if (drag.consumeClick()) return;
               if (preview) return;
               onInspectCell?.(descriptor.id);
               if (!disabled) onCell?.(descriptor.id);
             }}
+            onPointerDown={(event) => drag.onPointerDown(descriptor.id, event)}
+            {...drag.pointerHandlers}
             onKeyDown={(event) => {
               if (
                 !preview &&
@@ -346,6 +363,24 @@ export function ThreePlayerBoard({
           </g>
         );
       })}
-    </svg>
+      </svg>
+      {drag.preview && state.board[drag.preview.source] && (
+        <div
+          className="piece-drag-preview three-piece-drag-preview"
+          style={{
+            left: drag.preview.x,
+            top: drag.preview.y,
+            "--piece-color":
+              state.players[
+                state.board[drag.preview.source].controller ??
+                  state.board[drag.preview.source].owner
+              ].displayColor,
+          } as React.CSSProperties}
+          aria-hidden="true"
+        >
+          {THREE_PLAYER_PIECE_SYMBOLS[state.board[drag.preview.source].type]}
+        </div>
+      )}
+    </>
   );
 }

@@ -88,7 +88,6 @@ import {
   createPuzzleGame,
   PUZZLE_BY_ID,
   PUZZLES,
-  type PuzzleDifficulty,
 } from "./game/puzzles";
 import {
   createDailyPuzzleGame,
@@ -102,6 +101,16 @@ import {
   THREE_PLAYER_PUZZLE_BY_ID,
   THREE_PLAYER_PUZZLES,
 } from "./game/threePlayerPuzzles";
+import {
+  appPathForRoute,
+  appRouteFromPath,
+  isAppNavigationRoute,
+  type AppNavigationRoute,
+  type PlayerCount,
+  type PuzzleCategory,
+  type StartCategory,
+  type StartView,
+} from "./navigation";
 import { randomItem } from "./game/random";
 import type { Ability, ActionPresentation, CaptureAnimation, ChallengeId, ClassicMoveFirstCandidate, ClassicMoveFirstMove, Color, GameMode, GameState, GodId, OrbAnimation, OrbColor, Piece, PuzzleId, Square, ThreePlayerPuzzleId } from "./game/types";
 import { AccountModal } from "./account/AccountModal";
@@ -162,6 +171,7 @@ import {
 } from "./multiplayer/useThreePlayerOnlineGame";
 import { GameResultPresentation } from "./GameResultPresentation";
 import { MatchEscapeMenu } from "./MatchEscapeMenu";
+import { useBoardDrag } from "./components/useBoardDrag";
 import {
   TutorialOverlay,
   TutorialPracticeOverlay,
@@ -224,9 +234,6 @@ type MoveFirstDraft = {
   source: Square;
   destination?: Square;
 };
-type StartCategory = "local" | "online";
-type PlayerCount = 2 | 3 | 4;
-
 export interface SimulationExportData {
   resultSummary: string;
   completedTurns: number;
@@ -1043,6 +1050,7 @@ export function ChessBoard({
   dispatch,
   onInspectSquare,
   moveFirstDraft,
+  moveFirstSources = [],
   moveFirstTargets = [],
   onMoveFirstSquare,
 }: {
@@ -1050,6 +1058,7 @@ export function ChessBoard({
   dispatch: GameDispatch;
   onInspectSquare: (square: Square) => void;
   moveFirstDraft?: MoveFirstDraft;
+  moveFirstSources?: Square[];
   moveFirstTargets?: Square[];
   onMoveFirstSquare?: (square: Square) => void;
 }) {
@@ -1060,6 +1069,43 @@ export function ChessBoard({
     state.pending?.step === "enchant-enemy-move" ||
     state.pending?.step === "enchant-followup-move"
   ) && !state.selectedSquare;
+  const selectedAbilityKind = state.selectedGod && state.selectedAbility
+    ? GOD_BY_ID[state.selectedGod].abilities.find(
+      (ability) => ability.id === state.selectedAbility,
+    )?.kind
+    : undefined;
+  const moveAbilityActive =
+    selectedAbilityKind === "move" ||
+    selectedAbilityKind === "teleport" ||
+    selectedAbilityKind === "multi-move" ||
+    state.pending?.step === "enchant-enemy-move" ||
+    state.pending?.step === "enchant-followup-move";
+  const activateSquare = (square: Square) => {
+    onInspectSquare(square);
+    if (onMoveFirstSquare) onMoveFirstSquare(square);
+    else dispatch({ type: "square", square });
+  };
+  const drag = useBoardDrag<Square>({
+    attribute: "data-square",
+    canDrag: (square) => {
+      if (!state.board[square]) return false;
+      if (onMoveFirstSquare) {
+        return moveFirstDraft?.source === square ||
+          moveFirstSources.includes(square);
+      }
+      return moveAbilityActive && (
+        state.selectedSquare === square ||
+        state.legalTargets.includes(square)
+      );
+    },
+    onDragStart: (square) => {
+      if (
+        state.selectedSquare !== square &&
+        moveFirstDraft?.source !== square
+      ) activateSquare(square);
+    },
+    onDrop: activateSquare,
+  });
   return (
     <div className="board-shell" data-tutorial="board">
       <div className="board-frame">
@@ -1084,10 +1130,11 @@ export function ChessBoard({
                 className={`board-square ${(file.charCodeAt(0) + Number(rank)) % 2 ? "light" : "dark"} ${selected ? "selected" : ""} ${provisionalSource ? "provisional-source" : ""} ${provisionalDestination ? "provisional-destination" : ""} ${legal ? "legal" : ""} ${legal && piece ? "legal-occupied" : ""} ${legal && enchantSourceChoice ? "legal-source" : ""} ${legal && !enchantSourceChoice ? "legal-destination" : ""} ${effectPreview ? "effect-preview" : ""}`}
                 key={square}
                 onClick={() => {
-                  onInspectSquare(square);
-                  if (onMoveFirstSquare) onMoveFirstSquare(square);
-                  else dispatch({ type: "square", square });
+                  if (drag.consumeClick()) return;
+                  activateSquare(square);
                 }}
+                onPointerDown={(event) => drag.onPointerDown(square, event)}
+                {...drag.pointerHandlers}
               >
                 {file === "a" && <span className="rank-label">{rank}</span>}
                 {rank === "1" && <span className="file-label">{file}</span>}
@@ -1104,6 +1151,18 @@ export function ChessBoard({
           })}
         </div>
       </div>
+      {drag.preview && state.board[drag.preview.source] && (
+        <div
+          className="piece-drag-preview"
+          style={{
+            left: drag.preview.x,
+            top: drag.preview.y,
+          }}
+          aria-hidden="true"
+        >
+          <PieceView piece={state.board[drag.preview.source]} />
+        </div>
+      )}
     </div>
   );
 }
@@ -2992,6 +3051,7 @@ function StartGamePrompt({
 }
 
 function PuzzleSelectScreen({
+  category,
   completedPuzzles,
   completedChallenges,
   accountControl,
@@ -2999,9 +3059,11 @@ function PuzzleSelectScreen({
   progressError,
   onStartPuzzle,
   onStartChallenge,
+  onCategoryChange,
   onBack,
   onDismissError,
 }: {
+  category?: PuzzleCategory;
   completedPuzzles: Set<PuzzleId>;
   completedChallenges: Set<ChallengeId>;
   accountControl: ReactNode;
@@ -3009,15 +3071,11 @@ function PuzzleSelectScreen({
   progressError?: string;
   onStartPuzzle: (puzzleId: PuzzleId) => void;
   onStartChallenge: (challengeId: ChallengeId) => void;
+  onCategoryChange: (category?: PuzzleCategory) => void;
   onBack: () => void;
   onDismissError: () => void;
 }) {
-  type PuzzleCategory =
-    | PuzzleDifficulty
-    | "daily"
-    | "three-player"
-    | "challenges";
-  const [difficulty, setDifficulty] = useState<PuzzleCategory>();
+  const difficulty = category;
   const dailyPuzzle = currentDailyPuzzle();
   const visiblePuzzles = difficulty === "daily"
     ? dailyPuzzle ? [dailyPuzzle] : []
@@ -3040,7 +3098,7 @@ function PuzzleSelectScreen({
         {accountControl}
         <button
           className="puzzle-select-back"
-          onClick={() => difficulty ? setDifficulty(undefined) : onBack()}
+          onClick={() => difficulty ? onCategoryChange(undefined) : onBack()}
         >
           <ArrowLeft size={17} />
           {difficulty ? "Difficulties" : "Play menu"}
@@ -3057,7 +3115,7 @@ function PuzzleSelectScreen({
                 {
                   id: "daily",
                   title: "Daily",
-                  description: "Recreate the finish found by a level 10 simulation.",
+                  description: "Complete a daily puzzle.",
                   icon: Sparkles,
                 },
                 {
@@ -3110,7 +3168,7 @@ function PuzzleSelectScreen({
                   <button
                     className="puzzle-difficulty-card"
                     key={option.id}
-                    onClick={() => setDifficulty(option.id)}
+                    onClick={() => onCategoryChange(option.id)}
                   >
                     <Icon size={28} />
                     <strong>{option.title}</strong>
@@ -3145,7 +3203,7 @@ function PuzzleSelectScreen({
                       ? dailyPuzzle
                         ? completedPuzzles.has(dailyPuzzle.id)
                           ? "The current Daily is complete"
-                          : "Recreate the current Daily simulation finish"
+                          : "Complete today's Daily puzzle"
                         : "No daily puzzle is available yet"
                     : `${completedInDifficulty} of ${visiblePuzzles.length} positions completed`}
             </p>
@@ -3828,6 +3886,7 @@ export function GameScreen({
             dispatch={gameDispatch}
             onInspectSquare={setInspectedSquare}
             moveFirstDraft={moveFirstDraft}
+            moveFirstSources={[...moveFirstSources]}
             moveFirstTargets={moveFirstDraft ? moveFirstTargets : []}
             onMoveFirstSquare={moveFirstEnabled ? handleMoveFirstSquare : undefined}
           />
@@ -3968,7 +4027,7 @@ export function GameScreen({
             <h2>Try the position again</h2>
             <p>
               {dailyPuzzle
-                ? "The required simulation result was not reached within the turn limit. Retry from the checkpoint and look for a stronger continuation."
+                ? "The puzzle objective was not reached within the turn limit. Retry and look for a stronger continuation."
                 : "The level 10 Divine AI found its best response. Use the hint or restart from the original position."}
             </p>
             <div className="puzzle-result-actions">
@@ -4406,6 +4465,9 @@ function TutorialScreen({ onExit }: { onExit: () => void }) {
 
 export default function App() {
   const accountService = useAccount();
+  const initialNavigation = useRef(
+    appRouteFromPath(window.location.pathname),
+  ).current;
   useEffect(() => installGlobalDiagnostics(), []);
   const [localSavedGames, setLocalSavedGames] = useState(loadLocalSavedGames);
   const [cloudSavedGames, setCloudSavedGames] = useState<SavedGame[]>([]);
@@ -4487,10 +4549,19 @@ export default function App() {
   const savedGamesRef = useRef(savedGames);
   savedGamesRef.current = savedGames;
   const activeSaveId = useRef<string | undefined>(undefined);
-  const [startView, setStartView] = useState<"menu" | "roster" | "achievements" | "play" | "load" | "setup" | "three-setup" | "four-setup" | "puzzles" | "tutorial" | "none">("menu");
+  const [startView, setStartView] = useState<StartView>(
+    initialNavigation.startView,
+  );
   const [setupReturnView, setSetupReturnView] = useState<"menu" | "play" | "none">("menu");
-  const [setupCategory, setSetupCategory] = useState<StartCategory>("local");
-  const [setupPlayerCount, setSetupPlayerCount] = useState<PlayerCount>();
+  const [setupCategory, setSetupCategory] = useState<StartCategory>(
+    initialNavigation.setupCategory,
+  );
+  const [setupPlayerCount, setSetupPlayerCount] = useState<PlayerCount | undefined>(
+    initialNavigation.setupPlayerCount,
+  );
+  const [puzzleCategory, setPuzzleCategory] = useState<PuzzleCategory | undefined>(
+    initialNavigation.puzzleCategory,
+  );
   const [fourPlayerSession, setFourPlayerSession] = useState<FourPlayerSession>();
   const [threePlayerSession, setThreePlayerSession] = useState<ThreePlayerSession>();
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -4515,6 +4586,63 @@ export default function App() {
   const turnStart = useRef<GameState | undefined>(undefined);
   const cloudSaveQueue = useRef<Promise<void>>(Promise.resolve());
   const cloudAchievementQueue = useRef<Promise<void>>(Promise.resolve());
+  const restoringNavigation = useRef(false);
+  const navigationInitialized = useRef(false);
+
+  useEffect(() => {
+    const restore = (event: PopStateEvent) => {
+      const savedRoute = (event.state as {
+        godChessRoute?: unknown;
+      } | null)?.godChessRoute;
+      const route = isAppNavigationRoute(savedRoute)
+        ? savedRoute
+        : appRouteFromPath(window.location.pathname);
+      restoringNavigation.current = true;
+      setSetupCategory(route.setupCategory);
+      setSetupPlayerCount(route.setupPlayerCount);
+      setPuzzleCategory(route.puzzleCategory);
+      setStartView(route.startView);
+    };
+    window.addEventListener("popstate", restore);
+    return () => window.removeEventListener("popstate", restore);
+  }, []);
+
+  useEffect(() => {
+    const route: AppNavigationRoute = {
+      startView,
+      setupCategory,
+      setupPlayerCount,
+      puzzleCategory,
+    };
+    const path = startView === "none"
+      ? state.gameMode === "puzzle" && state.puzzleId?.startsWith("daily-")
+        ? "/daily/play"
+        : "/game"
+      : appPathForRoute(route);
+    const historyState = { godChessRoute: route };
+
+    if (!navigationInitialized.current) {
+      navigationInitialized.current = true;
+      window.history.replaceState(historyState, "", path);
+      return;
+    }
+    if (restoringNavigation.current) {
+      restoringNavigation.current = false;
+      return;
+    }
+    if (window.location.pathname !== path) {
+      window.history.pushState(historyState, "", path);
+    } else {
+      window.history.replaceState(historyState, "", path);
+    }
+  }, [
+    puzzleCategory,
+    setupCategory,
+    setupPlayerCount,
+    startView,
+    state.gameMode,
+    state.puzzleId,
+  ]);
 
   useEffect(() => {
     activeSaveId.current = undefined;
@@ -6101,7 +6229,10 @@ export default function App() {
         onBack={() => setStartView("menu")}
         onOpenLocal={() => openStartFlow("local", undefined, "play")}
         onOpenOnline={() => openStartFlow("online", undefined, "play")}
-        onOpenPuzzles={() => setStartView("puzzles")}
+        onOpenPuzzles={() => {
+          setPuzzleCategory(undefined);
+          setStartView("puzzles");
+        }}
         onOpenTutorial={() => setStartView("tutorial")}
         onOpenRoster={() => setStartView("roster")}
         onOpenAchievements={() => setStartView("achievements")}
@@ -6135,6 +6266,7 @@ export default function App() {
   if (startView === "puzzles") {
     return (
       <PuzzleSelectScreen
+        category={puzzleCategory}
         completedPuzzles={completedPuzzles}
         completedChallenges={completedChallenges}
         accountControl={renderAccountControl("puzzle-account-area")}
@@ -6142,6 +6274,7 @@ export default function App() {
         progressError={saveError}
         onStartPuzzle={beginPuzzle}
         onStartChallenge={beginChallenge}
+        onCategoryChange={setPuzzleCategory}
         onBack={() => setStartView("play")}
         onDismissError={() => setSaveError(undefined)}
       />

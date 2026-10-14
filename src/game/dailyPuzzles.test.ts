@@ -8,7 +8,7 @@ import {
 import { gameReducer } from "./engine";
 
 describe("daily puzzles", () => {
-  it("loads the generated simulation checkpoint as a five-turn White puzzle", () => {
+  it("loads the generated checkpoint as a five-turn White puzzle", () => {
     const puzzle = currentDailyPuzzle(new Date("2026-10-14T12:00:00"));
     expect(DAILY_PUZZLES).toHaveLength(1);
     expect(puzzle).toMatchObject({
@@ -35,9 +35,11 @@ describe("daily puzzles", () => {
     expect(state.players.white.name).toBe("Daily Solver");
     expect(state.players.black.name).toBe("Black Level 10 CPU");
     expect(Object.keys(state.board)).toHaveLength(8);
+    expect(puzzle?.hint).not.toMatch(/simulation/i);
+    expect(puzzle?.completionText).toBe("Puzzle complete.");
   });
 
-  it("reproduces the simulation checkmate within the generated turn limit", () => {
+  it("reproduces the target checkmate within the generated turn limit", () => {
     const puzzle = DAILY_PUZZLES[0];
     let state = puzzle.createState();
 
@@ -64,6 +66,33 @@ describe("daily puzzles", () => {
       rested: state.rested,
     })).toBe(true);
     expect(state.puzzlePlayerTurnsRemaining).toBeGreaterThanOrEqual(1);
+  });
+
+  it("finds a checkmate within two player turns from the reported position", () => {
+    const puzzle = DAILY_PUZZLES[0];
+    let state = puzzle.createState();
+
+    const firstPlan = chooseAiPlan(state, () => 0);
+    expect(firstPlan).toHaveLength(4);
+    for (const action of firstPlan) state = gameReducer(state, action);
+
+    const reply = chooseAiPlan(state, () => 0);
+    for (const action of reply) state = gameReducer(state, action);
+
+    const winningPlan = chooseAiPlan(state, () => 0);
+    expect(winningPlan).toHaveLength(4);
+    for (const action of winningPlan) state = gameReducer(state, action);
+
+    expect(state).toMatchObject({
+      phase: "gameover",
+      winner: "white",
+      result: {
+        kind: "winner",
+        winner: "white",
+        reason: "checkmate",
+      },
+      puzzlePlayerTurnsRemaining: 3,
+    });
   });
 
   it("requires the same terminal reason as the source simulation", () => {
