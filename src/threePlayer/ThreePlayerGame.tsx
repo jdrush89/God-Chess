@@ -2015,7 +2015,7 @@ export function ThreePlayerGame({
                   );
                   const level = abilityLevel(activePlayer.upgrades, ability.id);
                   const active = !readOnlyGod && state.selectedAbility === ability.id;
-                  const unavailable = !readOnlyGod && !action;
+                  const unavailable = !readOnlyGod && !active && !action;
                   return (
                     <PlayerAbilityCard
                       ability={ability}
@@ -2023,7 +2023,7 @@ export function ThreePlayerGame({
                       previewLevel={previewLevel}
                       active={active}
                       selectable={!readOnlyGod && !inputDisabled && !committedAbility && Boolean(action)}
-                      disabled={inputDisabled || committedAbility || unavailable}
+                      disabled={inputDisabled || unavailable}
                       footerAction={unavailable ? "UNAVAILABLE" : undefined}
                       onClick={() => {
                         if (action) dispatchAction(action);

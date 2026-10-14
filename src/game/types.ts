@@ -1,5 +1,5 @@
 export type Color = "white" | "black";
-export type GameMode = "local" | "ai" | "online" | "puzzle";
+export type GameMode = "local" | "ai" | "online" | "puzzle" | "simulation";
 export type ChallengeId =
   | "phalanx"
   | "there-can-only-be-one"

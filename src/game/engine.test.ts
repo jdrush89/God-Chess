@@ -204,6 +204,15 @@ describe("game flow", () => {
     expect(onlineGame.onlineHostColor).toBe("black");
     expect(onlineGame.players.white.name).toBe("Hermes");
     expect(onlineGame.players.black.name).toBe("Athena");
+
+    const simulation = createGame(1, {
+      mode: "simulation",
+      aiDifficulty: 10,
+    });
+    expect(simulation.aiDifficulty).toBe(10);
+    expect(simulation.players.white.name).toBe("White Level 10 CPU");
+    expect(simulation.players.black.name).toBe("Black Level 10 CPU");
+    expect(simulation.history.at(-1)).toMatch(/hidden cpu simulation/i);
   });
 
   it("uses the 1-2-2-1 snake draft and begins with white", () => {

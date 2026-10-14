@@ -3,13 +3,15 @@ import {
   threePlayerPieceValue,
   threePlayerPseudoTargets,
 } from "./threePlayerChess";
-import { availableThreePlayerActions } from "./threePlayerEngine";
+import {
+  availableThreePlayerActions,
+  isCompleteThreePlayerPlan,
+  threePlayerPlanStateSignature,
+  threePlayerReducer,
+} from "./threePlayerEngine";
 import { threePlayerSeatsAreAllies } from "./threePlayerConfig";
 import { getThreePlayerTopology } from "./threePlayerTopology";
-import {
-  enumerateCompleteThreePlayerPlans,
-  type ThreePlayerPlan,
-} from "./threePlayerPlans";
+import type { ThreePlayerPlan } from "./threePlayerPlans";
 import {
   THREE_PLAYER_SEATS,
   type ThreePlayerAction,
@@ -156,6 +158,71 @@ const randomFromSeed = (seed: number) => {
 const stablePlanKey = (plan: ThreePlayerPlan) =>
   JSON.stringify(plan.actions);
 
+const evenlySample = <T,>(items: T[], limit: number) => {
+  if (items.length <= limit) return items;
+  if (limit <= 1) return items.slice(0, 1);
+  return Array.from({ length: limit }, (_, index) =>
+    items[Math.round(index * (items.length - 1) / (limit - 1))]
+  );
+};
+
+const enumerateAiCandidates = (
+  state: ThreePlayerState,
+  difficulty: number,
+): ThreePlayerPlan[] => {
+  const maxPlans = difficulty >= 8 ? 8 : difficulty >= 4 ? 4 : 2;
+  const maxStates = difficulty >= 8 ? 60 : difficulty >= 4 ? 35 : 24;
+  const maxActionsPerState = difficulty >= 8 ? 12 : difficulty >= 4 ? 8 : 6;
+  const maxMilliseconds = difficulty >= 8
+    ? 8_000
+    : difficulty >= 4
+      ? 5_000
+      : 3_000;
+  const deadline = Date.now() + maxMilliseconds;
+  const stack: ThreePlayerPlan[] = [{ state, actions: [] }];
+  const completed: ThreePlayerPlan[] = [];
+  const seen = new Set([threePlayerPlanStateSignature(state)]);
+  let visited = 1;
+
+  while (
+    stack.length &&
+    visited < maxStates &&
+    completed.length < maxPlans &&
+    (!completed.length || Date.now() < deadline)
+  ) {
+    const node = stack.pop()!;
+    if (node.actions.length >= 12) continue;
+    const actions = evenlySample(
+      availableThreePlayerActions(node.state),
+      maxActionsPerState,
+    );
+    for (let index = actions.length - 1; index >= 0; index -= 1) {
+      const action = actions[index];
+      const next = threePlayerReducer(node.state, action);
+      const signature = threePlayerPlanStateSignature(next);
+      if (seen.has(signature)) continue;
+      seen.add(signature);
+      visited += 1;
+      const candidate = {
+        actions: [...node.actions, action],
+        state: next,
+      };
+      if (isCompleteThreePlayerPlan(state, next)) {
+        completed.push(candidate);
+      } else {
+        stack.push(candidate);
+      }
+      if (
+        visited >= maxStates ||
+        completed.length >= maxPlans ||
+        (completed.length > 0 && Date.now() >= deadline)
+      ) break;
+    }
+  }
+
+  return completed;
+};
+
 export const chooseThreePlayerAiPlan = (
   state: ThreePlayerState,
   randomOrSeed: (() => number) | number = Math.random,
@@ -182,12 +249,7 @@ export const chooseThreePlayerAiPlan = (
     const window = Math.min(actions.length, 1 + (10 - difficulty));
     return [actions[Math.floor(random() * window)] ?? actions[0]];
   }
-  const plans = enumerateCompleteThreePlayerPlans(state, {
-    maxDepth: 7 + Math.ceil(difficulty / 2),
-    maxStates: 500 + difficulty * 900,
-    maxActionsPerState: 20 + difficulty * 12,
-    maxPlans: 40 + difficulty * 50,
-  }).sort((first, second) =>
+  const plans = enumerateAiCandidates(state, difficulty).sort((first, second) =>
     evaluateThreePlayerState(second.state, state.activeSeat) -
       evaluateThreePlayerState(first.state, state.activeSeat) ||
     stablePlanKey(first).localeCompare(stablePlanKey(second))

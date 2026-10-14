@@ -253,10 +253,11 @@ describe("ThreePlayerGame", () => {
     const { container } = renderGame(state);
 
     fireEvent.click(screen.getByRole("button", { name: /chiron/i }));
-    fireEvent.click(
-      screen.getByText("Gallop").closest(".ability-card-main") as HTMLElement,
-    );
+    const gallopCard = screen.getByText("Gallop").closest(".ability-card") as HTMLElement;
+    fireEvent.click(gallopCard.querySelector(".ability-card-main") as HTMLElement);
 
+    expect(gallopCard.classList.contains("active")).toBe(true);
+    expect(gallopCard.classList.contains("disabled")).toBe(false);
     const sources = container.querySelectorAll(
       ".three-board-cell.legal-source",
     );

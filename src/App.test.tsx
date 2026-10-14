@@ -158,6 +158,7 @@ import App, { ActionPanel, ChessBoard, GameScreen } from "./App";
 import { persistLocalAchievementProgress } from "./achievementProgress";
 import { createAchievementProgress } from "./achievements";
 import { persistLocalCompletedChallenges } from "./challengeProgress";
+import type { ClassicAiPlanStrategy } from "./game/ai";
 import { chooseAiPlan } from "./game/ai";
 import {
   classicMoveFirstCandidates,
@@ -183,6 +184,7 @@ const LEGACY_SAVE_KEY = "god-chess-save-v1";
 interface ClassicAiWorkerRequest {
   requestId: number;
   state: ReturnType<typeof createGame>;
+  strategy?: ClassicAiPlanStrategy;
 }
 
 interface ClassicAiWorkerResponse {
@@ -495,6 +497,33 @@ describe("game startup", () => {
     expect(screen.getByRole("button", { name: /^local$/i })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /back to title/i }));
     expect(screen.getByRole("button", { name: /^start$/i })).toBeTruthy();
+  });
+
+  it("starts the hidden CPU simulation after five focused n key presses", async () => {
+    vi.stubGlobal("Worker", FakeClassicAiWorker);
+    render(<App />);
+    openPlayOption("Local");
+    fireEvent.click(screen.getByRole("button", { name: /^2 player$/i }));
+    const begin = screen.getByRole("button", { name: /begin local duel/i });
+    begin.focus();
+
+    for (let press = 0; press < 4; press += 1) {
+      fireEvent.keyDown(begin, { key: "n" });
+    }
+    expect(screen.getByRole("heading", { name: /choose opponent/i })).toBeTruthy();
+    expect(FakeClassicAiWorker.instances).toHaveLength(0);
+
+    fireEvent.keyDown(begin, { key: "n" });
+    expect(screen.getByRole("heading", { name: /choose your gods/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /quick draft/i })).toBeNull();
+
+    await waitFor(() => {
+      expect(FakeClassicAiWorker.instances).toHaveLength(1);
+    });
+    expect(FakeClassicAiWorker.instances[0].message?.state.gameMode)
+      .toBe("simulation");
+    expect(FakeClassicAiWorker.instances[0].message?.state.aiDifficulty).toBe(10);
+    expect(FakeClassicAiWorker.instances[0].message?.strategy).toBe("random");
   });
 
   it("closes the signed-in account menu when clicking outside it", () => {
@@ -1925,6 +1954,41 @@ describe("game startup", () => {
       godId: "chiron",
       abilityId: "gallop",
     });
+  });
+
+  it("opens the Chronicle instead of the result modal when a simulation ends", () => {
+    const state = createGame(1, {
+      mode: "simulation",
+      aiDifficulty: 10,
+    });
+    state.phase = "gameover";
+    state.winner = "white";
+    state.result = {
+      kind: "winner",
+      winner: "white",
+      reason: "checkmate",
+    };
+    state.history.push("Divine CPU White delivered checkmate.");
+
+    render(
+      <GameScreen
+        state={state}
+        dispatch={vi.fn()}
+        opponentColor="black"
+        undoEnabled={false}
+        canUndo={false}
+        onUndo={vi.fn()}
+        onOpenSettings={vi.fn()}
+        onRestart={vi.fn()}
+        onRestartPuzzle={vi.fn()}
+        onNextPuzzle={vi.fn()}
+        openHistoryOnGameOver
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: /chronicle/i })).toBeTruthy();
+    expect(screen.getByText(/divine cpu white delivered checkmate/i)).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: /white is victorious/i })).toBeNull();
   });
 
   it("autosaves the human-to-AI upgrade handoff without exposing the prior move", async () => {

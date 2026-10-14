@@ -1,5 +1,6 @@
 import {
   chooseAiPlan,
+  chooseRandomAiPlan,
   type ClassicAiWorkerRequest,
   type ClassicAiWorkerResponse,
 } from "./ai";
@@ -16,6 +17,8 @@ const scope = globalThis as unknown as ClassicAiWorkerScope;
 scope.onmessage = (event) => {
   scope.postMessage({
     requestId: event.data.requestId,
-    actions: chooseAiPlan(event.data.state),
+    actions: event.data.strategy === "random"
+      ? chooseRandomAiPlan(event.data.state)
+      : chooseAiPlan(event.data.state),
   });
 };
