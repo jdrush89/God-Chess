@@ -182,7 +182,9 @@ export const createGame = (
       : undefined;
   const onlineHostColor = gameMode === "online" ? (whitePlayer === 1 ? "white" : "black") : undefined;
   const playerName = options.playerName?.trim() || "Player 1";
-  const whiteName = gameMode === "puzzle"
+  const whiteName = gameMode === "simulation"
+    ? "White Level 10 CPU"
+    : gameMode === "puzzle"
     ? playerName
     : gameMode === "ai" && aiColor === "white"
     ? "Divine AI"
@@ -191,7 +193,9 @@ export const createGame = (
       : gameMode === "online"
         ? (onlineHostColor === "white" ? options.hostName ?? "Host" : options.guestName ?? "Guest")
         : `Player ${whitePlayer}`;
-  const blackName = gameMode === "puzzle"
+  const blackName = gameMode === "simulation"
+    ? "Black Level 10 CPU"
+    : gameMode === "puzzle"
     ? "Divine AI"
     : gameMode === "ai" && aiColor === "black"
     ? "Divine AI"
@@ -247,7 +251,9 @@ export const createGame = (
   nextCaptureAnimationId: 1,
   nextPresentationId: 1,
   history: [
-    gameMode === "ai"
+    gameMode === "simulation"
+      ? "Hidden CPU simulation started."
+      : gameMode === "ai"
       ? `${whiteName} was chosen for White.`
       : gameMode === "online"
         ? `${whiteName} was chosen for White.`
@@ -3559,8 +3565,13 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
   if (action.type === "adjudicate-no-turn") {
     if (
       state.phase !== "play" ||
-      (state.gameMode !== "ai" && state.gameMode !== "puzzle") ||
-      state.aiColor !== state.activeColor ||
+      (
+        state.gameMode !== "simulation" &&
+        (
+          (state.gameMode !== "ai" && state.gameMode !== "puzzle") ||
+          state.aiColor !== state.activeColor
+        )
+      ) ||
       state.activeColor !== action.activeColor ||
       state.turn !== action.turn ||
       state.selectedGod ||

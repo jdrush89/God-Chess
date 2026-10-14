@@ -24,12 +24,27 @@ export interface AiTurnPlan {
 export interface ClassicAiWorkerRequest {
   requestId: number;
   state: GameState;
+  strategy?: ClassicAiPlanStrategy;
 }
 
 export interface ClassicAiWorkerResponse {
   requestId: number;
   actions: GameAction[];
 }
+
+export type ClassicAiPlanStrategy = "optimal" | "random";
+
+export const classicSimulationPlanStrategy = (
+  state: GameState,
+  completedTurns: Record<Color, number>,
+): ClassicAiPlanStrategy =>
+  state.phase === "draft" ||
+    (
+      state.phase === "play" &&
+      completedTurns[state.activeColor] < 3
+    )
+    ? "random"
+    : "optimal";
 
 const MAX_DEPTH = 10;
 const MAX_ACTIONS_PER_NODE = 64;
@@ -323,6 +338,34 @@ const bestTacticalDefense = (
   return undefined;
 };
 
+const withUpgradePreview = (
+  state: GameState,
+  actions: GameAction[],
+): GameAction[] => {
+  if (state.phase !== "upgrade" || actions[0]?.type !== "upgrade") return actions;
+  const abilityId = actions[0].abilityId;
+  const godId = state.players[state.activeColor].gods.find((candidate) =>
+    GOD_BY_ID[candidate].abilities.some((ability) => ability.id === abilityId),
+  );
+  return godId
+    ? [{ type: "preview-upgrade", godId, abilityId }, ...actions]
+    : actions;
+};
+
+export const chooseRandomAiPlan = (
+  state: GameState,
+  random: () => number = Math.random,
+): GameAction[] => {
+  if (state.phase === "draft") {
+    const actions = availableClassicActions(state);
+    const action = actions[Math.floor(random() * actions.length)];
+    return action ? [action] : [];
+  }
+  const plans = enumerateTurnPlans(state, state.activeColor);
+  const plan = plans[Math.floor(random() * plans.length)];
+  return withUpgradePreview(state, plan?.actions ?? []);
+};
+
 export const chooseAiPlan = (
   state: GameState,
   random: () => number = Math.random,
@@ -345,17 +388,15 @@ export const chooseAiPlan = (
       actions = (alternative ?? plans[0]).actions;
     }
   }
-  if (state.phase !== "upgrade" || actions[0]?.type !== "upgrade") return actions;
-  const abilityId = actions[0].abilityId;
-  const godId = state.players[state.activeColor].gods.find((candidate) =>
-    GOD_BY_ID[candidate].abilities.some((ability) => ability.id === abilityId),
-  );
-  return godId
-    ? [{ type: "preview-upgrade", godId, abilityId }, ...actions]
-    : actions;
+  return withUpgradePreview(state, actions);
 };
 
 export const isAiTurn = (state: GameState) =>
-  (state.gameMode === "ai" || state.gameMode === "puzzle") &&
-  state.aiColor === state.activeColor &&
+  (
+    state.gameMode === "simulation" ||
+    (
+      (state.gameMode === "ai" || state.gameMode === "puzzle") &&
+      state.aiColor === state.activeColor
+    )
+  ) &&
   state.phase !== "gameover";

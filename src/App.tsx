@@ -51,8 +51,11 @@ import {
 } from "lucide-react";
 import { allSquares, isInCheck } from "./game/chess";
 import {
+  classicSimulationPlanStrategy,
   chooseAiPlan,
+  chooseRandomAiPlan,
   isAiTurn,
+  type ClassicAiPlanStrategy,
   type ClassicAiWorkerResponse,
 } from "./game/ai";
 import {
@@ -2499,6 +2502,7 @@ function StartGamePrompt({
   category,
   initialPlayerCount,
   onStart,
+  onStartSimulation,
   onOpenFourPlayer,
   onOpenThreePlayer,
   onHost,
@@ -2526,7 +2530,11 @@ function StartGamePrompt({
   accountControl: ReactNode;
   category: StartCategory;
   initialPlayerCount?: PlayerCount;
-  onStart: (mode: Exclude<GameMode, "online" | "puzzle">, difficulty: number) => void;
+  onStart: (
+    mode: Exclude<GameMode, "online" | "puzzle" | "simulation">,
+    difficulty: number,
+  ) => void;
+  onStartSimulation: () => void;
   onOpenFourPlayer: () => void;
   onOpenThreePlayer: () => void;
   onHost: (name: string) => void;
@@ -2567,6 +2575,7 @@ function StartGamePrompt({
   const [onlineAction, setOnlineAction] = useState<"host" | "join">("host");
   const [playerName, setPlayerName] = useState(defaultPlayerName || "Player");
   const [roomCode, setRoomCode] = useState("");
+  const simulationKeyCount = useRef(0);
 
   const back = () => {
     if (playerCount) {
@@ -2645,6 +2654,21 @@ function StartGamePrompt({
               <button
                 className="primary-button start-match-button"
                 onClick={() => onStart(localMode, difficulty)}
+                onBlur={() => {
+                  simulationKeyCount.current = 0;
+                }}
+                onKeyDown={(event) => {
+                  if (localMode !== "local" || event.repeat) return;
+                  if (event.key.toLowerCase() !== "n") {
+                    simulationKeyCount.current = 0;
+                    return;
+                  }
+                  simulationKeyCount.current += 1;
+                  if (simulationKeyCount.current < 5) return;
+                  simulationKeyCount.current = 0;
+                  event.preventDefault();
+                  onStartSimulation();
+                }}
               >
                 {localMode === "ai" ? "Challenge the AI" : "Begin local duel"}
               </button>
@@ -3020,6 +3044,7 @@ export function GameScreen({
   leaveLabel,
   onQuitWithoutSaving,
   moveFirstDisabled = false,
+  openHistoryOnGameOver = false,
 }: {
   state: GameState;
   dispatch: GameDispatch;
@@ -3038,6 +3063,7 @@ export function GameScreen({
   leaveLabel?: string;
   onQuitWithoutSaving?: () => void;
   moveFirstDisabled?: boolean;
+  openHistoryOnGameOver?: boolean;
 }) {
   const [rulesOpen, setRulesOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -3047,7 +3073,9 @@ export function GameScreen({
   const [moveFirstDraft, setMoveFirstDraft] = useState<MoveFirstDraft>();
   const [graveyardColor, setGraveyardColor] = useState<Color>();
   const gameFinished = !state.puzzleId && state.phase === "gameover";
-  const [resultOpen, setResultOpen] = useState(gameFinished);
+  const [resultOpen, setResultOpen] = useState(
+    gameFinished && !openHistoryOnGameOver,
+  );
   const kingInCheck = state.phase === "play" && isInCheck(state.board, state.activeColor, state.bananas);
   const puzzle = state.puzzleId ? PUZZLE_BY_ID[state.puzzleId] : undefined;
   const challenge = state.challengeId
@@ -3160,8 +3188,17 @@ export function GameScreen({
   }, [state.puzzleId]);
 
   useEffect(() => {
-    setResultOpen(gameFinished);
-  }, [gameFinished, state]);
+    if (!gameFinished) {
+      setResultOpen(false);
+      return;
+    }
+    if (openHistoryOnGameOver) {
+      setResultOpen(false);
+      setHistoryOpen(true);
+      return;
+    }
+    setResultOpen(true);
+  }, [gameFinished, openHistoryOnGameOver]);
 
   useEffect(() => {
     setPuzzleVictoryReady(false);
@@ -4229,6 +4266,10 @@ export default function App() {
   const aiNoPlanState = useRef<GameState | undefined>(undefined);
   const aiRequestId = useRef(0);
   const [aiPlanReady, setAiPlanReady] = useState(0);
+  const simulationCompletedTurns = useRef<Record<Color, number>>({
+    white: 0,
+    black: 0,
+  });
   const quickDraftPending = useRef(false);
   const undoStack = useRef<GameState[]>([]);
   const undoDepthRef = useRef(0);
@@ -4637,6 +4678,7 @@ export default function App() {
   };
 
   const classicLocalActors = (current: GameState): Color[] => {
+    if (current.gameMode === "simulation") return [];
     if (current.gameMode === "local") return ["white", "black"];
     if (current.gameMode === "online") {
       const localColor = onlinePlayerColor(online, current.onlineHostColor);
@@ -4676,6 +4718,16 @@ export default function App() {
   };
   const applyTrackedAction = (current: GameState, action: GameAction) => {
     const next = gameReducer(current, action);
+    const completedPlayTurn =
+      current.phase === "play" &&
+      (
+        next.turn !== current.turn ||
+        next.phase === "upgrade" ||
+        next.phase === "gameover"
+      );
+    if (current.gameMode === "simulation" && completedPlayTurn) {
+      simulationCompletedTurns.current[current.activeColor] += 1;
+    }
     const completedUpgrade =
       action.type === "upgrade" &&
       current.phase === "upgrade" &&
@@ -4715,7 +4767,10 @@ export default function App() {
       before: current as unknown as Record<string, unknown>,
       after: next as unknown as Record<string, unknown>,
     });
-    if (current.gameMode !== "puzzle") {
+    if (
+      current.gameMode !== "puzzle" &&
+      current.gameMode !== "simulation"
+    ) {
       recordAchievementTransition({
         variant: "classic",
         matchId: activeSaveId.current ??
@@ -4876,7 +4931,8 @@ export default function App() {
     if (
       threeOnlineActiveRef.current ||
       stateRef.current.gameMode === "online" ||
-      stateRef.current.gameMode === "puzzle"
+      stateRef.current.gameMode === "puzzle" ||
+      stateRef.current.gameMode === "simulation"
     ) return false;
     const id = activeSaveId.current ?? saveId();
     const saved = createSavedGame(
@@ -4927,6 +4983,7 @@ export default function App() {
   const quitWithoutSaving = () => {
     aiPlan.current = [];
     clearUndoHistory();
+    simulationCompletedTurns.current = { white: 0, black: 0 };
     activeSaveId.current = undefined;
     setStartView("menu");
   };
@@ -4939,6 +4996,7 @@ export default function App() {
       threeOnlineActive ||
       state.gameMode === "online" ||
       state.gameMode === "puzzle" ||
+      state.gameMode === "simulation" ||
       state.challengeId
     ) return;
     void saveCurrentGame();
@@ -4967,6 +5025,13 @@ export default function App() {
       const requestId = aiRequestId.current + 1;
       aiRequestId.current = requestId;
       const requestedState = state;
+      const strategy: ClassicAiPlanStrategy =
+        requestedState.gameMode === "simulation"
+          ? classicSimulationPlanStrategy(
+            requestedState,
+            simulationCompletedTurns.current,
+          )
+          : "optimal";
       let worker: Worker | undefined;
       let planningTimer: number | undefined;
       let secondFrame: number | undefined;
@@ -4995,7 +5060,7 @@ export default function App() {
           category: "ai",
           event: "classic-plan-result",
           context: { variant: "classic", mode: requestedState.gameMode },
-          data: { actions },
+          data: { actions, strategy },
         });
         setAiPlanReady((value) => value + 1);
       };
@@ -5024,7 +5089,11 @@ export default function App() {
           context: { variant: "classic", mode: requestedState.gameMode },
           data: { message },
         });
-        acceptPlan(chooseAiPlan(requestedState));
+        acceptPlan(
+          strategy === "random"
+            ? chooseRandomAiPlan(requestedState)
+            : chooseAiPlan(requestedState),
+        );
       };
       const firstFrame = window.requestAnimationFrame(() => {
         secondFrame = window.requestAnimationFrame(() => {
@@ -5037,10 +5106,15 @@ export default function App() {
                 phase: requestedState.phase,
                 activeColor: requestedState.activeColor,
                 turn: requestedState.turn,
+                strategy,
               },
             });
             if (typeof Worker === "undefined") {
-              acceptPlan(chooseAiPlan(requestedState));
+              acceptPlan(
+                strategy === "random"
+                  ? chooseRandomAiPlan(requestedState)
+                  : chooseAiPlan(requestedState),
+              );
               return;
             }
             try {
@@ -5062,7 +5136,11 @@ export default function App() {
               worker.onmessageerror = (event) => {
                 fallbackToMainThread(event);
               };
-              worker.postMessage({ requestId, state: requestedState });
+              worker.postMessage({
+                requestId,
+                state: requestedState,
+                strategy,
+              });
             } catch (error) {
               fallbackToMainThread(error);
             }
@@ -5087,7 +5165,7 @@ export default function App() {
       if (stateRef.current !== state) return;
       aiPlan.current = aiPlan.current.slice(1);
       dispatch(action);
-    }, aiActionDelay(action));
+    }, state.gameMode === "simulation" ? 120 : aiActionDelay(action));
     return () => window.clearTimeout(timer);
   }, [aiPlanReady, fourPlayerSession, threePlayerSession, startView, state]);
 
@@ -5211,6 +5289,7 @@ export default function App() {
   }, [online.started, online.role, state.gameMode, undoPreferred]);
 
   const loadGame = (game: SavedGame) => {
+    simulationCompletedTurns.current = { white: 0, black: 0 };
     activeSaveId.current = game.id;
     if (isFourPlayerSavedGame(game)) {
       setFourPlayerSession({
@@ -5301,12 +5380,16 @@ export default function App() {
     playerCount?: PlayerCount,
     returnView: "menu" | "play" | "none" = "menu",
   ) => {
+    simulationCompletedTurns.current = { white: 0, black: 0 };
     setSetupCategory(category);
     setSetupPlayerCount(playerCount);
     setSetupReturnView(returnView);
     setStartView("setup");
   };
-  const beginGame = (mode: Exclude<GameMode, "online" | "puzzle">, difficulty: number) => {
+  const beginGame = (
+    mode: Exclude<GameMode, "online" | "puzzle" | "simulation">,
+    difficulty: number,
+  ) => {
     onlineActions.disconnect();
     fourOnlineActions.disconnect();
     threeOnlineActions.disconnect();
@@ -5323,10 +5406,29 @@ export default function App() {
     aiPlan.current = [];
     setStartView("none");
   };
+  const beginSimulation = () => {
+    onlineActions.disconnect();
+    fourOnlineActions.disconnect();
+    threeOnlineActions.disconnect();
+    setFourPlayerSession(undefined);
+    setThreePlayerSession(undefined);
+    activeSaveId.current = undefined;
+    simulationCompletedTurns.current = { white: 0, black: 0 };
+    const next = createGame(1, {
+      mode: "simulation",
+      aiDifficulty: 10,
+    });
+    resetUndoTracking(next);
+    receiveState(next);
+    aiPlan.current = [];
+    setSettingsOpen(false);
+    setStartView("none");
+  };
   const beginFourPlayerGame = (config: FourPlayerConfig) => {
     onlineActions.disconnect();
     fourOnlineActions.disconnect();
     threeOnlineActions.disconnect();
+    simulationCompletedTurns.current = { white: 0, black: 0 };
     const id = saveId();
     activeSaveId.current = id;
     clearUndoHistory();
@@ -5343,6 +5445,7 @@ export default function App() {
     onlineActions.disconnect();
     fourOnlineActions.disconnect();
     threeOnlineActions.disconnect();
+    simulationCompletedTurns.current = { white: 0, black: 0 };
     const id = saveId();
     const next = createThreePlayerGame(config);
     const session: ThreePlayerSession = {
@@ -5362,6 +5465,7 @@ export default function App() {
     onlineActions.disconnect();
     fourOnlineActions.disconnect();
     threeOnlineActions.disconnect();
+    simulationCompletedTurns.current = { white: 0, black: 0 };
     setFourPlayerSession(undefined);
     const id = saveId();
     activeSaveId.current = id;
@@ -5392,6 +5496,7 @@ export default function App() {
     onlineActions.disconnect();
     fourOnlineActions.disconnect();
     threeOnlineActions.disconnect();
+    simulationCompletedTurns.current = { white: 0, black: 0 };
     activeSaveId.current = undefined;
     clearUndoHistory();
     aiPlan.current = [];
@@ -5549,6 +5654,8 @@ export default function App() {
     : online.undoConsent.host;
   const undoEnabled = state.gameMode === "puzzle"
     ? false
+    : state.gameMode === "simulation"
+      ? false
     : state.gameMode === "online"
     ? onlineUndoEnabled(online)
     : undoPreferred;
@@ -5556,7 +5663,11 @@ export default function App() {
     (state.phase === "play" || state.phase === "upgrade" || state.phase === "gameover") &&
     !state.selectedGod &&
     !state.selectedAbility;
-  const canUndo = state.gameMode !== "puzzle" && undoEnabled && undoStable && (
+  const canUndo =
+    state.gameMode !== "puzzle" &&
+    state.gameMode !== "simulation" &&
+    undoEnabled &&
+    undoStable && (
     state.gameMode === "online"
       ? online.undoAvailable && !online.awaitingSync
       : undoDepth > 0
@@ -5752,6 +5863,7 @@ export default function App() {
         category={setupCategory}
         initialPlayerCount={setupPlayerCount}
         onStart={beginGame}
+        onStartSimulation={beginSimulation}
         onOpenThreePlayer={() => {
           setSetupCategory("local");
           setSetupPlayerCount(undefined);
@@ -6062,7 +6174,12 @@ export default function App() {
           <DraftScreen
             state={state}
             dispatch={dispatch}
-            onQuickDraft={state.gameMode === "online" ? undefined : quickDraft}
+            onQuickDraft={
+              state.gameMode === "online" ||
+                state.gameMode === "simulation"
+                ? undefined
+                : quickDraft
+            }
             inputDisabled={inputDisabled}
           />
         )
@@ -6078,23 +6195,32 @@ export default function App() {
             canUndo={canUndo}
             onUndo={requestUndo}
             onOpenSettings={() => setSettingsOpen(true)}
-            onLeave={state.challengeId
-              ? () => setStartView("puzzles")
-              : state.gameMode === "online" || state.gameMode === "puzzle"
-                ? openNewGame
-                : () => void saveAndQuit()}
-            leaveLabel={state.gameMode === "online"
-              ? "Leave room"
-              : state.gameMode === "puzzle"
-                ? "Leave puzzle"
+            onLeave={
+              state.gameMode === "simulation"
+                ? quitWithoutSaving
                 : state.challengeId
-                  ? "Leave challenge"
-                  : "Save & quit"}
+                  ? () => setStartView("puzzles")
+                  : state.gameMode === "online" || state.gameMode === "puzzle"
+                    ? openNewGame
+                    : () => void saveAndQuit()
+            }
+            leaveLabel={
+              state.gameMode === "simulation"
+                ? "Quit simulation"
+                : state.gameMode === "online"
+                  ? "Leave room"
+                  : state.gameMode === "puzzle"
+                    ? "Leave puzzle"
+                    : state.challengeId
+                      ? "Leave challenge"
+                      : "Save & quit"
+            }
             onQuitWithoutSaving={
               state.gameMode === "local" && !state.challengeId
                 ? quitWithoutSaving
                 : undefined
             }
+            openHistoryOnGameOver={state.gameMode === "simulation"}
             onRestart={openNewGame}
             onRestartPuzzle={restartPuzzle}
             onNextPuzzle={nextPuzzle}
@@ -6115,18 +6241,26 @@ export default function App() {
           onOpenSettings={state.gameMode === "puzzle"
             ? undefined
             : () => setSettingsOpen(true)}
-          onLeave={state.challengeId
-            ? () => setStartView("puzzles")
-            : state.gameMode === "online" || state.gameMode === "puzzle"
-              ? openNewGame
-            : () => void saveAndQuit()}
-          leaveLabel={state.gameMode === "online"
-            ? "Leave room"
-            : state.gameMode === "puzzle"
-              ? "Leave puzzle"
+          onLeave={
+            state.gameMode === "simulation"
+              ? quitWithoutSaving
               : state.challengeId
-                ? "Leave challenge"
-              : "Save & quit"}
+                ? () => setStartView("puzzles")
+                : state.gameMode === "online" || state.gameMode === "puzzle"
+                  ? openNewGame
+                  : () => void saveAndQuit()
+          }
+          leaveLabel={
+            state.gameMode === "simulation"
+              ? "Quit simulation"
+              : state.gameMode === "online"
+                ? "Leave room"
+                : state.gameMode === "puzzle"
+                  ? "Leave puzzle"
+                  : state.challengeId
+                    ? "Leave challenge"
+                    : "Save & quit"
+          }
           onQuitWithoutSaving={
             state.gameMode === "local" && !state.challengeId
                 ? quitWithoutSaving

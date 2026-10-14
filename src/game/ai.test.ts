@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { chooseAiPlan, enumerateTurnPlans, evaluateGameState } from "./ai";
+import {
+  chooseAiPlan,
+  chooseRandomAiPlan,
+  classicSimulationPlanStrategy,
+  enumerateTurnPlans,
+  evaluateGameState,
+  isAiTurn,
+} from "./ai";
 import { createGame, gameReducer } from "./engine";
 import { PUZZLE_BY_ID } from "./puzzles";
 import type { Piece, PieceType } from "./types";
@@ -14,6 +21,55 @@ const piece = (type: PieceType, controller: "white" | "black", id: string): Piec
 });
 
 describe("Divine AI", () => {
+  it("uses random plans for each simulation CPU's first three turns", () => {
+    const state = createGame(1, {
+      mode: "simulation",
+      aiDifficulty: 10,
+    });
+    expect(isAiTurn(state)).toBe(true);
+    expect(classicSimulationPlanStrategy(state, { white: 3, black: 3 }))
+      .toBe("random");
+
+    state.phase = "play";
+    state.activeColor = "white";
+    expect(classicSimulationPlanStrategy(state, { white: 0, black: 3 }))
+      .toBe("random");
+    expect(classicSimulationPlanStrategy(state, { white: 2, black: 3 }))
+      .toBe("random");
+    expect(classicSimulationPlanStrategy(state, { white: 3, black: 2 }))
+      .toBe("optimal");
+
+    state.activeColor = "black";
+    expect(classicSimulationPlanStrategy(state, { white: 3, black: 2 }))
+      .toBe("random");
+    expect(classicSimulationPlanStrategy(state, { white: 3, black: 3 }))
+      .toBe("optimal");
+  });
+
+  it("chooses a random draft pick and a complete random legal turn", () => {
+    let state = createGame(1, {
+      mode: "simulation",
+      aiDifficulty: 10,
+    });
+    expect(chooseRandomAiPlan(state, () => 0)).toEqual([
+      { type: "draft", godId: "quetzacoatl" },
+    ]);
+    expect(chooseRandomAiPlan(state, () => 0.99)).toEqual([
+      { type: "draft", godId: "ares" },
+    ]);
+
+    (["ares", "medusa", "midas", "death", "artemis", "chiron"] as const)
+      .forEach((godId) => {
+        state = gameReducer(state, { type: "draft", godId });
+      });
+    const initialTurn = state.turn;
+    const plan = chooseRandomAiPlan(state, () => 0.5);
+    expect(plan.length).toBeGreaterThanOrEqual(3);
+    for (const action of plan) state = gameReducer(state, action);
+    expect(state.turn).toBeGreaterThan(initialTurn);
+    expect(state.activeColor).toBe("black");
+  });
+
   it("always chooses its highest-scoring draft pick at difficulty 10", () => {
     const state = createGame(2, { mode: "ai", aiDifficulty: 10 });
     expect(chooseAiPlan(state, () => 0.99)).toEqual([

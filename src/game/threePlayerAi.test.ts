@@ -101,6 +101,51 @@ describe("three-player AI", () => {
     }
   });
 
+  it("plans both CPU opening turns promptly in the reported three-player position", () => {
+    const config = createDefaultThreePlayerConfig();
+    config.seats.red.control = { kind: "ai", difficulty: 5 };
+    config.seats.black.control = { kind: "ai", difficulty: 5 };
+    let state = createThreePlayerGame(config);
+    for (
+      const godId of [
+        "anubis",
+        "leonidas",
+        "medusa",
+        "death",
+        "midas",
+        "salem",
+        "kangus",
+        "quetzacoatl",
+        "chiron",
+      ] as const
+    ) {
+      state = threePlayerReducer(state, { type: "draft", godId });
+    }
+    for (
+      const action of [
+        { type: "select-god", godId: "anubis" },
+        { type: "select-ability", abilityId: "construction" },
+        { type: "cell", cell: "three-player:19" },
+        { type: "cell", cell: "three-player:11" },
+      ] as const
+    ) {
+      state = threePlayerReducer(state, action);
+    }
+
+    const startedAt = Date.now();
+    for (const seed of [123, 456]) {
+      const before = state;
+      const plan = chooseThreePlayerAiPlan(state, seed);
+      expect(plan.length).toBeGreaterThan(0);
+      state = plan.reduce(threePlayerReducer, state);
+      expect(isCompleteThreePlayerPlan(before, state)).toBe(true);
+    }
+
+    expect(Date.now() - startedAt).toBeLessThan(15_000);
+    expect(state.activeSeat).toBe("white");
+    expect(state.turn).toBe(4);
+  }, 20_000);
+
   it("values an allied challenge victory as its own", () => {
     const config = createDefaultThreePlayerConfig();
     config.teams = {
