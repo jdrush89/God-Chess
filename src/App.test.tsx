@@ -154,7 +154,13 @@ vi.mock("./game/ai", async (importOriginal) => {
   };
 });
 
-import App, { ActionPanel, ChessBoard, GameScreen } from "./App";
+import App, {
+  ActionPanel,
+  ChessBoard,
+  GameScreen,
+  SimulationExportDialog,
+  rewindSimulationForExport,
+} from "./App";
 import { persistLocalAchievementProgress } from "./achievementProgress";
 import { createAchievementProgress } from "./achievements";
 import { persistLocalCompletedChallenges } from "./challengeProgress";
@@ -180,6 +186,17 @@ import { persistLocalCompletedPuzzles } from "./puzzleProgress";
 
 const SAVE_KEY = "god-chess-saves-v2";
 const LEGACY_SAVE_KEY = "god-chess-save-v1";
+const originalClipboardDescriptor =
+  Object.getOwnPropertyDescriptor(navigator, "clipboard");
+
+const setClipboard = (
+  clipboard: { writeText: (text: string) => Promise<void> } | undefined,
+) => {
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: clipboard,
+  });
+};
 
 interface ClassicAiWorkerRequest {
   requestId: number;
@@ -332,6 +349,15 @@ beforeAll(() => {
 afterEach(() => {
   cleanup();
   window.localStorage.clear();
+  if (originalClipboardDescriptor) {
+    Object.defineProperty(
+      navigator,
+      "clipboard",
+      originalClipboardDescriptor,
+    );
+  } else {
+    Reflect.deleteProperty(navigator, "clipboard");
+  }
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   vi.useRealTimers();
@@ -1956,39 +1982,92 @@ describe("game startup", () => {
     });
   });
 
-  it("opens the Chronicle instead of the result modal when a simulation ends", () => {
-    const state = createGame(1, {
-      mode: "simulation",
-      aiDifficulty: 10,
+  it("rewinds twice a random three-to-five round count and builds loadable save data", () => {
+    const base = completeClassicDraft();
+    base.gameMode = "simulation";
+    base.aiDifficulty = 10;
+    const undoHistory = Array.from({ length: 12 }, (_, index) => {
+      const snapshot = structuredClone(base);
+      snapshot.turn = index + 1;
+      snapshot.activeColor = index % 2 === 0 ? "white" : "black";
+      return snapshot;
     });
-    state.phase = "gameover";
-    state.winner = "white";
-    state.result = {
+    const terminal = structuredClone(base);
+    terminal.phase = "gameover";
+    terminal.turn = 13;
+    terminal.activeColor = "black";
+    terminal.winner = "white";
+    terminal.result = {
       kind: "winner",
       winner: "white",
       reason: "checkmate",
     };
-    state.history.push("Divine CPU White delivered checkmate.");
 
-    render(
-      <GameScreen
-        state={state}
-        dispatch={vi.fn()}
-        opponentColor="black"
-        undoEnabled={false}
-        canUndo={false}
-        onUndo={vi.fn()}
-        onOpenSettings={vi.fn()}
-        onRestart={vi.fn()}
-        onRestartPuzzle={vi.fn()}
-        onNextPuzzle={vi.fn()}
-        openHistoryOnGameOver
-      />,
+    const rewound = rewindSimulationForExport(
+      terminal,
+      undoHistory,
+      12,
+      () => 0,
     );
 
-    expect(screen.getByRole("heading", { name: /chronicle/i })).toBeTruthy();
-    expect(screen.getByText(/divine cpu white delivered checkmate/i)).toBeTruthy();
-    expect(screen.queryByRole("heading", { name: /white is victorious/i })).toBeNull();
+    expect(rewound.exportData.rewindRounds).toBe(3);
+    expect(rewound.exportData.requestedUndoActions).toBe(6);
+    expect(rewound.exportData.appliedUndoActions).toBe(6);
+    expect(rewound.state.turn).toBe(7);
+    expect(rewound.undoHistory).toHaveLength(6);
+    expect(rewound.exportData.resultSummary)
+      .toBe("White checkmated in 12 turns.");
+    expect(rewound.exportData.save.state.gameMode).toBe("local");
+    expect(rewound.exportData.save.state.turn).toBe(7);
+    expect(rewound.exportData.save.undoHistory).toHaveLength(6);
+  });
+
+  it("copies the rewound simulation save and original result from its dialog", async () => {
+    const terminal = completeClassicDraft();
+    terminal.gameMode = "simulation";
+    terminal.phase = "gameover";
+    terminal.activeColor = "black";
+    terminal.winner = undefined;
+    terminal.result = { kind: "draw", reason: "stalemate" };
+    const snapshots = Array.from({ length: 10 }, (_, index) => {
+      const snapshot = completeClassicDraft();
+      snapshot.gameMode = "simulation";
+      snapshot.turn = index + 1;
+      return snapshot;
+    });
+    const data = rewindSimulationForExport(
+      terminal,
+      snapshots,
+      10,
+      () => 0.999,
+    ).exportData;
+    const writeText = vi.fn(async (_text: string) => undefined);
+    setClipboard({ writeText });
+
+    render(<SimulationExportDialog data={data} onQuit={vi.fn()} />);
+    expect(screen.getByRole("dialog", { name: /rewound game state/i }))
+      .toBeTruthy();
+    expect(screen.getByText("Black was stalemated after 10 turns."))
+      .toBeTruthy();
+    expect(screen.getByText(/10 of 10 undo actions \(5 full rounds\)/i))
+      .toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", {
+      name: /copy game state and result/i,
+    }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    const copied = JSON.parse(writeText.mock.calls[0][0]);
+    expect(copied.result.summary).toBe(
+      "Black was stalemated after 10 turns.",
+    );
+    expect(copied.rewind).toEqual({
+      rounds: 5,
+      requestedUndoActions: 10,
+      appliedUndoActions: 10,
+    });
+    expect(copied.save.state.gameMode).toBe("local");
+    expect(screen.getByRole("status").textContent)
+      .toMatch(/game state and result copied/i);
   });
 
   it("autosaves the human-to-AI upgrade handoff without exposing the prior move", async () => {
