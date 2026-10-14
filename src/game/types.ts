@@ -38,6 +38,7 @@ export type ClassicPuzzleId =
   | "opened-throne"
   | "pinned-serpent"
   | "hexed-provocation";
+export type DailyPuzzleId = `daily-${string}`;
 export type ThreePlayerPuzzleId =
   | "three-frontier-fork"
   | "three-distant-rampart"
@@ -49,7 +50,7 @@ export type ThreePlayerPuzzleId =
   | "circular-outer-ring"
   | "half-board-siege"
   | "half-board-final-file";
-export type PuzzleId = ClassicPuzzleId | ThreePlayerPuzzleId;
+export type PuzzleId = ClassicPuzzleId | DailyPuzzleId | ThreePlayerPuzzleId;
 export type GodId =
   | "quetzacoatl"
   | "chiron"
@@ -261,7 +262,7 @@ export interface GameState {
   aiDifficulty: number;
   aiColor?: Color;
   onlineHostColor?: Color;
-  puzzleId?: ClassicPuzzleId;
+  puzzleId?: ClassicPuzzleId | DailyPuzzleId;
   puzzlePlayerTurnsRemaining?: number;
   puzzleFailed?: boolean;
   challengeId?: ChallengeId;

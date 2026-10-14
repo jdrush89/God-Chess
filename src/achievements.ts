@@ -1121,6 +1121,7 @@ export const achievementProgressValue = (
     easy: number;
     medium: number;
     hard: number;
+    daily?: number;
   },
 ) => {
   if (progress.completed[id]) return ACHIEVEMENT_BY_ID[id].goal ?? 1;
@@ -1133,7 +1134,8 @@ export const achievementProgressValue = (
             25,
             completedPuzzles.easy +
               completedPuzzles.medium +
-              completedPuzzles.hard,
+              completedPuzzles.hard +
+              (completedPuzzles.daily ?? 0),
           )
         : 0;
     case "i-have-the-power":
@@ -1175,10 +1177,15 @@ export const achievementProgressValue = (
 
 export const completeCryptologistIfEligible = (
   source: AchievementProgress,
-  counts: { easy: number; medium: number; hard: number },
+  counts: {
+    easy: number;
+    medium: number;
+    hard: number;
+    daily?: number;
+  },
 ) => {
   if (
-    counts.easy + counts.medium + counts.hard < 25 ||
+    counts.easy + counts.medium + counts.hard + (counts.daily ?? 0) < 25 ||
     source.completed.cryptologist
   ) return source;
   const progress = cloneProgress(source);

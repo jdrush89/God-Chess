@@ -191,16 +191,28 @@ mode chooser.
 
 ## Puzzle mode
 
-Puzzle mode has a dedicated difficulty browser with ten Easy positions won in
-one divine turn, ten Medium positions won across two player turns, and ten Hard
-positions won across three player turns. A separate Three Player set includes
-ten last-survivor positions, two on each supported three-player board, where
-both rival Kings must be checkmated within two player turns. The puzzle cards do
-not reveal the intended god or ability. Each position includes an optional hint,
-restart and next-puzzle controls, and level 10 Divine AI responses between player turns.
-Completion check marks are stored in local storage while signed out and in the
-player's account while signed in; puzzle positions themselves are not added to
-local or cloud saves.
+Puzzle mode has a dedicated browser with a Daily simulation finish, five Easy
+positions won in one divine turn, ten Medium positions won across two player
+turns, and ten Hard positions won across three player turns. A separate Three
+Player set includes ten last-survivor positions, two on each supported
+three-player board, where both rival Kings must be checkmated within two player
+turns. The puzzle cards do not reveal the intended god or ability. Each position
+includes an optional hint, restart and next-puzzle controls, and level 10 Divine
+AI responses between player turns. Completion check marks are stored in local
+storage while signed out and in the player's account while signed in; puzzle
+positions themselves are not added to local or cloud saves.
+
+Daily puzzles are generated from the copyable checkpoint emitted by hidden
+simulation mode:
+
+```sh
+npm run generate:daily -- path/to/simulation-checkpoint.json [YYYY-MM-DD]
+```
+
+The generator validates the stable rewound state, extracts the winning or
+stalemate side and turn limit, and writes a compact dated file under
+`src/game/dailies/`. Dated files are discovered automatically; no registry edit
+is required.
 
 ## Achievements
 
@@ -208,8 +220,8 @@ The Play menu includes a 50-item achievement gallery with completion states and
 progress bars for cumulative goals. Progress is recorded from canonical game
 transitions in classic, three-player, and four-player matches. Signed-out
 progress is stored in the browser; signing in merges that progress into the
-player's account and future progress is saved there. Cryptologist requires all
-ten Easy, ten Medium, and ten Hard classic puzzles.
+player's account and future progress is saved there. Cryptologist requires 25
+completed puzzles total, including Dailies.
 
 ### Puzzle god index
 
@@ -225,7 +237,7 @@ must update this documentation.
 | Position Three | Death, Midas, Salem | Ares, Chiron, Anubis | Death (resurrect) |
 | Position Four | Leonidas, Teles, Midas | Ares, Chiron, Anubis | Leonidas (escort) |
 | Position Five | Quetzacoatl, Teles, Salem | Ares, Chiron, Anubis | Quetzacoatl (air-strike) |
-| Position Six | Teles, Chiron, Medusa | Ares, Anubis, Salem | Teles (lure); Chiron (charge) |
+| Position Six | Teles, Chiron, Medusa | Quetzacoatl, Artemis, Ares | Teles (lure); Chiron (charge) |
 | Position Seven | Midas, Death, Salem | Ares, Chiron, Anubis | Midas (leverage); Death (resurrect) |
 | Position Eight | Chiron, Kangus Kong, Midas | Ares, Anubis, Salem | Chiron (mount); Kangus Kong (rage) |
 | Position Nine | Anubis, Quetzacoatl, Teles | Ares, Chiron, Salem | Anubis (monument); Quetzacoatl (air-strike) |
@@ -235,8 +247,8 @@ must update this documentation.
 | Position Thirteen | Quetzacoatl, Leonidas, Midas | Ares, Chiron, Anubis | Quetzacoatl (air-lift); Leonidas (escort) |
 | Position Fourteen | Quetzacoatl, Kangus Kong, Medusa | Ares, Chiron, Anubis | Quetzacoatl (flight); Kangus Kong (rage) |
 | Position Fifteen | Ares, Chiron, Salem | Artemis, Anubis, Medusa | Ares (pick-a-fight); Chiron (charge) |
-| Position Sixteen | Medusa, Teles, Chiron | Ares, Chiron, Midas | Medusa (captivate); Teles (enchant); Chiron (charge) |
-| Position Seventeen | Salem, Midas, Death | Ares, Chiron, Anubis | Salem (hex); Midas (leverage); Death (resurrect) |
+| Position Sixteen | Medusa, Teles, Chiron | Quetzacoatl, Anubis, Ares | Medusa (captivate); Teles (enchant); Chiron (charge) |
+| Position Seventeen | Salem, Midas, Death | Quetzacoatl, Anubis, Medusa | Salem (hex); Midas (leverage); Death (resurrect) |
 | Position Eighteen | Midas, Chiron, Kangus Kong | Ares, Anubis, Salem | Midas (barter); Chiron (mount); Kangus Kong (rage) |
 | Position Nineteen | Teles, Anubis, Quetzacoatl | Ares, Chiron, Salem | Teles (resonance); Anubis (construction); Quetzacoatl (air-strike) |
 | Position Twenty | Ares, Midas, Chiron | Artemis, Anubis, Salem | Ares (threaten); Midas (leverage); Chiron (charge) |
@@ -281,6 +293,8 @@ never stored in the game database or browser save records.
 - `npm run dev` starts the development server.
 - `npm test` runs the game-engine tests.
 - `npm run build` type-checks and creates a production build.
+- `npm run generate:daily -- <checkpoint> [YYYY-MM-DD]` creates a dated Daily
+  puzzle from a simulation checkpoint.
 - `npm run printables` regenerates the printable god boards and marker sheets.
 
 Every push to `main` runs the test suite, builds the game, and deploys the

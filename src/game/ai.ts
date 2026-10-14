@@ -309,7 +309,11 @@ const bestTacticalDefense = (
       .filter((piece) => piece.controller === enemy)
       .map((piece) => piece.id),
   );
-  const candidateLimit = state.gameMode === "puzzle" ? 3 : 32;
+  const candidateLimit =
+    state.gameMode === "puzzle" &&
+      !state.puzzleId?.startsWith("daily-")
+      ? 3
+      : 32;
   const candidates = plans
     .map((plan, index) => {
       const king = Object.entries(plan.state.board).find(

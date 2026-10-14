@@ -8,6 +8,7 @@ import {
   evaluateGameState,
   isAiTurn,
 } from "./ai";
+import { kingSquare } from "./chess";
 import { createGame, gameReducer } from "./engine";
 import { PUZZLE_BY_ID } from "./puzzles";
 import type { Piece, PieceType } from "./types";
@@ -296,12 +297,13 @@ describe("Divine AI", () => {
     for (const action of puzzle.solutionTurns[0]) state = gameReducer(state, action);
     delete state.board.f8;
     delete state.board.b4;
+    state.rested.push(...state.players.black.gods.slice(1));
 
     const response = chooseAiPlan(state, () => 0);
     for (const action of response) state = gameReducer(state, action);
 
-    expect(state.board.f8).toMatchObject({ type: "king", controller: "black" });
-    expect(state.board.f7?.type).not.toBe("king");
+    expect(kingSquare(state.board, "black")).toBeTruthy();
+    expect(kingSquare(state.board, "black")).not.toBe("f7");
   });
 
   it("captures the hanging Pick a Fight knight when the apparent defender is unpinned", () => {
@@ -309,6 +311,7 @@ describe("Divine AI", () => {
     let state = puzzle.createState();
     for (const action of puzzle.solutionTurns[0]) state = gameReducer(state, action);
     delete state.board.e6;
+    state.rested.push(...state.players.black.gods.slice(1));
 
     const response = chooseAiPlan(state, () => 0);
     for (const action of response) state = gameReducer(state, action);

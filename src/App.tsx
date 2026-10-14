@@ -91,6 +91,13 @@ import {
   type PuzzleDifficulty,
 } from "./game/puzzles";
 import {
+  createDailyPuzzleGame,
+  currentDailyPuzzle,
+  DAILY_PUZZLE_BY_ID,
+  dailyPuzzleResultMatches,
+  isDailyPuzzleId,
+} from "./game/dailyPuzzles";
+import {
   isThreePlayerPuzzleId,
   THREE_PLAYER_PUZZLE_BY_ID,
   THREE_PLAYER_PUZZLES,
@@ -267,7 +274,7 @@ export const rewindSimulationForExport = (
   random: () => number = Math.random,
 ): SimulationRewindResult => {
   const rewindRounds = 3 + Math.floor(random() * 3);
-  const requestedUndoActions = rewindRounds * 2;
+  const requestedUndoActions = rewindRounds * 2 - 1;
   const remainingUndoHistory = undoHistory.map((snapshot) =>
     prepareSavedState(snapshot)
   );
@@ -1973,7 +1980,7 @@ export function SimulationExportDialog({
         <p className="simulation-result-summary">{data.resultSummary}</p>
         <p>
           Rewound {data.appliedUndoActions} of {data.requestedUndoActions} undo
-          actions ({data.rewindRounds} full rounds).
+          actions for a {data.rewindRounds}-turn Daily window.
         </p>
         <pre
           className="simulation-export-data"
@@ -2348,7 +2355,12 @@ function AchievementsScreen({
   account?: AccountProfile;
   accountControl: ReactNode;
   loading: boolean;
-  puzzleCounts: Record<PuzzleDifficulty, number>;
+  puzzleCounts: {
+    easy: number;
+    medium: number;
+    hard: number;
+    daily: number;
+  };
   onBack: () => void;
 }) {
   const completed = new Set(completedAchievementIds(progress));
@@ -3000,13 +3012,20 @@ function PuzzleSelectScreen({
   onBack: () => void;
   onDismissError: () => void;
 }) {
-  type PuzzleCategory = PuzzleDifficulty | "three-player" | "challenges";
+  type PuzzleCategory =
+    | PuzzleDifficulty
+    | "daily"
+    | "three-player"
+    | "challenges";
   const [difficulty, setDifficulty] = useState<PuzzleCategory>();
-  const visiblePuzzles = difficulty === "three-player"
-    ? THREE_PLAYER_PUZZLES
-    : difficulty && difficulty !== "challenges"
-      ? PUZZLES.filter((puzzle) => puzzle.difficulty === difficulty)
-      : [];
+  const dailyPuzzle = currentDailyPuzzle();
+  const visiblePuzzles = difficulty === "daily"
+    ? dailyPuzzle ? [dailyPuzzle] : []
+    : difficulty === "three-player"
+      ? THREE_PLAYER_PUZZLES
+      : difficulty && difficulty !== "challenges"
+        ? PUZZLES.filter((puzzle) => puzzle.difficulty === difficulty)
+        : [];
   const completedInDifficulty = visiblePuzzles.filter((puzzle) => completedPuzzles.has(puzzle.id)).length;
 
   return (
@@ -3035,6 +3054,12 @@ function PuzzleSelectScreen({
             </p>
             <div className="puzzle-difficulty-grid">
               {([
+                {
+                  id: "daily",
+                  title: "Daily",
+                  description: "Recreate the finish found by a level 10 simulation.",
+                  icon: Sparkles,
+                },
                 {
                   id: "easy",
                   title: "Easy",
@@ -3068,6 +3093,8 @@ function PuzzleSelectScreen({
               ] as const).map((option) => {
                 const puzzles = option.id === "challenges"
                   ? CHALLENGES
+                  : option.id === "daily"
+                    ? dailyPuzzle ? [dailyPuzzle] : []
                   : option.id === "three-player"
                   ? THREE_PLAYER_PUZZLES
                   : PUZZLES.filter((puzzle) => puzzle.difficulty === option.id);
@@ -3103,6 +3130,8 @@ function PuzzleSelectScreen({
                   ? "Medium puzzles"
                   : difficulty === "hard"
                     ? "Hard puzzles"
+                      : difficulty === "daily"
+                        ? "Daily puzzle"
                       : difficulty === "three-player"
                         ? "Three Player puzzles"
                         : "Special challenges"}
@@ -3112,6 +3141,12 @@ function PuzzleSelectScreen({
                 ? "Loading completion history..."
                 : difficulty === "challenges"
                     ? `${completedChallenges.size} of ${CHALLENGES.length} challenges completed`
+                    : difficulty === "daily"
+                      ? dailyPuzzle
+                        ? completedPuzzles.has(dailyPuzzle.id)
+                          ? "The current Daily is complete"
+                          : "Recreate the current Daily simulation finish"
+                        : "No daily puzzle is available yet"
                     : `${completedInDifficulty} of ${visiblePuzzles.length} positions completed`}
             </p>
             <div className="puzzle-select-grid">
@@ -3137,7 +3172,9 @@ function PuzzleSelectScreen({
                     );
                 })
                 : visiblePuzzles.map((puzzle) => {
-                const index = difficulty === "three-player"
+                const index = difficulty === "daily"
+                  ? 0
+                  : difficulty === "three-player"
                   ? visiblePuzzles.findIndex((candidate) => candidate.id === puzzle.id)
                   : PUZZLES.findIndex((candidate) => candidate.id === puzzle.id);
                 const completed = completedPuzzles.has(puzzle.id);
@@ -3146,17 +3183,21 @@ function PuzzleSelectScreen({
                     className={`puzzle-select-card${completed ? " completed" : ""}`}
                     key={puzzle.id}
                     onClick={() => onStartPuzzle(puzzle.id)}
-                    aria-label={`Puzzle ${index + 1}, ${puzzle.title}${completed ? ", completed" : ""}`}
+                    aria-label={difficulty === "daily"
+                      ? `Daily puzzle, ${puzzle.title}${completed ? ", completed" : ""}`
+                      : `Puzzle ${index + 1}, ${puzzle.title}${completed ? ", completed" : ""}`}
                   >
                     {completed && (
                       <span className="puzzle-complete-badge" aria-hidden="true">
                         <Check size={22} strokeWidth={3} />
                       </span>
                     )}
-                    <span>PUZZLE {index + 1}</span>
+                    <span>{difficulty === "daily" ? "DAILY" : `PUZZLE ${index + 1}`}</span>
                     <strong>{puzzle.title}</strong>
                     <small>
-                      {difficulty === "three-player"
+                      {difficulty === "daily"
+                        ? puzzle.objective
+                        : difficulty === "three-player"
                         ? "Checkmate both rivals in two divine turns"
                         : `Win in ${puzzle.playerTurns === 1 ? "one" : puzzle.playerTurns === 2 ? "two" : "three"} divine turn${puzzle.playerTurns === 1 ? "" : "s"}`}
                     </small>
@@ -3256,25 +3297,36 @@ export function GameScreen({
     gameFinished && state.gameMode !== "simulation";
   const [resultOpen, setResultOpen] = useState(showGameResult);
   const kingInCheck = state.phase === "play" && isInCheck(state.board, state.activeColor, state.bananas);
-  const puzzle = state.puzzleId ? PUZZLE_BY_ID[state.puzzleId] : undefined;
+  const dailyPuzzle = state.puzzleId
+    ? DAILY_PUZZLE_BY_ID[state.puzzleId as keyof typeof DAILY_PUZZLE_BY_ID]
+    : undefined;
+  const puzzle = dailyPuzzle ??
+    (state.puzzleId
+      ? PUZZLE_BY_ID[state.puzzleId as keyof typeof PUZZLE_BY_ID]
+      : undefined);
   const challenge = state.challengeId
     ? CHALLENGE_BY_ID[state.challengeId]
     : undefined;
-  const difficultyPuzzles = puzzle
+  const difficultyPuzzles = puzzle && !dailyPuzzle
     ? PUZZLES.filter((candidate) => candidate.difficulty === puzzle.difficulty)
     : [];
   const puzzleIndex = puzzle
     ? difficultyPuzzles.findIndex((candidate) => candidate.id === puzzle.id)
     : -1;
-  const puzzleSolved = Boolean(
-    puzzle &&
-    state.phase === "gameover" &&
-    state.winner &&
-    state.winner !== state.aiColor,
-  );
+  const puzzleSolved = dailyPuzzle
+    ? dailyPuzzleResultMatches(dailyPuzzle, state)
+    : Boolean(
+      puzzle &&
+      state.phase === "gameover" &&
+      state.winner &&
+      state.winner !== state.aiColor,
+    );
   const puzzleFailed = Boolean(
     puzzle &&
-    state.puzzleFailed &&
+    (
+      state.puzzleFailed ||
+      (dailyPuzzle && state.phase === "gameover" && !puzzleSolved)
+    ) &&
     (
       state.phase === "gameover" ||
       state.activeColor !== state.aiColor
@@ -3687,7 +3739,11 @@ export function GameScreen({
         <section className="puzzle-banner">
           <div className="puzzle-banner-title">
             <Crosshair size={18} />
-            <span>PUZZLE {puzzleIndex + 1} OF {difficultyPuzzles.length}</span>
+            <span>
+              {dailyPuzzle
+                ? `DAILY · ${dailyPuzzle.playerTurns} TURN${dailyPuzzle.playerTurns === 1 ? "" : "S"}`
+                : `PUZZLE ${puzzleIndex + 1} OF ${difficultyPuzzles.length}`}
+            </span>
             <strong>{puzzle.title}</strong>
           </div>
           <p>{puzzle.objective}</p>
@@ -3888,10 +3944,16 @@ export function GameScreen({
             <div className="victory-crown"><Crown size={38} /></div>
             <p className="eyebrow">PUZZLE SOLVED</p>
             <h2>{puzzle.title}</h2>
-            <p>You found a winning line and captured the opposing King.</p>
+            <p>
+              {dailyPuzzle
+                ? dailyPuzzle.completionText
+                : "You found a winning line and captured the opposing King."}
+            </p>
             <div className="puzzle-result-actions">
               <button className="primary-button" onClick={onNextPuzzle}>
-                {puzzleIndex === difficultyPuzzles.length - 1 ? "Choose another puzzle" : "Next puzzle"}
+                {dailyPuzzle || puzzleIndex === difficultyPuzzles.length - 1
+                  ? "Choose another puzzle"
+                  : "Next puzzle"}
               </button>
               <button className="secondary-button" onClick={onRestartPuzzle}>Play again</button>
             </div>
@@ -3904,7 +3966,11 @@ export function GameScreen({
             <div className="victory-crown"><Crosshair size={38} /></div>
             <p className="eyebrow">WINNING LINE MISSED</p>
             <h2>Try the position again</h2>
-            <p>The level 10 Divine AI found its best response. Use the hint or restart from the original position.</p>
+            <p>
+              {dailyPuzzle
+                ? "The required simulation result was not reached within the turn limit. Retry from the checkpoint and look for a stronger continuation."
+                : "The level 10 Divine AI found its best response. Use the hint or restart from the original position."}
+            </p>
             <div className="puzzle-result-actions">
               <button className="primary-button" onClick={onRestartPuzzle}>Retry puzzle</button>
               <button className="secondary-button" onClick={onRestart}>Choose another puzzle</button>
@@ -4411,9 +4477,10 @@ export default function App() {
         (result, puzzleId) => {
           const puzzle = PUZZLE_BY_ID[puzzleId as keyof typeof PUZZLE_BY_ID];
           if (puzzle) result[puzzle.difficulty] += 1;
+          else if (puzzleId in DAILY_PUZZLE_BY_ID) result.daily += 1;
           return result;
         },
-        { easy: 0, medium: 0, hard: 0 } as Record<PuzzleDifficulty, number>,
+        { easy: 0, medium: 0, hard: 0, daily: 0 },
       ),
     [completedPuzzleIds],
   );
@@ -4818,20 +4885,30 @@ export default function App() {
 
   useEffect(() => {
     const puzzleId = state.puzzleId;
-    const solved =
+    const dailyPuzzle = puzzleId
+      ? DAILY_PUZZLE_BY_ID[puzzleId as keyof typeof DAILY_PUZZLE_BY_ID]
+      : undefined;
+    const solved = Boolean(
       puzzleId &&
       state.gameMode === "puzzle" &&
-      state.phase === "gameover" &&
-      state.winner &&
-      state.winner !== state.aiColor;
+      (
+        dailyPuzzle
+          ? dailyPuzzleResultMatches(dailyPuzzle, state)
+          : state.phase === "gameover" &&
+            state.winner &&
+            state.winner !== state.aiColor
+      )
+    );
     if (!solved || !puzzleId) return;
     recordPuzzleCompletion(puzzleId);
   }, [
     recordPuzzleCompletion,
+    state.activeColor,
     state.aiColor,
     state.gameMode,
     state.phase,
     state.puzzleId,
+    state.result,
     state.winner,
   ]);
 
@@ -5742,7 +5819,15 @@ export default function App() {
       return;
     }
     setThreePlayerSession(undefined);
-    const next = createPuzzleGame(puzzleId, accountService.account?.displayName);
+    const next = isDailyPuzzleId(puzzleId)
+      ? createDailyPuzzleGame(
+        puzzleId,
+        accountService.account?.displayName,
+      )
+      : createPuzzleGame(
+        puzzleId,
+        accountService.account?.displayName,
+      );
     resetUndoTracking(next);
     receiveState(next);
     aiPlan.current = [];
@@ -5856,6 +5941,10 @@ export default function App() {
   };
   const nextPuzzle = () => {
     if (!state.puzzleId) return;
+    if (isDailyPuzzleId(state.puzzleId)) {
+      setStartView("puzzles");
+      return;
+    }
     const current = PUZZLE_BY_ID[state.puzzleId];
     const difficultyPuzzles = PUZZLES.filter((puzzle) => puzzle.difficulty === current.difficulty);
     const index = difficultyPuzzles.findIndex((puzzle) => puzzle.id === state.puzzleId);

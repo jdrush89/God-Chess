@@ -17,11 +17,13 @@ describe("puzzle progress", () => {
       "centaurs-lance",
       "opened-file",
       "three-frontier-fork",
+      "daily-2026-10-14",
       "unknown-position",
     ])).toEqual([
       "centaurs-lance",
       "opened-file",
       "three-frontier-fork",
+      "daily-2026-10-14",
     ]);
   });
 
@@ -30,11 +32,13 @@ describe("puzzle progress", () => {
       "centaurs-lance",
       "opened-file",
       "three-frontier-fork",
+      "daily-2026-10-14",
     ]);
     expect(loadLocalCompletedPuzzles()).toEqual([
       "centaurs-lance",
       "opened-file",
       "three-frontier-fork",
+      "daily-2026-10-14",
     ]);
     expect(window.localStorage.getItem(PUZZLE_PROGRESS_KEY)).toBeTruthy();
   });
