@@ -889,6 +889,10 @@ span.move-target-dot {
 .setup-account-area .main-account-menu {
   position: absolute; top: 100%; right: 0;
 }
+.puzzle-account-area {
+  top: 0;
+  right: 0;
+}
 .main-menu-shade {
   position: absolute; inset: 0;
   background:
@@ -1085,6 +1089,9 @@ span.move-target-dot {
 .three-game-page > .three-game-topbar,
 .draft-page > .draft-topbar {
   padding-right: max(128px, calc(env(safe-area-inset-right) + 128px));
+}
+.draft-page > .roster-topbar {
+  padding-right: 38px;
 }
 .escape-menu-backdrop {
   position: fixed; z-index: 70; inset: 0; display: grid; place-items: center; padding: 24px;
@@ -2936,6 +2943,8 @@ span.move-target-dot {
   .setup-navigation-header { min-height: 58px; padding: 8px 12px; }
   .setup-navigation-header > span { display: none; }
   .setup-navigation-back { min-height: 38px; }
+  .draft-page > .roster-topbar { padding: 8px 12px; }
+  .roster-topbar .draft-turn { display: none; }
   .play-menu-heading { margin: 34px auto 24px; }
   .play-menu-grid { grid-template-columns: 1fr; width: calc(100% - 24px); gap: 10px; }
   .play-menu-grid > button { min-height: 112px; flex-direction: row; gap: 12px; }

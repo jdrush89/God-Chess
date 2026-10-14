@@ -204,6 +204,9 @@ export function BoardViewport({
       .filter(([, pointer]) => pointer.pointerType === "touch");
     if (touches.length < 2) return;
     const [[firstId, first], [secondId, second]] = touches;
+    const viewport = viewportRef.current;
+    viewport?.setPointerCapture?.(firstId);
+    viewport?.setPointerCapture?.(secondId);
     dragGesture.current = undefined;
     pinchGesture.current = {
       pointerIds: [firstId, secondId],
@@ -221,7 +224,6 @@ export function BoardViewport({
       ...point,
       pointerType: event.pointerType,
     });
-    event.currentTarget.setPointerCapture?.(event.pointerId);
     if (
       event.pointerType === "touch" &&
       [...activePointers.current.values()].filter(
@@ -279,7 +281,10 @@ export function BoardViewport({
     const deltaX = point.x - drag.start.x;
     const deltaY = point.y - drag.start.y;
     if (!drag.moved && Math.hypot(deltaX, deltaY) < 5) return;
-    drag.moved = true;
+    if (!drag.moved) {
+      drag.moved = true;
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+    }
     suppressClicksUntil.current = Number.POSITIVE_INFINITY;
     event.preventDefault();
     commitTransform({
