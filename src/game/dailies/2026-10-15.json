@@ -1,0 +1,380 @@
+{
+  "schema": 1,
+  "date": "2026-10-15",
+  "resultSummary": "White checkmated in 13 turns.",
+  "playerColor": "white",
+  "playerTurns": 5,
+  "targetResult": {
+    "kind": "winner",
+    "winner": "white",
+    "reason": "checkmate"
+  },
+  "state": {
+    "phase": "play",
+    "gameMode": "local",
+    "aiDifficulty": 10,
+    "board": {
+      "a1": {
+        "id": "white-rook-0",
+        "type": "rook",
+        "color": "white",
+        "controller": "white",
+        "hasMoved": false,
+        "status": {
+          "hexedBy": "black"
+        }
+      },
+      "a2": {
+        "id": "white-pawn-0",
+        "type": "pawn",
+        "color": "white",
+        "controller": "white",
+        "hasMoved": false,
+        "status": {
+          "hexedBy": "black"
+        }
+      },
+      "b2": {
+        "id": "white-pawn-1",
+        "type": "pawn",
+        "color": "white",
+        "controller": "white",
+        "hasMoved": false,
+        "status": {}
+      },
+      "c1": {
+        "id": "white-bishop-2",
+        "type": "bishop",
+        "color": "white",
+        "controller": "white",
+        "hasMoved": false,
+        "status": {}
+      },
+      "c2": {
+        "id": "white-pawn-2",
+        "type": "pawn",
+        "color": "white",
+        "controller": "white",
+        "hasMoved": false,
+        "status": {}
+      },
+      "d1": {
+        "id": "white-queen-3",
+        "type": "queen",
+        "color": "white",
+        "controller": "white",
+        "hasMoved": false,
+        "status": {}
+      },
+      "e1": {
+        "id": "white-king-4",
+        "type": "king",
+        "color": "white",
+        "controller": "white",
+        "hasMoved": false,
+        "status": {}
+      },
+      "e2": {
+        "id": "white-pawn-4",
+        "type": "pawn",
+        "color": "white",
+        "controller": "white",
+        "hasMoved": false,
+        "status": {}
+      },
+      "f1": {
+        "id": "white-bishop-5",
+        "type": "bishop",
+        "color": "white",
+        "controller": "white",
+        "hasMoved": false,
+        "status": {}
+      },
+      "f2": {
+        "id": "white-pawn-5",
+        "type": "pawn",
+        "color": "white",
+        "controller": "white",
+        "hasMoved": false,
+        "status": {}
+      },
+      "g1": {
+        "id": "white-knight-6",
+        "type": "knight",
+        "color": "white",
+        "controller": "white",
+        "hasMoved": false,
+        "status": {}
+      },
+      "g2": {
+        "id": "white-pawn-6",
+        "type": "pawn",
+        "color": "white",
+        "controller": "white",
+        "hasMoved": false,
+        "status": {}
+      },
+      "h1": {
+        "id": "white-rook-7",
+        "type": "rook",
+        "color": "white",
+        "controller": "white",
+        "hasMoved": false,
+        "status": {}
+      },
+      "h2": {
+        "id": "white-pawn-7",
+        "type": "pawn",
+        "color": "white",
+        "controller": "white",
+        "hasMoved": false,
+        "status": {}
+      },
+      "a8": {
+        "id": "black-rook-0",
+        "type": "rook",
+        "color": "black",
+        "controller": "black",
+        "hasMoved": false,
+        "status": {}
+      },
+      "a7": {
+        "id": "black-pawn-0",
+        "type": "pawn",
+        "color": "black",
+        "controller": "black",
+        "hasMoved": false,
+        "status": {}
+      },
+      "b8": {
+        "id": "black-knight-1",
+        "type": "knight",
+        "color": "black",
+        "controller": "black",
+        "hasMoved": false,
+        "status": {}
+      },
+      "c7": {
+        "id": "black-pawn-2",
+        "type": "pawn",
+        "color": "black",
+        "controller": "black",
+        "hasMoved": false,
+        "status": {}
+      },
+      "d8": {
+        "id": "black-queen-3",
+        "type": "queen",
+        "color": "black",
+        "controller": "black",
+        "hasMoved": false,
+        "status": {}
+      },
+      "d7": {
+        "id": "black-pawn-3",
+        "type": "pawn",
+        "color": "black",
+        "controller": "black",
+        "hasMoved": false,
+        "status": {}
+      },
+      "e8": {
+        "id": "black-king-4",
+        "type": "king",
+        "color": "black",
+        "controller": "black",
+        "hasMoved": false,
+        "status": {}
+      },
+      "e7": {
+        "id": "black-pawn-4",
+        "type": "pawn",
+        "color": "black",
+        "controller": "black",
+        "hasMoved": false,
+        "status": {}
+      },
+      "f8": {
+        "id": "black-bishop-5",
+        "type": "bishop",
+        "color": "black",
+        "controller": "black",
+        "hasMoved": false,
+        "status": {}
+      },
+      "f7": {
+        "id": "black-pawn-5",
+        "type": "pawn",
+        "color": "black",
+        "controller": "black",
+        "hasMoved": false,
+        "status": {}
+      },
+      "g8": {
+        "id": "black-knight-6",
+        "type": "knight",
+        "color": "black",
+        "controller": "black",
+        "hasMoved": false,
+        "status": {}
+      },
+      "h8": {
+        "id": "black-rook-7",
+        "type": "rook",
+        "color": "black",
+        "controller": "black",
+        "hasMoved": false,
+        "status": {}
+      },
+      "h7": {
+        "id": "black-pawn-7",
+        "type": "pawn",
+        "color": "black",
+        "controller": "black",
+        "hasMoved": false,
+        "status": {}
+      },
+      "d3": {
+        "id": "white-pawn-3",
+        "type": "pawn",
+        "color": "white",
+        "controller": "white",
+        "hasMoved": true,
+        "status": {}
+      },
+      "b6": {
+        "id": "black-pawn-1",
+        "type": "pawn",
+        "color": "black",
+        "controller": "black",
+        "hasMoved": true,
+        "status": {}
+      },
+      "b7": {
+        "id": "black-bishop-2",
+        "type": "bishop",
+        "color": "black",
+        "controller": "black",
+        "hasMoved": true,
+        "status": {}
+      },
+      "c4": {
+        "id": "white-knight-1",
+        "type": "knight",
+        "color": "white",
+        "controller": "white",
+        "hasMoved": true,
+        "status": {}
+      },
+      "g6": {
+        "id": "black-pawn-6",
+        "type": "pawn",
+        "color": "black",
+        "controller": "black",
+        "hasMoved": true,
+        "status": {}
+      }
+    },
+    "players": {
+      "white": {
+        "name": "White Level 10 CPU",
+        "color": "white",
+        "gods": [
+          "artemis",
+          "medusa",
+          "anubis"
+        ],
+        "godSkins": {
+          "artemis": "base",
+          "medusa": "base",
+          "anubis": "base"
+        },
+        "orbs": {
+          "white": 1,
+          "black": 0
+        },
+        "graveyard": [],
+        "upgrades": {
+          "take-cover": 2
+        }
+      },
+      "black": {
+        "name": "Black Level 10 CPU",
+        "color": "black",
+        "gods": [
+          "chiron",
+          "salem",
+          "ares"
+        ],
+        "godSkins": {
+          "chiron": "base",
+          "salem": "base",
+          "ares": "base"
+        },
+        "orbs": {
+          "white": 0,
+          "black": 0
+        },
+        "graveyard": [],
+        "upgrades": {
+          "gallop": 2
+        }
+      }
+    },
+    "activeColor": "white",
+    "whitePlayer": 1,
+    "draft": {
+      "order": [
+        "white",
+        "black",
+        "black",
+        "white",
+        "white",
+        "black"
+      ],
+      "pickIndex": 6,
+      "available": [
+        "quetzacoatl",
+        "teles",
+        "kangus",
+        "death",
+        "leonidas",
+        "midas"
+      ]
+    },
+    "rested": [],
+    "round": 2,
+    "turn": 7,
+    "upgradeQueue": [],
+    "legalTargets": [],
+    "bananas": [],
+    "stealth": {
+      "white": [],
+      "black": []
+    },
+    "orbAnimations": [],
+    "nextOrbAnimationId": 2,
+    "captureAnimations": [],
+    "nextCaptureAnimationId": 1,
+    "nextPresentationId": 23,
+    "history": [
+      "Black upgraded Gallop with Chiron to level 2.",
+      "White upgraded Take Cover with Artemis to level 2.",
+      "Black used Threaten with Ares: Pawn at g7 -> g6.",
+      "White used Take Cover with Artemis: Knight at d2 -> c4.",
+      "Black used Hex with Salem: Bishop at c8 -> b7.",
+      "White used Construction with Anubis: Knight at b1 -> d2.",
+      "Black used Gallop with Chiron: Pawn at b7 -> b6.",
+      "White used Captivate with Medusa: Pawn at d2 -> d3.",
+      "Black drafted Ares.",
+      "White drafted Anubis.",
+      "White drafted Medusa.",
+      "Black drafted Salem.",
+      "Black drafted Chiron.",
+      "White drafted Artemis.",
+      "Hidden CPU simulation started."
+    ],
+    "notice": "Round 2. White to act.",
+    "lastAction": "Black upgraded Gallop with Chiron to level 2."
+  }
+}
