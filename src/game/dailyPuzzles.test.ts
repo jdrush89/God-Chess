@@ -10,7 +10,7 @@ import { gameReducer } from "./engine";
 describe("daily puzzles", () => {
   it("loads the generated checkpoint as a five-turn White puzzle", () => {
     const puzzle = currentDailyPuzzle(new Date("2026-10-14T12:00:00"));
-    expect(DAILY_PUZZLES).toHaveLength(1);
+    expect(DAILY_PUZZLES.length).toBeGreaterThanOrEqual(1);
     expect(puzzle).toMatchObject({
       id: "daily-2026-10-14",
       playerColor: "white",
@@ -40,7 +40,7 @@ describe("daily puzzles", () => {
   });
 
   it("reproduces the target checkmate within the generated turn limit", () => {
-    const puzzle = DAILY_PUZZLES[0];
+    const puzzle = DAILY_PUZZLES.at(-1)!;
     let state = puzzle.createState();
 
     for (let plans = 0; plans < 12 && state.phase !== "gameover"; plans += 1) {

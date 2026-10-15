@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && node scripts/generate-route-indexes.mjs",
     "generate:daily": "vite-node scripts/generate-daily-puzzle.ts",
     "printables": "node scripts/generate-printables.mjs",
     "test": "vitest run",
