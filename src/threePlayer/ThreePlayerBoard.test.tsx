@@ -99,6 +99,10 @@ describe("ThreePlayerBoard", () => {
       clientX: 30,
       clientY: 30,
     });
+    expect(container.querySelector(
+      `[data-cell="${source}"] .three-board-piece`,
+    )).toBeNull();
+    expect(container.querySelector(".three-piece-drag-preview")).toBeTruthy();
     fireEvent.pointerUp(container.querySelector(`[data-cell="${target}"]`)!, {
       pointerId: 1,
       clientX: 30,

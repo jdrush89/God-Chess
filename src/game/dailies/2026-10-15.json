@@ -376,5 +376,132 @@
     ],
     "notice": "Round 2. White to act.",
     "lastAction": "Black upgraded Gallop with Chiron to level 2."
-  }
+  },
+  "solutionActions": [
+    {
+      "type": "select-god",
+      "godId": "anubis"
+    },
+    {
+      "type": "select-ability",
+      "abilityId": "construction"
+    },
+    {
+      "type": "pass"
+    },
+    {
+      "type": "select-god",
+      "godId": "ares"
+    },
+    {
+      "type": "select-ability",
+      "abilityId": "threaten"
+    },
+    {
+      "type": "square",
+      "square": "b7"
+    },
+    {
+      "type": "square",
+      "square": "d5"
+    },
+    {
+      "type": "select-god",
+      "godId": "medusa"
+    },
+    {
+      "type": "select-ability",
+      "abilityId": "captivate"
+    },
+    {
+      "type": "square",
+      "square": "e2"
+    },
+    {
+      "type": "square",
+      "square": "e4"
+    },
+    {
+      "type": "select-god",
+      "godId": "chiron"
+    },
+    {
+      "type": "select-ability",
+      "abilityId": "gallop"
+    },
+    {
+      "type": "square",
+      "square": "d5"
+    },
+    {
+      "type": "square",
+      "square": "c4"
+    },
+    {
+      "type": "select-god",
+      "godId": "artemis"
+    },
+    {
+      "type": "select-ability",
+      "abilityId": "take-cover"
+    },
+    {
+      "type": "square",
+      "square": "d3"
+    },
+    {
+      "type": "square",
+      "square": "c4"
+    },
+    {
+      "type": "select-god",
+      "godId": "salem"
+    },
+    {
+      "type": "select-ability",
+      "abilityId": "hex"
+    },
+    {
+      "type": "square",
+      "square": "a7"
+    },
+    {
+      "type": "square",
+      "square": "a5"
+    },
+    {
+      "type": "preview-upgrade",
+      "godId": "artemis",
+      "abilityId": "stealth"
+    },
+    {
+      "type": "upgrade",
+      "abilityId": "stealth"
+    },
+    {
+      "type": "preview-upgrade",
+      "godId": "chiron",
+      "abilityId": "mount"
+    },
+    {
+      "type": "upgrade",
+      "abilityId": "mount"
+    },
+    {
+      "type": "select-god",
+      "godId": "anubis"
+    },
+    {
+      "type": "select-ability",
+      "abilityId": "harden"
+    },
+    {
+      "type": "square",
+      "square": "d1"
+    },
+    {
+      "type": "square",
+      "square": "d7"
+    }
+  ]
 }

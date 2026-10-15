@@ -115,6 +115,7 @@ export const useBoardDrag = <Cell extends string>({
 
   return {
     preview,
+    draggingSource: preview?.source,
     consumeClick,
     pointerHandlers: {
       onPointerMove,

@@ -5,6 +5,7 @@ import type {
   GameState,
   PuzzleId,
 } from "./types";
+import type { GameAction } from "./engine";
 import { opposite } from "./types";
 
 export type DailyTargetResult =
@@ -22,6 +23,7 @@ export interface DailyPuzzleSource {
   playerColor: Color;
   playerTurns: number;
   targetResult: DailyTargetResult;
+  solutionActions: GameAction[];
   state: GameState;
 }
 
@@ -36,6 +38,7 @@ export interface DailyPuzzleDefinition {
   playerColor: Color;
   playerTurns: number;
   targetResult: DailyTargetResult;
+  solutionActions: GameAction[];
   createState: (playerName?: string) => GameState;
 }
 
@@ -100,7 +103,9 @@ const createDailyState = (
   state.players[aiColor].name = `${colorLabel(aiColor)} Level 10 CPU`;
   state.history = [
     `Daily puzzle: ${formatDailyDate(source.date)}`,
-    ...state.history.slice(-29),
+    ...state.history
+      .filter((entry) => !/simulation/i.test(entry))
+      .slice(0, 29),
   ];
   state.notice = objectiveFor(source);
   return state;
@@ -116,6 +121,8 @@ const isDailyPuzzleSource = (value: unknown): value is DailyPuzzleSource => {
     Number.isInteger(source.playerTurns) &&
     Number(source.playerTurns) > 0 &&
     Boolean(source.targetResult) &&
+    Array.isArray(source.solutionActions) &&
+    source.solutionActions.length > 0 &&
     Boolean(source.state);
 };
 
@@ -138,6 +145,7 @@ export const DAILY_PUZZLES: DailyPuzzleDefinition[] = Object.values(modules)
     playerColor: source.playerColor,
     playerTurns: source.playerTurns,
     targetResult: source.targetResult,
+    solutionActions: structuredClone(source.solutionActions),
     createState: (playerName?: string) =>
       createDailyState(source, playerName),
   }));

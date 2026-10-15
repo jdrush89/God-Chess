@@ -573,5 +573,55 @@
       "id": 330,
       "color": "black"
     }
-  }
+  },
+  "solutionActions": [
+    {
+      "type": "select-god",
+      "godId": "anubis"
+    },
+    {
+      "type": "select-ability",
+      "abilityId": "construction"
+    },
+    {
+      "type": "square",
+      "square": "h2"
+    },
+    {
+      "type": "square",
+      "square": "h7"
+    },
+    {
+      "type": "select-god",
+      "godId": "salem"
+    },
+    {
+      "type": "select-ability",
+      "abilityId": "hex"
+    },
+    {
+      "type": "square",
+      "square": "b7"
+    },
+    {
+      "type": "square",
+      "square": "b8"
+    },
+    {
+      "type": "select-god",
+      "godId": "kangus"
+    },
+    {
+      "type": "select-ability",
+      "abilityId": "ritual-sacrifice"
+    },
+    {
+      "type": "square",
+      "square": "e5"
+    },
+    {
+      "type": "square",
+      "square": "e8"
+    }
+  ]
 }

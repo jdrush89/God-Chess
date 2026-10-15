@@ -19,6 +19,7 @@ import {
   Crosshair,
   Download,
   Eye,
+  Flag,
   Flame,
   FlaskConical,
   GraduationCap,
@@ -241,6 +242,7 @@ export interface SimulationExportData {
   requestedUndoActions: number;
   appliedUndoActions: number;
   terminalResult?: GameState["result"];
+  solutionActions: GameAction[];
   save: TwoPlayerSavedGame;
 }
 
@@ -279,6 +281,7 @@ export const rewindSimulationForExport = (
   undoHistory: GameState[],
   completedTurns: number,
   random: () => number = Math.random,
+  completedActionGroups: GameAction[][] = [],
 ): SimulationRewindResult => {
   const rewindRounds = 3 + Math.floor(random() * 3);
   const requestedUndoActions = rewindRounds * 2 - 1;
@@ -319,6 +322,9 @@ export const rewindSimulationForExport = (
       terminalResult: terminal.result
         ? structuredClone(terminal.result)
         : undefined,
+      solutionActions: completedActionGroups
+        .slice(-appliedUndoActions)
+        .flatMap((actions) => structuredClone(actions)),
       save,
     },
   };
@@ -1145,7 +1151,9 @@ export function ChessBoard({
                   </span>
                 )}
                 {banana && <span className="banana" title="Banana peel">⌁</span>}
-                {piece && <PieceView piece={piece} />}
+                {piece && drag.draggingSource !== square && (
+                  <PieceView piece={piece} />
+                )}
               </button>
             );
           })}
@@ -2010,6 +2018,7 @@ export function SimulationExportDialog({
         requestedUndoActions: data.requestedUndoActions,
         appliedUndoActions: data.appliedUndoActions,
       },
+      solutionActions: data.solutionActions,
       save: data.save,
     }, null, 2), [data]);
 
@@ -3321,6 +3330,9 @@ export function GameScreen({
   dispatch,
   onRestart,
   onRestartPuzzle,
+  onGiveUpDaily,
+  dailyReplayActive = false,
+  dailySolutionRevealed = false,
   onNextPuzzle,
   inputDisabled = false,
   opponentColor,
@@ -3339,6 +3351,9 @@ export function GameScreen({
   dispatch: GameDispatch;
   onRestart: () => void;
   onRestartPuzzle: () => void;
+  onGiveUpDaily?: () => void;
+  dailyReplayActive?: boolean;
+  dailySolutionRevealed?: boolean;
   onNextPuzzle: () => void;
   inputDisabled?: boolean;
   opponentColor?: Color;
@@ -3779,9 +3794,22 @@ export function GameScreen({
       <header className="topbar">
         <Brand />
         <div className="game-meta" data-tutorial="round-and-turn">
-          <span>ROUND <strong>{state.round}</strong></span>
-          <i />
-          <span>TURN <strong>{state.turn}</strong></span>
+          {dailyPuzzle
+            ? (
+              <span>
+                TURNS LEFT{" "}
+                <strong>
+                  {state.puzzlePlayerTurnsRemaining ?? dailyPuzzle.playerTurns}
+                </strong>
+              </span>
+            )
+            : (
+              <>
+                <span>ROUND <strong>{state.round}</strong></span>
+                <i />
+                <span>TURN <strong>{state.turn}</strong></span>
+              </>
+            )}
           {onlineRoomCode && <><i /><span>ROOM <strong>{onlineRoomCode}</strong></span></>}
         </div>
         <div className="header-actions" data-tutorial="match-controls">
@@ -3821,6 +3849,12 @@ export function GameScreen({
               {puzzleHintOpen ? "Hide hint" : "Show hint"}
             </button>
             <button onClick={onRestartPuzzle}><RotateCcw size={15} />Restart</button>
+            {dailyPuzzle && onGiveUpDaily && (
+              <button onClick={onGiveUpDaily} disabled={dailyReplayActive}>
+                <Flag size={15} />
+                {dailyReplayActive ? "Solving..." : "Give up"}
+              </button>
+            )}
           </div>
           {puzzleHintOpen && <small>{puzzle.hint}</small>}
         </section>
@@ -4011,11 +4045,15 @@ export function GameScreen({
         <div className="modal-backdrop">
           <section className="gameover-modal">
             <div className="victory-crown"><Crown size={38} /></div>
-            <p className="eyebrow">PUZZLE SOLVED</p>
+            <p className="eyebrow">
+              {dailySolutionRevealed ? "SOLUTION SHOWN" : "PUZZLE SOLVED"}
+            </p>
             <h2>{puzzle.title}</h2>
             <p>
               {dailyPuzzle
-                ? dailyPuzzle.completionText
+                ? dailySolutionRevealed
+                  ? "The CPU's original winning line has been replayed."
+                  : dailyPuzzle.completionText
                 : "You found a winning line and captured the opposing King."}
             </p>
             <div className="puzzle-result-actions">
@@ -4602,8 +4640,13 @@ export default function App() {
     white: 0,
     black: 0,
   });
+  const simulationActionGroups = useRef<GameAction[][]>([]);
+  const simulationCurrentActions = useRef<GameAction[]>([]);
   const [simulationExport, setSimulationExport] =
     useState<SimulationExportData>();
+  const [dailyReplayActions, setDailyReplayActions] =
+    useState<GameAction[]>();
+  const dailyGivenUpPuzzleId = useRef<PuzzleId | undefined>(undefined);
   const quickDraftPending = useRef(false);
   const undoStack = useRef<GameState[]>([]);
   const undoDepthRef = useRef(0);
@@ -5051,7 +5094,11 @@ export default function App() {
             state.winner !== state.aiColor
       )
     );
-    if (!solved || !puzzleId) return;
+    if (
+      !solved ||
+      !puzzleId ||
+      dailyGivenUpPuzzleId.current === puzzleId
+    ) return;
     recordPuzzleCompletion(puzzleId);
   }, [
     recordPuzzleCompletion,
@@ -5118,6 +5165,15 @@ export default function App() {
     updateUndoDepth();
   };
   const applyTrackedAction = (current: GameState, action: GameAction) => {
+    if (
+      current.gameMode === "simulation" &&
+      (current.phase === "play" || current.phase === "upgrade")
+    ) {
+      simulationCurrentActions.current = [
+        ...simulationCurrentActions.current,
+        structuredClone(action),
+      ];
+    }
     const next = gameReducer(current, action);
     const completedPlayTurn =
       current.phase === "play" &&
@@ -5141,7 +5197,11 @@ export default function App() {
         next.upgradeQueue.length !== current.upgradeQueue.length
       );
     if (current.phase === "draft" && next.phase === "play") {
-      resetUndoTracking(next);
+        if (current.gameMode === "simulation") {
+          simulationActionGroups.current = [];
+          simulationCurrentActions.current = [];
+        }
+        resetUndoTracking(next);
     } else if (
       current.phase === "play" &&
       (
@@ -5163,6 +5223,16 @@ export default function App() {
       ];
       updateUndoDepth();
       turnStart.current = next.phase === "play" ? prepareSavedState(next) : undefined;
+    }
+    if (
+      current.gameMode === "simulation" &&
+      (completedPlayTurn || completedUpgrade)
+    ) {
+      simulationActionGroups.current = [
+        ...simulationActionGroups.current,
+        simulationCurrentActions.current,
+      ];
+      simulationCurrentActions.current = [];
     }
     recordActionTransition({
       variant: "classic",
@@ -5257,6 +5327,8 @@ export default function App() {
       terminal,
       undoStack.current,
       completedTurns,
+      Math.random,
+      simulationActionGroups.current,
     );
     undoStack.current = rewound.undoHistory;
     updateUndoDepth();
@@ -5421,6 +5493,8 @@ export default function App() {
     aiPlan.current = [];
     clearUndoHistory();
     simulationCompletedTurns.current = { white: 0, black: 0 };
+    simulationActionGroups.current = [];
+    simulationCurrentActions.current = [];
     setSimulationExport(undefined);
     activeSaveId.current = undefined;
     setStartView("menu");
@@ -5452,6 +5526,7 @@ export default function App() {
       threePlayerSession ||
       startView !== "none" ||
       simulationExport ||
+      dailyReplayActions ||
       !isAiTurn(state)
     ) {
       aiPlan.current = [];
@@ -5646,10 +5721,29 @@ export default function App() {
     aiPlanReady,
     fourPlayerSession,
     simulationExport,
+    dailyReplayActions,
     threePlayerSession,
     startView,
     state,
   ]);
+
+  useEffect(() => {
+    const action = dailyReplayActions?.[0];
+    if (!action) {
+      if (dailyReplayActions) setDailyReplayActions(undefined);
+      return;
+    }
+    const puzzleId = dailyGivenUpPuzzleId.current;
+    const timer = window.setTimeout(() => {
+      if (!puzzleId || stateRef.current.puzzleId !== puzzleId) {
+        setDailyReplayActions(undefined);
+        return;
+      }
+      dispatch(action);
+      setDailyReplayActions((current) => current?.slice(1));
+    }, aiActionDelay(action));
+    return () => window.clearTimeout(timer);
+  }, [dailyReplayActions]);
 
   useEffect(() => {
     if (online.started) setStartView("none");
@@ -5899,6 +5993,8 @@ export default function App() {
     setThreePlayerSession(undefined);
     activeSaveId.current = undefined;
     simulationCompletedTurns.current = { white: 0, black: 0 };
+    simulationActionGroups.current = [];
+    simulationCurrentActions.current = [];
     setSimulationExport(undefined);
     const next = createGame(1, {
       mode: "simulation",
@@ -5952,6 +6048,8 @@ export default function App() {
     fourOnlineActions.disconnect();
     threeOnlineActions.disconnect();
     simulationCompletedTurns.current = { white: 0, black: 0 };
+    setDailyReplayActions(undefined);
+    dailyGivenUpPuzzleId.current = undefined;
     setFourPlayerSession(undefined);
     const id = saveId();
     activeSaveId.current = id;
@@ -6092,6 +6190,20 @@ export default function App() {
     if (!state.puzzleId) return;
     beginPuzzle(state.puzzleId);
   };
+  const giveUpDaily = () => {
+    if (!state.puzzleId || !isDailyPuzzleId(state.puzzleId)) return;
+    const puzzle = DAILY_PUZZLE_BY_ID[state.puzzleId];
+    if (!puzzle?.solutionActions.length) return;
+    const next = createDailyPuzzleGame(
+      state.puzzleId,
+      accountService.account?.displayName,
+    );
+    dailyGivenUpPuzzleId.current = state.puzzleId;
+    aiPlan.current = [];
+    resetUndoTracking(next);
+    receiveState(next);
+    setDailyReplayActions(structuredClone(puzzle.solutionActions));
+  };
   const nextPuzzle = () => {
     if (!state.puzzleId) return;
     if (isDailyPuzzleId(state.puzzleId)) {
@@ -6128,6 +6240,7 @@ export default function App() {
     state.activeColor !== state.aiColor;
   const inputDisabled =
     isAiTurn(state) ||
+    Boolean(dailyReplayActions) ||
     puzzleInputLocked ||
     (
       state.gameMode === "online" &&
@@ -6727,6 +6840,15 @@ export default function App() {
             }
             onRestart={openNewGame}
             onRestartPuzzle={restartPuzzle}
+            onGiveUpDaily={
+              state.puzzleId && isDailyPuzzleId(state.puzzleId)
+                ? giveUpDaily
+                : undefined
+            }
+            dailyReplayActive={Boolean(dailyReplayActions)}
+            dailySolutionRevealed={
+              dailyGivenUpPuzzleId.current === state.puzzleId
+            }
             onNextPuzzle={nextPuzzle}
           />
         )}

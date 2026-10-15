@@ -225,6 +225,7 @@ export function ThreePlayerBoard({
         const isSelected = descriptor.id === selectedCell;
         const isProvisionalSource = descriptor.id === provisionalSource;
         const isProvisionalDestination = descriptor.id === provisionalDestination;
+        const isDraggedSource = drag.draggingSource === descriptor.id;
         const statusLabels = piece ? threePlayerPieceStatusLabels(piece) : [];
         const visualClass = descriptor.geometricClass === 2 &&
           threePlayerHasAlternatingNeutralCells(variant)
@@ -323,7 +324,7 @@ export function ThreePlayerBoard({
                 aria-hidden="true"
               />
             )}
-            {piece && !preview && (
+            {piece && !preview && !isDraggedSource && (
               <text
                 className={`three-board-piece seat-${piece.controller ?? piece.owner} ${piece.controller ? "" : "inert"}`}
                 x={descriptor.render.x}
@@ -338,7 +339,7 @@ export function ThreePlayerBoard({
                 {THREE_PLAYER_PIECE_SYMBOLS[piece.type]}
               </text>
             )}
-            {piece && hexedBy && !preview && (
+            {piece && hexedBy && !preview && !isDraggedSource && (
               <g
                 className="three-status-marker"
                 data-status="hexedBy"
