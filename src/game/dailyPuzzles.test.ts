@@ -37,6 +37,9 @@ describe("daily puzzles", () => {
     expect(Object.keys(state.board)).toHaveLength(8);
     expect(state.history.some((entry) => /simulation/i.test(entry))).toBe(false);
     expect(puzzle?.hint).not.toMatch(/simulation/i);
+    expect(puzzle?.hint).toMatch(
+      /^Start by moving a (king|queen|rook|bishop|knight|pawn)\./,
+    );
     expect(puzzle?.completionText).toBe("Puzzle complete.");
   });
 

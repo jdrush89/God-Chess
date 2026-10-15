@@ -3,9 +3,10 @@ import type {
   Color,
   DailyPuzzleId,
   GameState,
+  PieceType,
   PuzzleId,
 } from "./types";
-import type { GameAction } from "./engine";
+import { gameReducer, type GameAction } from "./engine";
 import { opposite } from "./types";
 
 export type DailyTargetResult =
@@ -69,6 +70,57 @@ const objectiveFor = (source: DailyPuzzleSource) => {
   return source.targetResult.reason === "checkmate"
     ? `Play as ${colorLabel(source.playerColor)} and checkmate ${colorLabel(opponent)} within ${turns}.`
     : `Play as ${colorLabel(source.playerColor)} and capture ${possessiveColor(opponent)} King within ${turns}.`;
+};
+
+const pieceLocations = (state: GameState) => {
+  const locations = new Map<
+    string,
+    { location: string; type: PieceType; controller: Color }
+  >();
+  for (const [square, piece] of Object.entries(state.board)) {
+    locations.set(piece.id, {
+      location: square,
+      type: piece.type,
+      controller: piece.controller,
+    });
+  }
+  for (const color of ["white", "black"] as const) {
+    for (const move of state.stealth[color]) {
+      locations.set(move.piece.id, {
+        location: `stealth:${move.destination}`,
+        type: move.piece.type,
+        controller: move.piece.controller,
+      });
+    }
+  }
+  return locations;
+};
+
+const firstSolutionPieceType = (source: DailyPuzzleSource) => {
+  let state = structuredClone(source.state);
+  for (const action of source.solutionActions) {
+    const before = pieceLocations(state);
+    const next = gameReducer(state, action);
+    const after = pieceLocations(next);
+    for (const [pieceId, piece] of before) {
+      if (
+        piece.controller === source.playerColor &&
+        after.has(pieceId) &&
+        after.get(pieceId)?.location !== piece.location
+      ) {
+        return piece.type;
+      }
+    }
+    state = next;
+  }
+  return undefined;
+};
+
+const hintFor = (source: DailyPuzzleSource) => {
+  const pieceType = firstSolutionPieceType(source);
+  return pieceType
+    ? `Start by moving a ${pieceType}. Find the strongest continuation from there.`
+    : "Find the strongest continuation and complete the objective within the turn limit.";
 };
 
 const createDailyState = (
@@ -140,7 +192,7 @@ export const DAILY_PUZZLES: DailyPuzzleDefinition[] = Object.values(modules)
     title: formatDailyDate(source.date),
     difficulty: "daily",
     objective: objectiveFor(source),
-    hint: "Find the strongest continuation and complete the objective within the turn limit.",
+    hint: hintFor(source),
     completionText: "Puzzle complete.",
     playerColor: source.playerColor,
     playerTurns: source.playerTurns,
