@@ -153,6 +153,34 @@ describe("ThreePlayerGame", () => {
     await waitFor(() => expect(onPuzzleComplete).toHaveBeenCalledWith(puzzle.id));
   });
 
+  it("undoes a completed three-player puzzle without requiring the undo setting", () => {
+    const puzzle = THREE_PLAYER_PUZZLES[0];
+    const initial = puzzle.createState();
+    const solved = puzzle.solutionTurns
+      .flatMap((turn) => turn)
+      .reduce(threePlayerReducer, initial);
+
+    render(
+      <ThreePlayerGame
+        initialState={solved}
+        initialUndoHistory={[initial]}
+        puzzle={puzzle}
+        undoPreferred={false}
+        onQuit={() => undefined}
+        onNewGame={() => undefined}
+      />,
+    );
+
+    const undo = screen.getAllByRole("button", { name: "Undo" })[0];
+    expect((undo as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(undo);
+
+    expect(screen.queryByText("Both rivals checkmated")).toBeNull();
+    expect(screen.getAllByText(puzzle.objective).length).toBeGreaterThan(0);
+    expect((screen.getByRole("button", { name: "Undo" }) as HTMLButtonElement).disabled)
+      .toBe(true);
+  });
+
   it("locks a three-player puzzle after the second unsuccessful turn", () => {
     const puzzle = THREE_PLAYER_PUZZLES[0];
     const failed = puzzle.createState();

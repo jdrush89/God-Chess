@@ -3370,6 +3370,7 @@ export function GameScreen({
   const [rulesOpen, setRulesOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [puzzleHintOpen, setPuzzleHintOpen] = useState(false);
+  const [puzzleAbilityHintOpen, setPuzzleAbilityHintOpen] = useState(false);
   const [inspectedGodId, setInspectedGodId] = useState<GodId>();
   const [inspectedSquare, setInspectedSquare] = useState<Square>();
   const [moveFirstDraft, setMoveFirstDraft] = useState<MoveFirstDraft>();
@@ -3498,6 +3499,7 @@ export function GameScreen({
 
   useEffect(() => {
     setPuzzleHintOpen(false);
+    setPuzzleAbilityHintOpen(false);
   }, [state.puzzleId]);
 
   useEffect(() => {
@@ -3812,16 +3814,14 @@ export function GameScreen({
           {onlineRoomCode && <><i /><span>ROOM <strong>{onlineRoomCode}</strong></span></>}
         </div>
         <div className="header-actions" data-tutorial="match-controls">
-          {state.gameMode !== "puzzle" && (
-            <button
-              onClick={onUndo}
-              disabled={!canUndo}
-              title={undoEnabled ? "Undo the latest completed turn or upgrade" : "Enable undo in Settings"}
-            >
-              <Undo2 size={18} />
-              <span>Undo</span>
-            </button>
-          )}
+          <button
+            onClick={onUndo}
+            disabled={!canUndo}
+            title={undoEnabled ? "Undo the latest completed turn or upgrade" : "Enable undo in Settings"}
+          >
+            <Undo2 size={18} />
+            <span>Undo</span>
+          </button>
           <button onClick={() => setHistoryOpen(!historyOpen)}><History size={18} /><span>History</span></button>
           <button onClick={onRestart}>
             <RotateCcw size={18} />
@@ -3847,6 +3847,14 @@ export function GameScreen({
               <Info size={15} />
               {puzzleHintOpen ? "Hide hint" : "Show hint"}
             </button>
+            {dailyPuzzle && (
+              <button onClick={() => setPuzzleAbilityHintOpen((open) => !open)}>
+                <Sparkles size={15} />
+                {puzzleAbilityHintOpen
+                  ? "Hide ability hint"
+                  : "Show ability hint"}
+              </button>
+            )}
             <button onClick={onRestartPuzzle}><RotateCcw size={15} />Restart</button>
             {dailyPuzzle && onGiveUpDaily && (
               <button onClick={onGiveUpDaily} disabled={dailyReplayActive}>
@@ -3856,6 +3864,9 @@ export function GameScreen({
             )}
           </div>
           {puzzleHintOpen && <small>{puzzle.hint}</small>}
+          {dailyPuzzle && puzzleAbilityHintOpen && (
+            <small>{dailyPuzzle.abilityHint}</small>
+          )}
         </section>
       )}
       {challenge && (
@@ -5278,7 +5289,10 @@ export default function App() {
     const current = stateRef.current;
     let restored = undoStack.current.pop();
     if (!restored) return undefined;
-    if (current.gameMode === "ai" && current.aiColor) {
+    if (
+      (current.gameMode === "ai" || current.gameMode === "puzzle") &&
+      current.aiColor
+    ) {
       while (restored.activeColor === current.aiColor && undoStack.current.length) {
         restored = undoStack.current.pop()!;
       }
@@ -6270,7 +6284,7 @@ export default function App() {
     ? online.undoConsent.peer
     : online.undoConsent.host;
   const undoEnabled = state.gameMode === "puzzle"
-    ? false
+    ? true
     : state.gameMode === "simulation"
       ? false
     : state.gameMode === "online"
@@ -6281,8 +6295,8 @@ export default function App() {
     !state.selectedGod &&
     !state.selectedAbility;
   const canUndo =
-    state.gameMode !== "puzzle" &&
     state.gameMode !== "simulation" &&
+    !dailyReplayActions &&
     undoEnabled &&
     undoStable && (
     state.gameMode === "online"
