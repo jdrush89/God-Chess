@@ -20,6 +20,7 @@ import {
 } from "./chess";
 import { abilityLevel, GOD_BY_ID, GODS } from "./gods";
 import { hasCompleteTurn } from "./completeTurnSearch";
+import { isClassicDeadPosition } from "./deadPosition";
 import { qualifyingSnake } from "./slither";
 import type {
   ClassicMoveFirstCandidate,
@@ -3497,18 +3498,35 @@ const adjudicateClassicNoTurn = (state: GameState) => {
   }
 };
 
+const adjudicateClassicDeadPosition = (state: GameState) => {
+  clearTurnSelection(state);
+  setClassicStalemate(state);
+  const message =
+    "The position is dead from insufficient material. The match is a draw by stalemate.";
+  log(state, message);
+  state.lastAction = message;
+  state.notice = message;
+};
+
 const resolveClassicTurnStart = (state: GameState) => {
   if (
     completeTurnSearchDepth > 0 ||
     classicTurnResolutionSuppressed > 0 ||
-    (
-      usesAuthoredPuzzleRules(state) &&
-      !isInCheck(state.board, state.activeColor, state.bananas)
-    ) ||
     state.phase !== "play" ||
     state.result ||
     state.selectedGod ||
     state.selectedAbility
+  ) return;
+  if (
+    !usesAuthoredPuzzleRules(state) &&
+    isClassicDeadPosition(state)
+  ) {
+    adjudicateClassicDeadPosition(state);
+    return;
+  }
+  if (
+    usesAuthoredPuzzleRules(state) &&
+    !isInCheck(state.board, state.activeColor, state.bananas)
   ) return;
   if (hasCompleteClassicTurn(state)) return;
   adjudicateClassicNoTurn(state);

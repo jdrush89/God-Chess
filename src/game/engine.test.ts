@@ -257,7 +257,7 @@ describe("game flow", () => {
     expect(result.history[0]).toBe("White was checkmated by Black.");
   });
 
-  it("adjudicates a safe no-turn position as a stalemate draw", () => {
+  it("adjudicates a dead position as a stalemate draw", () => {
     const state = createGame(1);
     state.phase = "play";
     state.activeColor = "white";
@@ -276,7 +276,7 @@ describe("game flow", () => {
     });
     expect(result.board.e1?.type).toBe("king");
     expect(result.history[0]).toBe(
-      "White was stalemated. The match is a draw.",
+      "The position is dead from insufficient material. The match is a draw by stalemate.",
     );
   });
 
