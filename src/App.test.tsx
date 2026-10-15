@@ -409,13 +409,30 @@ beforeEach(() => {
 });
 
 describe("game startup", () => {
-  it("opens the Daily puzzle page directly from /daily", () => {
+  it("starts today's Daily puzzle directly from /daily", () => {
     window.history.replaceState(null, "", "/daily");
+    const { container } = render(<App />);
+
+    expect(screen.getByText(/daily · 5 turns/i)).toBeTruthy();
+    expect(screen.getByText("October 14, 2026")).toBeTruthy();
+    expect(container.querySelectorAll(".chess-piece")).toHaveLength(8);
+    expect(window.location.pathname).toBe("/daily");
+  });
+
+  it("normalizes the legacy Daily play URL while starting the puzzle", async () => {
+    window.history.replaceState(null, "", "/daily/play");
     render(<App />);
 
-    expect(screen.getByRole("heading", { name: /daily puzzle/i })).toBeTruthy();
-    expect(screen.getByText(/complete today's daily puzzle/i)).toBeTruthy();
-    expect(window.location.pathname).toBe("/daily");
+    expect(screen.getByText(/daily · 5 turns/i)).toBeTruthy();
+    await waitFor(() => expect(window.location.pathname).toBe("/daily"));
+  });
+
+  it("opens the puzzle menu directly from /puzzles", () => {
+    window.history.replaceState(null, "", "/puzzles");
+    render(<App />);
+
+    expect(screen.getByRole("heading", { name: /choose a difficulty/i }))
+      .toBeTruthy();
   });
 
   it("updates URLs and restores the prior screen with browser history", async () => {
@@ -427,6 +444,7 @@ describe("game startup", () => {
     await waitFor(() => expect(window.location.pathname).toBe("/puzzles"));
     fireEvent.click(screen.getByRole("button", { name: /^daily/i }));
     await waitFor(() => expect(window.location.pathname).toBe("/daily"));
+    expect(screen.getByText(/daily · 5 turns/i)).toBeTruthy();
 
     act(() => window.history.back());
     await waitFor(() => {
@@ -1205,22 +1223,11 @@ describe("game startup", () => {
     openPlayOption("Puzzles");
 
     fireEvent.click(screen.getByRole("button", { name: /^daily/i }));
-    expect(screen.getByRole("heading", { name: /daily puzzle/i })).toBeTruthy();
-    expect(screen.getByRole("button", {
-      name: /daily puzzle, october 14, 2026/i,
-    })).toBeTruthy();
-    expect(screen.getByText(
-      /play as white and checkmate black within 5 divine turns/i,
-    )).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", {
-      name: /daily puzzle, october 14, 2026/i,
-    }));
-
     expect(screen.getByText(/daily · 5 turns/i)).toBeTruthy();
     expect(screen.getByText("October 14, 2026")).toBeTruthy();
     expect(container.querySelectorAll(".chess-piece")).toHaveLength(8);
     expect(FakeClassicAiWorker.instances).toHaveLength(0);
+    expect(window.location.pathname).toBe("/daily");
   });
 
   it("paints a committed puzzle move before AI planning and ignores a stale worker result after restart", async () => {

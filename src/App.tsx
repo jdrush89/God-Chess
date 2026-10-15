@@ -3168,7 +3168,15 @@ function PuzzleSelectScreen({
                   <button
                     className="puzzle-difficulty-card"
                     key={option.id}
-                    onClick={() => onCategoryChange(option.id)}
+                    onClick={() => {
+                      if (option.id === "daily" && dailyPuzzle) {
+                        onCategoryChange("daily");
+                        onStartPuzzle(dailyPuzzle.id);
+                        return;
+                      }
+                      onCategoryChange(option.id);
+                    }}
+                    disabled={option.id === "daily" && !dailyPuzzle}
                   >
                     <Icon size={28} />
                     <strong>{option.title}</strong>
@@ -3208,7 +3216,15 @@ function PuzzleSelectScreen({
                     : `${completedInDifficulty} of ${visiblePuzzles.length} positions completed`}
             </p>
             <div className="puzzle-select-grid">
-              {difficulty === "challenges"
+              {difficulty === "daily"
+                ? (
+                  <p className="puzzle-select-intro">
+                    {dailyPuzzle
+                      ? "Starting today's Daily puzzle..."
+                      : "No daily puzzle is available yet."}
+                  </p>
+                )
+                : difficulty === "challenges"
                 ? CHALLENGES.map((challenge, index) => {
                     const completed = completedChallenges.has(challenge.id);
                     return (
@@ -3230,9 +3246,7 @@ function PuzzleSelectScreen({
                     );
                 })
                 : visiblePuzzles.map((puzzle) => {
-                const index = difficulty === "daily"
-                  ? 0
-                  : difficulty === "three-player"
+                const index = difficulty === "three-player"
                   ? visiblePuzzles.findIndex((candidate) => candidate.id === puzzle.id)
                   : PUZZLES.findIndex((candidate) => candidate.id === puzzle.id);
                 const completed = completedPuzzles.has(puzzle.id);
@@ -3241,21 +3255,17 @@ function PuzzleSelectScreen({
                     className={`puzzle-select-card${completed ? " completed" : ""}`}
                     key={puzzle.id}
                     onClick={() => onStartPuzzle(puzzle.id)}
-                    aria-label={difficulty === "daily"
-                      ? `Daily puzzle, ${puzzle.title}${completed ? ", completed" : ""}`
-                      : `Puzzle ${index + 1}, ${puzzle.title}${completed ? ", completed" : ""}`}
+                    aria-label={`Puzzle ${index + 1}, ${puzzle.title}${completed ? ", completed" : ""}`}
                   >
                     {completed && (
                       <span className="puzzle-complete-badge" aria-hidden="true">
                         <Check size={22} strokeWidth={3} />
                       </span>
                     )}
-                    <span>{difficulty === "daily" ? "DAILY" : `PUZZLE ${index + 1}`}</span>
+                    <span>PUZZLE {index + 1}</span>
                     <strong>{puzzle.title}</strong>
                     <small>
-                      {difficulty === "daily"
-                        ? puzzle.objective
-                        : difficulty === "three-player"
+                      {difficulty === "three-player"
                         ? "Checkmate both rivals in two divine turns"
                         : `Win in ${puzzle.playerTurns === 1 ? "one" : puzzle.playerTurns === 2 ? "two" : "three"} divine turn${puzzle.playerTurns === 1 ? "" : "s"}`}
                     </small>
@@ -4468,6 +4478,11 @@ export default function App() {
   const initialNavigation = useRef(
     appRouteFromPath(window.location.pathname),
   ).current;
+  const initialDailyPuzzle = useRef(
+    initialNavigation.puzzleCategory === "daily"
+      ? currentDailyPuzzle()
+      : undefined,
+  ).current;
   useEffect(() => installGlobalDiagnostics(), []);
   const [localSavedGames, setLocalSavedGames] = useState(loadLocalSavedGames);
   const [cloudSavedGames, setCloudSavedGames] = useState<SavedGame[]>([]);
@@ -4550,7 +4565,7 @@ export default function App() {
   savedGamesRef.current = savedGames;
   const activeSaveId = useRef<string | undefined>(undefined);
   const [startView, setStartView] = useState<StartView>(
-    initialNavigation.startView,
+    initialDailyPuzzle ? "none" : initialNavigation.startView,
   );
   const [setupReturnView, setSetupReturnView] = useState<"menu" | "play" | "none">("menu");
   const [setupCategory, setSetupCategory] = useState<StartCategory>(
@@ -4567,7 +4582,16 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [undoPreferred, setUndoPreferred] = useState(loadUndoSetting);
   const [undoDepth, setUndoDepth] = useState(0);
-  const [state, baseDispatch] = useReducer(gameReducer, undefined, () => createGame());
+  const [state, baseDispatch] = useReducer(
+    gameReducer,
+    undefined,
+    () => initialDailyPuzzle
+      ? createDailyPuzzleGame(
+        initialDailyPuzzle.id,
+        accountService.account?.displayName,
+      )
+      : createGame(),
+  );
   const stateRef = useRef(state);
   stateRef.current = state;
   const aiPlan = useRef<GameAction[]>([]);
@@ -4616,7 +4640,7 @@ export default function App() {
     };
     const path = startView === "none"
       ? state.gameMode === "puzzle" && state.puzzleId?.startsWith("daily-")
-        ? "/daily/play"
+        ? "/daily"
         : "/game"
       : appPathForRoute(route);
     const historyState = { godChessRoute: route };
@@ -6058,6 +6082,7 @@ export default function App() {
       return;
     }
     if (state.gameMode === "puzzle") {
+      if (state.puzzleId?.startsWith("daily-")) setPuzzleCategory(undefined);
       setStartView("puzzles");
       return;
     }
@@ -6070,6 +6095,7 @@ export default function App() {
   const nextPuzzle = () => {
     if (!state.puzzleId) return;
     if (isDailyPuzzleId(state.puzzleId)) {
+      setPuzzleCategory(undefined);
       setStartView("puzzles");
       return;
     }
