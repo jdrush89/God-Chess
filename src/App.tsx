@@ -1643,8 +1643,7 @@ export function ActionPanel({
                   highlighted={presentation?.abilityId === item.id}
                   selectable={!readOnly && !committed && !unavailable}
                   disabled={presentedGodResting || (!readOnly && (
-                    (unavailable && !(committed && active)) ||
-                    (committed && !active)
+                    !active && (unavailable || committed)
                   ))}
                   footerAction={!readOnly && item.id === "lure" && !hasQueen ? "REQUIRES QUEEN" : undefined}
                   onClick={() => {
