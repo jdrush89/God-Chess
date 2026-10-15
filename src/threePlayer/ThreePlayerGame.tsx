@@ -1515,7 +1515,7 @@ export function ThreePlayerGame({
       }
       return;
     }
-    if (!undoEnabled || !isStableState(stateRef.current)) return;
+    if ((!undoEnabled && !puzzle) || !isStableState(stateRef.current)) return;
     const current = stateRef.current;
     const snapshot = undoStack.current.pop();
     if (!snapshot) return;
@@ -1555,7 +1555,7 @@ export function ThreePlayerGame({
   };
 
   const canUndo = puzzle
-    ? false
+    ? undoDepth > 0 && isStableState(state)
     : onlineSession
     ? (
       onlineSession.undoAvailable &&
@@ -1688,15 +1688,13 @@ export function ThreePlayerGame({
         </div>
         <div className="three-game-actions">
           <button onClick={() => setHistoryOpen(true)} aria-label="History"><History size={17} /></button>
-          {!puzzle && (
-            <button
-              disabled={!canUndo}
-              onClick={undo}
-              aria-label="Undo"
-            >
-              <Undo2 size={17} />
-            </button>
-          )}
+          <button
+            disabled={!canUndo}
+            onClick={undo}
+            aria-label="Undo"
+          >
+            <Undo2 size={17} />
+          </button>
         </div>
       </header>
 

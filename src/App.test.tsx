@@ -429,6 +429,14 @@ describe("game startup", () => {
       .toMatch(new RegExp(`turns left\\s*${daily.playerTurns}`, "i"));
     expect(container.querySelector(".game-meta")?.textContent)
       .not.toMatch(/round/i);
+    expect(
+      (screen.getByRole("button", { name: /^undo$/i }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    fireEvent.click(screen.getByRole("button", {
+      name: /show ability hint/i,
+    }));
+    expect(screen.getByText(daily.abilityHint)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /history/i }));
     const historyDrawer = screen.getByLabelText("Full history");
     expect(historyDrawer.firstElementChild?.className)
@@ -1518,6 +1526,39 @@ describe("game startup", () => {
     expect(screen.getByText(/you found a winning line/i)).toBeTruthy();
     expect(screen.queryByText(puzzle.solutionSummary)).toBeNull();
     expect(JSON.parse(window.localStorage.getItem("god-chess-puzzle-progress-v1") ?? "[]")).toContain(puzzle.id);
+  });
+
+  it("undoes completed classic puzzle turns without requiring the undo setting", () => {
+    const puzzle = PUZZLES[0];
+    const initialState = puzzle.createState("Solver");
+    const solvedState = puzzle.solutionTurns[0].reduce(
+      gameReducer,
+      initialState,
+    );
+    window.localStorage.setItem("god-chess-undo-enabled", "false");
+    window.localStorage.setItem(SAVE_KEY, JSON.stringify([
+      createSavedGame(
+        "puzzle-undo",
+        solvedState,
+        [initialState],
+        initialState,
+      ),
+    ]));
+
+    const { container } = render(<App />);
+    openPlayOption("Load");
+    fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
+
+    const undo = screen.getByRole("button", { name: /^undo$/i });
+    expect((undo as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(undo);
+
+    expect(container.querySelector(".gameover-modal")).toBeNull();
+    expect(screen.getAllByText(puzzle.objective).length).toBeGreaterThan(0);
+    expect(
+      (screen.getByRole("button", { name: /^undo$/i }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
   });
 
   it("attaches pending graveyard choices to the selected ability card", () => {

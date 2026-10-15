@@ -7,6 +7,7 @@ import type {
   PuzzleId,
 } from "./types";
 import { gameReducer, type GameAction } from "./engine";
+import { GODS } from "./gods";
 import { opposite } from "./types";
 
 export type DailyTargetResult =
@@ -35,6 +36,7 @@ export interface DailyPuzzleDefinition {
   difficulty: "daily";
   objective: string;
   hint: string;
+  abilityHint: string;
   completionText: string;
   playerColor: Color;
   playerTurns: number;
@@ -123,6 +125,42 @@ const hintFor = (source: DailyPuzzleSource) => {
     : "Find the strongest continuation and complete the objective within the turn limit.";
 };
 
+const abilityNameById = new Map(
+  GODS.flatMap((god) =>
+    god.abilities.map((ability) => [ability.id, ability.name] as const)
+  ),
+);
+
+const formatList = (items: string[]) => {
+  if (items.length <= 1) return items[0] ?? "";
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(", ")}, and ${items.at(-1)}`;
+};
+
+const abilityHintFor = (source: DailyPuzzleSource) => {
+  let state = structuredClone(source.state);
+  const abilityNames: string[] = [];
+  for (const action of source.solutionActions) {
+    if (state.activeColor === source.playerColor) {
+      const abilityId = action.type === "select-ability"
+        ? action.abilityId
+        : action.type === "commit-move-first"
+          ? action.abilityId
+          : undefined;
+      const abilityName = abilityId
+        ? abilityNameById.get(abilityId)
+        : undefined;
+      if (abilityName && !abilityNames.includes(abilityName)) {
+        abilityNames.push(abilityName);
+      }
+    }
+    state = gameReducer(state, action);
+  }
+  return abilityNames.length
+    ? `The winning CPU line used ${formatList(abilityNames)}.`
+    : "The winning CPU line did not require a named God ability.";
+};
+
 const createDailyState = (
   source: DailyPuzzleSource,
   playerName?: string,
@@ -193,6 +231,7 @@ export const DAILY_PUZZLES: DailyPuzzleDefinition[] = Object.values(modules)
     difficulty: "daily",
     objective: objectiveFor(source),
     hint: hintFor(source),
+    abilityHint: abilityHintFor(source),
     completionText: "Puzzle complete.",
     playerColor: source.playerColor,
     playerTurns: source.playerTurns,

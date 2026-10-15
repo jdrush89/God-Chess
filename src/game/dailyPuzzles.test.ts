@@ -40,6 +40,9 @@ describe("daily puzzles", () => {
     expect(puzzle?.hint).toMatch(
       /^Start by moving a (king|queen|rook|bishop|knight|pawn)\./,
     );
+    expect(puzzle?.abilityHint).toMatch(
+      /^The winning CPU line used .+\.$/,
+    );
     expect(puzzle?.completionText).toBe("Puzzle complete.");
   });
 
