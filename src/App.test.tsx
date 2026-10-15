@@ -171,6 +171,7 @@ import {
   createGame,
   gameReducer,
 } from "./game/engine";
+import { currentDailyPuzzle } from "./game/dailyPuzzles";
 import { GODS } from "./game/gods";
 import { createDefaultThreePlayerConfig } from "./game/threePlayerConfig";
 import { createThreePlayerGame, threePlayerReducer } from "./game/threePlayerEngine";
@@ -410,20 +411,28 @@ beforeEach(() => {
 
 describe("game startup", () => {
   it("starts today's Daily puzzle directly from /daily", () => {
+    const daily = currentDailyPuzzle()!;
     window.history.replaceState(null, "", "/daily");
     const { container } = render(<App />);
 
-    expect(screen.getByText(/daily · 5 turns/i)).toBeTruthy();
-    expect(screen.getByText("October 14, 2026")).toBeTruthy();
-    expect(container.querySelectorAll(".chess-piece")).toHaveLength(8);
+    expect(screen.getByText(
+      new RegExp(`daily · ${daily.playerTurns} turns?`, "i"),
+    )).toBeTruthy();
+    expect(screen.getByText(daily.title)).toBeTruthy();
+    expect(container.querySelectorAll(".chess-piece")).toHaveLength(
+      Object.keys(daily.createState().board).length,
+    );
     expect(window.location.pathname).toBe("/daily");
   });
 
   it("normalizes the legacy Daily play URL while starting the puzzle", async () => {
+    const daily = currentDailyPuzzle()!;
     window.history.replaceState(null, "", "/daily/play");
     render(<App />);
 
-    expect(screen.getByText(/daily · 5 turns/i)).toBeTruthy();
+    expect(screen.getByText(
+      new RegExp(`daily · ${daily.playerTurns} turns?`, "i"),
+    )).toBeTruthy();
     await waitFor(() => expect(window.location.pathname).toBe("/daily"));
   });
 
@@ -436,6 +445,7 @@ describe("game startup", () => {
   });
 
   it("updates URLs and restores the prior screen with browser history", async () => {
+    const daily = currentDailyPuzzle()!;
     render(<App />);
 
     fireEvent.click(screen.getByRole("button", { name: /^start$/i }));
@@ -444,7 +454,9 @@ describe("game startup", () => {
     await waitFor(() => expect(window.location.pathname).toBe("/puzzles"));
     fireEvent.click(screen.getByRole("button", { name: /^daily/i }));
     await waitFor(() => expect(window.location.pathname).toBe("/daily"));
-    expect(screen.getByText(/daily · 5 turns/i)).toBeTruthy();
+    expect(screen.getByText(
+      new RegExp(`daily · ${daily.playerTurns} turns?`, "i"),
+    )).toBeTruthy();
 
     act(() => window.history.back());
     await waitFor(() => {
@@ -1218,14 +1230,19 @@ describe("game startup", () => {
   });
 
   it("starts the generated Daily puzzle from its simulation checkpoint", async () => {
+    const daily = currentDailyPuzzle()!;
     vi.stubGlobal("Worker", FakeClassicAiWorker);
     const { container } = render(<App />);
     openPlayOption("Puzzles");
 
     fireEvent.click(screen.getByRole("button", { name: /^daily/i }));
-    expect(screen.getByText(/daily · 5 turns/i)).toBeTruthy();
-    expect(screen.getByText("October 14, 2026")).toBeTruthy();
-    expect(container.querySelectorAll(".chess-piece")).toHaveLength(8);
+    expect(screen.getByText(
+      new RegExp(`daily · ${daily.playerTurns} turns?`, "i"),
+    )).toBeTruthy();
+    expect(screen.getByText(daily.title)).toBeTruthy();
+    expect(container.querySelectorAll(".chess-piece")).toHaveLength(
+      Object.keys(daily.createState().board).length,
+    );
     expect(FakeClassicAiWorker.instances).toHaveLength(0);
     expect(window.location.pathname).toBe("/daily");
   });
