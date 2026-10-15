@@ -183,7 +183,10 @@ import {
   persistLocalSavedGames,
   prepareSavedState,
 } from "./saves";
-import { persistLocalCompletedPuzzles } from "./puzzleProgress";
+import {
+  loadLocalCompletedPuzzles,
+  persistLocalCompletedPuzzles,
+} from "./puzzleProgress";
 
 const SAVE_KEY = "god-chess-saves-v2";
 const LEGACY_SAVE_KEY = "god-chess-save-v1";
@@ -422,7 +425,37 @@ describe("game startup", () => {
     expect(container.querySelectorAll(".chess-piece")).toHaveLength(
       Object.keys(daily.createState().board).length,
     );
+    expect(container.querySelector(".game-meta")?.textContent)
+      .toMatch(new RegExp(`turns left\\s*${daily.playerTurns}`, "i"));
+    expect(container.querySelector(".game-meta")?.textContent)
+      .not.toMatch(/round/i);
+    fireEvent.click(screen.getByRole("button", { name: /history/i }));
+    expect(screen.queryByText(/hidden cpu simulation started/i)).toBeNull();
     expect(window.location.pathname).toBe("/daily");
+  });
+
+  it("resets and replays the Daily solution after giving up without awarding completion", async () => {
+    vi.useFakeTimers();
+    const daily = currentDailyPuzzle()!;
+    window.history.replaceState(null, "", "/daily");
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: /give up/i }));
+    expect(
+      (screen.getByRole("button", { name: /solving/i }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+
+    for (let index = 0; index < daily.solutionActions.length + 12; index += 1) {
+      await act(async () => {
+        await vi.runOnlyPendingTimersAsync();
+      });
+    }
+
+    expect(screen.getByText(/cpu's original winning line has been replayed/i))
+      .toBeTruthy();
+    expect(screen.getByText(/solution shown/i)).toBeTruthy();
+    expect(loadLocalCompletedPuzzles()).not.toContain(daily.id);
   });
 
   it("normalizes the legacy Daily play URL while starting the puzzle", async () => {
@@ -1591,11 +1624,15 @@ describe("game startup", () => {
       clientX: 30,
       clientY: 30,
     });
+    expect(source.querySelector("[data-piece-id]")).toBeNull();
+    expect(container.querySelector(".piece-drag-preview [data-piece-id]"))
+      .toBeTruthy();
     fireEvent.pointerUp(destination, {
       pointerId: 1,
       clientX: 30,
       clientY: 30,
     });
+    expect(source.querySelector("[data-piece-id]")).toBeTruthy();
 
     expect(dispatch).toHaveBeenNthCalledWith(1, {
       type: "square",
@@ -2159,12 +2196,20 @@ describe("game startup", () => {
       winner: "white",
       reason: "checkmate",
     };
+    const completedActionGroups: GameAction[][] = Array.from(
+      { length: 12 },
+      (_, index) => [{
+        type: "select-ability",
+        abilityId: `simulation-action-${index + 1}`,
+      }],
+    );
 
     const rewound = rewindSimulationForExport(
       terminal,
       undoHistory,
       12,
       () => 0,
+      completedActionGroups,
     );
 
     expect(rewound.exportData.rewindRounds).toBe(3);
@@ -2178,6 +2223,9 @@ describe("game startup", () => {
     expect(rewound.exportData.save.state.gameMode).toBe("local");
     expect(rewound.exportData.save.state.turn).toBe(8);
     expect(rewound.exportData.save.undoHistory).toHaveLength(7);
+    expect(rewound.exportData.solutionActions).toEqual(
+      completedActionGroups.slice(-5).flat(),
+    );
   });
 
   it("copies the rewound simulation save and original result from its dialog", async () => {
@@ -2223,6 +2271,7 @@ describe("game startup", () => {
       requestedUndoActions: 9,
       appliedUndoActions: 9,
     });
+    expect(copied.solutionActions).toEqual([]);
     expect(copied.save.state.gameMode).toBe("local");
     expect(screen.getByRole("status").textContent)
       .toMatch(/game state and result copied/i);

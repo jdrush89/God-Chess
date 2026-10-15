@@ -8,6 +8,7 @@ import type {
   Color,
   GameState,
 } from "../src/game/types";
+import type { GameAction } from "../src/game/engine";
 
 const [, , inputPath, dateOverride] = process.argv;
 
@@ -24,6 +25,7 @@ const terminalResult = payload?.result?.terminalResult as
 const resultSummary = payload?.result?.summary;
 const savedAt = payload?.save?.savedAt;
 let state = payload?.save?.state as GameState | undefined;
+let solutionActions = payload?.solutionActions as GameAction[] | undefined;
 const date = dateOverride ?? savedAt?.slice(0, 10);
 
 if (!Number.isInteger(turns) || turns <= 0) {
@@ -80,6 +82,43 @@ if (state.activeColor !== playerColor) {
   }
 }
 
+const targetMatches = (candidate: GameState) => {
+  if (candidate.phase !== "gameover" || !candidate.result) return false;
+  if (targetResult.kind === "draw") {
+    return candidate.result.kind === "draw" &&
+      candidate.result.reason === "stalemate" &&
+      candidate.activeColor === targetResult.stalematedColor;
+  }
+  return candidate.result.kind === "winner" &&
+    candidate.result.winner === targetResult.winner &&
+    candidate.result.reason === targetResult.reason;
+};
+
+const deriveSolutionActions = (initialState: GameState) => {
+  const actions: GameAction[] = [];
+  let candidate = structuredClone(initialState);
+  for (let plans = 0; plans < turns * 2 + 4 && !targetMatches(candidate); plans += 1) {
+    const plan = chooseAiPlan(candidate, () => 0);
+    if (!plan.length) break;
+    actions.push(...plan);
+    for (const action of plan) candidate = gameReducer(candidate, action);
+  }
+  if (!targetMatches(candidate)) {
+    throw new Error("Unable to derive a Daily solution matching the simulation result.");
+  }
+  return actions;
+};
+
+if (!Array.isArray(solutionActions) || !solutionActions.length) {
+  solutionActions = deriveSolutionActions(state);
+}
+
+let replayed = structuredClone(state);
+for (const action of solutionActions) replayed = gameReducer(replayed, action);
+if (!targetMatches(replayed)) {
+  throw new Error("The exported solution actions do not reproduce the simulation result.");
+}
+
 const output = {
   schema: 1,
   date,
@@ -87,6 +126,7 @@ const output = {
   playerColor,
   playerTurns: turns,
   targetResult,
+  solutionActions,
   state,
 };
 const outputDirectory = path.resolve("src/game/dailies");

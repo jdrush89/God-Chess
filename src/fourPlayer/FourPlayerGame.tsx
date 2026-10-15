@@ -732,7 +732,9 @@ function FourPlayerBoard({
                   {legal && !piece && <span className="move-target-dot" aria-hidden="true" />}
                   {banana && <span className="banana" title="Banana peel">⌁</span>}
                   {captureEffects.has(square) && <span className="four-capture-effect"><Skull /></span>}
-                  {piece && <PieceView piece={piece} state={state} square={square} />}
+                  {piece && drag.draggingSource !== square && (
+                    <PieceView piece={piece} state={state} square={square} />
+                  )}
                 </button>
               );
             })}

@@ -218,11 +218,16 @@ describe("four-player app integration", () => {
       clientX: 30,
       clientY: 30,
     });
+    expect(sourceCell.querySelector(`[data-piece-id="${pieceId}"]`)).toBeNull();
+    expect(container.querySelector(
+      `.piece-drag-preview [data-piece-id="${pieceId}"]`,
+    )).toBeTruthy();
     fireEvent.pointerUp(destinationCell, {
       pointerId: 1,
       clientX: 50,
       clientY: 50,
     });
+    expect(sourceCell.querySelector(`[data-piece-id="${pieceId}"]`)).toBeTruthy();
 
     expect(sourceCell.classList.contains("provisional-source")).toBe(true);
     expect(destinationCell.classList.contains("provisional-destination")).toBe(true);

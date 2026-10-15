@@ -35,6 +35,7 @@ describe("daily puzzles", () => {
     expect(state.players.white.name).toBe("Daily Solver");
     expect(state.players.black.name).toBe("Black Level 10 CPU");
     expect(Object.keys(state.board)).toHaveLength(8);
+    expect(state.history.some((entry) => /simulation/i.test(entry))).toBe(false);
     expect(puzzle?.hint).not.toMatch(/simulation/i);
     expect(puzzle?.completionText).toBe("Puzzle complete.");
   });
@@ -66,6 +67,20 @@ describe("daily puzzles", () => {
       rested: state.rested,
     })).toBe(true);
     expect(state.puzzlePlayerTurnsRemaining).toBeGreaterThanOrEqual(1);
+  });
+
+  it("replays the stored simulation solution to the target result", () => {
+    for (const puzzle of DAILY_PUZZLES) {
+      let state = puzzle.createState();
+      expect(puzzle.solutionActions.length).toBeGreaterThan(0);
+      for (const action of puzzle.solutionActions) {
+        state = gameReducer(state, action);
+      }
+      expect(
+        dailyPuzzleResultMatches(puzzle, state),
+        JSON.stringify({ puzzle: puzzle.id, result: state.result }),
+      ).toBe(true);
+    }
   });
 
   it("finds a checkmate within two player turns from the reported position", () => {
