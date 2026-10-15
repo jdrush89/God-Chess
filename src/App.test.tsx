@@ -430,6 +430,11 @@ describe("game startup", () => {
     expect(container.querySelector(".game-meta")?.textContent)
       .not.toMatch(/round/i);
     fireEvent.click(screen.getByRole("button", { name: /history/i }));
+    const historyDrawer = screen.getByLabelText("Full history");
+    expect(historyDrawer.firstElementChild?.className)
+      .toBe("history-drawer-header");
+    expect(within(historyDrawer.firstElementChild as HTMLElement)
+      .getByRole("button", { name: /close history/i })).toBeTruthy();
     expect(screen.queryByText(/hidden cpu simulation started/i)).toBeNull();
     expect(window.location.pathname).toBe("/daily");
   });
