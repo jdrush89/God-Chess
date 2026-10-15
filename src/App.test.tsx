@@ -2443,6 +2443,10 @@ describe("game startup", () => {
     fireEvent.click(screen.getByRole("button", { name: /medusa sight/i }));
     fireEvent.click(screen.getByRole("button", { name: /stone gaze/i }));
 
+    const stoneGazeCard = screen.getByText("Stone Gaze")
+      .closest(".ability-card");
+    expect(stoneGazeCard?.classList.contains("active")).toBe(true);
+    expect(stoneGazeCard?.classList.contains("disabled")).toBe(false);
     expect(screen.getByRole("button", { name: /confirm stone gaze/i })).toBeTruthy();
     expect(screen.getByRole("gridcell", {
       name: /e2, white pawn, affected by selected ability/i,
