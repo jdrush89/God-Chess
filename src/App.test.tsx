@@ -157,6 +157,7 @@ vi.mock("./game/ai", async (importOriginal) => {
 import App, {
   ActionPanel,
   ChessBoard,
+  dailyGolfScoreForTurnsRemaining,
   GameScreen,
   SimulationExportDialog,
   rewindSimulationForExport,
@@ -473,6 +474,18 @@ beforeEach(() => {
 });
 
 describe("game startup", () => {
+  it.each([
+    [1, "birdie"],
+    [2, "eagle"],
+    [3, "albatross"],
+    [4, "condor"],
+  ] as const)(
+    "calls %i spare Daily turn a %s",
+    (turnsRemaining, score) => {
+      expect(dailyGolfScoreForTurnsRemaining(turnsRemaining)).toBe(score);
+    },
+  );
+
   it("starts today's Daily puzzle directly from /daily", () => {
     const daily = currentDailyPuzzle()!;
     window.history.replaceState(null, "", "/daily");
@@ -505,6 +518,30 @@ describe("game startup", () => {
       .getByRole("button", { name: /close history/i })).toBeTruthy();
     expect(screen.queryByText(/hidden cpu simulation started/i)).toBeNull();
     expect(window.location.pathname).toBe("/daily");
+  });
+
+  it("shows spare Daily turns and their golf score on victory", async () => {
+    const daily = currentDailyPuzzle()!;
+    let solvedState = daily.createState("Solver");
+    for (const action of daily.solutionActions) {
+      solvedState = gameReducer(solvedState, action);
+    }
+    solvedState.puzzlePlayerTurnsRemaining = 2;
+    window.localStorage.setItem(LEGACY_SAVE_KEY, JSON.stringify({
+      version: 1,
+      savedAt: new Date().toISOString(),
+      state: solvedState,
+    }));
+
+    render(<App />);
+    openPlayOption("Load");
+    fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
+
+    expect(await screen.findByText(
+      /2 player turns left and scored an eagle/i,
+      {},
+      { timeout: 1400 },
+    )).toBeTruthy();
   });
 
   it("resets and replays the Daily solution after giving up without awarding completion", async () => {
