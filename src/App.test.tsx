@@ -249,6 +249,66 @@ const completeClassicDraft = () => {
   return state;
 };
 
+const buildDailySimulationTrace = () => {
+  const puzzle = currentDailyPuzzle(new Date("2026-10-15T12:00:00"))!;
+  let state = puzzle.createState();
+  state.gameMode = "simulation";
+  state.aiColor = undefined;
+  state.puzzleId = undefined;
+  state.puzzlePlayerTurnsRemaining = undefined;
+  state.puzzleFailed = undefined;
+
+  const undoHistory = [];
+  const completedActionGroups: GameAction[][] = [];
+  let turnStart = prepareSavedState(state);
+  let currentActions: GameAction[] = [];
+  let completedTurns = 0;
+
+  for (const action of puzzle.solutionActions) {
+    currentActions.push(structuredClone(action));
+    const before = state;
+    state = gameReducer(state, action);
+    const completedPlayTurn =
+      before.phase === "play" &&
+      (
+        state.turn !== before.turn ||
+        state.phase === "upgrade" ||
+        state.phase === "gameover"
+      );
+    const completedUpgrade =
+      action.type === "upgrade" &&
+      before.phase === "upgrade" &&
+      (
+        state.phase !== before.phase ||
+        state.upgradeQueue.length !== before.upgradeQueue.length
+      );
+    if (completedPlayTurn) {
+      undoHistory.push(prepareSavedState(turnStart));
+      completedTurns += 1;
+      turnStart = state.phase === "play"
+        ? prepareSavedState(state)
+        : prepareSavedState(before);
+    } else if (completedUpgrade) {
+      undoHistory.push(prepareSavedState(before));
+      turnStart = state.phase === "play"
+        ? prepareSavedState(state)
+        : prepareSavedState(before);
+    }
+    if (completedPlayTurn || completedUpgrade) {
+      completedActionGroups.push(currentActions);
+      currentActions = [];
+    }
+  }
+
+  return {
+    terminal: state,
+    undoHistory,
+    completedActionGroups,
+    completedTurns,
+    solutionActions: puzzle.solutionActions,
+  };
+};
+
 const openPlayMenu = () => {
   const start = screen.queryByRole("button", { name: /^start$/i });
   if (start) fireEvent.click(start);
@@ -419,14 +479,14 @@ describe("game startup", () => {
     const { container } = render(<App />);
 
     expect(screen.getByText(
-      new RegExp(`daily · ${daily.playerTurns} turns?`, "i"),
+      new RegExp(`daily · ${daily.playerTurns} player turns?`, "i"),
     )).toBeTruthy();
     expect(screen.getByText(daily.title)).toBeTruthy();
     expect(container.querySelectorAll(".chess-piece")).toHaveLength(
       Object.keys(daily.createState().board).length,
     );
     expect(container.querySelector(".game-meta")?.textContent)
-      .toMatch(new RegExp(`turns left\\s*${daily.playerTurns}`, "i"));
+      .toMatch(new RegExp(`player turns left\\s*${daily.playerTurns}`, "i"));
     expect(container.querySelector(".game-meta")?.textContent)
       .not.toMatch(/round/i);
     expect(
@@ -477,7 +537,7 @@ describe("game startup", () => {
     render(<App />);
 
     expect(screen.getByText(
-      new RegExp(`daily · ${daily.playerTurns} turns?`, "i"),
+      new RegExp(`daily · ${daily.playerTurns} player turns?`, "i"),
     )).toBeTruthy();
     await waitFor(() => expect(window.location.pathname).toBe("/daily"));
   });
@@ -501,7 +561,7 @@ describe("game startup", () => {
     fireEvent.click(screen.getByRole("button", { name: /^daily/i }));
     await waitFor(() => expect(window.location.pathname).toBe("/daily"));
     expect(screen.getByText(
-      new RegExp(`daily · ${daily.playerTurns} turns?`, "i"),
+      new RegExp(`daily · ${daily.playerTurns} player turns?`, "i"),
     )).toBeTruthy();
 
     act(() => window.history.back());
@@ -1283,7 +1343,7 @@ describe("game startup", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /^daily/i }));
     expect(screen.getByText(
-      new RegExp(`daily · ${daily.playerTurns} turns?`, "i"),
+      new RegExp(`daily · ${daily.playerTurns} player turns?`, "i"),
     )).toBeTruthy();
     expect(screen.getByText(daily.title)).toBeTruthy();
     expect(container.querySelectorAll(".chess-piece")).toHaveLength(
@@ -2222,76 +2282,53 @@ describe("game startup", () => {
     });
   });
 
-  it("rewinds an odd boundary count so the checkpoint starts on the winning side's turn", () => {
-    const base = completeClassicDraft();
-    base.gameMode = "simulation";
-    base.aiDifficulty = 10;
-    const undoHistory = Array.from({ length: 12 }, (_, index) => {
-      const snapshot = structuredClone(base);
-      snapshot.turn = index + 1;
-      snapshot.activeColor = index % 2 === 0 ? "black" : "white";
-      return snapshot;
-    });
-    const terminal = structuredClone(base);
-    terminal.phase = "gameover";
-    terminal.turn = 13;
-    terminal.activeColor = "white";
-    terminal.winner = "white";
-    terminal.result = {
-      kind: "winner",
-      winner: "white",
-      reason: "checkmate",
-    };
-    const completedActionGroups: GameAction[][] = Array.from(
-      { length: 12 },
-      (_, index) => [{
-        type: "select-ability",
-        abilityId: `simulation-action-${index + 1}`,
-      }],
-    );
+  it("rewinds enough boundaries for the winning side to receive four player turns", () => {
+    const {
+      terminal,
+      undoHistory,
+      completedActionGroups,
+      completedTurns,
+      solutionActions,
+    } = buildDailySimulationTrace();
 
     const rewound = rewindSimulationForExport(
       terminal,
       undoHistory,
-      12,
-      () => 0,
+      completedTurns,
+      () => 0.34,
       completedActionGroups,
     );
 
-    expect(rewound.exportData.rewindRounds).toBe(3);
-    expect(rewound.exportData.requestedUndoActions).toBe(5);
-    expect(rewound.exportData.appliedUndoActions).toBe(5);
-    expect(rewound.state.turn).toBe(8);
+    expect(rewound.exportData.rewindRounds).toBe(4);
+    expect(rewound.exportData.requestedUndoActions).toBe(9);
+    expect(rewound.exportData.appliedUndoActions).toBe(9);
+    expect(rewound.state.turn).toBe(93);
     expect(rewound.state.activeColor).toBe("white");
-    expect(rewound.undoHistory).toHaveLength(7);
+    expect(rewound.undoHistory).toHaveLength(0);
     expect(rewound.exportData.resultSummary)
-      .toBe("White checkmated in 12 turns.");
+      .toBe("White checkmated in 7 turns.");
     expect(rewound.exportData.save.state.gameMode).toBe("local");
-    expect(rewound.exportData.save.state.turn).toBe(8);
-    expect(rewound.exportData.save.undoHistory).toHaveLength(7);
+    expect(rewound.exportData.save.state.turn).toBe(93);
+    expect(rewound.exportData.save.undoHistory).toHaveLength(0);
     expect(rewound.exportData.solutionActions).toEqual(
-      completedActionGroups.slice(-5).flat(),
+      solutionActions,
     );
   });
 
   it("copies the rewound simulation save and original result from its dialog", async () => {
-    const terminal = completeClassicDraft();
-    terminal.gameMode = "simulation";
-    terminal.phase = "gameover";
-    terminal.activeColor = "black";
-    terminal.winner = undefined;
-    terminal.result = { kind: "draw", reason: "stalemate" };
-    const snapshots = Array.from({ length: 10 }, (_, index) => {
-      const snapshot = completeClassicDraft();
-      snapshot.gameMode = "simulation";
-      snapshot.turn = index + 1;
-      return snapshot;
-    });
+    const {
+      terminal,
+      undoHistory,
+      completedActionGroups,
+      completedTurns,
+      solutionActions,
+    } = buildDailySimulationTrace();
     const data = rewindSimulationForExport(
       terminal,
-      snapshots,
-      10,
-      () => 0.999,
+      undoHistory,
+      completedTurns,
+      () => 0.34,
+      completedActionGroups,
     ).exportData;
     const writeText = vi.fn(async (_text: string) => undefined);
     setClipboard({ writeText });
@@ -2299,9 +2336,9 @@ describe("game startup", () => {
     render(<SimulationExportDialog data={data} onQuit={vi.fn()} />);
     expect(screen.getByRole("dialog", { name: /rewound game state/i }))
       .toBeTruthy();
-    expect(screen.getByText("Black was stalemated after 10 turns."))
+    expect(screen.getByText("White checkmated in 7 turns."))
       .toBeTruthy();
-    expect(screen.getByText(/9 of 9 undo actions for a 5-turn Daily window/i))
+    expect(screen.getByText(/9 of 9 undo actions for a 4-player-turn Daily window/i))
       .toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", {
@@ -2309,15 +2346,13 @@ describe("game startup", () => {
     }));
     await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
     const copied = JSON.parse(writeText.mock.calls[0][0]);
-    expect(copied.result.summary).toBe(
-      "Black was stalemated after 10 turns.",
-    );
+    expect(copied.result.summary).toBe("White checkmated in 7 turns.");
     expect(copied.rewind).toEqual({
-      rounds: 5,
+      rounds: 4,
       requestedUndoActions: 9,
       appliedUndoActions: 9,
     });
-    expect(copied.solutionActions).toEqual([]);
+    expect(copied.solutionActions).toEqual(solutionActions);
     expect(copied.save.state.gameMode).toBe("local");
     expect(screen.getByRole("status").textContent)
       .toMatch(/game state and result copied/i);

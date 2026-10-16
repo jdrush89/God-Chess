@@ -209,8 +209,9 @@ simulation mode:
 npm run generate:daily -- path/to/simulation-checkpoint.json [YYYY-MM-DD]
 ```
 
-The generator validates the stable rewound state, extracts the winning or
-stalemate side and turn limit, and writes a compact dated file under
+The generator validates the stable rewound state and exact replay, requires a
+checkmate that takes the winning side three to five player turns, confirms that
+the level 10 CPU cannot finish sooner, and writes a compact dated file under
 `src/game/dailies/`. Dated files are discovered automatically; no registry edit
 is required.
 

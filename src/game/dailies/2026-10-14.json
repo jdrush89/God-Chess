@@ -1,14 +1,150 @@
 {
   "schema": 1,
   "date": "2026-10-14",
-  "resultSummary": "White checkmated in 99 turns.",
+  "resultSummary": "White checkmated in 100 turns.",
   "playerColor": "white",
-  "playerTurns": 5,
+  "playerTurns": 4,
   "targetResult": {
     "kind": "winner",
     "winner": "white",
     "reason": "checkmate"
   },
+  "solutionActions": [
+    {
+      "type": "select-god",
+      "godId": "anubis"
+    },
+    {
+      "type": "select-ability",
+      "abilityId": "construction"
+    },
+    {
+      "type": "square",
+      "square": "a6"
+    },
+    {
+      "type": "square",
+      "square": "a5"
+    },
+    {
+      "type": "select-god",
+      "godId": "salem"
+    },
+    {
+      "type": "select-ability",
+      "abilityId": "hex"
+    },
+    {
+      "type": "square",
+      "square": "b7"
+    },
+    {
+      "type": "square",
+      "square": "b6"
+    },
+    {
+      "type": "select-god",
+      "godId": "kangus"
+    },
+    {
+      "type": "select-ability",
+      "abilityId": "ritual-sacrifice"
+    },
+    {
+      "type": "square",
+      "square": "f4"
+    },
+    {
+      "type": "square",
+      "square": "e3"
+    },
+    {
+      "type": "select-god",
+      "godId": "death"
+    },
+    {
+      "type": "select-ability",
+      "abilityId": "marked"
+    },
+    {
+      "type": "square",
+      "square": "b6"
+    },
+    {
+      "type": "square",
+      "square": "b7"
+    },
+    {
+      "type": "preview-upgrade",
+      "godId": "kangus",
+      "abilityId": "ritual-sacrifice"
+    },
+    {
+      "type": "upgrade",
+      "abilityId": "ritual-sacrifice"
+    },
+    {
+      "type": "preview-upgrade",
+      "godId": "death",
+      "abilityId": "marked"
+    },
+    {
+      "type": "upgrade",
+      "abilityId": "marked"
+    },
+    {
+      "type": "select-god",
+      "godId": "midas"
+    },
+    {
+      "type": "select-ability",
+      "abilityId": "barter"
+    },
+    {
+      "type": "square",
+      "square": "a5"
+    },
+    {
+      "type": "square",
+      "square": "a7"
+    },
+    {
+      "type": "barter",
+      "give": "white"
+    },
+    {
+      "type": "select-god",
+      "godId": "leonidas"
+    },
+    {
+      "type": "select-ability",
+      "abilityId": "royal-step"
+    },
+    {
+      "type": "square",
+      "square": "b7"
+    },
+    {
+      "type": "square",
+      "square": "b8"
+    },
+    {
+      "type": "select-god",
+      "godId": "anubis"
+    },
+    {
+      "type": "select-ability",
+      "abilityId": "construction"
+    },
+    {
+      "type": "square",
+      "square": "e5"
+    },
+    {
+      "type": "square",
+      "square": "e8"
+    }
+  ],
   "state": {
     "phase": "play",
     "gameMode": "local",
@@ -49,28 +185,6 @@
         "controller": "white",
         "hasMoved": true,
         "status": {}
-      },
-      "h2": {
-        "id": "white-monument-87",
-        "type": "rook",
-        "color": "white",
-        "controller": "white",
-        "hasMoved": true,
-        "status": {}
-      },
-      "b5": {
-        "id": "white-bishop-5",
-        "type": "bishop",
-        "color": "white",
-        "controller": "white",
-        "hasMoved": true,
-        "status": {
-          "ritual": {
-            "owner": "white",
-            "expires": "kangus",
-            "level": 2
-          }
-        }
       },
       "a6": {
         "id": "white-rook-0",
@@ -251,6 +365,34 @@
               "status": {}
             },
             "capturedOnTurn": 87
+          },
+          {
+            "piece": {
+              "id": "white-monument-87",
+              "type": "rook",
+              "color": "white",
+              "controller": "white",
+              "hasMoved": true,
+              "status": {}
+            },
+            "capturedOnTurn": 92
+          },
+          {
+            "piece": {
+              "id": "white-bishop-5",
+              "type": "bishop",
+              "color": "white",
+              "controller": "white",
+              "hasMoved": true,
+              "status": {
+                "ritual": {
+                  "owner": "white",
+                  "expires": "kangus",
+                  "level": 2
+                }
+              }
+            },
+            "capturedOnTurn": 92
           }
         ],
         "upgrades": {
@@ -528,9 +670,7 @@
       "Black upgraded Polymorph with Salem to level 3.",
       "White upgraded Leverage with Midas to level 3.",
       "Black used Hex with Salem: King at c6 -> b6.",
-      "White used Goad with Kangus Kong: Bishop at a6 -> b5.",
       "Black used Royal Step with Leonidas: King at d6 -> c6.",
-      "White used Monument with Anubis: sacrificed 1 pawn and raised a rook on h2.",
       "Black used Siphon with Death: stole 2 white orbs.",
       "White used Barter with Midas: gave a white orb to complete the trade.",
       "Black upgraded Poison Cloud with Salem to level 3.",
@@ -573,55 +713,5 @@
       "id": 330,
       "color": "black"
     }
-  },
-  "solutionActions": [
-    {
-      "type": "select-god",
-      "godId": "anubis"
-    },
-    {
-      "type": "select-ability",
-      "abilityId": "construction"
-    },
-    {
-      "type": "square",
-      "square": "h2"
-    },
-    {
-      "type": "square",
-      "square": "h7"
-    },
-    {
-      "type": "select-god",
-      "godId": "salem"
-    },
-    {
-      "type": "select-ability",
-      "abilityId": "hex"
-    },
-    {
-      "type": "square",
-      "square": "b7"
-    },
-    {
-      "type": "square",
-      "square": "b8"
-    },
-    {
-      "type": "select-god",
-      "godId": "kangus"
-    },
-    {
-      "type": "select-ability",
-      "abilityId": "ritual-sacrifice"
-    },
-    {
-      "type": "square",
-      "square": "e5"
-    },
-    {
-      "type": "square",
-      "square": "e8"
-    }
-  ]
+  }
 }

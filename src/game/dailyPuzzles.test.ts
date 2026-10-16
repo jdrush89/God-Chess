@@ -8,13 +8,13 @@ import {
 import { gameReducer } from "./engine";
 
 describe("daily puzzles", () => {
-  it("loads the generated checkpoint as a five-turn White puzzle", () => {
+  it("loads the generated checkpoint as a four-turn White puzzle", () => {
     const puzzle = currentDailyPuzzle(new Date("2026-10-14T12:00:00"));
     expect(DAILY_PUZZLES.length).toBeGreaterThanOrEqual(1);
     expect(puzzle).toMatchObject({
       id: "daily-2026-10-14",
       playerColor: "white",
-      playerTurns: 5,
+      playerTurns: 4,
       targetResult: {
         kind: "winner",
         winner: "white",
@@ -29,12 +29,12 @@ describe("daily puzzles", () => {
       activeColor: "white",
       aiColor: "black",
       puzzleId: "daily-2026-10-14",
-      puzzlePlayerTurnsRemaining: 5,
+      puzzlePlayerTurnsRemaining: 4,
       puzzleFailed: false,
     });
     expect(state.players.white.name).toBe("Daily Solver");
     expect(state.players.black.name).toBe("Black Level 10 CPU");
-    expect(Object.keys(state.board)).toHaveLength(8);
+    expect(Object.keys(state.board)).toHaveLength(6);
     expect(state.history.some((entry) => /simulation/i.test(entry))).toBe(false);
     expect(puzzle?.hint).not.toMatch(/simulation/i);
     expect(puzzle?.hint).toMatch(
@@ -72,7 +72,7 @@ describe("daily puzzles", () => {
       turnsRemaining: state.puzzlePlayerTurnsRemaining,
       rested: state.rested,
     })).toBe(true);
-    expect(state.puzzlePlayerTurnsRemaining).toBeGreaterThanOrEqual(1);
+    expect(state.puzzlePlayerTurnsRemaining).toBe(0);
   });
 
   it("replays the stored simulation solution to the target result", () => {
@@ -89,20 +89,31 @@ describe("daily puzzles", () => {
     }
   });
 
-  it("finds a checkmate within two player turns from the reported position", () => {
+  it("requires four player turns along the level 10 winning line", () => {
     const puzzle = DAILY_PUZZLES[0];
     let state = puzzle.createState();
 
-    const firstPlan = chooseAiPlan(state, () => 0);
-    expect(firstPlan).toHaveLength(4);
-    for (const action of firstPlan) state = gameReducer(state, action);
-
-    const reply = chooseAiPlan(state, () => 0);
-    for (const action of reply) state = gameReducer(state, action);
-
-    const winningPlan = chooseAiPlan(state, () => 0);
-    expect(winningPlan).toHaveLength(4);
-    for (const action of winningPlan) state = gameReducer(state, action);
+    let completedPlayerTurns = 0;
+    for (let plans = 0; plans < 12 && state.phase !== "gameover"; plans += 1) {
+      const activeColor = state.activeColor;
+      const plan = chooseAiPlan(state, () => 0);
+      expect(plan.length).toBeGreaterThan(0);
+      for (const action of plan) {
+        const before = state;
+        state = gameReducer(state, action);
+        if (
+          before.phase === "play" &&
+          activeColor === puzzle.playerColor &&
+          (
+            state.turn !== before.turn ||
+            state.phase === "upgrade" ||
+            state.phase === "gameover"
+          )
+        ) {
+          completedPlayerTurns += 1;
+        }
+      }
+    }
 
     expect(state).toMatchObject({
       phase: "gameover",
@@ -112,8 +123,24 @@ describe("daily puzzles", () => {
         winner: "white",
         reason: "checkmate",
       },
-      puzzlePlayerTurnsRemaining: 3,
+      puzzlePlayerTurnsRemaining: 0,
     });
+    expect(completedPlayerTurns).toBe(4);
+  });
+
+  it("decrements the limit only after the player's turns", () => {
+    const puzzle = currentDailyPuzzle(new Date("2026-10-15T12:00:00"))!;
+    let state = puzzle.createState();
+
+    const playerPlan = chooseAiPlan(state, () => 0);
+    for (const action of playerPlan) state = gameReducer(state, action);
+    expect(state.activeColor).toBe("black");
+    expect(state.puzzlePlayerTurnsRemaining).toBe(3);
+
+    const cpuReply = chooseAiPlan(state, () => 0);
+    for (const action of cpuReply) state = gameReducer(state, action);
+    expect(state.activeColor).toBe("white");
+    expect(state.puzzlePlayerTurnsRemaining).toBe(3);
   });
 
   it("requires the same terminal reason as the source simulation", () => {

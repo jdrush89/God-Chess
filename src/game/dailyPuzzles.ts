@@ -60,7 +60,7 @@ const formatDailyDate = (date: string) =>
   }).format(new Date(`${date}T00:00:00Z`));
 
 const objectiveFor = (source: DailyPuzzleSource) => {
-  const turns = `${source.playerTurns} divine turn${
+  const turns = `${source.playerTurns} of your divine turn${
     source.playerTurns === 1 ? "" : "s"
   }`;
   if (source.targetResult.kind === "draw") {
