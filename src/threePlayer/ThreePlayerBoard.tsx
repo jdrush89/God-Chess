@@ -196,9 +196,13 @@ export function ThreePlayerBoard({
       !preview &&
       !disabled &&
       Boolean(state.board[cell]) &&
-      (cell === selectedCell || sources.has(cell)),
+      (
+        cell === selectedCell ||
+        cell === provisionalSource ||
+        sources.has(cell)
+      ),
     onDragStart: (cell) => {
-      if (cell !== selectedCell) onCell?.(cell);
+      if (cell !== selectedCell && cell !== provisionalSource) onCell?.(cell);
     },
     onDrop: (cell) => onCell?.(cell),
   });

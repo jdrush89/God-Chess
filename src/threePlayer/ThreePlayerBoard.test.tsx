@@ -113,6 +113,49 @@ describe("ThreePlayerBoard", () => {
     expect(onCell).toHaveBeenNthCalledWith(2, target);
   });
 
+  it("drags a provisionally selected source without cancelling it first", () => {
+    const state = createThreePlayerGame(createDefaultThreePlayerConfig());
+    const source = Object.keys(state.board).find(
+      (cell) => state.board[cell]?.controller === state.activeSeat,
+    )!;
+    const target = getThreePlayerTopology(state.config.boardVariant).cells.find(
+      (cell) => !state.board[cell],
+    )!;
+    const onCell = vi.fn();
+    const { container } = render(
+      <ThreePlayerBoard
+        state={state}
+        provisionalSource={source}
+        legalCells={[target]}
+        onCell={onCell}
+      />,
+    );
+    const sourceCell = container.querySelector(`[data-cell="${source}"]`)!;
+    const targetCell = container.querySelector(`[data-cell="${target}"]`)!;
+
+    fireEvent.pointerDown(sourceCell, {
+      button: 0,
+      pointerId: 1,
+      clientX: 10,
+      clientY: 10,
+    });
+    fireEvent.pointerMove(sourceCell, {
+      pointerId: 1,
+      clientX: 30,
+      clientY: 30,
+    });
+    expect(sourceCell.querySelector(".three-board-piece")).toBeNull();
+    expect(container.querySelector(".three-piece-drag-preview")).toBeTruthy();
+    fireEvent.pointerUp(targetCell, {
+      pointerId: 1,
+      clientX: 30,
+      clientY: 30,
+    });
+
+    expect(onCell).toHaveBeenCalledOnce();
+    expect(onCell).toHaveBeenCalledWith(target);
+  });
+
   it.each(THREE_PLAYER_BOARD_VARIANTS)(
     "renders every %s topology cell inside a padded accessible SVG",
     (variant) => {
