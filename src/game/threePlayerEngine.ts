@@ -2640,7 +2640,7 @@ const resolveRage = (
       alliedTeammate ||
       (spareAllies && alliedPiece(state, victim))
     ) continue;
-    captureAt(state, cell, true);
+    captureAt(state, cell, true, true);
   }
 };
 

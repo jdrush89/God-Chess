@@ -815,7 +815,7 @@ describe("three-player God catalog", () => {
     expect(targeted.board[kingCell]?.type).toBe("king");
   });
 
-  it("preserves adjacent Kings while Rage destroys hostile and friendly pieces", () => {
+  it("lets Rage destroy adjacent Kings, hostile pieces, and friendly pieces", () => {
     let state = abilityState("kangus", 2);
     const topology = getThreePlayerTopology(state.config.boardVariant);
     const center = topology.cells.find((cell) =>
@@ -840,7 +840,8 @@ describe("three-player God catalog", () => {
     state = threePlayerReducer(state, { type: "cell", cell: center });
     state = threePlayerReducer(state, { type: "choice", value: false });
 
-    expect(state.board[kingCell]?.type).toBe("king");
+    expect(state.board[kingCell]).toBeUndefined();
+    expect(state.players.red.eliminated).toBe(true);
     expect(state.board[friendlyCell]).toBeUndefined();
     expect(state.board[hostileCell]).toBeUndefined();
   });

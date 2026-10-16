@@ -2392,8 +2392,7 @@ const resolveRage = (
         seatsAreAllies(state.config, state.activeSeat, victim.controller)
       )
     ) continue;
-    captureAt(state, square, true);
-    if (state.phase === "gameover" || state.players[state.activeSeat].eliminated) break;
+    captureAt(state, square, true, true);
   }
 };
 
