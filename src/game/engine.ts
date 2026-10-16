@@ -3186,7 +3186,12 @@ export const availableClassicActions = (state: GameState): GameAction[] => {
       square,
     } as GameAction)));
   } else if (state.pending?.step === "source") {
-    actions.push(...classicAbilityMoveSources(state).map((square) => ({
+    const candidates = state.selectedAbility === "enchant"
+      ? allSquares
+      : Object.entries(state.board)
+          .filter(([, piece]) => piece.controller === state.activeColor)
+          .map(([square]) => square);
+    actions.push(...candidates.map((square) => ({
       type: "square",
       square,
     } as GameAction)));
