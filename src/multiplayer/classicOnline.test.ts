@@ -119,10 +119,15 @@ describe("classic online protocol compatibility", () => {
       "peer",
       {
         type: "game_action",
-        action: { type: "draft", godId: "ares" },
+        action: {
+          type: "auto-draft",
+          godId: "salem",
+          skinId: "chonk",
+        },
       },
     ));
-    expect(state.players.white.gods).toEqual(["ares"]);
+    expect(state.players.white.gods).toEqual(["salem"]);
+    expect(state.players.white.godSkins?.salem).toBe("chonk");
     expect(transport.broadcasts.at(-2)).toMatchObject({
       payload: { type: "state_sync" },
     });

@@ -271,7 +271,10 @@ export const pseudoTargets = (
 export const isSquareAttacked = (board: Record<Square, Piece>, square: Square, by: Color, bananas: Banana[] = []) =>
   Object.entries(board).some(([from, piece]) =>
     piece.controller === by &&
+    !piece.status.hardened &&
     !piece.status.frozen &&
+    !piece.status.gazing &&
+    !piece.status.stunned &&
     ordinaryAttackSquares(board, from, bananas).includes(square),
   );
 

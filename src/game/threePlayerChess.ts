@@ -375,7 +375,10 @@ export const threePlayerIsSquareAttackedBy = (
   attacker: ThreePlayerSeat,
 ) => Object.entries(state.board).some(([from, piece]) =>
   piece.controller === attacker &&
+  !piece.status.hardened &&
   !piece.status.frozen &&
+  !piece.status.gazing &&
+  !piece.status.stunned &&
   threePlayerOrdinaryAttackCells(state, from).includes(cell)
 );
 

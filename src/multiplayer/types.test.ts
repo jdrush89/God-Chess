@@ -136,6 +136,12 @@ describe("versioned multiplayer protocol", () => {
       action: { type: "draft", godId: "anubis", skinId: "tightrope" },
     });
     expect(normalizeProtocolMessage(locked)).toBeUndefined();
+
+    const autoPick = createProtocolMessage("classic", "peer", {
+      type: "game_action",
+      action: { type: "auto-draft", godId: "salem", skinId: "chonk" },
+    });
+    expect(normalizeProtocolMessage(autoPick)).toEqual(autoPick);
   });
 
   it("round-trips only fully bound classic move-first commits", () => {

@@ -429,6 +429,8 @@ describe("three-player ordinary chess", () => {
     expect(threePlayerCheckingSeats(checked, "white")).toEqual(
       expect.arrayContaining(["red", "black"]),
     );
+    checked.board[redOrigin].status.hardened = 2;
+    expect(threePlayerCheckingSeats(checked, "white")).toEqual(["black"]);
 
     const pin = topology.cells
       .flatMap((origin) =>
