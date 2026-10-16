@@ -42,9 +42,10 @@ const initialState: OnlineGameState = {
 };
 
 export const onlinePlayerColor = (state: OnlineGameState, hostColor?: Color) => {
+  if (state.localColor) return state.localColor;
   if (hostColor && state.role === "host") return hostColor;
   if (hostColor && state.role === "peer") return hostColor === "white" ? "black" : "white";
-  return state.localColor;
+  return undefined;
 };
 
 export const onlineTurnInputDisabled = (

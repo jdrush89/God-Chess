@@ -60,6 +60,21 @@ describe("online player input", () => {
     expect(onlineTurnInputDisabled(guest, "white", "black")).toBe(false);
   });
 
+  it("prioritizes the explicit game-start seat over embedded host metadata", () => {
+    const guest: OnlineGameState = {
+      role: "peer",
+      connecting: false,
+      started: true,
+      awaitingSync: false,
+      localColor: "white",
+      ...undoState,
+    };
+
+    expect(onlinePlayerColor(guest, "white")).toBe("white");
+    expect(onlineTurnInputDisabled(guest, "white", "white")).toBe(false);
+    expect(onlineTurnInputDisabled(guest, "black", "white")).toBe(true);
+  });
+
   it("keeps the assigned drafter enabled if the transport temporarily clears started", () => {
     const host: OnlineGameState = {
       role: "host",
