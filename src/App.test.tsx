@@ -1879,7 +1879,7 @@ describe("game startup", () => {
     expect(dispatch).toHaveBeenCalledWith({ type: "square", square: "f6" });
   });
 
-  it("keeps committed Rage active without exposing cancellation or ability switching", () => {
+  it("keeps Rage cancellable until its capture choice is confirmed", () => {
     let state = createGame(1);
     state.phase = "play";
     state.players.white.gods = ["kangus"];
@@ -1905,14 +1905,13 @@ describe("game startup", () => {
     expect(rageCard.classList.contains("active")).toBe(true);
     expect(rageCard.classList.contains("disabled")).toBe(false);
     expect(rageCard.querySelector(".ability-card-main")?.getAttribute("aria-disabled")).toBeNull();
-    expect(goadCard.classList.contains("disabled")).toBe(true);
+    expect(goadCard.classList.contains("disabled")).toBe(false);
     expect((screen.getByRole("button", {
       name: /choose a different god/i,
-    }) as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.queryByRole("button", { name: /cancel ability/i })).toBeNull();
+    }) as HTMLButtonElement).disabled).toBe(false);
 
-    fireEvent.click(screen.getByText("Rage"));
-    expect(dispatch).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /cancel ability/i }));
+    expect(dispatch).toHaveBeenCalledWith({ type: "cancel" });
     fireEvent.click(screen.getByRole("button", { name: /spare allies/i }));
     expect(dispatch).toHaveBeenCalledWith({ type: "rage-resolve", spareFriendly: true });
   });

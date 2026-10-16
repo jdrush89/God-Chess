@@ -530,7 +530,7 @@ describe("four-player configuration and flow", () => {
     expect(result.winner).toEqual({ seat: "north", team: undefined, reason: "first-king-captured" });
   });
 
-  it("does not let Rage destroy the acting King's own King", () => {
+  it("lets Rage destroy the acting player's adjacent King", () => {
     let state = readyGame();
     state.config.victoryMode = "first-king-captured";
     state.players.north.gods = ["kangus"];
@@ -545,14 +545,14 @@ describe("four-player configuration and flow", () => {
     state = fourPlayerReducer(state, { type: "select-god", godId: "kangus" });
     state = fourPlayerReducer(state, { type: "select-ability", abilityId: "rage" });
     state = fourPlayerReducer(state, { type: "square", square: "g8" });
-    expect(state.players.north.eliminated).toBe(false);
+    expect(state.players.north.eliminated).toBe(true);
     expect(state.winner).toBeUndefined();
     expect(state.phase).toBe("play");
     expect(state.activeSeat).toBe("east");
-    expect(state.board.g9?.type).toBe("king");
+    expect(state.board.g9).toBeUndefined();
   });
 
-  it("does not let Rage capture adjacent Kings", () => {
+  it("lets Rage capture every adjacent King", () => {
     let state = readyGame();
     state.config.victoryMode = "first-king-captured";
     state.config.takeover = true;
@@ -568,14 +568,14 @@ describe("four-player configuration and flow", () => {
     state = fourPlayerReducer(state, { type: "select-god", godId: "kangus" });
     state = fourPlayerReducer(state, { type: "select-ability", abilityId: "rage" });
     state = fourPlayerReducer(state, { type: "square", square: "g8" });
-    expect(state.players.north.eliminated).toBe(false);
-    expect(state.players.east.eliminated).toBe(false);
+    expect(state.players.north.eliminated).toBe(true);
+    expect(state.players.east.eliminated).toBe(true);
     expect(state.winner).toBeUndefined();
-    expect(state.board.g9?.type).toBe("king");
-    expect(state.board.h9?.type).toBe("king");
+    expect(state.board.g9).toBeUndefined();
+    expect(state.board.h9).toBeUndefined();
   });
 
-  it("does not let Rage destroy teammate or hostile Kings", () => {
+  it("lets Rage destroy teammate and hostile Kings", () => {
     const config = createDefaultFourPlayerConfig();
     config.mode = "teams";
     config.teams = {
@@ -603,11 +603,12 @@ describe("four-player configuration and flow", () => {
     state = fourPlayerReducer(state, { type: "select-god", godId: "kangus" });
     state = fourPlayerReducer(state, { type: "select-ability", abilityId: "rage" });
     state = fourPlayerReducer(state, { type: "square", square: "m8" });
-    expect(state.players.east.eliminated).toBe(false);
-    expect(state.players.south.eliminated).toBe(false);
+    expect(state.players.east.eliminated).toBe(true);
+    expect(state.players.south.eliminated).toBe(true);
     expect(state.winner).toBeUndefined();
     expect(state.phase).toBe("play");
-    expect(state.activeSeat).toBe("east");
+    expect(state.board.m9).toBeUndefined();
+    expect(state.board.n8).toBeUndefined();
   });
 
   it("wins FFA only when one player remains", () => {

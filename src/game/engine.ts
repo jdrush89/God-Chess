@@ -834,7 +834,6 @@ const COMMITTED_PENDING_STEPS = new Set([
   "marked-choice",
   "mount-place",
   "mount-rider",
-  "rage-choice",
   "resurrect-more",
   "siphon-choice",
   "siphon-targets",
@@ -845,6 +844,12 @@ const COMMITTED_PENDING_STEPS = new Set([
 export const hasCommittedClassicAction = (state: GameState) => {
   const pending = state.pending;
   if (!pending) return false;
+  if (
+    pending.step === "rage-choice" &&
+    pending.source &&
+    pending.destination &&
+    pending.source !== pending.destination
+  ) return true;
   if (COMMITTED_PENDING_STEPS.has(pending.step)) return true;
   if (
     ["grave", "revive-place"].includes(pending.step) &&
@@ -2260,7 +2265,7 @@ const resolveRage = (state: GameState, square: Square, spareFriendly: boolean) =
   for (const adjacent of adjacentSquares(square)) {
     const victim = state.board[adjacent];
     if (!victim || (spareFriendly && victim.controller === state.activeColor)) continue;
-    captureAt(state, adjacent, state.activeColor);
+    captureAt(state, adjacent, state.activeColor, true);
   }
 };
 
@@ -3107,6 +3112,9 @@ export const availableClassicActions = (state: GameState): GameAction[] => {
     return [
       { type: "rage-resolve", spareFriendly: false },
       { type: "rage-resolve", spareFriendly: true },
+      ...(!hasCommittedClassicAction(state)
+        ? [{ type: "cancel" } as GameAction]
+        : []),
     ];
   }
   if (state.pending?.step === "barter-choice") {

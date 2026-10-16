@@ -44,11 +44,11 @@
     },
     {
       "type": "select-god",
-      "godId": "kangus"
+      "godId": "chiron"
     },
     {
       "type": "select-ability",
-      "abilityId": "ritual-sacrifice"
+      "abilityId": "gallop"
     },
     {
       "type": "square",
@@ -76,12 +76,12 @@
     },
     {
       "type": "preview-upgrade",
-      "godId": "kangus",
-      "abilityId": "ritual-sacrifice"
+      "godId": "chiron",
+      "abilityId": "gallop"
     },
     {
       "type": "upgrade",
-      "abilityId": "ritual-sacrifice"
+      "abilityId": "gallop"
     },
     {
       "type": "preview-upgrade",
@@ -212,12 +212,12 @@
         "gods": [
           "anubis",
           "midas",
-          "kangus"
+          "chiron"
         ],
         "godSkins": {
           "anubis": "base",
           "midas": "base",
-          "kangus": "base"
+          "chiron": "base"
         },
         "orbs": {
           "white": 1,
@@ -402,9 +402,9 @@
           "barter": 3,
           "military-funding": 3,
           "leverage": 3,
-          "ritual-sacrifice": 2,
-          "banana-peel": 2,
-          "rage": 2
+          "gallop": 2,
+          "mount": 2,
+          "charge": 2
         }
       },
       "black": {

@@ -153,7 +153,7 @@ export const GODS: God[] = [
         "You may throw the banana to any empty space within 2 spaces of the moved piece.",
         "Any opponent’s piece that steps on the banana is stunned for one turn. Stunned pieces cannot move or be moved by any abilities.",
       ], { white: 1 }),
-      ability("rage", "Rage", "Choose a friendly piece and capture all friendly and enemy pieces adjacent to that piece.", "target", [
+      ability("rage", "Rage", "Choose a friendly piece and capture every piece on the 8 surrounding squares, including diagonals.", "target", [
         "Friendly pieces are also destroyed.",
         "You may choose not to capture friendly pieces.",
         "You may move the chosen piece 1 legal space before capturing adjacent pieces.",

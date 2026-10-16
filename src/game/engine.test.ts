@@ -1121,7 +1121,6 @@ describe("game flow", () => {
       "marked-choice",
       "mount-place",
       "mount-rider",
-      "rage-choice",
       "resurrect-more",
       "siphon-choice",
       "slither",
@@ -1142,6 +1141,58 @@ describe("game flow", () => {
       expect(hasCommittedClassicAction(state), step).toBe(true);
       expect(availableClassicActions(state), step).not.toContainEqual({ type: "cancel" });
     }
+  });
+
+  it("lets Rage be cancelled before resolution and destroys diagonal Kings", () => {
+    let state = createGame(1);
+    state.phase = "play";
+    state.gameMode = "puzzle";
+    state.puzzleId = "daily-2026-10-15";
+    state.activeColor = "white";
+    state.players.white.gods = ["kangus"];
+    state.players.black.gods = ["salem"];
+    state.players.white.orbs.black = 3;
+    state.players.white.upgrades.rage = 2;
+    state.board = {
+      a1: testPiece("king", "white", "white-king"),
+      d4: testPiece("rook", "white", "rage-center"),
+      d5: testPiece("pawn", "black", "orthogonal-victim"),
+      e5: testPiece("king", "black", "diagonal-king"),
+    };
+
+    state = gameReducer(state, { type: "select-god", godId: "kangus" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "rage" });
+    state = gameReducer(state, { type: "square", square: "d4" });
+    expect(state.pending?.step).toBe("rage-choice");
+    expect(hasCommittedClassicAction(state)).toBe(false);
+    expect(availableClassicActions(state)).toContainEqual({ type: "cancel" });
+
+    const cancelled = gameReducer(state, { type: "cancel" });
+    expect(cancelled.selectedAbility).toBeUndefined();
+    expect(cancelled.pending).toBeUndefined();
+    expect(cancelled.players.white.orbs.black).toBe(3);
+
+    let resolved = gameReducer(cancelled, {
+      type: "select-ability",
+      abilityId: "rage",
+    });
+    resolved = gameReducer(resolved, { type: "square", square: "d4" });
+    resolved = gameReducer(resolved, {
+      type: "rage-resolve",
+      spareFriendly: false,
+    });
+
+    expect(resolved.board.d5).toBeUndefined();
+    expect(resolved.board.e5).toBeUndefined();
+    expect(resolved).toMatchObject({
+      phase: "gameover",
+      winner: "white",
+      result: {
+        kind: "winner",
+        winner: "white",
+        reason: "king-death",
+      },
+    });
 
     const preCommit = quetzSlitherState(1, {
       a1: testPiece("king", "white", "white-king"),
