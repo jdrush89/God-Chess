@@ -1446,6 +1446,17 @@ const sourceTargets = (state: GameState, square: Square) => {
   ])]);
 };
 
+export const classicAbilityMoveSources = (state: GameState): Square[] => {
+  if (
+    !state.selectedAbility ||
+    state.selectedSquare ||
+    state.pending?.step !== "source"
+  ) return [];
+  return allSquares.filter((square) =>
+    sourceIsAllowed(state, square) && sourceTargets(state, square).length > 0
+  );
+};
+
 const startTargetAbility = (state: GameState, abilityId: string) => {
   const level = currentLevel(state, abilityId);
   const enemy = opposite(state.activeColor);
@@ -3175,12 +3186,7 @@ export const availableClassicActions = (state: GameState): GameAction[] => {
       square,
     } as GameAction)));
   } else if (state.pending?.step === "source") {
-    const candidates = state.selectedAbility === "enchant"
-      ? allSquares
-      : Object.entries(state.board)
-          .filter(([, piece]) => piece.controller === state.activeColor)
-          .map(([square]) => square);
-    actions.push(...candidates.map((square) => ({
+    actions.push(...classicAbilityMoveSources(state).map((square) => ({
       type: "square",
       square,
     } as GameAction)));

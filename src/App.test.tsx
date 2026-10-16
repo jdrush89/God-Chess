@@ -1702,12 +1702,17 @@ describe("game startup", () => {
     expect(occupiedTarget?.querySelector(".move-target-dot")).toBeNull();
   });
 
-  it("drags a selected ability's piece to its destination", () => {
+  it("selects an ability source automatically when its piece starts dragging", () => {
     const state = createGame(1);
     state.phase = "play";
     state.selectedGod = "chiron";
     state.selectedAbility = "gallop";
-    state.legalTargets = ["e2"];
+    state.pending = {
+      godId: "chiron",
+      abilityId: "gallop",
+      step: "source",
+    };
+    state.legalTargets = [];
     const dispatch = vi.fn();
     const { container } = render(
       <ChessBoard

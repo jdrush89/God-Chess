@@ -53,6 +53,7 @@ import {
 import {
   availableThreePlayerActions,
   canStartThreePlayerMoveFirst,
+  threePlayerAbilityMoveSources,
   threePlayerMoveFirstCandidates,
   threePlayerMoveFirstSources,
   threePlayerMoveFirstTargets,
@@ -1099,6 +1100,10 @@ export function ThreePlayerGame({
       : [],
     [moveFirstDraft, moveFirstEnabled, state],
   );
+  const abilityMoveSources = useMemo(
+    () => threePlayerAbilityMoveSources(state as ThreePlayerState),
+    [state],
+  );
   const moveActions = actions.filter((action) => action.type === "move");
   const legalCells = state.legalCells?.length
     ? state.legalCells
@@ -1122,12 +1127,13 @@ export function ThreePlayerGame({
       : [];
   const sourceCells = moveFirstEnabled && !moveFirstDraft
     ? [...moveFirstSources]
-    : !selectedCell && (
-        state.pending?.step === "source" ||
-        state.pending?.step === "enchant-enemy-move" ||
-        state.pending?.step === "enchant-followup-move"
-      )
-      ? legalCells
+    : !selectedCell && state.pending?.step === "source"
+      ? abilityMoveSources
+      : !selectedCell && (
+          state.pending?.step === "enchant-enemy-move" ||
+          state.pending?.step === "enchant-followup-move"
+        )
+        ? legalCells
       : [];
 
   const dispatchAction = (

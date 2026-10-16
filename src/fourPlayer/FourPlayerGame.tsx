@@ -60,6 +60,7 @@ import { fourPlayerSquareAt } from "../game/fourPlayerChess";
 import { seatsAreAllies } from "../game/fourPlayerConfig";
 import {
   canStartFourPlayerMoveFirst,
+  fourPlayerAbilityMoveSources,
   fourPlayerMoveFirstBoardIdentity,
   fourPlayerMoveFirstCandidates,
   fourPlayerMoveFirstSources,
@@ -667,6 +668,10 @@ function FourPlayerBoard({
     selectedAbilityKind === "multi-move" ||
     state.pending?.step === "enchant-enemy-move" ||
     state.pending?.step === "enchant-followup-move";
+  const abilityMoveSources = useMemo(
+    () => new Set(fourPlayerAbilityMoveSources(state)),
+    [state],
+  );
   const activateSquare = (square: Square) => {
     onInspectSquare(square);
     onSquare(square);
@@ -680,6 +685,7 @@ function FourPlayerBoard({
       }
       return moveAbilityActive && (
         state.selectedSquare === square ||
+        abilityMoveSources.has(square) ||
         legalTargets.includes(square)
       );
     },
