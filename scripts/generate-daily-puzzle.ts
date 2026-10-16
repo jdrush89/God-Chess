@@ -11,6 +11,8 @@ import type {
 import type { GameAction } from "../src/game/engine";
 
 const [, , inputPath, dateOverride] = process.argv;
+const MIN_DAILY_TURNS = 3;
+const MAX_DAILY_TURNS = 5;
 
 if (!inputPath) {
   console.error("Usage: npm run generate:daily -- <simulation-export.json> [YYYY-MM-DD]");
@@ -18,7 +20,7 @@ if (!inputPath) {
 }
 
 const payload = JSON.parse(fs.readFileSync(path.resolve(inputPath), "utf8"));
-const turns = payload?.rewind?.rounds;
+const reportedTurns = payload?.rewind?.rounds;
 const terminalResult = payload?.result?.terminalResult as
   | ClassicResult
   | undefined;
@@ -28,7 +30,7 @@ let state = payload?.save?.state as GameState | undefined;
 let solutionActions = payload?.solutionActions as GameAction[] | undefined;
 const date = dateOverride ?? savedAt?.slice(0, 10);
 
-if (!Number.isInteger(turns) || turns <= 0) {
+if (!Number.isInteger(reportedTurns) || reportedTurns <= 0) {
   throw new Error("The simulation export must include a positive rewind.rounds value.");
 }
 if (!terminalResult || typeof resultSummary !== "string") {
@@ -50,54 +52,61 @@ if (
   throw new Error("The rewound state must be at a stable turn boundary.");
 }
 
-let playerColor: Color;
-let targetResult;
-if (terminalResult.kind === "winner") {
-  playerColor = terminalResult.winner;
-  targetResult = terminalResult;
-} else if (terminalResult.kind === "draw" && terminalResult.reason === "stalemate") {
-  const match = /^(White|Black) was stalemated\b/i.exec(resultSummary);
-  if (!match) {
-    throw new Error("A stalemate summary must identify the stalemated color.");
-  }
-  const stalematedColor = match[1].toLowerCase() as Color;
-  playerColor = stalematedColor === "white" ? "black" : "white";
-  targetResult = {
-    kind: "draw" as const,
-    reason: "stalemate" as const,
-    stalematedColor,
-  };
-} else {
-  throw new Error("Unsupported simulation result.");
+if (
+  terminalResult.kind !== "winner" ||
+  terminalResult.reason !== "checkmate"
+) {
+  throw new Error("Daily puzzles can only be generated from checkmate simulations.");
 }
+const playerColor: Color = terminalResult.winner;
+const targetResult = terminalResult;
 
 if (state.activeColor !== playerColor) {
-  const opponentPlan = chooseAiPlan(state, () => 0);
-  if (!opponentPlan.length) {
-    throw new Error("Unable to advance the legacy checkpoint to the player's turn.");
-  }
-  for (const action of opponentPlan) state = gameReducer(state, action);
-  if (state.phase === "gameover" || state.activeColor !== playerColor) {
-    throw new Error("The legacy checkpoint did not advance to a stable player turn.");
-  }
+  throw new Error("The checkpoint must begin on the checkmating player's turn.");
 }
 
 const targetMatches = (candidate: GameState) => {
   if (candidate.phase !== "gameover" || !candidate.result) return false;
-  if (targetResult.kind === "draw") {
-    return candidate.result.kind === "draw" &&
-      candidate.result.reason === "stalemate" &&
-      candidate.activeColor === targetResult.stalematedColor;
-  }
   return candidate.result.kind === "winner" &&
     candidate.result.winner === targetResult.winner &&
     candidate.result.reason === targetResult.reason;
 };
 
-const deriveSolutionActions = (initialState: GameState) => {
+const replaySolution = (
+  initialState: GameState,
+  actions: GameAction[],
+) => {
+  let candidate = structuredClone(initialState);
+  let playerTurns = 0;
+  for (const action of actions) {
+    const before = candidate;
+    candidate = gameReducer(candidate, action);
+    const completedPlayTurn =
+      before.phase === "play" &&
+      (
+        candidate.turn !== before.turn ||
+        candidate.phase === "upgrade" ||
+        candidate.phase === "gameover"
+      );
+    if (
+      completedPlayTurn &&
+      action.type !== "adjudicate-no-turn" &&
+      before.activeColor === playerColor
+    ) {
+      playerTurns += 1;
+    }
+  }
+  return { state: candidate, playerTurns };
+};
+
+const deriveOptimalSolution = (initialState: GameState) => {
   const actions: GameAction[] = [];
   let candidate = structuredClone(initialState);
-  for (let plans = 0; plans < turns * 2 + 4 && !targetMatches(candidate); plans += 1) {
+  for (
+    let plans = 0;
+    plans < MAX_DAILY_TURNS * 2 + 6 && !targetMatches(candidate);
+    plans += 1
+  ) {
     const plan = chooseAiPlan(candidate, () => 0);
     if (!plan.length) break;
     actions.push(...plan);
@@ -110,13 +119,36 @@ const deriveSolutionActions = (initialState: GameState) => {
 };
 
 if (!Array.isArray(solutionActions) || !solutionActions.length) {
-  solutionActions = deriveSolutionActions(state);
+  throw new Error("The simulation export must include its exact solutionActions.");
 }
 
-let replayed = structuredClone(state);
-for (const action of solutionActions) replayed = gameReducer(replayed, action);
-if (!targetMatches(replayed)) {
+const replayed = replaySolution(state, solutionActions);
+if (!targetMatches(replayed.state)) {
   throw new Error("The exported solution actions do not reproduce the simulation result.");
+}
+if (
+  replayed.playerTurns < MIN_DAILY_TURNS ||
+  replayed.playerTurns > MAX_DAILY_TURNS
+) {
+  throw new Error(
+    `The exported solution takes ${replayed.playerTurns} player turns; Daily puzzles must take ${MIN_DAILY_TURNS}-${MAX_DAILY_TURNS}.`,
+  );
+}
+if (reportedTurns !== replayed.playerTurns) {
+  throw new Error(
+    `The export reports ${reportedTurns} player turns, but its exact solution takes ${replayed.playerTurns}.`,
+  );
+}
+
+const optimalActions = deriveOptimalSolution(state);
+const optimalReplay = replaySolution(state, optimalActions);
+if (!targetMatches(optimalReplay.state)) {
+  throw new Error("The level 10 CPU no longer finds the exported checkmate.");
+}
+if (optimalReplay.playerTurns < MIN_DAILY_TURNS) {
+  throw new Error(
+    `The level 10 CPU finds checkmate in ${optimalReplay.playerTurns} player turns; choose an earlier checkpoint.`,
+  );
 }
 
 const output = {
@@ -124,7 +156,7 @@ const output = {
   date,
   resultSummary,
   playerColor,
-  playerTurns: turns,
+  playerTurns: replayed.playerTurns,
   targetResult,
   solutionActions,
   state,

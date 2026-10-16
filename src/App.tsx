@@ -284,21 +284,79 @@ export const rewindSimulationForExport = (
   completedActionGroups: GameAction[][] = [],
 ): SimulationRewindResult => {
   const rewindRounds = 3 + Math.floor(random() * 3);
-  const requestedUndoActions = rewindRounds * 2 - 1;
-  const remainingUndoHistory = undoHistory.map((snapshot) =>
-    prepareSavedState(snapshot)
-  );
-  let state = prepareSavedState(terminal);
-  let appliedUndoActions = 0;
-
-  while (
-    appliedUndoActions < requestedUndoActions &&
-    remainingUndoHistory.length
-  ) {
-    state = prepareSavedState(remainingUndoHistory.pop()!);
-    appliedUndoActions += 1;
+  const winner = terminal.result?.kind === "winner" &&
+      terminal.result.reason === "checkmate"
+    ? terminal.result.winner
+    : undefined;
+  if (!winner) {
+    throw new Error("Daily checkpoints require a checkmate result.");
   }
 
+  const availableBoundaries = Math.min(
+    undoHistory.length,
+    completedActionGroups.length,
+  );
+  let requestedUndoActions = 0;
+  let state: GameState | undefined;
+  let solutionActions: GameAction[] = [];
+
+  for (
+    let boundaryCount = 1;
+    boundaryCount <= availableBoundaries;
+    boundaryCount += 1
+  ) {
+    const candidate = prepareSavedState(
+      undoHistory[undoHistory.length - boundaryCount],
+    );
+    if (candidate.phase !== "play" || candidate.activeColor !== winner) continue;
+
+    const candidateActions = completedActionGroups
+      .slice(-boundaryCount)
+      .flatMap((actions) => structuredClone(actions));
+    let replayed = prepareSavedState(candidate);
+    let playerTurns = 0;
+    for (const action of candidateActions) {
+      const before = replayed;
+      replayed = gameReducer(replayed, action);
+      const completedPlayTurn =
+        before.phase === "play" &&
+        (
+          replayed.turn !== before.turn ||
+          replayed.phase === "upgrade" ||
+          replayed.phase === "gameover"
+        );
+      if (
+        completedPlayTurn &&
+        action.type !== "adjudicate-no-turn" &&
+        before.activeColor === winner
+      ) {
+        playerTurns += 1;
+      }
+    }
+    if (
+      playerTurns === rewindRounds &&
+      replayed.phase === "gameover" &&
+      replayed.result?.kind === "winner" &&
+      replayed.result.winner === winner &&
+      replayed.result.reason === "checkmate"
+    ) {
+      requestedUndoActions = boundaryCount;
+      state = candidate;
+      solutionActions = candidateActions;
+      break;
+    }
+  }
+
+  if (!state) {
+    throw new Error(
+      `Unable to create an exact ${rewindRounds}-turn checkmate checkpoint.`,
+    );
+  }
+
+  const remainingUndoHistory = undoHistory
+    .slice(0, -requestedUndoActions)
+    .map((snapshot) => prepareSavedState(snapshot));
+  const appliedUndoActions = requestedUndoActions;
   const turnStart = state.phase === "play"
     ? prepareSavedState(state)
     : undefined;
@@ -322,9 +380,7 @@ export const rewindSimulationForExport = (
       terminalResult: terminal.result
         ? structuredClone(terminal.result)
         : undefined,
-      solutionActions: completedActionGroups
-        .slice(-appliedUndoActions)
-        .flatMap((actions) => structuredClone(actions)),
+      solutionActions,
       save,
     },
   };
@@ -2047,7 +2103,7 @@ export function SimulationExportDialog({
         <p className="simulation-result-summary">{data.resultSummary}</p>
         <p>
           Rewound {data.appliedUndoActions} of {data.requestedUndoActions} undo
-          actions for a {data.rewindRounds}-turn Daily window.
+          actions for a {data.rewindRounds}-player-turn Daily window.
         </p>
         <pre
           className="simulation-export-data"
@@ -3798,7 +3854,7 @@ export function GameScreen({
           {dailyPuzzle
             ? (
               <span>
-                TURNS LEFT{" "}
+                PLAYER TURNS LEFT{" "}
                 <strong>
                   {state.puzzlePlayerTurnsRemaining ?? dailyPuzzle.playerTurns}
                 </strong>
@@ -3836,7 +3892,7 @@ export function GameScreen({
             <Crosshair size={18} />
             <span>
               {dailyPuzzle
-                ? `DAILY · ${dailyPuzzle.playerTurns} TURN${dailyPuzzle.playerTurns === 1 ? "" : "S"}`
+                ? `DAILY · ${dailyPuzzle.playerTurns} PLAYER TURN${dailyPuzzle.playerTurns === 1 ? "" : "S"}`
                 : `PUZZLE ${puzzleIndex + 1} OF ${difficultyPuzzles.length}`}
             </span>
             <strong>{puzzle.title}</strong>
@@ -5337,6 +5393,20 @@ export default function App() {
     if (threeOnlineActive) activeSaveId.current = undefined;
   }, [threeOnlineActive]);
 
+  const resetSimulationAttempt = () => {
+    simulationCompletedTurns.current = { white: 0, black: 0 };
+    simulationActionGroups.current = [];
+    simulationCurrentActions.current = [];
+    setSimulationExport(undefined);
+    const next = createGame(1, {
+      mode: "simulation",
+      aiDifficulty: 10,
+    });
+    resetUndoTracking(next);
+    aiPlan.current = [];
+    return next;
+  };
+
   const finalizeSimulation = (terminal: GameState) => {
     const completedTurns =
       simulationCompletedTurns.current.white +
@@ -5391,10 +5461,46 @@ export default function App() {
       return;
     }
     const tracked = applyTrackedAction(current, action);
-    const next =
-      tracked.gameMode === "simulation" && tracked.phase === "gameover"
-        ? finalizeSimulation(tracked)
-        : tracked;
+    let next = tracked;
+    if (tracked.gameMode === "simulation") {
+      const completedTurns =
+        simulationCompletedTurns.current.white +
+        simulationCompletedTurns.current.black;
+      const isCheckmate =
+        tracked.phase === "gameover" &&
+        tracked.result?.kind === "winner" &&
+        tracked.result.reason === "checkmate";
+      if (completedTurns > 200 || (tracked.phase === "gameover" && !isCheckmate)) {
+        recordDiagnostic({
+          category: "ui",
+          event: "simulation-attempt-restarted",
+          context: { variant: "classic", mode: "simulation" },
+          data: {
+            completedTurns,
+            reason: completedTurns > 200
+              ? "turn-limit"
+              : tracked.result?.reason ?? "non-checkmate",
+          },
+        });
+        next = resetSimulationAttempt();
+      } else if (isCheckmate) {
+        try {
+          next = finalizeSimulation(tracked);
+        } catch (error) {
+          recordDiagnostic({
+            category: "ui",
+            event: "simulation-attempt-restarted",
+            context: { variant: "classic", mode: "simulation" },
+            data: {
+              completedTurns,
+              reason: "invalid-daily-window",
+              message: error instanceof Error ? error.message : String(error),
+            },
+          });
+          next = resetSimulationAttempt();
+        }
+      }
+    }
     receiveState(next);
   };
 
@@ -6010,17 +6116,7 @@ export default function App() {
     setFourPlayerSession(undefined);
     setThreePlayerSession(undefined);
     activeSaveId.current = undefined;
-    simulationCompletedTurns.current = { white: 0, black: 0 };
-    simulationActionGroups.current = [];
-    simulationCurrentActions.current = [];
-    setSimulationExport(undefined);
-    const next = createGame(1, {
-      mode: "simulation",
-      aiDifficulty: 10,
-    });
-    resetUndoTracking(next);
-    receiveState(next);
-    aiPlan.current = [];
+    receiveState(resetSimulationAttempt());
     setSettingsOpen(false);
     setStartView("none");
   };
