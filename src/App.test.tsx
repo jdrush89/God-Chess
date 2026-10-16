@@ -2358,8 +2358,10 @@ describe("game startup", () => {
     });
     expect(copied.solutionActions).toEqual(solutionActions);
     expect(copied.save.state.gameMode).toBe("local");
-    expect(screen.getByRole("status").textContent)
-      .toMatch(/game state and result copied/i);
+    await waitFor(() => {
+      expect(screen.getByRole("status").textContent)
+        .toMatch(/game state and result copied/i);
+    });
   });
 
   it("autosaves the human-to-AI upgrade handoff without exposing the prior move", async () => {
