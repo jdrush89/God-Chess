@@ -296,6 +296,7 @@ const normalizeGameAction = (value: unknown): GameAction | undefined => {
   if (!isRecord(value) || typeof value.type !== "string") return undefined;
   switch (value.type) {
     case "draft":
+    case "auto-draft":
       if (
         !hasExactKeys(value, ["type", "godId"], ["skinId"]) ||
         !isGodId(value.godId) ||
@@ -308,14 +309,10 @@ const normalizeGameAction = (value: unknown): GameAction | undefined => {
         )
       ) return undefined;
       return {
-        type: "draft",
+        type: value.type,
         godId: value.godId,
         ...(value.skinId === undefined ? {} : { skinId: value.skinId }),
       };
-    case "auto-draft":
-      return hasExactKeys(value, ["type", "godId"]) && isGodId(value.godId)
-        ? { type: "auto-draft", godId: value.godId }
-        : undefined;
     case "select-god":
       return hasExactKeys(value, ["type", "godId"]) && isGodId(value.godId)
         ? { type: "select-god", godId: value.godId }

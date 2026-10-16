@@ -138,13 +138,18 @@ describe("chess movement", () => {
     expect(legalTargets(board, "e2")).not.toContain("d2");
   });
 
-  it("does not treat a Stone-Gazed piece as checking the king", () => {
-    const frozenRook = testPiece("rook", "black", "frozen-attacker");
-    frozenRook.status.frozen = 2;
+  it.each([
+    ["Hardened", { hardened: 2 }],
+    ["Stone-Gazed", { frozen: 2 }],
+    ["Gazing", { gazing: true }],
+    ["Stunned", { stunned: true }],
+  ] as const)("does not treat a %s piece as checking the king", (_, status) => {
+    const immobilizedRook = testPiece("rook", "black", "immobilized-attacker");
+    Object.assign(immobilizedRook.status, status);
     const board = {
       e1: testPiece("king", "white", "white-king"),
       a2: testPiece("rook", "white", "white-rook"),
-      e8: frozenRook,
+      e8: immobilizedRook,
       h8: testPiece("king", "black", "black-king"),
     };
 

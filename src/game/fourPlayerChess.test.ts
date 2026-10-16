@@ -207,5 +207,7 @@ describe("four-player cross geometry", () => {
     expect(fourPlayerIsInCheck(board, "north", teamConfig)).toBe(false);
     board.g11.controller = "south";
     expect(fourPlayerIsInCheck(board, "north", teamConfig)).toBe(true);
+    board.g11.status.hardened = 2;
+    expect(fourPlayerIsInCheck(board, "north", teamConfig)).toBe(false);
   });
 });

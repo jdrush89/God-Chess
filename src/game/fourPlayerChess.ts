@@ -344,7 +344,10 @@ export const fourPlayerIsSquareAttackedBy = (
   bananas: FourPlayerBanana[] = [],
 ) => Object.entries(board).some(([from, piece]) =>
   piece.controller === attacker &&
+  !piece.status.hardened &&
   !piece.status.frozen &&
+  !piece.status.gazing &&
+  !piece.status.stunned &&
   fourPlayerOrdinaryAttackSquares(board, from, config, bananas).includes(square),
 );
 
