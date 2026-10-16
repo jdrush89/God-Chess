@@ -3386,6 +3386,16 @@ function GraveyardModal({
   );
 }
 
+export const dailyGolfScoreForTurnsRemaining = (
+  turnsRemaining: number,
+): "birdie" | "eagle" | "albatross" | "condor" | undefined => {
+  if (turnsRemaining === 1) return "birdie";
+  if (turnsRemaining === 2) return "eagle";
+  if (turnsRemaining === 3) return "albatross";
+  if (turnsRemaining === 4) return "condor";
+  return undefined;
+};
+
 export function GameScreen({
   state,
   dispatch,
@@ -3476,6 +3486,12 @@ export function GameScreen({
       state.phase === "gameover" ||
       state.activeColor !== state.aiColor
     ),
+  );
+  const dailyTurnsRemaining = dailyPuzzle
+    ? state.puzzlePlayerTurnsRemaining ?? 0
+    : 0;
+  const dailyGolfScore = dailyGolfScoreForTurnsRemaining(
+    dailyTurnsRemaining,
   );
   const winningKingCaptureId = puzzleSolved
     ? [...(state.captureAnimations ?? [])]
@@ -4130,7 +4146,9 @@ export function GameScreen({
               {dailyPuzzle
                 ? dailySolutionRevealed
                   ? "The CPU's original winning line has been replayed."
-                  : dailyPuzzle.completionText
+                  : dailyGolfScore
+                    ? `You solved the Daily with ${dailyTurnsRemaining} player turn${dailyTurnsRemaining === 1 ? "" : "s"} left and scored ${/^[aeiou]/.test(dailyGolfScore) ? "an" : "a"} ${dailyGolfScore}.`
+                    : dailyPuzzle.completionText
                 : "You found a winning line and captured the opposing King."}
             </p>
             <div className="puzzle-result-actions">
