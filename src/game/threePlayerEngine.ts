@@ -48,6 +48,7 @@ import { getThreePlayerTopology } from "./threePlayerTopology";
 import {
   THREE_PLAYER_SEATS,
   type ThreePlayerAction,
+  type ThreePlayerCell,
   type ThreePlayerConfig,
   type ThreePlayerPiece,
   type ThreePlayerOrbAffinity,
@@ -1649,6 +1650,19 @@ const sourceTargets = (state: ThreePlayerState, cell: string): string[] => {
     });
   }
   return constrainLure(state, cell, targets);
+};
+
+export const threePlayerAbilityMoveSources = (
+  state: ThreePlayerState,
+): ThreePlayerCell[] => {
+  if (
+    !state.selectedAbility ||
+    state.selectedCell ||
+    state.pending?.step !== "source"
+  ) return [];
+  return Object.keys(state.board).filter((cell) =>
+    sourceIsAllowed(state, cell) && sourceTargets(state, cell).length > 0
+  );
 };
 
 const enchantSourceCells = (state: ThreePlayerState) =>
@@ -4385,11 +4399,7 @@ export const availableThreePlayerActions = (
     !state.legalCells!.length &&
     state.pending?.step === "source"
   ) {
-    actions.push(...Object.keys(state.board)
-      .filter((cell) =>
-        sourceIsAllowed(state, cell) &&
-        sourceTargets(state, cell).length > 0
-      )
+    actions.push(...threePlayerAbilityMoveSources(state)
       .map((cell) => ({ type: "cell", cell } as ThreePlayerAction)));
   }
   if (canPassAction(state)) actions.push({ type: "pass" });

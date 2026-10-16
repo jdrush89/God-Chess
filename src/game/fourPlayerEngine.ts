@@ -1471,6 +1471,17 @@ const movableSourceSquares = (state: FourPlayerState) =>
     sourceIsAllowed(state, square) && sourceTargets(state, square).length > 0
   );
 
+export const fourPlayerAbilityMoveSources = (
+  state: FourPlayerState,
+): Square[] => {
+  if (
+    !state.selectedAbility ||
+    state.selectedSquare ||
+    state.pending?.step !== "source"
+  ) return [];
+  return movableSourceSquares(state);
+};
+
 const enterHexMovement = (state: FourPlayerState) => {
   const sources = movableSourceSquares(state);
   if (!sources.length) {
@@ -3472,7 +3483,7 @@ export const availableFourPlayerActions = (
       (square) => ({ type: "square", square } as FourPlayerAction),
     ));
   } else if (state.pending?.step === "source") {
-    actions.push(...movableSourceSquares(state).map(
+    actions.push(...fourPlayerAbilityMoveSources(state).map(
       (square) => ({ type: "square", square } as FourPlayerAction),
     ));
   }

@@ -62,6 +62,7 @@ import {
 } from "./game/ai";
 import {
   canStartClassicMoveFirst,
+  classicAbilityMoveSources,
   classicMoveFirstCandidates,
   classicMoveFirstSources,
   classicMoveFirstTargets,
@@ -1142,6 +1143,10 @@ export function ChessBoard({
     selectedAbilityKind === "multi-move" ||
     state.pending?.step === "enchant-enemy-move" ||
     state.pending?.step === "enchant-followup-move";
+  const abilityMoveSources = useMemo(
+    () => new Set(classicAbilityMoveSources(state)),
+    [state],
+  );
   const activateSquare = (square: Square) => {
     onInspectSquare(square);
     if (onMoveFirstSquare) onMoveFirstSquare(square);
@@ -1157,6 +1162,7 @@ export function ChessBoard({
       }
       return moveAbilityActive && (
         state.selectedSquare === square ||
+        abilityMoveSources.has(square) ||
         state.legalTargets.includes(square)
       );
     },

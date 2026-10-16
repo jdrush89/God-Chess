@@ -5,11 +5,12 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import App from "../App";
 import {
   createFourPlayerGame,
+  fourPlayerAbilityMoveSources,
   fourPlayerMoveFirstSources,
   fourPlayerMoveFirstTargets,
   fourPlayerReducer,
 } from "../game/fourPlayerEngine";
-import { GODS } from "../game/gods";
+import { GOD_BY_ID, GODS } from "../game/gods";
 import { createSavedGame } from "../saves";
 import { FourPlayerGame } from "./FourPlayerGame";
 import { createFourPlayerOnlineConfig } from "../multiplayer/fourPlayerRoom";
@@ -233,6 +234,57 @@ describe("four-player app integration", () => {
     expect(destinationCell.classList.contains("provisional-destination")).toBe(true);
     expect(container.querySelector(`[data-piece-id="${pieceId}"]`)
       ?.closest("[data-square]")?.getAttribute("data-square")).toBe(source);
+  });
+
+  it("selects an ability source automatically when its piece starts dragging", () => {
+    let state = completeFourPlayerDraft();
+    const godId = state.players[state.activeSeat].gods.find((candidate) =>
+      GOD_BY_ID[candidate].abilities.some((ability) => ability.kind === "move")
+    )!;
+    const abilityId = GOD_BY_ID[godId].abilities.find(
+      (ability) => ability.kind === "move",
+    )!.id;
+    state = fourPlayerReducer(state, { type: "select-god", godId });
+    state = fourPlayerReducer(state, { type: "select-ability", abilityId });
+    const source = fourPlayerAbilityMoveSources(state)[0];
+    const selected = fourPlayerReducer(state, { type: "square", square: source });
+    const destination = selected.legalTargets[0];
+    const pieceId = state.board[source].id;
+    const { container } = render(
+      <FourPlayerGame
+        initialState={state}
+        undoPreferred={false}
+        onUndoPreferenceChange={vi.fn()}
+        onPersist={vi.fn(async () => false)}
+        onQuit={vi.fn()}
+        onNewGame={vi.fn()}
+      />,
+    );
+    const sourceCell = container.querySelector(`[data-square="${source}"]`)!;
+    const destinationCell = container.querySelector(
+      `[data-square="${destination}"]`,
+    )!;
+
+    fireEvent.pointerDown(sourceCell, {
+      button: 0,
+      pointerId: 1,
+      clientX: 10,
+      clientY: 10,
+    });
+    fireEvent.pointerMove(sourceCell, {
+      pointerId: 1,
+      clientX: 30,
+      clientY: 30,
+    });
+    expect(sourceCell.querySelector(`[data-piece-id="${pieceId}"]`)).toBeNull();
+    fireEvent.pointerUp(destinationCell, {
+      pointerId: 1,
+      clientX: 50,
+      clientY: 50,
+    });
+
+    expect(container.querySelector(`[data-piece-id="${pieceId}"]`)
+      ?.closest("[data-square]")?.getAttribute("data-square")).toBe(destination);
   });
 
   it("offers only the selected God's first ability for a provisional move", () => {

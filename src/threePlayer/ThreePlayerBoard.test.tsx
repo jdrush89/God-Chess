@@ -2,7 +2,10 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { createThreePlayerGame } from "../game/threePlayerEngine";
+import {
+  createThreePlayerGame,
+  threePlayerAbilityMoveSources,
+} from "../game/threePlayerEngine";
 import { createDefaultThreePlayerConfig } from "../game/threePlayerConfig";
 import { getThreePlayerTopology } from "../game/threePlayerTopology";
 import { THREE_PLAYER_BOARD_VARIANTS } from "../game/threePlayerTypes";
@@ -104,6 +107,55 @@ describe("ThreePlayerBoard", () => {
     )).toBeNull();
     expect(container.querySelector(".three-piece-drag-preview")).toBeTruthy();
     fireEvent.pointerUp(container.querySelector(`[data-cell="${target}"]`)!, {
+      pointerId: 1,
+      clientX: 30,
+      clientY: 30,
+    });
+
+    expect(onCell).toHaveBeenNthCalledWith(1, source);
+    expect(onCell).toHaveBeenNthCalledWith(2, target);
+  });
+
+  it("selects an ability source automatically when its piece starts dragging", () => {
+    const state = createThreePlayerGame(createDefaultThreePlayerConfig());
+    state.phase = "play";
+    state.selectedGod = "chiron";
+    state.selectedAbility = "gallop";
+    state.pending = {
+      godId: "chiron",
+      abilityId: "gallop",
+      step: "source",
+    };
+    state.legalCells = [];
+    const source = threePlayerAbilityMoveSources(state)[0];
+    const target = getThreePlayerTopology(state.config.boardVariant).cells.find(
+      (cell) => !state.board[cell],
+    )!;
+    const onCell = vi.fn();
+    const { container } = render(
+      <ThreePlayerBoard
+        state={state}
+        legalCells={[target]}
+        sourceCells={threePlayerAbilityMoveSources(state)}
+        onCell={onCell}
+      />,
+    );
+    const sourceCell = container.querySelector(`[data-cell="${source}"]`)!;
+    const targetCell = container.querySelector(`[data-cell="${target}"]`)!;
+
+    fireEvent.pointerDown(sourceCell, {
+      button: 0,
+      pointerId: 1,
+      clientX: 10,
+      clientY: 10,
+    });
+    fireEvent.pointerMove(sourceCell, {
+      pointerId: 1,
+      clientX: 30,
+      clientY: 30,
+    });
+    expect(sourceCell.querySelector(".three-board-piece")).toBeNull();
+    fireEvent.pointerUp(targetCell, {
       pointerId: 1,
       clientX: 30,
       clientY: 30,
