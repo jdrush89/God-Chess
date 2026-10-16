@@ -161,6 +161,7 @@ import {
   useOnlineGame,
   type OnlineGameState,
 } from "./multiplayer/useOnlineGame";
+import { RoomCodeCopyButton } from "./multiplayer/RoomCodeCopyButton";
 import {
   fourPlayerOnlineLocalSeat,
   useFourPlayerOnlineGame,
@@ -3023,13 +3024,9 @@ function StartGamePrompt({
                 <div className="online-lobby">
                   <Wifi size={24} />
                   <span>ROOM CODE</span>
-                  <button
-                    className="room-code"
-                    onClick={() => online.roomCode && navigator.clipboard.writeText(online.roomCode)}
-                    title="Copy room code"
-                  >
-                    {online.roomCode}<Copy size={15} />
-                  </button>
+                  {online.roomCode && (
+                    <RoomCodeCopyButton roomCode={online.roomCode} />
+                  )}
                   <p>{online.guest ? `${online.guest.name} joined the room.` : "Waiting for another player to join..."}</p>
                   <button className="primary-button" disabled={!online.guest} onClick={onStartOnline}>
                     Start online game
@@ -3191,7 +3188,7 @@ function PuzzleSelectScreen({
                 {
                   id: "easy",
                   title: "Easy",
-                  description: "Win in one divine turn.",
+                  description: "Win or escape checkmate in one divine turn.",
                   icon: Crosshair,
                 },
                 {
@@ -3470,12 +3467,14 @@ export function GameScreen({
     : -1;
   const puzzleSolved = dailyPuzzle
     ? dailyPuzzleResultMatches(dailyPuzzle, state)
-    : Boolean(
-      puzzle &&
-      state.phase === "gameover" &&
-      state.winner &&
-      state.winner !== state.aiColor,
-    );
+    : state.puzzleEscapeAbilityId
+      ? Boolean(state.puzzleSolved)
+      : Boolean(
+        puzzle &&
+        state.phase === "gameover" &&
+        state.winner &&
+        state.winner !== state.aiColor,
+      );
   const puzzleFailed = Boolean(
     puzzle &&
     (
@@ -3587,13 +3586,16 @@ export function GameScreen({
   useEffect(() => {
     setPuzzleVictoryReady(false);
     if (!puzzleSolved) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (
+      state.puzzleSolved ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
       setPuzzleVictoryReady(true);
       return;
     }
     const timer = window.setTimeout(() => setPuzzleVictoryReady(true), 1050);
     return () => window.clearTimeout(timer);
-  }, [puzzleSolved, state.puzzleId, winningKingCaptureId]);
+  }, [puzzleSolved, state.puzzleId, state.puzzleSolved, winningKingCaptureId]);
 
   useEffect(() => {
     const event = state.presentation;
@@ -4149,7 +4151,9 @@ export function GameScreen({
                   : dailyGolfScore
                     ? `You solved the Daily with ${dailyTurnsRemaining} player turn${dailyTurnsRemaining === 1 ? "" : "s"} left and scored ${/^[aeiou]/.test(dailyGolfScore) ? "an" : "a"} ${dailyGolfScore}.`
                     : dailyPuzzle.completionText
-                : "You found a winning line and captured the opposing King."}
+                : state.puzzleEscapeAbilityId
+                  ? "You used the required divine ability to escape checkmate."
+                  : "You found a winning line and captured the opposing King."}
             </p>
             <div className="puzzle-result-actions">
               <button className="primary-button" onClick={onNextPuzzle}>
@@ -5184,9 +5188,11 @@ export default function App() {
       (
         dailyPuzzle
           ? dailyPuzzleResultMatches(dailyPuzzle, state)
-          : state.phase === "gameover" &&
-            state.winner &&
-            state.winner !== state.aiColor
+          : state.puzzleEscapeAbilityId
+            ? state.puzzleSolved
+            : state.phase === "gameover" &&
+              state.winner &&
+              state.winner !== state.aiColor
       )
     );
     if (
@@ -5201,7 +5207,9 @@ export default function App() {
     state.aiColor,
     state.gameMode,
     state.phase,
+    state.puzzleEscapeAbilityId,
     state.puzzleId,
+    state.puzzleSolved,
     state.result,
     state.winner,
   ]);
@@ -5270,12 +5278,19 @@ export default function App() {
       ];
     }
     const next = gameReducer(current, action);
+    const completedDefensivePuzzle =
+      current.gameMode === "puzzle" &&
+      Boolean(current.puzzleEscapeAbilityId) &&
+      !current.puzzleSolved &&
+      !current.puzzleFailed &&
+      Boolean(next.puzzleSolved || next.puzzleFailed);
     const completedPlayTurn =
       current.phase === "play" &&
       (
         next.turn !== current.turn ||
         next.phase === "upgrade" ||
-        next.phase === "gameover"
+        next.phase === "gameover" ||
+        completedDefensivePuzzle
       );
     if (
       current.gameMode === "simulation" &&
@@ -5297,14 +5312,7 @@ export default function App() {
           simulationCurrentActions.current = [];
         }
         resetUndoTracking(next);
-    } else if (
-      current.phase === "play" &&
-      (
-        next.turn !== current.turn ||
-        next.phase === "upgrade" ||
-        next.phase === "gameover"
-      )
-    ) {
+    } else if (completedPlayTurn) {
       undoStack.current = [
         ...undoStack.current,
         prepareSavedState(turnStart.current ?? current),

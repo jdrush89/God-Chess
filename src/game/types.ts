@@ -37,7 +37,12 @@ export type ClassicPuzzleId =
   | "sung-execution"
   | "opened-throne"
   | "pinned-serpent"
-  | "hexed-provocation";
+  | "hexed-provocation"
+  | "last-second-flight"
+  | "centaur-blockade"
+  | "rage-break"
+  | "grave-intercession"
+  | "enchanted-retreat";
 export type DailyPuzzleId = `daily-${string}`;
 export type ThreePlayerPuzzleId =
   | "three-frontier-fork"
@@ -265,6 +270,8 @@ export interface GameState {
   puzzleId?: ClassicPuzzleId | DailyPuzzleId;
   puzzlePlayerTurnsRemaining?: number;
   puzzleFailed?: boolean;
+  puzzleEscapeAbilityId?: string;
+  puzzleSolved?: boolean;
   challengeId?: ChallengeId;
   challengeGodUses?: Record<Color, Partial<Record<GodId, number>>>;
   challengeUpgradeResumeColor?: Color;
