@@ -575,6 +575,11 @@ export const isTwoPlayerGameState = (state: unknown): state is GameState => {
       !isInteger(state.puzzlePlayerTurnsRemaining)
     ) ||
     (state.puzzleFailed !== undefined && typeof state.puzzleFailed !== "boolean") ||
+    (
+      state.puzzleEscapeAbilityId !== undefined &&
+      typeof state.puzzleEscapeAbilityId !== "string"
+    ) ||
+    (state.puzzleSolved !== undefined && typeof state.puzzleSolved !== "boolean") ||
     !isRecord(state.board) ||
     !isRecord(state.players) ||
     !isPlayerState(state.players.white, "white") ||
@@ -738,7 +743,9 @@ export const isStrictOnlineTwoPlayerGameState = (
   state.aiColor === undefined &&
   state.puzzleId === undefined &&
   state.puzzlePlayerTurnsRemaining === undefined &&
-  state.puzzleFailed === undefined;
+  state.puzzleFailed === undefined &&
+  state.puzzleEscapeAbilityId === undefined &&
+  state.puzzleSolved === undefined;
 
 const prepareSavedGameState = (
   state: unknown,

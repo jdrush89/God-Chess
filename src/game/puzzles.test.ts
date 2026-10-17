@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import readme from "../../README.md?raw";
 import { chooseAiPlan, enumerateTurnPlans, evaluateGameState, isAiTurn } from "./ai";
-import { kingSquare, legalTargets } from "./chess";
+import { isInCheck, kingSquare, legalTargets } from "./chess";
 import {
   availableClassicActions,
   classicPlanStateSignature,
@@ -18,6 +18,12 @@ import {
 import type { GameState, GodId, PieceType } from "./types";
 
 const HARD_PUZZLES = PUZZLES.filter((puzzle) => puzzle.difficulty === "hard");
+const DEFENSIVE_PUZZLES = PUZZLES.filter((puzzle) =>
+  Boolean(puzzle.createState().puzzleEscapeAbilityId)
+);
+const OFFENSIVE_PUZZLES = PUZZLES.filter((puzzle) =>
+  !puzzle.createState().puzzleEscapeAbilityId
+);
 
 const applyActions = (state: GameState, actions: GameAction[]) =>
   actions.reduce(gameReducer, state);
@@ -166,24 +172,26 @@ const countDistinctWinningLines = (
 };
 
 describe("puzzle mode", () => {
-  it("includes five unique Easy and ten each Medium and Hard positions", () => {
-    expect(PUZZLES).toHaveLength(25);
-    expect(PUZZLES.filter((puzzle) => puzzle.playerTurns === 1)).toHaveLength(5);
+  it("includes ten unique Easy and ten each Medium and Hard positions", () => {
+    expect(PUZZLES).toHaveLength(30);
+    expect(PUZZLES.filter((puzzle) => puzzle.playerTurns === 1)).toHaveLength(10);
     expect(PUZZLES.filter((puzzle) => puzzle.playerTurns === 2)).toHaveLength(10);
     expect(PUZZLES.filter((puzzle) => puzzle.playerTurns === 3)).toHaveLength(10);
-    expect(PUZZLES.filter((puzzle) => puzzle.difficulty === "easy")).toHaveLength(5);
+    expect(PUZZLES.filter((puzzle) => puzzle.difficulty === "easy")).toHaveLength(10);
     expect(PUZZLES.filter((puzzle) => puzzle.difficulty === "medium")).toHaveLength(10);
     expect(HARD_PUZZLES).toHaveLength(10);
+    expect(DEFENSIVE_PUZZLES).toHaveLength(5);
     expect(HARD_PUZZLES.every((puzzle) => puzzle.playerTurns === 3)).toBe(true);
     expect(PUZZLES.map((puzzle) => puzzle.title)).toEqual(
-      Array.from({ length: 25 }, (_, index) => {
+      Array.from({ length: 30 }, (_, index) => {
         const number = [
           "One", "Two", "Three", "Four", "Five",
           "Six", "Seven", "Eight", "Nine", "Ten",
           "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen",
           "Sixteen", "Seventeen", "Eighteen", "Nineteen", "Twenty",
           "Twenty-One", "Twenty-Two", "Twenty-Three", "Twenty-Four",
-          "Twenty-Five",
+          "Twenty-Five", "Twenty-Six", "Twenty-Seven", "Twenty-Eight",
+          "Twenty-Nine", "Thirty",
         ][index];
         return `Position ${number}`;
       }),
@@ -398,7 +406,7 @@ describe("puzzle mode", () => {
     }
   });
 
-  it.each(PUZZLES)("$title has a legal winning solution against level 10 AI", (puzzle) => {
+  it.each(OFFENSIVE_PUZZLES)("$title has a legal winning solution against level 10 AI", (puzzle) => {
     let state = puzzle.createState("Solver");
 
     expect(state.gameMode).toBe("puzzle");
@@ -433,6 +441,49 @@ describe("puzzle mode", () => {
     expect(state.winner).toBe("white");
     expect(state.puzzleFailed).toBe(false);
   });
+
+  it.each(DEFENSIVE_PUZZLES)(
+    "$title starts in check and only its required ability creates a safe completed turn",
+    (puzzle) => {
+      const initial = puzzle.createState("Solver");
+      const requiredAbility = initial.puzzleEscapeAbilityId;
+
+      expect(requiredAbility).toBeTruthy();
+      expect(isInCheck(initial.board, "white", initial.bananas)).toBe(true);
+
+      const searchState = structuredClone(initial);
+      searchState.puzzleEscapeAbilityId = undefined;
+      searchState.puzzleSolved = undefined;
+      searchState.puzzlePlayerTurnsRemaining = undefined;
+      searchState.puzzleFailed = false;
+      const safePlans = uniqueTurnPlans(searchState).filter((plan) =>
+        Boolean(kingSquare(plan.state.board, "white")) &&
+        !isInCheck(plan.state.board, "white", plan.state.bananas)
+      );
+
+      expect(safePlans.length).toBeGreaterThan(0);
+      expect(
+        safePlans.every((plan) =>
+          plan.actions.some(
+            (action) =>
+              action.type === "select-ability" &&
+              action.abilityId === requiredAbility,
+          )
+        ),
+      ).toBe(true);
+
+      const solved = applyActions(initial, puzzle.solutionTurns[0]);
+      expect(solved).toMatchObject({
+        phase: "play",
+        activeColor: "white",
+        puzzleSolved: true,
+        puzzleFailed: false,
+      });
+      expect(isInCheck(solved.board, "white", solved.bananas)).toBe(false);
+      expect(isAiTurn(solved)).toBe(false);
+      expect(chooseAiPlan(solved, () => 0)).toEqual([]);
+    },
+  );
 
   it.each([
     "rising-monument",

@@ -1,7 +1,6 @@
 import {
   Bot,
   Check,
-  Copy,
   Crown,
   Shield,
   UserRound,
@@ -17,6 +16,7 @@ import type {
   ThreePlayerParticipant,
 } from "../multiplayer/types";
 import type { ThreePlayerOnlineState } from "../multiplayer/useThreePlayerOnlineGame";
+import { RoomCodeCopyButton } from "../multiplayer/RoomCodeCopyButton";
 import {
   THREE_PLAYER_PALETTES,
   THREE_PLAYER_SEAT_LABELS,
@@ -110,13 +110,7 @@ export function ThreePlayerOnlineLobby({
           <Wifi size={22} />
           <span>THREE-PLAYER ROOM</span>
         </div>
-        <button
-          className="room-code"
-          onClick={() => navigator.clipboard.writeText(snapshot.roomCode)}
-          title="Copy room code"
-        >
-          {snapshot.roomCode}<Copy size={15} />
-        </button>
+        <RoomCodeCopyButton roomCode={snapshot.roomCode} />
       </header>
 
       <div className="three-online-participants">

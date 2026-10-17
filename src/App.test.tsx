@@ -1056,7 +1056,7 @@ describe("game startup", () => {
 
     openPlayOption("Puzzles");
     expect(screen.getByRole("button", {
-      name: /^easy.*0 of 5 completed/i,
+      name: /^easy.*0 of 10 completed/i,
     })).toBeTruthy();
     expect(screen.getByRole("button", {
       name: /^challenges.*0 of 8 completed/i,
@@ -1353,7 +1353,7 @@ describe("game startup", () => {
 
     expect(screen.getByRole("heading", { name: /choose a difficulty/i })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /^easy/i }));
-    expect(screen.getAllByRole("button", { name: /puzzle \d/i })).toHaveLength(5);
+    expect(screen.getAllByRole("button", { name: /puzzle \d/i })).toHaveLength(10);
     fireEvent.click(screen.getByRole("button", { name: /difficulties/i }));
     fireEvent.click(screen.getByRole("button", { name: /^medium/i }));
     expect(screen.getAllByRole("button", { name: /puzzle \d/i })).toHaveLength(10);
@@ -1535,7 +1535,7 @@ describe("game startup", () => {
     const { container } = render(<App />);
     openPlayOption("Puzzles");
 
-    expect(screen.getByRole("button", { name: /^easy.*1 of 5 completed/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^easy.*1 of 10 completed/i })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /^easy/i }));
     expect(screen.getByRole("button", { name: /puzzle 1.*completed/i })).toBeTruthy();
     expect(container.querySelector(".puzzle-complete-badge svg")).toBeTruthy();
@@ -1623,6 +1623,39 @@ describe("game startup", () => {
     expect(screen.getByText(/you found a winning line/i)).toBeTruthy();
     expect(screen.queryByText(puzzle.solutionSummary)).toBeNull();
     expect(JSON.parse(window.localStorage.getItem("god-chess-puzzle-progress-v1") ?? "[]")).toContain(puzzle.id);
+  });
+
+  it("completes a defensive puzzle immediately without starting an AI reply", async () => {
+    const puzzle = PUZZLES.find((candidate) =>
+      candidate.id === "last-second-flight"
+    )!;
+    const solvedState = puzzle.solutionTurns[0].reduce(
+      gameReducer,
+      puzzle.createState("Solver"),
+    );
+    window.localStorage.setItem(LEGACY_SAVE_KEY, JSON.stringify({
+      version: 1,
+      savedAt: new Date().toISOString(),
+      state: solvedState,
+    }));
+    vi.stubGlobal("Worker", FakeClassicAiWorker);
+
+    render(<App />);
+    openPlayOption("Load");
+    fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
+
+    expect(await screen.findByText("PUZZLE SOLVED")).toBeTruthy();
+    expect(
+      screen.getByText(/required divine ability to escape checkmate/i),
+    ).toBeTruthy();
+    expect(FakeClassicAiWorker.instances).toHaveLength(0);
+    await waitFor(() => {
+      expect(
+        JSON.parse(
+          window.localStorage.getItem("god-chess-puzzle-progress-v1") ?? "[]",
+        ),
+      ).toContain(puzzle.id);
+    });
   });
 
   it("undoes completed classic puzzle turns without requiring the undo setting", () => {
