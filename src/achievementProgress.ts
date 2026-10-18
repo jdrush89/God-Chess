@@ -7,6 +7,10 @@ import {
   type MatchAchievementProgress,
 } from "./achievements";
 import { GODS } from "./game/gods";
+import {
+  THREE_PLAYER_BOARD_VARIANTS,
+  type ThreePlayerBoardVariant,
+} from "./game/threePlayerTypes";
 import type { GodId, PieceType } from "./game/types";
 
 export const ACHIEVEMENT_PROGRESS_KEY = "god-chess-achievements-v1";
@@ -94,6 +98,9 @@ const pieceTypes = new Set<PieceType>([
   "knight",
   "pawn",
 ]);
+const threePlayerBoardVariants = new Set<ThreePlayerBoardVariant>(
+  THREE_PLAYER_BOARD_VARIANTS,
+);
 
 export const normalizeAchievementProgress = (
   value: unknown,
@@ -128,6 +135,7 @@ export const normalizeAchievementProgress = (
       leveragedQueens: nonNegativeInteger(totals.leveragedQueens),
       lightOrbsGained: nonNegativeInteger(totals.lightOrbsGained),
       darkOrbsGained: nonNegativeInteger(totals.darkOrbsGained),
+      piecesCaptured: nonNegativeInteger(totals.piecesCaptured),
     },
     collections: {
       wonGods: [...new Set(
@@ -148,6 +156,13 @@ export const normalizeAchievementProgress = (
           (pieceType): pieceType is PieceType =>
             typeof pieceType === "string" &&
             pieceTypes.has(pieceType as PieceType),
+        ),
+      )],
+      wonThreePlayerVariants: [...new Set(
+        (collections.wonThreePlayerVariants ?? []).filter(
+          (variant): variant is ThreePlayerBoardVariant =>
+            typeof variant === "string" &&
+            threePlayerBoardVariants.has(variant as ThreePlayerBoardVariant),
         ),
       )],
     },

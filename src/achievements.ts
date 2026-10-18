@@ -24,10 +24,12 @@ import {
   threePlayerOrdinaryAttackCells,
 } from "./game/threePlayerChess";
 import { getThreePlayerTopology } from "./game/threePlayerTopology";
-import type {
-  ThreePlayerAction,
-  ThreePlayerSeat,
-  ThreePlayerState,
+import {
+  THREE_PLAYER_BOARD_VARIANTS,
+  type ThreePlayerBoardVariant,
+  type ThreePlayerAction,
+  type ThreePlayerSeat,
+  type ThreePlayerState,
 } from "./game/threePlayerTypes";
 import type {
   Color,
@@ -89,6 +91,11 @@ export const ACHIEVEMENTS = [
   ["threatening-me", "Are you threatening me?", "Use Threaten to attack 4 pieces at once."],
   ["worbs", "Worbs", "Gain 200 Light orbs total."],
   ["borbs", "Borbs", "Gain 200 Dark orbs total."],
+  ["consistency", "Consistency", "Complete the Daily puzzle 7 days in a row."],
+  ["veteran", "Veteran", "Complete 50 Daily puzzles."],
+  ["prisoners-of-war", "Prisoners of war", "Capture 100 pieces."],
+  ["war-never-changes", "War never changes", "Capture 500 pieces."],
+  ["triples-is-best", "Triples is best", "Win a game on each of the five 3 player boards."],
 ] as const;
 
 export type AchievementId = (typeof ACHIEVEMENTS)[number][0];
@@ -114,6 +121,11 @@ const GOALS: Partial<Record<AchievementId, number>> = {
   "queen-for-hire": 5,
   worbs: 200,
   borbs: 200,
+  consistency: 7,
+  veteran: 50,
+  "prisoners-of-war": 100,
+  "war-never-changes": 500,
+  "triples-is-best": THREE_PLAYER_BOARD_VARIANTS.length,
 };
 
 export const ACHIEVEMENT_DEFINITIONS: AchievementDefinition[] =
@@ -139,12 +151,14 @@ export interface AchievementTotals {
   leveragedQueens: number;
   lightOrbsGained: number;
   darkOrbsGained: number;
+  piecesCaptured: number;
 }
 
 export interface AchievementCollections {
   wonGods: GodId[];
   usedAbilities: string[];
   polymorphedPieceTypes: PieceType[];
+  wonThreePlayerVariants: ThreePlayerBoardVariant[];
 }
 
 interface LuredQueen {
@@ -230,11 +244,13 @@ export const createAchievementProgress = (): AchievementProgress => ({
     leveragedQueens: 0,
     lightOrbsGained: 0,
     darkOrbsGained: 0,
+    piecesCaptured: 0,
   },
   collections: {
     wonGods: [],
     usedAbilities: [],
     polymorphedPieceTypes: [],
+    wonThreePlayerVariants: [],
   },
   matches: {},
 });
@@ -273,6 +289,10 @@ export const mergeAchievementProgress = (
       first.totals.darkOrbsGained,
       second.totals.darkOrbsGained,
     ),
+    piecesCaptured: Math.max(
+      first.totals.piecesCaptured,
+      second.totals.piecesCaptured,
+    ),
   },
   collections: {
     wonGods: unique([
@@ -286,6 +306,10 @@ export const mergeAchievementProgress = (
     polymorphedPieceTypes: unique([
       ...first.collections.polymorphedPieceTypes,
       ...second.collections.polymorphedPieceTypes,
+    ]),
+    wonThreePlayerVariants: unique([
+      ...first.collections.wonThreePlayerVariants,
+      ...second.collections.wonThreePlayerVariants,
     ]),
   },
   matches: { ...first.matches, ...second.matches },
@@ -320,6 +344,29 @@ const players = (state: AnyState) =>
 
 const controller = (piece: AnyPiece) =>
   "controller" in piece ? piece.controller : undefined;
+
+const controllersAreHostile = (
+  transition: AchievementTransition,
+  actorSeat: string,
+  targetSeat: string,
+) => {
+  if (actorSeat === targetSeat) return false;
+  if (transition.variant === "three-player") {
+    const actorTeam = transition.before.config.teams?.[
+      actorSeat as ThreePlayerSeat
+    ];
+    const targetTeam = transition.before.config.teams?.[
+      targetSeat as ThreePlayerSeat
+    ];
+    return !actorTeam || !targetTeam || actorTeam !== targetTeam;
+  }
+  if (transition.variant === "four-player") {
+    const actorTeam = transition.before.players[actorSeat as Seat]?.team;
+    const targetTeam = transition.before.players[targetSeat as Seat]?.team;
+    return !actorTeam || !targetTeam || actorTeam !== targetTeam;
+  }
+  return true;
+};
 
 const owner = (piece: AnyPiece) =>
   "owner" in piece ? piece.owner : piece.color;
@@ -645,6 +692,18 @@ export const applyAchievementTransition = (
   const added = addedPieces(transition.before, transition.after);
   const moved = movedPieces(transition.before, transition.after);
   const actorRemoved = localAction ? removed : [];
+  const hostileCaptured = localAction
+    ? removed.filter((piece) => {
+      const pieceController = controller(piece);
+      return pieceController !== undefined &&
+        pieceController !== null &&
+        controllersAreHostile(
+          transition,
+          actorSeat,
+          String(pieceController),
+        );
+    })
+    : [];
   const actorLightGain = localAction
     ? Math.max(
       0,
@@ -660,6 +719,16 @@ export const applyAchievementTransition = (
     )
     : 0;
   const totalOrbGain = actorLightGain + actorDarkGain;
+
+  if (hostileCaptured.length) {
+    progress.totals.piecesCaptured += hostileCaptured.length;
+    if (progress.totals.piecesCaptured >= 100) {
+      complete(progress, "prisoners-of-war", unlocked);
+    }
+    if (progress.totals.piecesCaptured >= 500) {
+      complete(progress, "war-never-changes", unlocked);
+    }
+  }
 
   if (localAction) {
     progress.totals.lightOrbsGained += actorLightGain;
@@ -1094,6 +1163,22 @@ export const applyAchievementTransition = (
         (match.constructionLight[winner] ?? 0) >= 10
       )
     ) complete(progress, "anoobus", unlocked);
+    if (
+      transition.variant === "three-player" &&
+      !transition.after.challengeId
+    ) {
+      progress.collections.wonThreePlayerVariants = unique([
+        ...progress.collections.wonThreePlayerVariants,
+        transition.after.config.boardVariant,
+      ]);
+      if (
+        THREE_PLAYER_BOARD_VARIANTS.every((variant) =>
+          progress.collections.wonThreePlayerVariants.includes(variant)
+        )
+      ) {
+        complete(progress, "triples-is-best", unlocked);
+      }
+    }
     if (transition.variant === "three-player") {
       const achieved = winners.some((winner) => {
         const turns = match.kingCaptureTurns[winner] ?? [];
@@ -1122,6 +1207,7 @@ export const achievementProgressValue = (
     medium: number;
     hard: number;
     daily?: number;
+    dailyStreak?: number;
   },
 ) => {
   if (progress.completed[id]) return ACHIEVEMENT_BY_ID[id].goal ?? 1;
@@ -1170,6 +1256,15 @@ export const achievementProgressValue = (
       return progress.totals.lightOrbsGained;
     case "borbs":
       return progress.totals.darkOrbsGained;
+    case "consistency":
+      return completedPuzzles?.dailyStreak ?? 0;
+    case "veteran":
+      return completedPuzzles?.daily ?? 0;
+    case "prisoners-of-war":
+    case "war-never-changes":
+      return progress.totals.piecesCaptured;
+    case "triples-is-best":
+      return progress.collections.wonThreePlayerVariants.length;
     default:
       return 0;
   }
@@ -1190,5 +1285,63 @@ export const completeCryptologistIfEligible = (
   ) return source;
   const progress = cloneProgress(source);
   progress.completed.cryptologist = new Date().toISOString();
+  return progress;
+};
+
+const DAILY_PUZZLE_ID_PATTERN = /^daily-(\d{4}-\d{2}-\d{2})$/;
+const DAY_IN_MS = 24 * 60 * 60 * 1_000;
+
+export const dailyPuzzleCompletionStats = (
+  completedPuzzleIds: Iterable<string>,
+) => {
+  const completedDays = [...new Set(
+    [...completedPuzzleIds].flatMap((id) => {
+      const date = id.match(DAILY_PUZZLE_ID_PATTERN)?.[1];
+      if (!date) return [];
+      const timestamp = Date.parse(`${date}T00:00:00.000Z`);
+      if (
+        Number.isNaN(timestamp) ||
+        new Date(timestamp).toISOString().slice(0, 10) !== date
+      ) return [];
+      return [timestamp];
+    }),
+  )].sort((left, right) => left - right);
+
+  let longestStreak = 0;
+  let currentStreak = 0;
+  let previousDay: number | undefined;
+  for (const day of completedDays) {
+    currentStreak = previousDay === undefined || day - previousDay === DAY_IN_MS
+      ? currentStreak + 1
+      : 1;
+    longestStreak = Math.max(longestStreak, currentStreak);
+    previousDay = day;
+  }
+
+  return {
+    completed: completedDays.length,
+    longestStreak,
+  };
+};
+
+export const completeDailyAchievementsIfEligible = (
+  source: AchievementProgress,
+  completedPuzzleIds: Iterable<string>,
+) => {
+  const { completed, longestStreak } = dailyPuzzleCompletionStats(
+    completedPuzzleIds,
+  );
+  if (
+    (longestStreak < 7 || source.completed.consistency) &&
+    (completed < 50 || source.completed.veteran)
+  ) return source;
+
+  const progress = cloneProgress(source);
+  if (longestStreak >= 7 && !progress.completed.consistency) {
+    progress.completed.consistency = new Date().toISOString();
+  }
+  if (completed >= 50 && !progress.completed.veteran) {
+    progress.completed.veteran = new Date().toISOString();
+  }
   return progress;
 };

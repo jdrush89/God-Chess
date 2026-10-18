@@ -893,7 +893,7 @@ describe("game startup", () => {
     ).toBeTruthy();
     expect(
       within(document.querySelector(".achievements-heading")!)
-        .getByText("0 / 50"),
+        .getByText("0 / 55"),
     ).toBeTruthy();
     expect(screen.getByRole("heading", { name: /^it begins$/i })).toBeTruthy();
     expect(screen.getByRole("heading", { name: /^borbs$/i })).toBeTruthy();

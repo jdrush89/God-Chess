@@ -151,7 +151,9 @@ import {
   achievementProgressValue,
   applyAchievementTransition,
   completeCryptologistIfEligible,
+  completeDailyAchievementsIfEligible,
   createAchievementProgress,
+  dailyPuzzleCompletionStats,
   type AchievementProgress,
   type AchievementTransition,
 } from "./achievements";
@@ -2491,6 +2493,7 @@ function AchievementsScreen({
     medium: number;
     hard: number;
     daily: number;
+    dailyStreak: number;
   };
   onBack: () => void;
 }) {
@@ -4839,19 +4842,23 @@ export default function App() {
       achievementProgressLoadedFor !== accountService.account.userId
       ? createAchievementProgress()
       : achievementProgress;
-  const completedPuzzleCounts = useMemo(
-    () =>
-      completedPuzzleIds.reduce(
-        (result, puzzleId) => {
-          const puzzle = PUZZLE_BY_ID[puzzleId as keyof typeof PUZZLE_BY_ID];
-          if (puzzle) result[puzzle.difficulty] += 1;
-          else if (puzzleId in DAILY_PUZZLE_BY_ID) result.daily += 1;
-          return result;
-        },
-        { easy: 0, medium: 0, hard: 0, daily: 0 },
-      ),
-    [completedPuzzleIds],
-  );
+  const completedPuzzleCounts = useMemo(() => {
+    const dailyStats = dailyPuzzleCompletionStats(completedPuzzleIds);
+    return completedPuzzleIds.reduce(
+      (result, puzzleId) => {
+        const puzzle = PUZZLE_BY_ID[puzzleId as keyof typeof PUZZLE_BY_ID];
+        if (puzzle) result[puzzle.difficulty] += 1;
+        return result;
+      },
+      {
+        easy: 0,
+        medium: 0,
+        hard: 0,
+        daily: dailyStats.completed,
+        dailyStreak: dailyStats.longestStreak,
+      },
+    );
+  }, [completedPuzzleIds]);
   const savedGamesRef = useRef(savedGames);
   savedGamesRef.current = savedGames;
   const activeSaveId = useRef<string | undefined>(undefined);
@@ -5399,9 +5406,16 @@ export default function App() {
 
   useEffect(() => {
     saveAchievementProgress((current) =>
-      completeCryptologistIfEligible(current, completedPuzzleCounts)
+      completeDailyAchievementsIfEligible(
+        completeCryptologistIfEligible(current, completedPuzzleCounts),
+        completedPuzzleIds,
+      )
     );
-  }, [completedPuzzleCounts, saveAchievementProgress]);
+  }, [
+    completedPuzzleCounts,
+    completedPuzzleIds,
+    saveAchievementProgress,
+  ]);
 
   const recordAchievementTransition = (
     transition: AchievementTransition,

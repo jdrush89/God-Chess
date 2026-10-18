@@ -218,7 +218,7 @@ is required.
 
 ## Achievements
 
-The Play menu includes a 50-item achievement gallery with completion states and
+The Play menu includes a 55-item achievement gallery with completion states and
 progress bars for cumulative goals. Progress is recorded from canonical game
 transitions in classic, three-player, and four-player matches. Signed-out
 progress is stored in the browser; signing in merges that progress into the
