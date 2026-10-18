@@ -728,6 +728,7 @@ const advanceUpgradeQueue = (state: GameState) => {
 };
 
 const finishTurn = (state: GameState, description: string) => {
+  const actingAbility = state.selectedAbility;
   if (state.selectedGod === "death") resolveMarkedForDeath(state);
   const actingGod = state.selectedGod;
   markChallengeGodUsed(state, state.activeColor, actingGod);
@@ -739,10 +740,10 @@ const finishTurn = (state: GameState, description: string) => {
   state.selectedSquare = undefined;
   state.pending = undefined;
   state.legalTargets = [];
-  if (state.phase === "gameover") return;
 
   const endingColor = state.activeColor;
   const keepsTurn = state.bonusTurn === endingColor;
+  if (state.phase === "gameover" && !state.puzzleEscapeAbilityId) return;
   if (
     state.gameMode === "puzzle" &&
     endingColor !== state.aiColor &&
@@ -752,6 +753,25 @@ const finishTurn = (state: GameState, description: string) => {
     state.puzzlePlayerTurnsRemaining = Math.max(0, state.puzzlePlayerTurnsRemaining - 1);
     if (state.puzzlePlayerTurnsRemaining === 0) state.puzzleFailed = true;
   }
+  if (
+    state.gameMode === "puzzle" &&
+    state.puzzleEscapeAbilityId &&
+    endingColor !== state.aiColor &&
+    !keepsTurn
+  ) {
+    const escaped = Boolean(
+      kingSquare(state.board, endingColor) &&
+      actingAbility === state.puzzleEscapeAbilityId &&
+      !isInCheck(state.board, endingColor, state.bananas),
+    );
+    state.puzzleSolved = escaped;
+    state.puzzleFailed = !escaped;
+    state.notice = escaped
+      ? "Checkmate avoided. The defensive line is complete."
+      : "That line does not escape checkmate.";
+    return;
+  }
+  if (state.phase === "gameover") return;
   if (
     usesAuthoredPuzzleRules(state) &&
     state.aiColor &&

@@ -1,7 +1,6 @@
 import {
   Bot,
   Check,
-  Copy,
   Crown,
   Shield,
   Swords,
@@ -17,6 +16,7 @@ import {
 } from "../game/fourPlayerTypes";
 import type { FourPlayerOnlineState } from "../multiplayer/useFourPlayerOnlineGame";
 import type { FourPlayerHostRoomSnapshot } from "../multiplayer/types";
+import { RoomCodeCopyButton } from "../multiplayer/RoomCodeCopyButton";
 import {
   FOUR_PLAYER_PALETTES,
   FOUR_PLAYER_SEAT_LABELS,
@@ -110,13 +110,7 @@ export function FourPlayerOnlineLobby({
           <Wifi size={22} />
           <span>FOUR-PLAYER ROOM</span>
         </div>
-        <button
-          className="room-code"
-          onClick={() => navigator.clipboard.writeText(snapshot.roomCode)}
-          title="Copy room code"
-        >
-          {snapshot.roomCode}<Copy size={15} />
-        </button>
+        <RoomCodeCopyButton roomCode={snapshot.roomCode} />
       </header>
 
       <div className="four-online-participants">

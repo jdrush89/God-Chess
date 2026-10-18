@@ -27,10 +27,20 @@ describe("local achievement progress", () => {
       ACHIEVEMENT_PROGRESS_KEY,
       JSON.stringify({
         completed: { unknown: "now", "it-begins": "then" },
-        totals: { bananasDropped: -4, lightOrbsGained: 3.8 },
+        totals: {
+          bananasDropped: -4,
+          lightOrbsGained: 3.8,
+          piecesCaptured: 12.9,
+        },
         collections: {
           wonGods: ["salem", "invalid", "salem"],
           polymorphedPieceTypes: ["queen", "dragon"],
+          wonThreePlayerVariants: [
+            "three-player",
+            "invalid",
+            "three-player",
+            "triad",
+          ],
         },
       }),
     );
@@ -40,8 +50,11 @@ describe("local achievement progress", () => {
     expect(progress.completed).toEqual({ "it-begins": "then" });
     expect(progress.totals.bananasDropped).toBe(0);
     expect(progress.totals.lightOrbsGained).toBe(3);
+    expect(progress.totals.piecesCaptured).toBe(12);
     expect(progress.collections.wonGods).toEqual(["salem"]);
     expect(progress.collections.polymorphedPieceTypes).toEqual(["queen"]);
+    expect(progress.collections.wonThreePlayerVariants)
+      .toEqual(["three-player", "triad"]);
   });
 
   it("returns an empty progress object for non-object input", () => {

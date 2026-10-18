@@ -192,7 +192,8 @@ mode chooser.
 ## Puzzle mode
 
 Puzzle mode has a dedicated browser with a Daily simulation finish, five Easy
-positions won in one divine turn, ten Medium positions won across two player
+positions won in one divine turn, five Easy positions where one specific
+ability must prevent checkmate, ten Medium positions won across two player
 turns, and ten Hard positions won across three player turns. A separate Three
 Player set includes ten last-survivor positions, two on each supported
 three-player board, where both rival Kings must be checkmated within two player
@@ -217,7 +218,7 @@ is required.
 
 ## Achievements
 
-The Play menu includes a 50-item achievement gallery with completion states and
+The Play menu includes a 55-item achievement gallery with completion states and
 progress bars for cumulative goals. Progress is recorded from canonical game
 transitions in classic, three-player, and four-player matches. Signed-out
 progress is stored in the browser; signing in merges that progress into the
@@ -258,11 +259,11 @@ must update this documentation.
 | Position Twenty-Three | Anubis, Quetzacoatl, Leonidas | Ares, Chiron, Salem | Anubis (construction); Quetzacoatl (air-lift); Leonidas (escort) |
 | Position Twenty-Four | Medusa, Quetzacoatl, Kangus Kong | Ares, Chiron, Anubis | Medusa (captivate); Quetzacoatl (flight); Kangus Kong (rage) |
 | Position Twenty-Five | Salem, Ares, Chiron | Artemis, Anubis, Medusa | Salem (hex); Ares (pick-a-fight); Chiron (charge) |
-| Position Twenty-Six | Chiron, Teles, Midas | Ares, Chiron, Anubis | Chiron (charge) |
-| Position Twenty-Seven | Kangus Kong, Teles, Death | Ares, Chiron, Anubis | Kangus Kong (rage) |
-| Position Twenty-Eight | Death, Midas, Salem | Ares, Chiron, Anubis | Death (resurrect) |
-| Position Twenty-Nine | Leonidas, Teles, Midas | Ares, Chiron, Anubis | Leonidas (escort) |
-| Position Thirty | Quetzacoatl, Teles, Salem | Ares, Chiron, Anubis | Quetzacoatl (air-strike) |
+| Position Twenty-Six | Quetzacoatl, Teles, Midas | Ares, Chiron, Anubis | Quetzacoatl (air-lift) |
+| Position Twenty-Seven | Chiron, Teles, Midas | Ares, Chiron, Anubis | Chiron (charge) |
+| Position Twenty-Eight | Kangus Kong, Midas, Death | Ares, Chiron, Anubis | Kangus Kong (rage) |
+| Position Twenty-Nine | Death, Teles, Midas | Ares, Chiron, Anubis | Death (resurrect) |
+| Position Thirty | Teles, Midas, Death | Ares, Chiron, Anubis | Teles (enchant) |
 
 ## Accounts and cloud saves
 

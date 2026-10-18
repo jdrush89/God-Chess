@@ -62,6 +62,7 @@ const preparePuzzle = (
   gods: [GodId, GodId, GodId],
   playerName?: string,
   playerTurns: 1 | 2 | 3 = 1,
+  escapeAbilityId?: string,
 ) => {
   const state = createGame(1, {
     mode: "puzzle",
@@ -72,6 +73,8 @@ const preparePuzzle = (
   state.puzzleId = id;
   state.puzzlePlayerTurnsRemaining = playerTurns;
   state.puzzleFailed = false;
+  state.puzzleEscapeAbilityId = escapeAbilityId;
+  state.puzzleSolved = escapeAbilityId ? false : undefined;
   state.activeColor = "white";
   state.aiDifficulty = 10;
   state.aiColor = "black";
@@ -1196,6 +1199,121 @@ const hexedProvocation = (playerName?: string) => {
   return state;
 };
 
+const lastSecondFlight = (playerName?: string) => {
+  const state = preparePuzzle(
+    "last-second-flight",
+    "Position Twenty-Six",
+    "Avoid checkmate by using the required ability.",
+    ["quetzacoatl", "teles", "midas"],
+    playerName,
+    1,
+    "air-lift",
+  );
+  state.board = board(
+    ["a1", piece("white-king", "king", "white")],
+    ["g2", piece("white-decoy-pawn-g2", "pawn", "white")],
+    ["h2", piece("white-decoy-pawn-h2", "pawn", "white")],
+    ["a8", piece("black-checking-rook", "rook", "black")],
+    ["b8", piece("black-caging-rook", "rook", "black")],
+    ["h8", piece("black-king", "king", "black")],
+  );
+  state.players.white.upgrades = { "air-lift": 1 };
+  return state;
+};
+
+const centaurBlockade = (playerName?: string) => {
+  const state = preparePuzzle(
+    "centaur-blockade",
+    "Position Twenty-Seven",
+    "Avoid checkmate by using the required ability.",
+    ["chiron", "teles", "midas"],
+    playerName,
+    1,
+    "charge",
+  );
+  state.board = board(
+    ["a1", piece("white-king", "king", "white")],
+    ["e2", piece("white-charge-knight", "knight", "white")],
+    ["h2", piece("white-decoy-pawn-h2", "pawn", "white")],
+    ["a8", piece("black-checking-rook", "rook", "black")],
+    ["b8", piece("black-caging-rook", "rook", "black")],
+    ["h8", piece("black-king", "king", "black")],
+  );
+  state.players.white.upgrades = { charge: 1 };
+  return state;
+};
+
+const rageBreak = (playerName?: string) => {
+  const state = preparePuzzle(
+    "rage-break",
+    "Position Twenty-Eight",
+    "Avoid checkmate by using the required ability.",
+    ["kangus", "midas", "death"],
+    playerName,
+    1,
+    "rage",
+  );
+  state.board = board(
+    ["a1", piece("white-king", "king", "white")],
+    ["b3", piece("white-rage-knight", "knight", "white")],
+    ["a3", piece("black-checking-rook", "rook", "black")],
+    ["c2", piece("black-caging-bishop", "bishop", "black")],
+    ["c4", piece("black-guard-knight", "knight", "black")],
+    ["h8", piece("black-king", "king", "black")],
+  );
+  state.players.white.upgrades = { rage: 1 };
+  return state;
+};
+
+const graveIntercession = (playerName?: string) => {
+  const state = preparePuzzle(
+    "grave-intercession",
+    "Position Twenty-Nine",
+    "Avoid checkmate by using the required ability.",
+    ["death", "teles", "midas"],
+    playerName,
+    1,
+    "resurrect",
+  );
+  state.board = board(
+    ["a1", piece("white-king", "king", "white")],
+    ["b1", piece("white-anchor-bishop", "bishop", "white", { hardened: "god" })],
+    ["h2", piece("white-decoy-pawn-h2", "pawn", "white")],
+    ["a8", piece("black-checking-rook", "rook", "black")],
+    ["b8", piece("black-caging-rook", "rook", "black")],
+    ["h8", piece("black-king", "king", "black")],
+  );
+  state.players.white.graveyard = [{
+    piece: piece("white-reserve-pawn", "pawn", "white"),
+    capturedOnTurn: 0,
+  }];
+  state.players.white.upgrades = { resurrect: 1 };
+  return state;
+};
+
+const enchantedRetreat = (playerName?: string) => {
+  const state = preparePuzzle(
+    "enchanted-retreat",
+    "Position Thirty",
+    "Avoid checkmate by using the required ability.",
+    ["teles", "midas", "death"],
+    playerName,
+    1,
+    "enchant",
+  );
+  state.board = board(
+    ["a1", piece("white-king", "king", "white")],
+    ["h2", piece("white-follow-up-pawn", "pawn", "white")],
+    ["a8", piece("black-checking-rook", "rook", "black")],
+    ["c2", piece("black-caging-bishop", "bishop", "black")],
+    ["b3", piece("black-caging-bishop-b3", "bishop", "black")],
+    ["d3", piece("black-caging-knight", "knight", "black")],
+    ["h8", piece("black-king", "king", "black")],
+  );
+  state.players.white.upgrades = { enchant: 2 };
+  return state;
+};
+
 export const PUZZLES: PuzzleDefinition[] = [
   {
     id: "centaurs-lance",
@@ -1859,6 +1977,87 @@ export const PUZZLES: PuzzleDefinition[] = [
       ],
     ],
     createState: hexedProvocation,
+  },
+  {
+    id: "last-second-flight",
+    title: "Position Twenty-Six",
+    difficulty: "easy",
+    objective: "Avoid checkmate in one divine turn by using a specific ability.",
+    hint: "The King needs to leave the entire corner cage without crossing it.",
+    solutionSummary: "Use Quetzacoatl's Air Lift to teleport the King out of the rook cage.",
+    playerTurns: 1,
+    solutionTurns: [[
+      { type: "select-god", godId: "quetzacoatl" },
+      { type: "select-ability", abilityId: "air-lift" },
+      { type: "square", square: "a1" },
+      { type: "square", square: "c3" },
+    ]],
+    createState: lastSecondFlight,
+  },
+  {
+    id: "centaur-blockade",
+    title: "Position Twenty-Seven",
+    difficulty: "easy",
+    objective: "Avoid checkmate in one divine turn by using a specific ability.",
+    hint: "A knight can become the wall the King needs.",
+    solutionSummary: "Use Chiron's Charge to move the knight from e2 to a2 and block the checking rook.",
+    playerTurns: 1,
+    solutionTurns: [[
+      { type: "select-god", godId: "chiron" },
+      { type: "select-ability", abilityId: "charge" },
+      { type: "square", square: "e2" },
+      { type: "square", square: "a2" },
+    ]],
+    createState: centaurBlockade,
+  },
+  {
+    id: "rage-break",
+    title: "Position Twenty-Eight",
+    difficulty: "easy",
+    objective: "Avoid checkmate in one divine turn by using a specific ability.",
+    hint: "Every hostile piece surrounding the knight is part of the cage.",
+    solutionSummary: "Use Kangus Kong's Rage on b3 to destroy the checking rook and every piece guarding the King's exits.",
+    playerTurns: 1,
+    solutionTurns: [[
+      { type: "select-god", godId: "kangus" },
+      { type: "select-ability", abilityId: "rage" },
+      { type: "square", square: "b3" },
+    ]],
+    createState: rageBreak,
+  },
+  {
+    id: "grave-intercession",
+    title: "Position Twenty-Nine",
+    difficulty: "easy",
+    objective: "Avoid checkmate in one divine turn by using a specific ability.",
+    hint: "The hardened Bishop cannot move, but it can guide a fallen ally back into the attack line.",
+    solutionSummary: "Use Death's Resurrect to return the pawn from the graveyard to a2 and block the checking rook.",
+    playerTurns: 1,
+    solutionTurns: [[
+      { type: "select-god", godId: "death" },
+      { type: "select-ability", abilityId: "resurrect" },
+      { type: "grave", pieceId: "white-reserve-pawn" },
+      { type: "square", square: "a2" },
+    ]],
+    createState: graveIntercession,
+  },
+  {
+    id: "enchanted-retreat",
+    title: "Position Thirty",
+    difficulty: "easy",
+    objective: "Avoid checkmate in one divine turn by using a specific ability.",
+    hint: "The checking piece can be ordered to abandon its own attack line.",
+    solutionSummary: "Use Teles's Enchant to move the checking rook from a8 to c8, then complete the turn with h2 to h3.",
+    playerTurns: 1,
+    solutionTurns: [[
+      { type: "select-god", godId: "teles" },
+      { type: "select-ability", abilityId: "enchant" },
+      { type: "square", square: "a8" },
+      { type: "square", square: "c8" },
+      { type: "square", square: "h2" },
+      { type: "square", square: "h3" },
+    ]],
+    createState: enchantedRetreat,
   },
 ];
 

@@ -3,10 +3,15 @@ import {
   ACHIEVEMENT_DEFINITIONS,
   applyAchievementTransition,
   completeCryptologistIfEligible,
+  completeDailyAchievementsIfEligible,
   createAchievementProgress,
+  dailyPuzzleCompletionStats,
   mergeAchievementProgress,
 } from "./achievements";
 import { createGame } from "./game/engine";
+import { createDefaultThreePlayerConfig } from "./game/threePlayerConfig";
+import { createThreePlayerGame } from "./game/threePlayerEngine";
+import { THREE_PLAYER_BOARD_VARIANTS } from "./game/threePlayerTypes";
 import type { GameState } from "./game/types";
 
 const playableState = (): GameState => {
@@ -19,9 +24,9 @@ const playableState = (): GameState => {
 };
 
 describe("achievement progress", () => {
-  it("defines all 50 unique achievements", () => {
-    expect(ACHIEVEMENT_DEFINITIONS).toHaveLength(50);
-    expect(new Set(ACHIEVEMENT_DEFINITIONS.map(({ id }) => id)).size).toBe(50);
+  it("defines all 55 unique achievements", () => {
+    expect(ACHIEVEMENT_DEFINITIONS).toHaveLength(55);
+    expect(new Set(ACHIEVEMENT_DEFINITIONS.map(({ id }) => id)).size).toBe(55);
   });
 
   it("unlocks wins and records winning Gods", () => {
@@ -184,17 +189,124 @@ describe("achievement progress", () => {
     expect(complete.completed.cryptologist).toBeTruthy();
   });
 
+  it("unlocks Daily achievements from unique historical completion dates", () => {
+    const ids = Array.from({ length: 50 }, (_, offset) => {
+      const date = new Date(Date.UTC(2026, 0, 1 + offset))
+        .toISOString()
+        .slice(0, 10);
+      return `daily-${date}`;
+    });
+    const stats = dailyPuzzleCompletionStats([
+      ...ids,
+      ids[0],
+      "daily-not-a-date",
+      "position-one",
+    ]);
+    const progress = completeDailyAchievementsIfEligible(
+      createAchievementProgress(),
+      ids,
+    );
+
+    expect(stats).toEqual({ completed: 50, longestStreak: 50 });
+    expect(progress.completed.consistency).toBeTruthy();
+    expect(progress.completed.veteran).toBeTruthy();
+  });
+
+  it("preserves the longest Daily streak after a missed day", () => {
+    expect(dailyPuzzleCompletionStats([
+      "daily-2026-01-01",
+      "daily-2026-01-02",
+      "daily-2026-01-04",
+      "daily-2026-01-05",
+      "daily-2026-01-06",
+      "daily-2026-01-07",
+      "daily-2026-01-08",
+      "daily-2026-01-09",
+      "daily-2026-01-10",
+    ])).toEqual({ completed: 9, longestStreak: 7 });
+  });
+
+  it("counts only hostile pieces toward cumulative capture achievements", () => {
+    const before = playableState();
+    const after = structuredClone(before);
+    delete after.board.d8;
+    delete after.board.d1;
+    const source = createAchievementProgress();
+    source.totals.piecesCaptured = 99;
+
+    const first = applyAchievementTransition(source, {
+      variant: "classic",
+      matchId: "capture-100",
+      localActors: ["white"],
+      before,
+      after,
+    }).progress;
+
+    expect(first.totals.piecesCaptured).toBe(100);
+    expect(first.completed["prisoners-of-war"]).toBeTruthy();
+
+    first.totals.piecesCaptured = 499;
+    const secondBefore = playableState();
+    const secondAfter = structuredClone(secondBefore);
+    delete secondAfter.board.d8;
+    const second = applyAchievementTransition(first, {
+      variant: "classic",
+      matchId: "capture-500",
+      localActors: ["white"],
+      before: secondBefore,
+      after: secondAfter,
+    }).progress;
+
+    expect(second.totals.piecesCaptured).toBe(500);
+    expect(second.completed["war-never-changes"]).toBeTruthy();
+  });
+
+  it("unlocks Triples is best after wins on all five three-player boards", () => {
+    let progress = createAchievementProgress();
+    for (const boardVariant of THREE_PLAYER_BOARD_VARIANTS) {
+      const config = createDefaultThreePlayerConfig();
+      config.boardVariant = boardVariant;
+      const before = createThreePlayerGame(config);
+      before.phase = "play";
+      const after = structuredClone(before);
+      after.phase = "gameover";
+      after.result = {
+        kind: "winner",
+        seat: "white",
+        reason: "last-survivor",
+      };
+      progress = applyAchievementTransition(progress, {
+        variant: "three-player",
+        matchId: `win-${boardVariant}`,
+        localActors: ["white"],
+        before,
+        after,
+      }).progress;
+    }
+
+    expect(progress.collections.wonThreePlayerVariants)
+      .toEqual(THREE_PLAYER_BOARD_VARIANTS);
+    expect(progress.completed["triples-is-best"]).toBeTruthy();
+  });
+
   it("merges replicas without double-counting cumulative totals", () => {
     const local = createAchievementProgress();
     local.totals.bananasDropped = 12;
+    local.totals.piecesCaptured = 100;
     local.collections.wonGods = ["salem"];
+    local.collections.wonThreePlayerVariants = ["three-player"];
     const cloud = createAchievementProgress();
     cloud.totals.bananasDropped = 8;
+    cloud.totals.piecesCaptured = 80;
     cloud.collections.wonGods = ["death"];
+    cloud.collections.wonThreePlayerVariants = ["triad"];
 
     const merged = mergeAchievementProgress(local, cloud);
 
     expect(merged.totals.bananasDropped).toBe(12);
+    expect(merged.totals.piecesCaptured).toBe(100);
     expect(merged.collections.wonGods).toEqual(["salem", "death"]);
+    expect(merged.collections.wonThreePlayerVariants)
+      .toEqual(["three-player", "triad"]);
   });
 });
