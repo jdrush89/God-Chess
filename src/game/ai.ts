@@ -396,10 +396,11 @@ const bestOptimalPlan = (
   plans: AiTurnPlan[],
   mateSearchDepth = 0,
 ) => {
-  const shouldResolvePlans = Object.keys(state.board).length <= 12;
   const immediateWin = plans.find((plan) => {
     if (plan.state.phase === "gameover" && plan.state.winner === color) return true;
-    if (!shouldResolvePlans) return false;
+    if (!isInCheck(plan.state.board, opposite(color), plan.state.bananas)) {
+      return false;
+    }
     const resolved = plan.actions.reduce(gameReducer, state);
     return resolved.phase === "gameover" && resolved.winner === color;
   });

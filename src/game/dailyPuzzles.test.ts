@@ -72,7 +72,8 @@ describe("daily puzzles", () => {
       turnsRemaining: state.puzzlePlayerTurnsRemaining,
       rested: state.rested,
     })).toBe(true);
-    expect(state.puzzlePlayerTurnsRemaining).toBe(0);
+    expect(state.puzzlePlayerTurnsRemaining).toBeGreaterThanOrEqual(0);
+    expect(state.puzzlePlayerTurnsRemaining).toBeLessThan(puzzle.playerTurns);
   });
 
   it("replays the stored simulation solution to the target result", () => {
