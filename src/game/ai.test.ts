@@ -9,7 +9,12 @@ import {
   isAiTurn,
 } from "./ai";
 import { kingSquare } from "./chess";
-import { createGame, gameReducer } from "./engine";
+import {
+  availableClassicActions,
+  createGame,
+  gameReducer,
+} from "./engine";
+import { createDailyPuzzleGame } from "./dailyPuzzles";
 import { PUZZLE_BY_ID } from "./puzzles";
 import type { Piece, PieceType } from "./types";
 
@@ -124,6 +129,39 @@ describe("Divine AI", () => {
     for (const action of plan) state = gameReducer(state, action);
     expect(state.turn).toBeGreaterThan(initialTurn);
     expect(state.activeColor).toBe("black");
+  });
+
+  it("chooses an immediate checkmate in the October 18 Daily position", () => {
+    const state = createDailyPuzzleGame("daily-2026-10-18");
+    const directMate = [
+      { type: "select-god", godId: "artemis" },
+      { type: "select-ability", abilityId: "take-cover" },
+      { type: "square", square: "f7" },
+      { type: "square", square: "g7" },
+    ] as const;
+    let directResult = state;
+    for (const action of directMate) {
+      expect(availableClassicActions(directResult)).toContainEqual(action);
+      directResult = gameReducer(directResult, action);
+    }
+    const plans = enumerateTurnPlans(state);
+    const plan = chooseAiPlan(state, () => 0);
+    const result = plan.reduce(gameReducer, state);
+
+    expect(directResult.result).toEqual({
+      kind: "winner",
+      winner: "white",
+      reason: "checkmate",
+    });
+    expect(plans.some((candidate) =>
+      JSON.stringify(candidate.actions) === JSON.stringify(directMate)
+    )).toBe(true);
+    expect(result.phase).toBe("gameover");
+    expect(result.result).toEqual({
+      kind: "winner",
+      winner: "white",
+      reason: "checkmate",
+    });
   });
 
   it("confirms an instant ability after its affected pieces are previewed", () => {
