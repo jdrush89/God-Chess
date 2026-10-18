@@ -1722,6 +1722,29 @@ span.move-target-dot {
 .puzzle-result-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 26px; }
 .puzzle-result-actions .primary-button { margin-top: 0; }
 .puzzle-result-actions .secondary-button { width: 100%; }
+.daily-share-card {
+  display: grid; gap: 14px; margin-top: 22px; padding: 16px;
+  color: #ded8ca; background: linear-gradient(145deg, rgba(198,161,91,.12), rgba(9,11,16,.82));
+  border: 1px solid rgba(198,161,91,.36); text-align: left;
+}
+.daily-share-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.daily-share-card-heading > div { display: grid; gap: 4px; }
+.daily-share-card-heading span, .daily-share-stats span {
+  color: #9d8250; font-size: 7px; font-weight: 800; letter-spacing: .18em;
+}
+.daily-share-card-heading strong { color: #fff0c7; font: 600 14px "Cinzel"; }
+.daily-share-card-heading > svg { color: var(--gold-bright); }
+.daily-share-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.daily-share-stats > div {
+  min-height: 76px; display: grid; align-content: center; gap: 4px; padding: 12px;
+  background: rgba(5,7,11,.58); border: 1px solid rgba(255,255,255,.07);
+}
+.daily-share-stats strong { color: #fff; font: 600 21px "Cinzel"; text-transform: capitalize; }
+.daily-share-stats small { color: #85868d; font-size: 8px; }
+.daily-share-button {
+  width: 100%; min-height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+}
+.daily-share-feedback { margin: -4px 0 0; color: #e58b80; font-size: 9px; text-align: center; }
 .puzzle-banner {
   min-height: 58px; display: grid; grid-template-columns: auto minmax(180px, 1fr) auto; align-items: center; gap: 16px;
   padding: 10px max(18px, calc((100vw - 1180px) / 2)); color: #bcb8ad;

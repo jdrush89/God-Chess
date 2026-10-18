@@ -35,6 +35,7 @@ import {
   Rabbit,
   RotateCcw,
   Settings,
+  Share2,
   Shield,
   Skull,
   Snowflake,
@@ -3393,6 +3394,147 @@ export const dailyGolfScoreForTurnsRemaining = (
   return undefined;
 };
 
+export const formatDailyCompletionTime = (elapsedMs: number) => {
+  const totalSeconds = Math.max(0, Math.floor(elapsedMs / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+};
+
+const capitalize = (value: string) =>
+  value.charAt(0).toUpperCase() + value.slice(1);
+
+export const dailyShareText = ({
+  title,
+  elapsedMs,
+  turnsRemaining,
+  golfScore,
+  url,
+}: {
+  title: string;
+  elapsedMs: number;
+  turnsRemaining: number;
+  golfScore?: "birdie" | "eagle" | "albatross" | "condor";
+  url: string;
+}) => {
+  const score = golfScore
+    ? `${capitalize(golfScore)} - ${turnsRemaining} player turn${turnsRemaining === 1 ? "" : "s"} left`
+    : "Par - solved on the final player turn";
+  return [
+    `${title} | God Chess`,
+    `Time: ${formatDailyCompletionTime(elapsedMs)}`,
+    score,
+    url,
+  ].join("\n");
+};
+
+function DailyShareCard({
+  title,
+  elapsedMs,
+  turnsRemaining,
+  golfScore,
+}: {
+  title: string;
+  elapsedMs: number;
+  turnsRemaining: number;
+  golfScore?: "birdie" | "eagle" | "albatross" | "condor";
+}) {
+  const [shareStatus, setShareStatus] = useState<
+    "idle" | "sharing" | "shared" | "copied" | "failed"
+  >("idle");
+  const completionTime = formatDailyCompletionTime(elapsedMs);
+  const scoreLabel = golfScore ? capitalize(golfScore) : "Par";
+  const shareUrl = new URL(
+    "daily",
+    `${window.location.origin}${import.meta.env.BASE_URL}`,
+  ).toString();
+  const text = dailyShareText({
+    title,
+    elapsedMs,
+    turnsRemaining,
+    golfScore,
+    url: shareUrl,
+  });
+
+  const share = async () => {
+    setShareStatus("sharing");
+    try {
+      if (typeof navigator.share === "function") {
+        await navigator.share({
+          title: `${title} | God Chess`,
+          text: text.split("\n").slice(1, -1).join("\n"),
+          url: shareUrl,
+        });
+        setShareStatus("shared");
+        return;
+      }
+      if (typeof navigator.clipboard?.writeText !== "function") {
+        throw new Error("Sharing unavailable.");
+      }
+      await navigator.clipboard.writeText(text);
+      setShareStatus("copied");
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        setShareStatus("idle");
+        return;
+      }
+      setShareStatus("failed");
+    }
+  };
+
+  return (
+    <article className="daily-share-card" aria-label="Daily share card">
+      <div className="daily-share-card-heading">
+        <div>
+          <span>DAILY RESULT</span>
+          <strong>{title}</strong>
+        </div>
+        <Share2 size={20} aria-hidden="true" />
+      </div>
+      <div className="daily-share-stats">
+        <div>
+          <span>TIME</span>
+          <strong>{completionTime}</strong>
+        </div>
+        <div>
+          <span>SCORE</span>
+          <strong>{scoreLabel}</strong>
+          <small>
+            {golfScore
+              ? `${turnsRemaining} player turn${turnsRemaining === 1 ? "" : "s"} left`
+              : "Final player turn"}
+          </small>
+        </div>
+      </div>
+      <button
+        className="secondary-button daily-share-button"
+        disabled={shareStatus === "sharing"}
+        onClick={() => void share()}
+      >
+        {shareStatus === "shared" || shareStatus === "copied"
+          ? <Check size={16} />
+          : <Share2 size={16} />}
+        {shareStatus === "sharing"
+          ? "Sharing..."
+          : shareStatus === "shared"
+            ? "Shared"
+            : shareStatus === "copied"
+              ? "Result copied"
+              : "Share result"}
+      </button>
+      {shareStatus === "failed" && (
+        <p className="daily-share-feedback" role="alert">
+          Sharing failed. Try again or copy the page address.
+        </p>
+      )}
+    </article>
+  );
+}
+
 export function GameScreen({
   state,
   dispatch,
@@ -3401,6 +3543,7 @@ export function GameScreen({
   onGiveUpDaily,
   dailyReplayActive = false,
   dailySolutionRevealed = false,
+  dailyCompletionMs,
   onNextPuzzle,
   inputDisabled = false,
   opponentColor,
@@ -3422,6 +3565,7 @@ export function GameScreen({
   onGiveUpDaily?: () => void;
   dailyReplayActive?: boolean;
   dailySolutionRevealed?: boolean;
+  dailyCompletionMs?: number;
   onNextPuzzle: () => void;
   inputDisabled?: boolean;
   opponentColor?: Color;
@@ -4155,6 +4299,16 @@ export function GameScreen({
                   ? "You used the required divine ability to escape checkmate."
                   : "You found a winning line and captured the opposing King."}
             </p>
+            {dailyPuzzle &&
+              !dailySolutionRevealed &&
+              dailyCompletionMs !== undefined && (
+                <DailyShareCard
+                  title={dailyPuzzle.title}
+                  elapsedMs={dailyCompletionMs}
+                  turnsRemaining={dailyTurnsRemaining}
+                  golfScore={dailyGolfScore}
+                />
+              )}
             <div className="puzzle-result-actions">
               <button className="primary-button" onClick={onNextPuzzle}>
                 {dailyPuzzle || puzzleIndex === difficultyPuzzles.length - 1
@@ -4746,6 +4900,10 @@ export default function App() {
   const [dailyReplayActions, setDailyReplayActions] =
     useState<GameAction[]>();
   const dailyGivenUpPuzzleId = useRef<PuzzleId | undefined>(undefined);
+  const dailyStartedAt = useRef<number | undefined>(
+    initialDailyPuzzle ? Date.now() : undefined,
+  );
+  const [dailyCompletionMs, setDailyCompletionMs] = useState<number>();
   const quickDraftPending = useRef(false);
   const undoStack = useRef<GameState[]>([]);
   const undoDepthRef = useRef(0);
@@ -5210,6 +5368,31 @@ export default function App() {
     state.puzzleEscapeAbilityId,
     state.puzzleId,
     state.puzzleSolved,
+    state.result,
+    state.winner,
+  ]);
+
+  useEffect(() => {
+    const puzzleId = state.puzzleId;
+    const dailyPuzzle = puzzleId
+      ? DAILY_PUZZLE_BY_ID[puzzleId as keyof typeof DAILY_PUZZLE_BY_ID]
+      : undefined;
+    if (
+      !dailyPuzzle ||
+      dailyGivenUpPuzzleId.current === puzzleId
+    ) return;
+    if (!dailyPuzzleResultMatches(dailyPuzzle, state)) {
+      if (dailyCompletionMs !== undefined) setDailyCompletionMs(undefined);
+      return;
+    }
+    if (dailyCompletionMs !== undefined) return;
+    const completedAt = Date.now();
+    const startedAt = dailyStartedAt.current ?? completedAt;
+    setDailyCompletionMs(Math.max(0, completedAt - startedAt));
+  }, [
+    dailyCompletionMs,
+    state.phase,
+    state.puzzleId,
     state.result,
     state.winner,
   ]);
@@ -6054,6 +6237,11 @@ export default function App() {
     setFourPlayerSession(undefined);
     setThreePlayerSession(undefined);
     const next = structuredClone(game.state);
+    dailyStartedAt.current =
+      next.puzzleId && isDailyPuzzleId(next.puzzleId)
+        ? Date.now()
+        : undefined;
+    setDailyCompletionMs(undefined);
     restoreUndoTracking(game.undoHistory, game.turnStart, next);
     receiveState(next);
     aiPlan.current = [];
@@ -6196,6 +6384,10 @@ export default function App() {
     simulationCompletedTurns.current = { white: 0, black: 0 };
     setDailyReplayActions(undefined);
     dailyGivenUpPuzzleId.current = undefined;
+    dailyStartedAt.current = isDailyPuzzleId(puzzleId)
+      ? Date.now()
+      : undefined;
+    setDailyCompletionMs(undefined);
     setFourPlayerSession(undefined);
     const id = saveId();
     activeSaveId.current = id;
@@ -6345,6 +6537,8 @@ export default function App() {
       accountService.account?.displayName,
     );
     dailyGivenUpPuzzleId.current = state.puzzleId;
+    dailyStartedAt.current = undefined;
+    setDailyCompletionMs(undefined);
     aiPlan.current = [];
     resetUndoTracking(next);
     receiveState(next);
@@ -6995,6 +7189,7 @@ export default function App() {
             dailySolutionRevealed={
               dailyGivenUpPuzzleId.current === state.puzzleId
             }
+            dailyCompletionMs={dailyCompletionMs}
             onNextPuzzle={nextPuzzle}
           />
         )}

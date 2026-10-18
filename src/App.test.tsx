@@ -157,7 +157,9 @@ vi.mock("./game/ai", async (importOriginal) => {
 import App, {
   ActionPanel,
   ChessBoard,
+  dailyShareText,
   dailyGolfScoreForTurnsRemaining,
+  formatDailyCompletionTime,
   GameScreen,
   SimulationExportDialog,
   rewindSimulationForExport,
@@ -486,6 +488,29 @@ describe("game startup", () => {
     },
   );
 
+  it.each([
+    [0, "0:00"],
+    [65_000, "1:05"],
+    [3_661_000, "1:01:01"],
+  ] as const)("formats %i milliseconds as %s", (elapsedMs, expected) => {
+    expect(formatDailyCompletionTime(elapsedMs)).toBe(expected);
+  });
+
+  it("formats a shareable Daily result with time and golf score", () => {
+    expect(dailyShareText({
+      title: "Daily - October 18, 2026",
+      elapsedMs: 125_000,
+      turnsRemaining: 2,
+      golfScore: "eagle",
+      url: "https://playgodchess.com/daily",
+    })).toBe([
+      "Daily - October 18, 2026 | God Chess",
+      "Time: 2:05",
+      "Eagle - 2 player turns left",
+      "https://playgodchess.com/daily",
+    ].join("\n"));
+  });
+
   it("starts today's Daily puzzle directly from /daily", () => {
     const daily = currentDailyPuzzle()!;
     window.history.replaceState(null, "", "/daily");
@@ -522,6 +547,8 @@ describe("game startup", () => {
 
   it("shows spare Daily turns and their golf score on victory", async () => {
     const daily = currentDailyPuzzle()!;
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    setClipboard({ writeText });
     let solvedState = daily.createState("Solver");
     for (const action of daily.solutionActions) {
       solvedState = gameReducer(solvedState, action);
@@ -542,6 +569,21 @@ describe("game startup", () => {
       {},
       { timeout: 1400 },
     )).toBeTruthy();
+    const shareCard = await screen.findByLabelText(/daily share card/i);
+    expect(within(shareCard).getByText("Eagle")).toBeTruthy();
+    expect(within(shareCard).getByText(/^\d+:\d{2}$/)).toBeTruthy();
+
+    fireEvent.click(within(shareCard).getByRole("button", {
+      name: /share result/i,
+    }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    expect(writeText.mock.calls[0][0]).toContain("Eagle - 2 player turns left");
+    expect(writeText.mock.calls[0][0]).toMatch(/Time: \d+:\d{2}/);
+    expect(writeText.mock.calls[0][0]).toContain("/daily");
+    expect(within(shareCard).getByRole("button", {
+      name: /result copied/i,
+    })).toBeTruthy();
   });
 
   it("resets and replays the Daily solution after giving up without awarding completion", async () => {
@@ -565,6 +607,7 @@ describe("game startup", () => {
     expect(screen.getByText(/cpu's original winning line has been replayed/i))
       .toBeTruthy();
     expect(screen.getByText(/solution shown/i)).toBeTruthy();
+    expect(screen.queryByLabelText(/daily share card/i)).toBeNull();
     expect(loadLocalCompletedPuzzles()).not.toContain(daily.id);
   });
 
