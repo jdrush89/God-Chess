@@ -500,6 +500,32 @@ describe("game flow", () => {
     });
   });
 
+  it("allows an upgrade while the upgrading player starts the round in check", () => {
+    let state = createGame(1);
+    (["ares", "medusa", "midas", "death", "artemis", "chiron"] as const)
+      .forEach((godId) => {
+        state = gameReducer(state, { type: "draft", godId });
+      });
+    state.phase = "upgrade";
+    state.activeColor = "white";
+    state.upgradeQueue = ["white", "black"];
+    state.board = {
+      e1: testPiece("king", "white", "white-king"),
+      e8: testPiece("rook", "black", "black-rook"),
+      a8: testPiece("king", "black", "black-king"),
+    };
+
+    expect(isInCheck(state.board, "white", state.bananas)).toBe(true);
+    state = gameReducer(state, { type: "upgrade", abilityId: "threaten" });
+
+    expect(state.players.white.upgrades.threaten).toBe(2);
+    expect(state).toMatchObject({
+      phase: "upgrade",
+      activeColor: "black",
+      upgradeQueue: ["black"],
+    });
+  });
+
   it("skips players with no legal upgrades and normalizes resumed upgrade queues", () => {
     let state = createGame(1);
     (["ares", "medusa", "midas", "death", "artemis", "chiron"] as const).forEach((godId) => {

@@ -3922,6 +3922,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
   }
   const actor = state.activeColor;
   if (
+    state.phase === "play" &&
     isCompleteClassicTurn(state, next) &&
     Boolean(kingSquare(next.board, actor)) &&
     isInCheck(next.board, actor, next.bananas)

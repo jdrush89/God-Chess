@@ -164,6 +164,62 @@ describe("Divine AI", () => {
     });
   });
 
+  it("completes the CPU upgrade handoff in the October 19 Daily position", () => {
+    let state = createDailyPuzzleGame("daily-2026-10-19");
+    for (const action of [
+      { type: "select-god", godId: "death" },
+      { type: "select-ability", abilityId: "resurrect" },
+      { type: "grave", pieceId: "black-queen-3" },
+      { type: "square", square: "e6" },
+      { type: "select-god", godId: "artemis" },
+      { type: "select-ability", abilityId: "take-cover" },
+      { type: "square", square: "e1" },
+      { type: "square", square: "d1" },
+      { type: "select-god", godId: "ares" },
+      { type: "select-ability", abilityId: "threaten" },
+      { type: "square", square: "e6" },
+      { type: "square", square: "g4" },
+    ] as const) {
+      state = gameReducer(state, action);
+    }
+
+    expect(state).toMatchObject({
+      phase: "upgrade",
+      activeColor: "white",
+      upgradeQueue: ["white", "black"],
+    });
+    expect(state.players.white.upgrades["take-cover"]).toBe(2);
+
+    const plan = chooseAiPlan(state, () => 0);
+    expect(plan).toHaveLength(2);
+    expect(plan[0]).toMatchObject({ type: "preview-upgrade" });
+    expect(plan[1]).toEqual({
+      type: "upgrade",
+      abilityId: plan[0].type === "preview-upgrade"
+        ? plan[0].abilityId
+        : undefined,
+    });
+    const upgradedAbility = plan[1].type === "upgrade"
+      ? plan[1].abilityId
+      : "";
+    const priorLevel = state.players.white.upgrades[upgradedAbility] ?? 1;
+    for (const action of plan) {
+      expect(availableClassicActions(state)).toContainEqual(
+        action.type === "preview-upgrade"
+          ? { type: "upgrade", abilityId: action.abilityId }
+          : action,
+      );
+      state = gameReducer(state, action);
+    }
+
+    expect(state).toMatchObject({
+      phase: "upgrade",
+      activeColor: "black",
+      upgradeQueue: ["black"],
+    });
+    expect(state.players.white.upgrades[upgradedAbility]).toBe(priorLevel + 1);
+  });
+
   it("confirms an instant ability after its affected pieces are previewed", () => {
     let state = createGame(2, { mode: "ai", aiDifficulty: 10 });
     state.phase = "play";
