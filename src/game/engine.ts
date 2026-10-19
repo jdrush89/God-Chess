@@ -3448,6 +3448,13 @@ export const isCompleteClassicTurn = (
   next: GameState,
 ) => {
   if (next.phase === "gameover") return true;
+  if (
+    initial.gameMode === "puzzle" &&
+    initial.puzzleEscapeAbilityId &&
+    !initial.puzzleSolved &&
+    !initial.puzzleFailed &&
+    Boolean(next.puzzleSolved || next.puzzleFailed)
+  ) return true;
   if (initial.phase === "draft") {
     return next.draft.pickIndex !== initial.draft.pickIndex;
   }

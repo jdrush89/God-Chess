@@ -6,6 +6,7 @@ import {
   availableClassicActions,
   classicPlanStateSignature,
   gameReducer,
+  isCompleteClassicTurn,
   type GameAction,
 } from "./engine";
 import { GOD_BY_ID, GODS } from "./gods";
@@ -450,6 +451,19 @@ describe("puzzle mode", () => {
 
       expect(requiredAbility).toBeTruthy();
       expect(isInCheck(initial.board, "white", initial.bananas)).toBe(true);
+      const loaded = gameReducer(initial, {
+        type: "load-game",
+        state: initial,
+      });
+      expect(loaded).toMatchObject({
+        phase: "play",
+        activeColor: "white",
+        puzzleSolved: false,
+        puzzleFailed: false,
+      });
+      expect(kingSquare(loaded.board, "white")).toBe("a1");
+      expect(isInCheck(loaded.board, "white", loaded.bananas)).toBe(true);
+      expect(loaded.result).toBeUndefined();
 
       const searchState = structuredClone(initial);
       searchState.puzzleEscapeAbilityId = undefined;
@@ -479,6 +493,7 @@ describe("puzzle mode", () => {
         puzzleSolved: true,
         puzzleFailed: false,
       });
+      expect(isCompleteClassicTurn(initial, solved)).toBe(true);
       expect(isInCheck(solved.board, "white", solved.bananas)).toBe(false);
       expect(isAiTurn(solved)).toBe(false);
       expect(chooseAiPlan(solved, () => 0)).toEqual([]);
