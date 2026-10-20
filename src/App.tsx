@@ -3224,21 +3224,27 @@ function PuzzleSelectScreen({
           onClick={() => difficulty ? onCategoryChange(undefined) : onBack()}
         >
           <ArrowLeft size={17} />
-          {difficulty ? "Difficulties" : "Play menu"}
+          {difficulty ? "Puzzle Types" : "Play menu"}
         </button>
         <p className="eyebrow">DIVINE PUZZLES</p>
         {!difficulty ? (
           <>
-            <h1>Choose a difficulty</h1>
+            <h1>Choose Puzzle Type</h1>
             <p className="puzzle-select-intro">
-              Solve Divine tactics, face unusual rule-bending challenges, or checkmate two rivals on the three-player boards.
+              Play today's Daily, browse the archive, solve Divine tactics, or face rule-bending challenges.
             </p>
             <div className="puzzle-difficulty-grid">
               {([
                 {
-                  id: "daily",
+                  id: "daily-current",
                   title: "Daily",
-                  description: "Browse the daily puzzle archive.",
+                  description: "Play today's Daily puzzle.",
+                  icon: Sparkles,
+                },
+                {
+                  id: "daily",
+                  title: "Daily Archive",
+                  description: "Replay current and past Daily puzzles.",
                   icon: Sparkles,
                 },
                 {
@@ -3274,6 +3280,8 @@ function PuzzleSelectScreen({
               ] as const).map((option) => {
                 const puzzles = option.id === "challenges"
                   ? CHALLENGES
+                  : option.id === "daily-current"
+                    ? dailyPuzzle ? [dailyPuzzle] : []
                   : option.id === "daily"
                     ? DAILY_PUZZLES
                   : option.id === "three-player"
@@ -3292,9 +3300,15 @@ function PuzzleSelectScreen({
                     className="puzzle-difficulty-card"
                     key={option.id}
                     onClick={() => {
+                      if (option.id === "daily-current") {
+                        if (dailyPuzzle) onStartPuzzle(dailyPuzzle.id);
+                        return;
+                      }
                       onCategoryChange(option.id);
                     }}
-                    disabled={option.id === "daily" && !dailyPuzzle}
+                    disabled={
+                      option.id === "daily-current" && !dailyPuzzle
+                    }
                   >
                     <Icon size={28} />
                     <strong>{option.title}</strong>
@@ -3315,7 +3329,7 @@ function PuzzleSelectScreen({
                   : difficulty === "hard"
                     ? "Hard puzzles"
                       : difficulty === "daily"
-                        ? "Daily puzzle"
+                        ? "Daily Archive"
                       : difficulty === "three-player"
                         ? "Three Player puzzles"
                         : "Special challenges"}

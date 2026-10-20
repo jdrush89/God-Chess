@@ -659,7 +659,7 @@ describe("game startup", () => {
     window.history.replaceState(null, "", "/puzzles");
     render(<App />);
 
-    expect(screen.getByRole("heading", { name: /choose a difficulty/i }))
+    expect(screen.getByRole("heading", { name: /choose puzzle type/i }))
       .toBeTruthy();
   });
 
@@ -667,7 +667,7 @@ describe("game startup", () => {
     window.history.replaceState(null, "", "/puzzles/daily");
     render(<App />);
 
-    expect(screen.getByRole("heading", { name: /daily puzzle/i })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /daily archive/i })).toBeTruthy();
     expect(screen.getAllByRole("button", {
       name: /(?:today's daily|archived daily)/i,
     })).toHaveLength(DAILY_PUZZLES.length);
@@ -682,7 +682,7 @@ describe("game startup", () => {
     await waitFor(() => expect(window.location.pathname).toBe("/play"));
     fireEvent.click(screen.getByRole("button", { name: /^puzzles$/i }));
     await waitFor(() => expect(window.location.pathname).toBe("/puzzles"));
-    fireEvent.click(screen.getByRole("button", { name: /^daily/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^daily archive/i }));
     expect(window.location.pathname).toBe("/puzzles/daily");
     fireEvent.click(screen.getByRole("button", {
       name: new RegExp(`today's daily, ${daily.title}`, "i"),
@@ -695,7 +695,7 @@ describe("game startup", () => {
     act(() => window.history.back());
     await waitFor(() => {
       expect(window.location.pathname).toBe("/puzzles/daily");
-      expect(screen.getByRole("heading", { name: /daily puzzle/i }))
+      expect(screen.getByRole("heading", { name: /daily archive/i }))
         .toBeTruthy();
     });
   });
@@ -1190,7 +1190,7 @@ describe("game startup", () => {
     expect(screen.getByRole("button", {
       name: /^challenges.*0 of 8 completed/i,
     })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /^daily/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^daily archive/i }));
     expect(screen.getByRole("button", {
       name: new RegExp(`today's daily, ${daily.title}.*thumbed down`, "i"),
     })).toBeTruthy();
@@ -1208,7 +1208,7 @@ describe("game startup", () => {
     }
     fireEvent.click(screen.getByRole("button", { name: /back to play/i }));
     fireEvent.click(screen.getByRole("button", { name: /^puzzles$/i }));
-    expect(screen.getByRole("heading", { name: /choose a difficulty/i })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /choose puzzle type/i })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /play menu/i }));
     expect(screen.getByRole("button", { name: /^puzzles$/i })).toBeTruthy();
   });
@@ -1480,17 +1480,17 @@ describe("game startup", () => {
     });
   });
 
-  it("browses puzzle difficulties and starts a selected position", () => {
+  it("browses puzzle types and starts a selected position", () => {
     const { container } = render(<App />);
     openPlayOption("Puzzles");
 
-    expect(screen.getByRole("heading", { name: /choose a difficulty/i })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /choose puzzle type/i })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /^easy/i }));
     expect(screen.getAllByRole("button", { name: /puzzle \d/i })).toHaveLength(10);
-    fireEvent.click(screen.getByRole("button", { name: /difficulties/i }));
+    fireEvent.click(screen.getByRole("button", { name: /puzzle types/i }));
     fireEvent.click(screen.getByRole("button", { name: /^medium/i }));
     expect(screen.getAllByRole("button", { name: /puzzle \d/i })).toHaveLength(10);
-    fireEvent.click(screen.getByRole("button", { name: /difficulties/i }));
+    fireEvent.click(screen.getByRole("button", { name: /puzzle types/i }));
     fireEvent.click(screen.getByRole("button", { name: /^easy/i }));
 
     const puzzleLibrary = container.querySelector(".puzzle-select-grid");
@@ -1505,6 +1505,22 @@ describe("game startup", () => {
     expect(screen.queryByRole("button", { name: /save & quit/i })).toBeNull();
   });
 
+  it("starts today's puzzle directly from the Daily puzzle type", () => {
+    const daily = currentDailyPuzzle()!;
+    render(<App />);
+    openPlayOption("Puzzles");
+
+    fireEvent.click(screen.getByRole("button", {
+      name: /^daily play today's daily puzzle/i,
+    }));
+
+    expect(screen.getByText(daily.title)).toBeTruthy();
+    expect(screen.getByText(
+      new RegExp(`daily · ${daily.playerTurns} player turns?`, "i"),
+    )).toBeTruthy();
+    expect(window.location.pathname).toBe("/daily");
+  });
+
   it("browses the Daily archive newest-first and starts a selected Daily", async () => {
     const daily = currentDailyPuzzle()!;
     const archived = DAILY_PUZZLES[0];
@@ -1515,7 +1531,7 @@ describe("game startup", () => {
     openPlayOption("Puzzles");
 
     fireEvent.click(screen.getByRole("button", {
-      name: new RegExp(`^daily.*1 of ${DAILY_PUZZLES.length} completed`, "i"),
+      name: new RegExp(`^daily archive.*1 of ${DAILY_PUZZLES.length} completed`, "i"),
     }));
     const archiveCards = screen.getAllByRole("button", {
       name: /(?:today's daily|archived daily)/i,
