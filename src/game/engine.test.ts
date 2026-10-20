@@ -1501,6 +1501,38 @@ describe("game flow", () => {
     expect(targets(attackedAfterLanding)).toContain("g6");
   });
 
+  it("only extends Pick a Fight's attacked destination to new piece types at level 3", () => {
+    const targets = (attacked: boolean) => {
+      let state = createGame(1);
+      state.phase = "play";
+      state.activeColor = "white";
+      state.players.white.gods = ["ares"];
+      state.players.black.gods = ["medusa"];
+      state.players.white.orbs.white = 2;
+      state.players.white.upgrades["pick-a-fight"] = 3;
+      state.board = {
+        a1: testPiece("king", "white", "white-king"),
+        b8: testPiece("king", "black", "black-king"),
+        e5: testPiece("rook", "white", "fighter"),
+        c5: testPiece("pawn", "black", "first-target"),
+        g7: testPiece("pawn", "black", "second-target"),
+        ...(attacked
+          ? { h6: testPiece("bishop", "black", "attacker") }
+          : {}),
+      };
+      state = gameReducer(state, { type: "select-god", godId: "ares" });
+      state = gameReducer(state, {
+        type: "select-ability",
+        abilityId: "pick-a-fight",
+      });
+      state = gameReducer(state, { type: "square", square: "e5" });
+      return state.legalTargets;
+    };
+
+    expect(targets(false)).not.toContain("g5");
+    expect(targets(true)).toContain("g5");
+  });
+
   it("requires a level 1 Air Strike passenger to land on an empty crossed space", () => {
     let state = createGame(1);
     (["quetzacoatl", "chiron", "teles", "death", "artemis", "midas"] as const).forEach((godId) => {

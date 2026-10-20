@@ -88,6 +88,41 @@ const completeFourPlayerDraft = (
 };
 
 describe("four-player app integration", () => {
+  it("uses Undo to return an uncommitted God or ability selection to the God list", () => {
+    const state = completeFourPlayerDraft();
+    state.phase = "play";
+    state.activeSeat = FOUR_PLAYER_SEATS.find((seat) =>
+      state.players[seat].gods.includes("ares")
+    )!;
+    state.rested = [];
+    render(
+      <FourPlayerGame
+        initialState={state}
+        undoPreferred={false}
+        onUndoPreferenceChange={vi.fn()}
+        onQuit={vi.fn()}
+        onNewGame={vi.fn()}
+      />,
+    );
+
+    const selectAres = () =>
+      fireEvent.click(screen.getByRole("button", { name: /ares conflict/i }));
+    const undo = () => screen.getByRole("button", { name: /^undo$/i });
+
+    selectAres();
+    expect((undo() as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(undo());
+    expect(screen.queryByRole("button", { name: /choose a different god/i })).toBeNull();
+
+    selectAres();
+    fireEvent.click(screen.getByRole("button", { name: /^threaten/i }));
+    expect((undo() as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(undo());
+
+    expect(screen.queryByRole("button", { name: /choose a different god/i })).toBeNull();
+    expect(screen.getByRole("button", { name: /ares conflict/i })).toBeTruthy();
+  });
+
   it("moves Rules into the match menu and offers local quit without saving", () => {
     const onQuit = vi.fn();
     render(

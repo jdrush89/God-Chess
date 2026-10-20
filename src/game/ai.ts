@@ -255,6 +255,23 @@ const hasWinningTurn = (state: GameState, color: Color) => {
   );
 };
 
+const hasResolvedWinningTurn = (state: GameState, color: Color) => {
+  const isWin = (candidate: GameState) =>
+    candidate.phase === "gameover" &&
+    candidate.winner === color &&
+    Boolean(kingSquare(candidate.board, color)) &&
+    !kingSquare(candidate.board, opposite(color));
+  if (state.phase === "gameover") return isWin(state);
+  const turn = state.activeColor === color ? state : hypotheticalTurnFor(state, color);
+  return enumerateTurnPlans(turn, color).some((plan) => {
+    if (isWin(plan.state)) return true;
+    if (!isInCheck(plan.state.board, opposite(color), plan.state.bananas)) {
+      return false;
+    }
+    return isWin(plan.actions.reduce(gameReducer, turn));
+  });
+};
+
 const hasWinningAirStrikeTurn = (state: GameState, color: Color) => {
   if (state.phase === "gameover") return false;
   const turn = state.activeColor === color ? state : hypotheticalTurnFor(state, color);
@@ -294,14 +311,12 @@ const hasWinningAirStrikeTurn = (state: GameState, color: Color) => {
 const hasImmediateWinningTurn = (state: GameState, color: Color) =>
   hasWinningAirStrikeTurn(state, color) || hasWinningTurn(state, color);
 
-const bestTacticalDefense = (
+const defensiveCandidates = (
   state: GameState,
   color: Color,
   plans: AiTurnPlan[],
 ) => {
   const enemy = opposite(color);
-  if (!hasImmediateWinningTurn(state, enemy)) return undefined;
-
   const initialKing = Object.entries(state.board).find(
     ([, piece]) => piece.controller === color && piece.type === "king",
   )?.[0];
@@ -349,11 +364,36 @@ const bestTacticalDefense = (
     if (included.has(candidate.index)) continue;
     candidates.push(candidate);
   }
+  return candidates.slice(0, candidateLimit).map(({ plan }) => plan);
+};
 
-  for (const { plan } of candidates.slice(0, candidateLimit)) {
+const bestTacticalDefense = (
+  state: GameState,
+  color: Color,
+  plans: AiTurnPlan[],
+) => {
+  const enemy = opposite(color);
+  if (!hasImmediateWinningTurn(state, enemy)) return undefined;
+
+  for (const plan of defensiveCandidates(state, color, plans)) {
     if (!hasImmediateWinningTurn(plan.state, enemy)) return plan;
   }
   return undefined;
+};
+
+const bestImmediateMateAvoidance = (
+  state: GameState,
+  color: Color,
+  plans: AiTurnPlan[],
+) => {
+  const enemy = opposite(color);
+  const allowsImmediateMate = (candidate: GameState) =>
+    hasWinningAirStrikeTurn(candidate, enemy) ||
+    hasResolvedWinningTurn(candidate, enemy);
+  if (!plans[0] || !allowsImmediateMate(plans[0].state)) return undefined;
+
+  return defensiveCandidates(state, color, plans)
+    .find((plan) => !allowsImmediateMate(plan.state));
 };
 
 const bestSparseMateInTwo = (
@@ -409,6 +449,15 @@ const bestOptimalPlan = (
     ? bestTacticalDefense(state, color, plans)
     : undefined;
   if (defense) return defense;
+  const saferPlan =
+    state.aiDifficulty >= 8 &&
+      (
+        state.gameMode === "simulation" ||
+        state.puzzleId?.startsWith("daily-")
+      )
+    ? bestImmediateMateAvoidance(state, color, plans)
+    : undefined;
+  if (saferPlan) return saferPlan;
   if (mateSearchDepth <= 1) {
     const attack = bestSparseMateInTwo(
       state,

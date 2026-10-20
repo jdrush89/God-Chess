@@ -68,6 +68,32 @@ const renderGame = (state: ThreePlayerState) =>
     />,
   );
 
+it("uses Undo to return an uncommitted God or ability selection to the God list", () => {
+  const state = completeDraft();
+  state.phase = "play";
+  state.activeSeat = "white";
+  state.players.white.gods = ["ares"];
+  state.rested = [];
+  renderGame(state);
+
+  const selectAres = () =>
+    fireEvent.click(screen.getByRole("button", { name: /ares conflict/i }));
+  const undo = () => screen.getByRole("button", { name: /^undo$/i });
+
+  selectAres();
+  expect((undo() as HTMLButtonElement).disabled).toBe(false);
+  fireEvent.click(undo());
+  expect(screen.queryByRole("button", { name: /choose a different god/i })).toBeNull();
+
+  selectAres();
+  fireEvent.click(screen.getByRole("button", { name: /^threaten/i }));
+  expect((undo() as HTMLButtonElement).disabled).toBe(false);
+  fireEvent.click(undo());
+
+  expect(screen.queryByRole("button", { name: /choose a different god/i })).toBeNull();
+  expect(screen.getByRole("button", { name: /ares conflict/i })).toBeTruthy();
+});
+
 it("renders Quetzacoatl's committed Slither orb choice", () => {
   const state = completeDraft();
   state.phase = "play";

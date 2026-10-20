@@ -117,6 +117,27 @@ const threePlayerSlitherSetup = (
 };
 
 describe("three-player God catalog", () => {
+  it("clears an uncommitted paid ability when returning to God selection", () => {
+    let state = abilityState("ares", 3);
+    const initialLightOrbs = state.players.white.orbs.light;
+    state = threePlayerReducer(state, {
+      type: "select-god",
+      godId: "ares",
+    });
+    state = threePlayerReducer(state, {
+      type: "select-ability",
+      abilityId: "pick-a-fight",
+    });
+    expect(state.players.white.orbs.light).toBe(initialLightOrbs - 2);
+
+    state = threePlayerReducer(state, { type: "clear-god" });
+
+    expect(state.selectedGod).toBeUndefined();
+    expect(state.selectedAbility).toBeUndefined();
+    expect(state.pending).toBeUndefined();
+    expect(state.players.white.orbs.light).toBe(initialLightOrbs);
+  });
+
   it("implements every catalog ability", () => {
     expect(unsupportedThreePlayerAbilities()).toEqual([]);
   });

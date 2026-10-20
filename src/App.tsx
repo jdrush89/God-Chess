@@ -3596,6 +3596,10 @@ export function GameScreen({
     gameFinished && state.gameMode !== "simulation";
   const [resultOpen, setResultOpen] = useState(showGameResult);
   const kingInCheck = state.phase === "play" && isInCheck(state.board, state.activeColor, state.bananas);
+  const undoReturnsToGodSelection =
+    state.phase === "play" &&
+    Boolean(state.selectedGod) &&
+    !hasCommittedClassicAction(state);
   const dailyPuzzle = state.puzzleId
     ? DAILY_PUZZLE_BY_ID[state.puzzleId as keyof typeof DAILY_PUZZLE_BY_ID]
     : undefined;
@@ -4044,7 +4048,11 @@ export function GameScreen({
           <button
             onClick={onUndo}
             disabled={!canUndo}
-            title={undoEnabled ? "Undo the latest completed turn or upgrade" : "Enable undo in Settings"}
+            title={undoReturnsToGodSelection
+              ? "Return to God selection"
+              : undoEnabled
+                ? "Undo the latest completed turn or upgrade"
+                : "Enable undo in Settings"}
           >
             <Undo2 size={18} />
             <span>Undo</span>
@@ -6630,7 +6638,12 @@ export default function App() {
     (state.phase === "play" || state.phase === "upgrade" || state.phase === "gameover") &&
     !state.selectedGod &&
     !state.selectedAbility;
-  const canUndo =
+  const canCancelDivineSelection =
+    !inputDisabled &&
+    state.phase === "play" &&
+    Boolean(state.selectedGod) &&
+    !hasCommittedClassicAction(state);
+  const canUndoCompletedAction =
     state.gameMode !== "simulation" &&
     !dailyReplayActions &&
     undoEnabled &&
@@ -6639,8 +6652,13 @@ export default function App() {
       ? online.undoAvailable && !online.awaitingSync
       : undoDepth > 0
   );
+  const canUndo = canCancelDivineSelection || canUndoCompletedAction;
   const requestUndo = () => {
-    if (!canUndo) return;
+    if (canCancelDivineSelection) {
+      dispatch({ type: "clear-god" });
+      return;
+    }
+    if (!canUndoCompletedAction) return;
     if (state.gameMode === "online") onlineActions.requestUndo();
     else applyUndo();
   };

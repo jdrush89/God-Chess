@@ -1,4 +1,4 @@
-import type { Ability, God, GodId } from "./types";
+import type { Ability, God, GodId, PieceType } from "./types";
 
 const ability = (
   id: string,
@@ -316,3 +316,18 @@ export const GOD_BY_ID = Object.fromEntries(GODS.map((god) => [god.id, god])) as
 
 export const abilityLevel = (upgrades: Record<string, 1 | 2 | 3>, abilityId: string) =>
   upgrades[abilityId] ?? 1;
+
+export const canUsePickAFightDestination = (
+  level: 1 | 2 | 3,
+  pieceType: PieceType,
+  attacked: boolean,
+  attacksTwo: boolean,
+) => {
+  const isOriginalPieceType =
+    pieceType === "knight" || pieceType === "bishop";
+  return (
+    attacked && (isOriginalPieceType || level >= 3)
+  ) || (
+    attacksTwo && isOriginalPieceType && level >= 2
+  );
+};

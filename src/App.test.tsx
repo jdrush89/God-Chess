@@ -2585,6 +2585,45 @@ describe("game startup", () => {
     expect((screen.getByRole("button", { name: /^undo$/i }) as HTMLButtonElement).disabled).toBe(true);
   }, 15_000);
 
+  it("uses Undo to return an uncommitted God or ability selection to the God list", () => {
+    const savedState = createGame(1);
+    savedState.phase = "play";
+    savedState.players.white.gods = ["ares"];
+    savedState.players.black.gods = ["medusa"];
+    savedState.players.white.orbs.white = 2;
+    window.localStorage.setItem("god-chess-undo-enabled", "false");
+    window.localStorage.setItem(SAVE_KEY, JSON.stringify([{
+      version: 3,
+      id: "selection-undo-save",
+      savedAt: new Date().toISOString(),
+      state: savedState,
+      undoHistory: [],
+    }]));
+
+    render(<App />);
+    openPlayOption("Load");
+    fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
+
+    const selectAres = () =>
+      fireEvent.click(screen.getByRole("button", { name: /ares conflict/i }));
+    const undo = () => screen.getByRole("button", { name: /^undo$/i });
+
+    expect((undo() as HTMLButtonElement).disabled).toBe(true);
+    selectAres();
+    expect((undo() as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(undo());
+    expect(screen.queryByRole("button", { name: /choose a different god/i })).toBeNull();
+
+    selectAres();
+    fireEvent.click(screen.getByRole("button", { name: /^pick a fight/i }));
+    expect((undo() as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(undo());
+
+    expect(screen.queryByRole("button", { name: /choose a different god/i })).toBeNull();
+    expect(screen.getByRole("button", { name: /ares conflict/i })).toBeTruthy();
+    expect((undo() as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it("undoes a completed upgrade", () => {
     const savedState = createGame(1);
     savedState.phase = "upgrade";

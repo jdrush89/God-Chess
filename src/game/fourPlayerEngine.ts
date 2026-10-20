@@ -48,7 +48,12 @@ import {
   type GodSkinId,
 } from "../godSkins";
 import { isFourPlayerState } from "./fourPlayerPersistence";
-import { abilityLevel, GOD_BY_ID, GODS } from "./gods";
+import {
+  abilityLevel,
+  canUsePickAFightDestination,
+  GOD_BY_ID,
+  GODS,
+} from "./gods";
 import { hasCompleteTurn } from "./completeTurnSearch";
 import { qualifyingSnake } from "./slither";
 import type { GodId, PieceType, Square } from "./types";
@@ -1329,7 +1334,6 @@ const sourceTargets = (state: FourPlayerState, square: Square): Square[] => {
     );
   }
   if (abilityId === "pick-a-fight") {
-    if (level < 3 && !["knight", "bishop"].includes(piece.type)) return [];
     return constrainLure(
       state,
       square,
@@ -1358,7 +1362,12 @@ const sourceTargets = (state: FourPlayerState, square: Square): Square[] => {
           state.config,
           state.bananas,
         ).filter((candidate) => hostilePiece(state, simulated[candidate])).length >= 2;
-        if (!attacked && !(level >= 2 && attacksTwo)) return false;
+        if (!canUsePickAFightDestination(
+          level,
+          piece.type,
+          attacked,
+          attacksTwo,
+        )) return false;
         return !fourPlayerIsInCheck(
           simulated,
           state.activeSeat,
