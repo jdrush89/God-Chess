@@ -21,7 +21,6 @@ import { GODS } from "./gods";
 import type { GodId } from "./types";
 import {
   isGodSkinFor,
-  isGodSkinUnlocked,
 } from "../godSkins";
 
 export interface ThreePlayerActionEnvelope {
@@ -113,10 +112,7 @@ export const normalizeThreePlayerAction = (
       !isGodId(value.godId) ||
       (
         value.skinId !== undefined &&
-        (
-          !isGodSkinFor(value.godId, value.skinId) ||
-          !isGodSkinUnlocked(value.godId, value.skinId)
-        )
+        !isGodSkinFor(value.godId, value.skinId)
       )
     ) return undefined;
     return {

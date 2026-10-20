@@ -44,7 +44,6 @@ import {
 } from "./fourPlayerTypes";
 import {
   isGodSkinFor,
-  isGodSkinUnlocked,
   type GodSkinId,
 } from "../godSkins";
 import { isFourPlayerState } from "./fourPlayerPersistence";
@@ -3306,7 +3305,7 @@ const draftGod = (
   skinId: GodSkinId = "base",
 ) => {
   if (!state.draft.available.includes(godId)) return;
-  if (!isGodSkinFor(godId, skinId) || !isGodSkinUnlocked(godId, skinId)) return;
+  if (!isGodSkinFor(godId, skinId)) return;
   const seat = state.draft.order[state.draft.pickIndex];
   state.players[seat].gods.push(godId);
   state.players[seat].godSkins ??= {};

@@ -124,18 +124,24 @@ describe("versioned multiplayer protocol", () => {
     expect(normalizeProtocolMessage(message)).toEqual(message);
   });
 
-  it("normalizes unlocked classic draft skins and rejects locked ones", () => {
+  it("normalizes known classic draft skins and rejects mismatched ones", () => {
     const unlocked = createProtocolMessage("classic", "peer", {
       type: "game_action",
       action: { type: "draft", godId: "salem", skinId: "chonk" },
     });
     expect(normalizeProtocolMessage(unlocked)).toEqual(unlocked);
 
-    const locked = createProtocolMessage("classic", "peer", {
+    const matching = createProtocolMessage("classic", "peer", {
       type: "game_action",
       action: { type: "draft", godId: "anubis", skinId: "tightrope" },
     });
-    expect(normalizeProtocolMessage(locked)).toBeUndefined();
+    expect(normalizeProtocolMessage(matching)).toEqual(matching);
+
+    const mismatched = createProtocolMessage("classic", "peer", {
+      type: "game_action",
+      action: { type: "draft", godId: "salem", skinId: "tightrope" },
+    });
+    expect(normalizeProtocolMessage(mismatched)).toBeUndefined();
 
     const autoPick = createProtocolMessage("classic", "peer", {
       type: "game_action",

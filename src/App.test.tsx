@@ -951,7 +951,33 @@ describe("game startup", () => {
     expect(screen.getByRole("button", { name: /^local$/i })).toBeTruthy();
   });
 
-  it("browses skin unlocks in the roster and saves Salem's Chonk favorite", () => {
+  it("locks every custom skin including Salem's Chonk by default", () => {
+    render(<App />);
+    openPlayMenu();
+    fireEvent.click(screen.getByRole("button", { name: /^roster$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /salem/i }));
+
+    const chonk = screen.getByRole("button", { name: /^chonk locked$/i });
+    fireEvent.click(chonk);
+    expect(chonk.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByText(
+      /complete any salem ability achievement to unlock this skin/i,
+    )).toBeTruthy();
+    expect(screen.queryByRole("button", {
+      name: /chonk as favorite/i,
+    })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /^ares/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^businessman locked$/i }));
+    expect(screen.getByText(
+      /complete any ares ability achievement to unlock this skin/i,
+    )).toBeTruthy();
+  });
+
+  it("unlocks a custom skin after any achievement for that God and saves it as a favorite", () => {
+    const achievements = createAchievementProgress();
+    achievements.completed["hex-mix"] = "2026-10-20T12:00:00.000Z";
+    persistLocalAchievementProgress(achievements);
     render(<App />);
     openPlayMenu();
     fireEvent.click(screen.getByRole("button", { name: /^roster$/i }));
@@ -959,20 +985,19 @@ describe("game startup", () => {
 
     const chonk = screen.getByRole("button", { name: /^chonk unlocked$/i });
     fireEvent.click(chonk);
-    expect(chonk.getAttribute("aria-pressed")).toBe("true");
-    fireEvent.click(screen.getByRole("button", { name: /set chonk as favorite/i }));
+    fireEvent.click(screen.getByRole("button", {
+      name: /set chonk as favorite/i,
+    }));
     expect(JSON.parse(
       window.localStorage.getItem("god-chess-favorite-skins-v1") ?? "{}",
     )).toEqual({ salem: "chonk" });
     expect(screen.getByRole("button", { name: /remove chonk as favorite/i })).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: /^ares/i }));
-    fireEvent.click(screen.getByRole("button", { name: /^businessman locked$/i }));
-    expect(screen.getByText(/must be unlocked before it can be drafted/i)).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /businessman as favorite/i })).toBeNull();
   });
 
   it("defaults drafts to a favorite skin, permits overrides, and blocks locked skins", () => {
+    const achievements = createAchievementProgress();
+    achievements.completed["hex-mix"] = "2026-10-20T12:00:00.000Z";
+    persistLocalAchievementProgress(achievements);
     window.localStorage.setItem(
       "god-chess-favorite-skins-v1",
       JSON.stringify({ salem: "chonk" }),

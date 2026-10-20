@@ -43,7 +43,6 @@ import type {
 import { opposite } from "./types";
 import {
   isGodSkinFor,
-  isGodSkinUnlocked,
   type GodSkinId,
 } from "../godSkins";
 
@@ -3036,7 +3035,7 @@ const selectGod = (state: GameState, godId: GodId) => {
 
 const draftGod = (state: GameState, godId: GodId, skinId: GodSkinId = "base") => {
   if (!state.draft.available.includes(godId)) return;
-  if (!isGodSkinFor(godId, skinId) || !isGodSkinUnlocked(godId, skinId)) return;
+  if (!isGodSkinFor(godId, skinId)) return;
   const color = state.draft.order[state.draft.pickIndex];
   state.players[color].gods.push(godId);
   state.players[color].godSkins ??= {};

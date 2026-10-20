@@ -10,6 +10,7 @@ import {
   loadFavoriteGodSkins,
   persistFavoriteGodSkins,
 } from "./godSkins";
+import { GOD_ACHIEVEMENT_IDS } from "./achievements";
 
 describe("God skins", () => {
   beforeEach(() => {
@@ -35,10 +36,24 @@ describe("God skins", () => {
     });
   });
 
-  it("unlocks every base skin and only Salem's Chonk custom skin", () => {
+  it("locks every custom skin by default and unlocks it with any matching God achievement", () => {
     expect(isGodSkinUnlocked("salem", "base")).toBe(true);
-    expect(isGodSkinUnlocked("salem", "chonk")).toBe(true);
-    expect(isGodSkinUnlocked("anubis", "tightrope")).toBe(false);
+    expect(isGodSkinUnlocked("salem", "chonk")).toBe(false);
+    expect(isGodSkinUnlocked(
+      "salem",
+      "chonk",
+      { "i-have-the-power": "2026-10-20T12:00:00.000Z" },
+    )).toBe(false);
+    for (const [godId, skins] of Object.entries(GOD_SKINS)) {
+      const achievementId = GOD_ACHIEVEMENT_IDS[
+        godId as keyof typeof GOD_ACHIEVEMENT_IDS
+      ][0];
+      expect(isGodSkinUnlocked(
+        godId as keyof typeof GOD_SKINS,
+        skins[1].id,
+        { [achievementId]: "2026-10-20T12:00:00.000Z" },
+      )).toBe(true);
+    }
     expect(isGodSkinUnlocked("salem", "tightrope")).toBe(false);
   });
 
@@ -46,19 +61,24 @@ describe("God skins", () => {
     expect(isGodSkinFor("salem", "chonk")).toBe(true);
     expect(isGodSkinFor("anubis", "chonk")).toBe(false);
     expect(isGodSkinSelections({ salem: "chonk" })).toBe(true);
-    expect(isGodSkinSelections({ anubis: "tightrope" })).toBe(false);
+    expect(isGodSkinSelections({ anubis: "tightrope" })).toBe(true);
+    expect(isGodSkinSelections({ salem: "tightrope" })).toBe(false);
   });
 
-  it("persists unlocked favorites and defaults invalid stored values to base", () => {
+  it("persists favorites but only applies them after their God achievement unlocks", () => {
     persistFavoriteGodSkins({ salem: "chonk" });
     expect(loadFavoriteGodSkins()).toEqual({ salem: "chonk" });
-    expect(favoriteGodSkin(loadFavoriteGodSkins(), "salem")).toBe("chonk");
+    expect(favoriteGodSkin(loadFavoriteGodSkins(), "salem")).toBe("base");
+    expect(favoriteGodSkin(
+      loadFavoriteGodSkins(),
+      "salem",
+      { "hex-mix": "2026-10-20T12:00:00.000Z" },
+    )).toBe("chonk");
 
     window.localStorage.setItem(
       "god-chess-favorite-skins-v1",
-      JSON.stringify({ anubis: "tightrope" }),
+      JSON.stringify({ salem: "tightrope" }),
     );
     expect(loadFavoriteGodSkins()).toEqual({});
-    expect(favoriteGodSkin(loadFavoriteGodSkins(), "anubis")).toBe("base");
   });
 });

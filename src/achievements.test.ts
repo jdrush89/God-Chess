@@ -6,9 +6,14 @@ import {
   completeDailyAchievementsIfEligible,
   createAchievementProgress,
   dailyPuzzleCompletionStats,
+  GOD_ABILITY_ACHIEVEMENT_IDS,
+  GOD_ACHIEVEMENT_IDS,
+  hasCompletedGodAchievement,
   mergeAchievementProgress,
+  type AchievementId,
 } from "./achievements";
 import { createGame } from "./game/engine";
+import { GODS } from "./game/gods";
 import { createDefaultThreePlayerConfig } from "./game/threePlayerConfig";
 import { createThreePlayerGame } from "./game/threePlayerEngine";
 import { THREE_PLAYER_BOARD_VARIANTS } from "./game/threePlayerTypes";
@@ -27,6 +32,23 @@ describe("achievement progress", () => {
   it("defines all 55 unique achievements", () => {
     expect(ACHIEVEMENT_DEFINITIONS).toHaveLength(55);
     expect(new Set(ACHIEVEMENT_DEFINITIONS.map(({ id }) => id)).size).toBe(55);
+  });
+
+  it("associates every God with achievement unlocks covering its three abilities", () => {
+    const knownIds = new Set(ACHIEVEMENT_DEFINITIONS.map(({ id }) => id));
+    const associatedIds = Object.values(GOD_ACHIEVEMENT_IDS).flat();
+
+    expect(new Set(associatedIds).size).toBe(associatedIds.length);
+    for (const god of GODS) {
+      const ids = GOD_ACHIEVEMENT_IDS[god.id];
+      expect(Object.keys(GOD_ABILITY_ACHIEVEMENT_IDS[god.id]).sort()).toEqual(
+        god.abilities.map(({ id }) => id).sort(),
+      );
+      expect(ids.every((id) => knownIds.has(id as AchievementId))).toBe(true);
+      expect(hasCompletedGodAchievement({
+        [ids[0]]: "2026-10-20T12:00:00.000Z",
+      }, god.id)).toBe(true);
+    }
   });
 
   it("unlocks wins and records winning Gods", () => {

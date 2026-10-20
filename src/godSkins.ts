@@ -1,4 +1,5 @@
 import type { GodId } from "./game/types";
+import { isAchievementUnlockedGodSkin } from "./godAchievementUnlocks";
 
 export type GodSkinId =
   | "base"
@@ -127,8 +128,20 @@ export const isGodSkinFor = (
   typeof skinId === "string" &&
   GOD_SKINS[godId].some((skin) => skin.id === skinId);
 
-export const isGodSkinUnlocked = (godId: GodId, skinId: GodSkinId) =>
-  skinId === "base" || (godId === "salem" && skinId === "chonk");
+export const isGodSkinUnlocked = (
+  godId: GodId,
+  skinId: GodSkinId,
+  completedAchievements: Partial<Record<string, string>> = {},
+) =>
+  skinId === "base" ||
+  (
+    isGodSkinFor(godId, skinId) &&
+    isAchievementUnlockedGodSkin(
+      completedAchievements,
+      godId,
+      skinId,
+    )
+  );
 
 export const draftedGodSkin = (
   selections: GodSkinSelections | undefined,
@@ -146,8 +159,7 @@ export const isGodSkinSelections = (
   return Object.entries(value).every(([godId, skinId]) => {
     const typedGodId = godId as GodId;
     return typedGodId in GOD_SKINS &&
-      isGodSkinFor(typedGodId, skinId) &&
-      isGodSkinUnlocked(typedGodId, skinId);
+      isGodSkinFor(typedGodId, skinId);
   });
 };
 
@@ -177,7 +189,10 @@ export const persistFavoriteGodSkins = (favorites: GodSkinSelections) => {
 export const favoriteGodSkin = (
   favorites: GodSkinSelections,
   godId: GodId,
+  completedAchievements: Partial<Record<string, string>> = {},
 ) => {
   const skinId = draftedGodSkin(favorites, godId);
-  return isGodSkinUnlocked(godId, skinId) ? skinId : "base";
+  return isGodSkinUnlocked(godId, skinId, completedAchievements)
+    ? skinId
+    : "base";
 };

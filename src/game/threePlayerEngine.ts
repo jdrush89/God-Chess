@@ -42,7 +42,6 @@ import {
 import { prepareThreePlayerState } from "./threePlayerPersistence";
 import {
   isGodSkinFor,
-  isGodSkinUnlocked,
 } from "../godSkins";
 import { getThreePlayerTopology } from "./threePlayerTopology";
 import {
@@ -826,7 +825,7 @@ const reduceDraft = (
 ) => {
   const { godId, skinId = "base" } = action;
   if (!state.draft.available.includes(godId)) return false;
-  if (!isGodSkinFor(godId, skinId) || !isGodSkinUnlocked(godId, skinId)) return false;
+  if (!isGodSkinFor(godId, skinId)) return false;
   const seat = state.draft.order[state.draft.pickIndex];
   if (seat !== state.activeSeat) return false;
   state.players[seat].gods.push(godId);

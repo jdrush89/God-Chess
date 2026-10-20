@@ -86,6 +86,11 @@ describe("four-player layer-three session seams", () => {
       type: "draft",
       godId: "anubis",
       skinId: "tightrope",
+    })).toEqual({ type: "draft", godId: "anubis", skinId: "tightrope" });
+    expect(normalizeFourPlayerAction({
+      type: "draft",
+      godId: "salem",
+      skinId: "tightrope",
     })).toBeUndefined();
 
     for (const action of [
