@@ -106,7 +106,6 @@ export const appPathForRoute = (route: AppNavigationRoute) => {
     case "tutorial":
       return "/tutorial";
     case "puzzles":
-      if (route.puzzleCategory === "daily") return "/daily";
       return route.puzzleCategory
         ? `/puzzles/${route.puzzleCategory}`
         : "/puzzles";

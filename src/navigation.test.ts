@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { appPathForRoute, appRouteFromPath } from "./navigation";
 
 describe("app navigation", () => {
-  it("maps Daily links to the single canonical Daily route", () => {
+  it("maps direct Daily links separately from the Daily archive", () => {
     expect(appRouteFromPath("/daily")).toMatchObject({
       startView: "puzzles",
       puzzleCategory: "daily",
@@ -11,7 +11,11 @@ describe("app navigation", () => {
       startView: "puzzles",
       puzzleCategory: "daily",
     });
-    expect(appPathForRoute(appRouteFromPath("/daily/play"))).toBe("/daily");
+    expect(appPathForRoute({
+      startView: "puzzles",
+      setupCategory: "local",
+      puzzleCategory: "daily",
+    })).toBe("/puzzles/daily");
   });
 
   it("maps major screens and setup paths in both directions", () => {

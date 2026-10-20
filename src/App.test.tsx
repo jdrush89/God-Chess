@@ -47,6 +47,8 @@ const cloudSaveHarness = vi.hoisted(() => ({
 const cloudProgressHarness = vi.hoisted(() => ({
   loadPuzzles: vi.fn(),
   upsertPuzzles: vi.fn(async () => undefined),
+  loadDailyRatings: vi.fn(),
+  upsertDailyRatings: vi.fn(async () => undefined),
   loadChallenges: vi.fn(),
   upsertChallenges: vi.fn(async () => undefined),
   loadAchievements: vi.fn(),
@@ -133,6 +135,11 @@ vi.mock("./account/cloudPuzzleProgress", () => ({
   upsertCloudCompletedPuzzles: cloudProgressHarness.upsertPuzzles,
 }));
 
+vi.mock("./account/cloudDailyPuzzleRatings", () => ({
+  loadCloudDailyPuzzleRatings: cloudProgressHarness.loadDailyRatings,
+  upsertCloudDailyPuzzleRatings: cloudProgressHarness.upsertDailyRatings,
+}));
+
 vi.mock("./account/cloudChallengeProgress", () => ({
   loadCloudCompletedChallenges: cloudProgressHarness.loadChallenges,
   upsertCloudCompletedChallenges: cloudProgressHarness.upsertChallenges,
@@ -174,7 +181,7 @@ import {
   createGame,
   gameReducer,
 } from "./game/engine";
-import { currentDailyPuzzle } from "./game/dailyPuzzles";
+import { currentDailyPuzzle, DAILY_PUZZLES } from "./game/dailyPuzzles";
 import { GODS } from "./game/gods";
 import { createDefaultThreePlayerConfig } from "./game/threePlayerConfig";
 import { createThreePlayerGame, threePlayerReducer } from "./game/threePlayerEngine";
@@ -190,6 +197,10 @@ import {
   loadLocalCompletedPuzzles,
   persistLocalCompletedPuzzles,
 } from "./puzzleProgress";
+import {
+  loadLocalDailyPuzzleRatings,
+  persistLocalDailyPuzzleRatings,
+} from "./dailyPuzzleRatings";
 
 const SAVE_KEY = "god-chess-saves-v2";
 const LEGACY_SAVE_KEY = "god-chess-save-v1";
@@ -456,6 +467,9 @@ beforeEach(() => {
   cloudProgressHarness.loadPuzzles.mockReset();
   cloudProgressHarness.loadPuzzles.mockResolvedValue([]);
   cloudProgressHarness.upsertPuzzles.mockClear();
+  cloudProgressHarness.loadDailyRatings.mockReset();
+  cloudProgressHarness.loadDailyRatings.mockResolvedValue({});
+  cloudProgressHarness.upsertDailyRatings.mockClear();
   cloudProgressHarness.loadChallenges.mockReset();
   cloudProgressHarness.loadChallenges.mockResolvedValue([]);
   cloudProgressHarness.upsertChallenges.mockClear();
@@ -584,6 +598,24 @@ describe("game startup", () => {
     expect(within(shareCard).getByRole("button", {
       name: /result copied/i,
     })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", {
+      name: /thumbs up this daily puzzle/i,
+    }));
+    expect(loadLocalDailyPuzzleRatings()[daily.id]).toBe("up");
+    expect(screen.getByRole("button", {
+      name: /thumbs up this daily puzzle/i,
+    }).getAttribute("aria-pressed")).toBe("true");
+
+    fireEvent.click(screen.getByRole("button", {
+      name: /thumbs down this daily puzzle/i,
+    }));
+    expect(loadLocalDailyPuzzleRatings()[daily.id]).toBe("down");
+
+    fireEvent.click(screen.getByRole("button", {
+      name: /thumbs down this daily puzzle/i,
+    }));
+    expect(loadLocalDailyPuzzleRatings()[daily.id]).toBeUndefined();
   });
 
   it("resets and replays the Daily solution after giving up without awarding completion", async () => {
@@ -608,6 +640,7 @@ describe("game startup", () => {
       .toBeTruthy();
     expect(screen.getByText(/solution shown/i)).toBeTruthy();
     expect(screen.queryByLabelText(/daily share card/i)).toBeNull();
+    expect(screen.queryByLabelText(/rate this daily puzzle/i)).toBeNull();
     expect(loadLocalCompletedPuzzles()).not.toContain(daily.id);
   });
 
@@ -630,6 +663,17 @@ describe("game startup", () => {
       .toBeTruthy();
   });
 
+  it("opens the Daily archive directly from /puzzles/daily", () => {
+    window.history.replaceState(null, "", "/puzzles/daily");
+    render(<App />);
+
+    expect(screen.getByRole("heading", { name: /daily puzzle/i })).toBeTruthy();
+    expect(screen.getAllByRole("button", {
+      name: /(?:today's daily|archived daily)/i,
+    })).toHaveLength(DAILY_PUZZLES.length);
+    expect(screen.queryByText(/player turns left/i)).toBeNull();
+  });
+
   it("updates URLs and restores the prior screen with browser history", async () => {
     const daily = currentDailyPuzzle()!;
     render(<App />);
@@ -639,6 +683,10 @@ describe("game startup", () => {
     fireEvent.click(screen.getByRole("button", { name: /^puzzles$/i }));
     await waitFor(() => expect(window.location.pathname).toBe("/puzzles"));
     fireEvent.click(screen.getByRole("button", { name: /^daily/i }));
+    expect(window.location.pathname).toBe("/puzzles/daily");
+    fireEvent.click(screen.getByRole("button", {
+      name: new RegExp(`today's daily, ${daily.title}`, "i"),
+    }));
     await waitFor(() => expect(window.location.pathname).toBe("/daily"));
     expect(screen.getByText(
       new RegExp(`daily · ${daily.playerTurns} player turns?`, "i"),
@@ -646,8 +694,8 @@ describe("game startup", () => {
 
     act(() => window.history.back());
     await waitFor(() => {
-      expect(window.location.pathname).toBe("/puzzles");
-      expect(screen.getByRole("heading", { name: /choose a difficulty/i }))
+      expect(window.location.pathname).toBe("/puzzles/daily");
+      expect(screen.getByRole("heading", { name: /daily puzzle/i }))
         .toBeTruthy();
     });
   });
@@ -991,6 +1039,7 @@ describe("game startup", () => {
     const localSave = createSavedGame("local-save", createGame(1), []);
     persistLocalSavedGames([localSave]);
     persistLocalCompletedPuzzles(["centaurs-lance"]);
+    persistLocalDailyPuzzleRatings({ [currentDailyPuzzle()!.id]: "up" });
     persistLocalCompletedChallenges(["phalanx"]);
     const localAchievements = createAchievementProgress();
     localAchievements.completed["it-begins"] = "2026-10-12T12:00:00.000Z";
@@ -1024,6 +1073,10 @@ describe("game startup", () => {
     );
     expect(cloudProgressHarness.upsertPuzzles)
       .toHaveBeenCalledWith("new-account", ["centaurs-lance"]);
+    expect(cloudProgressHarness.upsertDailyRatings).toHaveBeenCalledWith(
+      "new-account",
+      { [currentDailyPuzzle()!.id]: "up" },
+    );
     expect(cloudProgressHarness.upsertChallenges)
       .toHaveBeenCalledWith("new-account", ["phalanx"]);
     expect(cloudProgressHarness.upsertAchievements).toHaveBeenCalledWith(
@@ -1065,15 +1118,18 @@ describe("game startup", () => {
     });
     expect(cloudSaveHarness.upsert).not.toHaveBeenCalled();
     expect(cloudProgressHarness.upsertPuzzles).not.toHaveBeenCalled();
+    expect(cloudProgressHarness.upsertDailyRatings).not.toHaveBeenCalled();
     expect(cloudProgressHarness.upsertChallenges).not.toHaveBeenCalled();
     expect(cloudProgressHarness.upsertAchievements).not.toHaveBeenCalled();
   });
 
   it("uses only account data after sign-in unless import was accepted", async () => {
+    const daily = currentDailyPuzzle()!;
     persistLocalSavedGames([
       createSavedGame("local-save", createGame(1), []),
     ]);
     persistLocalCompletedPuzzles(["centaurs-lance"]);
+    persistLocalDailyPuzzleRatings({ [daily.id]: "up" });
     persistLocalCompletedChallenges(["phalanx"]);
     const localAchievements = createAchievementProgress();
     localAchievements.completed["it-begins"] = "2026-10-12T12:00:00.000Z";
@@ -1084,10 +1140,15 @@ describe("game startup", () => {
       email: "existing@example.com",
       displayName: "Existing Player",
     };
+    cloudProgressHarness.loadDailyRatings.mockResolvedValue({
+      [daily.id]: "down",
+    });
 
     render(<App />);
     await waitFor(() => {
       expect(cloudProgressHarness.loadAchievements)
+        .toHaveBeenCalledWith("existing-account");
+      expect(cloudProgressHarness.loadDailyRatings)
         .toHaveBeenCalledWith("existing-account");
     });
 
@@ -1103,6 +1164,10 @@ describe("game startup", () => {
     })).toBeTruthy();
     expect(screen.getByRole("button", {
       name: /^challenges.*0 of 8 completed/i,
+    })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^daily/i }));
+    expect(screen.getByRole("button", {
+      name: new RegExp(`today's daily, ${daily.title}.*thumbed down`, "i"),
     })).toBeTruthy();
   });
 
@@ -1415,13 +1480,37 @@ describe("game startup", () => {
     expect(screen.queryByRole("button", { name: /save & quit/i })).toBeNull();
   });
 
-  it("starts the generated Daily puzzle from its simulation checkpoint", async () => {
+  it("browses the Daily archive newest-first and starts a selected Daily", async () => {
     const daily = currentDailyPuzzle()!;
+    const archived = DAILY_PUZZLES[0];
+    persistLocalCompletedPuzzles([archived.id]);
+    persistLocalDailyPuzzleRatings({ [archived.id]: "up" });
     vi.stubGlobal("Worker", FakeClassicAiWorker);
     const { container } = render(<App />);
     openPlayOption("Puzzles");
 
-    fireEvent.click(screen.getByRole("button", { name: /^daily/i }));
+    fireEvent.click(screen.getByRole("button", {
+      name: new RegExp(`^daily.*1 of ${DAILY_PUZZLES.length} completed`, "i"),
+    }));
+    const archiveCards = screen.getAllByRole("button", {
+      name: /(?:today's daily|archived daily)/i,
+    });
+    expect(archiveCards).toHaveLength(DAILY_PUZZLES.length);
+    expect(archiveCards[0].textContent).toContain(
+      DAILY_PUZZLES[DAILY_PUZZLES.length - 1].title,
+    );
+    expect(screen.getByRole("button", {
+      name: new RegExp(
+        `archived daily, ${archived.title}.*completed.*thumbed up`,
+        "i",
+      ),
+    })).toBeTruthy();
+    expect(window.location.pathname).toBe("/puzzles/daily");
+    expect(FakeClassicAiWorker.instances).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole("button", {
+      name: new RegExp(`today's daily, ${daily.title}`, "i"),
+    }));
     expect(screen.getByText(
       new RegExp(`daily · ${daily.playerTurns} player turns?`, "i"),
     )).toBeTruthy();
