@@ -7,7 +7,7 @@ import { prepareThreePlayerState } from "./threePlayerPersistence";
 import { prepareTwoPlayerState } from "../saves";
 
 describe("drafted God skins", () => {
-  it("stores Salem's unlocked Chonk skin in a classic draft", () => {
+  it("stores a selected custom skin in a classic draft", () => {
     const state = createGame(1);
     const next = gameReducer(state, {
       type: "draft",
@@ -19,9 +19,9 @@ describe("drafted God skins", () => {
     expect(next.players.white.godSkins?.salem).toBe("chonk");
   });
 
-  it("rejects locked and mismatched skins in a classic draft", () => {
+  it("accepts matching custom skins and rejects mismatched skins in a classic draft", () => {
     const state = createGame(1);
-    const locked = gameReducer(state, {
+    const matching = gameReducer(state, {
       type: "draft",
       godId: "anubis",
       skinId: "tightrope",
@@ -32,13 +32,13 @@ describe("drafted God skins", () => {
       skinId: "tightrope",
     });
 
-    expect(locked.draft.pickIndex).toBe(0);
-    expect(locked.players.white.gods).toEqual([]);
+    expect(matching.draft.pickIndex).toBe(1);
+    expect(matching.players.white.godSkins?.anubis).toBe("tightrope");
     expect(mismatched.draft.pickIndex).toBe(0);
     expect(mismatched.players.white.gods).toEqual([]);
   });
 
-  it("stores Salem's unlocked Chonk skin in three-player drafts", () => {
+  it("stores a selected custom skin in three-player drafts", () => {
     const state = createThreePlayerGame();
     const next = threePlayerReducer(state, {
       type: "draft",
@@ -50,7 +50,7 @@ describe("drafted God skins", () => {
     expect(next.players.white.godSkins?.salem).toBe("chonk");
   });
 
-  it("rejects locked skins in three-player drafts", () => {
+  it("accepts matching custom skins in three-player drafts", () => {
     const state = createThreePlayerGame();
     const next = threePlayerReducer(state, {
       type: "draft",
@@ -58,11 +58,11 @@ describe("drafted God skins", () => {
       skinId: "tightrope",
     });
 
-    expect(next.draft.pickIndex).toBe(0);
-    expect(next.players.white.gods).toEqual([]);
+    expect(next.draft.pickIndex).toBe(1);
+    expect(next.players.white.godSkins?.anubis).toBe("tightrope");
   });
 
-  it("stores Salem's unlocked Chonk skin in four-player drafts", () => {
+  it("stores a selected custom skin in four-player drafts", () => {
     const state = createFourPlayerGame();
     const firstSeat = state.activeSeat;
     const next = fourPlayerReducer(state, {
@@ -75,7 +75,7 @@ describe("drafted God skins", () => {
     expect(next.players[firstSeat].godSkins?.salem).toBe("chonk");
   });
 
-  it("rejects locked skins in four-player drafts", () => {
+  it("accepts matching custom skins in four-player drafts", () => {
     const state = createFourPlayerGame();
     const firstSeat = state.activeSeat;
     const next = fourPlayerReducer(state, {
@@ -84,8 +84,8 @@ describe("drafted God skins", () => {
       skinId: "tightrope",
     });
 
-    expect(next.draft.pickIndex).toBe(0);
-    expect(next.players[firstSeat].gods).toEqual([]);
+    expect(next.draft.pickIndex).toBe(1);
+    expect(next.players[firstSeat].godSkins?.anubis).toBe("tightrope");
   });
 
   it("migrates old states without skin selections", () => {

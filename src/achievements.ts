@@ -39,6 +39,13 @@ import type {
 } from "./game/types";
 import type { GameAction } from "./game/engine";
 import { qualifyingSnake } from "./game/slither";
+export {
+  GOD_ABILITY_ACHIEVEMENT_IDS,
+  GOD_ACHIEVEMENT_IDS,
+  GOD_ACHIEVEMENT_SKIN_IDS,
+  hasCompletedGodAchievement,
+  isAchievementUnlockedGodSkin,
+} from "./godAchievementUnlocks";
 
 export const ACHIEVEMENTS = [
   ["it-begins", "It Begins", "Win a game."],

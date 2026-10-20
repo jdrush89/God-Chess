@@ -1,4 +1,6 @@
 import { Lock, Star } from "lucide-react";
+import type { AchievementId } from "./achievements";
+import { GOD_BY_ID } from "./game/gods";
 import type { GodId } from "./game/types";
 import {
   GOD_SKINS,
@@ -13,15 +15,21 @@ export function GodSkinPicker({
   favoriteSkinId,
   onSelect,
   onFavorite,
+  completedAchievements = {},
 }: {
   godId: GodId;
   selectedSkinId: GodSkinId;
   favoriteSkinId?: GodSkinId;
   onSelect: (skinId: GodSkinId) => void;
   onFavorite?: (skinId: GodSkinId) => void;
+  completedAchievements?: Partial<Record<AchievementId, string>>;
 }) {
   const selected = godSkin(godId, selectedSkinId);
-  const unlocked = isGodSkinUnlocked(godId, selected.id);
+  const unlocked = isGodSkinUnlocked(
+    godId,
+    selected.id,
+    completedAchievements,
+  );
 
   return (
     <section className="skin-picker" aria-label={`${godId} skins`}>
@@ -31,7 +39,11 @@ export function GodSkinPicker({
       </div>
       <div className="skin-options">
         {GOD_SKINS[godId].map((skin) => {
-          const skinUnlocked = isGodSkinUnlocked(godId, skin.id);
+          const skinUnlocked = isGodSkinUnlocked(
+            godId,
+            skin.id,
+            completedAchievements,
+          );
           const favorite = favoriteSkinId === skin.id;
           return (
             <div className="skin-option-shell" key={skin.id}>
@@ -66,10 +78,9 @@ export function GodSkinPicker({
       {!unlocked && (
         <p className="skin-locked-note">
           <Lock size={13} />
-          You can preview this skin, but it must be unlocked before it can be drafted.
+          Complete any {GOD_BY_ID[godId].name} ability achievement to unlock this skin.
         </p>
       )}
     </section>
   );
 }
-

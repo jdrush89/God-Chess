@@ -687,26 +687,38 @@ function DraftScreen({
   dispatch,
   onQuickDraft,
   inputDisabled = false,
+  completedAchievements,
 }: {
   state: GameState;
   dispatch: GameDispatch;
   onQuickDraft?: () => void;
   inputDisabled?: boolean;
+  completedAchievements: AchievementProgress["completed"];
 }) {
   const [inspected, setInspected] = useState<GodId>(state.draft.available[0]);
   const [godPreviewLevel, setGodPreviewLevel] = useState<number>();
   const [favorites] = useState<GodSkinSelections>(loadFavoriteGodSkins);
   const [selectedSkinId, setSelectedSkinId] = useState<GodSkinId>(() =>
-    favoriteGodSkin(favorites, state.draft.available[0])
+    favoriteGodSkin(
+      favorites,
+      state.draft.available[0],
+      completedAchievements,
+    )
   );
   const activePlayer = state.players[state.activeColor];
   const currentGod = GOD_BY_ID[inspected];
-  const selectedSkinUnlocked = isGodSkinUnlocked(currentGod.id, selectedSkinId);
+  const selectedSkinUnlocked = isGodSkinUnlocked(
+    currentGod.id,
+    selectedSkinId,
+    completedAchievements,
+  );
 
   useEffect(() => {
     setGodPreviewLevel(undefined);
-    setSelectedSkinId(favoriteGodSkin(favorites, inspected));
-  }, [inspected]);
+    setSelectedSkinId(
+      favoriteGodSkin(favorites, inspected, completedAchievements),
+    );
+  }, [completedAchievements, favorites, inspected]);
 
   useEffect(() => {
     if (!state.draft.available.includes(inspected) && state.draft.available[0]) {
@@ -739,7 +751,11 @@ function DraftScreen({
               dispatch({
                 type: "auto-draft",
                 godId,
-                skinId: favoriteGodSkin(favorites, godId),
+                skinId: favoriteGodSkin(
+                  favorites,
+                  godId,
+                  completedAchievements,
+                ),
               });
             }}
           >
@@ -777,7 +793,11 @@ function DraftScreen({
                 : undefined;
             const skinId = owner
               ? draftedGodSkin(state.players[owner].godSkins, god.id)
-              : favoriteGodSkin(favorites, god.id);
+              : favoriteGodSkin(
+                favorites,
+                god.id,
+                completedAchievements,
+              );
             return (
               <button
                 className={`draft-card ${inspected === god.id ? "inspected" : ""} ${owner ? "claimed" : ""}`}
@@ -813,6 +833,7 @@ function DraftScreen({
             godId={currentGod.id}
             selectedSkinId={selectedSkinId}
             onSelect={setSelectedSkinId}
+            completedAchievements={completedAchievements}
           />
           <LevelSelector
             level={godPreviewLevel ?? 1}
@@ -885,25 +906,33 @@ function DraftScreen({
 function RosterScreen({
   accountControl,
   onBack,
+  completedAchievements,
 }: {
   accountControl: ReactNode;
   onBack: () => void;
+  completedAchievements: AchievementProgress["completed"];
 }) {
   const [inspected, setInspected] = useState<GodId>(GODS[0].id);
   const [previewLevel, setPreviewLevel] = useState(1);
   const [favorites, setFavorites] = useState<GodSkinSelections>(loadFavoriteGodSkins);
   const [selectedSkinId, setSelectedSkinId] = useState<GodSkinId>(() =>
-    favoriteGodSkin(favorites, GODS[0].id)
+    favoriteGodSkin(favorites, GODS[0].id, completedAchievements)
   );
   const currentGod = GOD_BY_ID[inspected];
 
   useEffect(() => {
     setPreviewLevel(1);
-    setSelectedSkinId(favoriteGodSkin(favorites, inspected));
-  }, [inspected]);
+    setSelectedSkinId(
+      favoriteGodSkin(favorites, inspected, completedAchievements),
+    );
+  }, [completedAchievements, favorites, inspected]);
 
   const toggleFavorite = (skinId: GodSkinId) => {
-    if (!isGodSkinUnlocked(inspected, skinId)) return;
+    if (!isGodSkinUnlocked(
+      inspected,
+      skinId,
+      completedAchievements,
+    )) return;
     const next = { ...favorites };
     if (next[inspected] === skinId) delete next[inspected];
     else next[inspected] = skinId;
@@ -943,7 +972,11 @@ function RosterScreen({
             >
               <GodPortrait
                 godId={god.id}
-                skinId={favoriteGodSkin(favorites, god.id)}
+                skinId={favoriteGodSkin(
+                  favorites,
+                  god.id,
+                  completedAchievements,
+                )}
                 className="god-card-portrait"
               />
               <span className="draft-card-copy">
@@ -973,6 +1006,7 @@ function RosterScreen({
             favoriteSkinId={favorites[currentGod.id]}
             onSelect={setSelectedSkinId}
             onFavorite={toggleFavorite}
+            completedAchievements={completedAchievements}
           />
           <LevelSelector
             level={previewLevel}
@@ -5960,7 +5994,11 @@ export default function App() {
         dispatch({
           type: "draft",
           godId,
-          skinId: favoriteGodSkin(favorites, godId),
+          skinId: favoriteGodSkin(
+            favorites,
+            godId,
+            visibleAchievementProgress.completed,
+          ),
         });
       }
     } finally {
@@ -6914,6 +6952,7 @@ export default function App() {
     return (
       <RosterScreen
         accountControl={renderAccountControl()}
+        completedAchievements={visibleAchievementProgress.completed}
         onBack={() => setStartView("play")}
       />
     );
@@ -7140,6 +7179,7 @@ export default function App() {
       <ThreePlayerGame
         key={`online-three-${threeOnline.roomCode}`}
         initialState={threeOnlineCanonical.state}
+        completedAchievements={visibleAchievementProgress.completed}
         onAchievementTransition={(before, after, action) => {
           const localSeat = threePlayerOnlineLocalSeat(threeOnline);
           recordAchievementTransition({
@@ -7191,6 +7231,7 @@ export default function App() {
       <FourPlayerGame
         key={`online-${fourOnline.roomCode}`}
         initialState={fourOnlineCanonical.state}
+        completedAchievements={visibleAchievementProgress.completed}
         onAchievementTransition={(before, after, action) => {
           const localSeat = fourPlayerOnlineLocalSeat(fourOnline);
           recordAchievementTransition({
@@ -7251,6 +7292,7 @@ export default function App() {
         <FourPlayerGame
           key={fourPlayerSession.key}
           initialState={fourPlayerSession.state}
+          completedAchievements={visibleAchievementProgress.completed}
           onAchievementTransition={(before, after, action) => {
             const localActors = FOUR_PLAYER_SEATS.filter((seat) => {
               const control = before.players[seat].control;
@@ -7303,6 +7345,7 @@ export default function App() {
       <ThreePlayerGame
         key={threePlayerSession.key}
         initialState={threePlayerSession.state}
+        completedAchievements={visibleAchievementProgress.completed}
         onAchievementTransition={(before, after, action) => {
           if (threePlayerPuzzle) return;
           const localActors = (["white", "red", "black"] as const).filter(
@@ -7372,6 +7415,7 @@ export default function App() {
           <DraftScreen
             state={state}
             dispatch={dispatch}
+            completedAchievements={visibleAchievementProgress.completed}
             onQuickDraft={
               state.gameMode === "online" ||
                 state.gameMode === "simulation"

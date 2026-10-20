@@ -34,6 +34,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import type { AchievementId } from "../achievements";
 import { GameResultPresentation } from "../GameResultPresentation";
 import { MatchEscapeMenu } from "../MatchEscapeMenu";
 import { BoardViewport } from "../components/BoardViewport";
@@ -294,6 +295,7 @@ function FourPlayerDraft({
   onQuickDraft,
   canUndo,
   onUndo,
+  completedAchievements,
 }: {
   state: FourPlayerState;
   dispatch: FourPlayerDispatch;
@@ -301,21 +303,32 @@ function FourPlayerDraft({
   onQuickDraft?: () => void;
   canUndo: boolean;
   onUndo: () => void;
+  completedAchievements: Partial<Record<AchievementId, string>>;
 }) {
   const [inspected, setInspected] = useState<GodId>(state.draft.available[0]);
   const [godPreviewLevel, setGodPreviewLevel] = useState<number>();
   const [favorites] = useState<GodSkinSelections>(loadFavoriteGodSkins);
   const [selectedSkinId, setSelectedSkinId] = useState<GodSkinId>(() =>
-    favoriteGodSkin(favorites, state.draft.available[0])
+    favoriteGodSkin(
+      favorites,
+      state.draft.available[0],
+      completedAchievements,
+    )
   );
   const activePlayer = state.players[state.activeSeat];
   const currentGod = GOD_BY_ID[inspected];
-  const selectedSkinUnlocked = isGodSkinUnlocked(inspected, selectedSkinId);
+  const selectedSkinUnlocked = isGodSkinUnlocked(
+    inspected,
+    selectedSkinId,
+    completedAchievements,
+  );
 
   useEffect(() => {
     setGodPreviewLevel(undefined);
-    setSelectedSkinId(favoriteGodSkin(favorites, inspected));
-  }, [inspected]);
+    setSelectedSkinId(
+      favoriteGodSkin(favorites, inspected, completedAchievements),
+    );
+  }, [completedAchievements, favorites, inspected]);
 
   return (
     <main className={`draft-page four-draft-page ${inputDisabled ? "input-locked" : ""}`}>
@@ -351,7 +364,11 @@ function FourPlayerDraft({
                   dispatch({
                     type: "draft",
                     godId,
-                    skinId: favoriteGodSkin(favorites, godId),
+                    skinId: favoriteGodSkin(
+                      favorites,
+                      godId,
+                      completedAchievements,
+                    ),
                   });
                 }
               }}
@@ -391,7 +408,11 @@ function FourPlayerDraft({
             );
             const skinId = owner
               ? draftedGodSkin(state.players[owner].godSkins, god.id)
-              : favoriteGodSkin(favorites, god.id);
+              : favoriteGodSkin(
+                favorites,
+                god.id,
+                completedAchievements,
+              );
             return (
               <button
                 className={`draft-card ${inspected === god.id ? "inspected" : ""} ${owner ? "claimed" : ""}`}
@@ -434,6 +455,7 @@ function FourPlayerDraft({
             godId={currentGod.id}
             selectedSkinId={selectedSkinId}
             onSelect={setSelectedSkinId}
+            completedAchievements={completedAchievements}
           />
           <LevelSelector
             level={godPreviewLevel ?? 1}
@@ -1696,6 +1718,7 @@ export interface FourPlayerGameProps {
     action: FourPlayerAction | undefined,
     source: "human" | "ai" | "online",
   ) => void;
+  completedAchievements?: Partial<Record<AchievementId, string>>;
 }
 
 export function FourPlayerGame({
@@ -1710,6 +1733,7 @@ export function FourPlayerGame({
   onChallengeComplete,
   onlineSession,
   onAchievementTransition,
+  completedAchievements = {},
 }: FourPlayerGameProps) {
   const [state, baseDispatch] = useReducer(
     fourPlayerReducer,
@@ -1964,7 +1988,11 @@ export function FourPlayerGame({
         if (!applyAction({
           type: "draft",
           godId,
-          skinId: favoriteGodSkin(favorites, godId),
+          skinId: favoriteGodSkin(
+            favorites,
+            godId,
+            completedAchievements,
+          ),
         })) break;
       }
     } finally {
@@ -2304,6 +2332,7 @@ export function FourPlayerGame({
           onQuickDraft={onlineSession ? undefined : quickDraft}
           canUndo={canUndo}
           onUndo={applyUndo}
+          completedAchievements={completedAchievements}
         />
         <MatchEscapeMenu
           onOpenRules={() => setRulesOpen(true)}

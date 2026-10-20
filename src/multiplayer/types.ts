@@ -32,7 +32,6 @@ import { GODS } from "../game/gods";
 import type { Color, GameMode, GameState, GodId } from "../game/types";
 import {
   isGodSkinFor,
-  isGodSkinUnlocked,
 } from "../godSkins";
 import {
   isStrictOnlineTwoPlayerGameState,
@@ -302,10 +301,7 @@ const normalizeGameAction = (value: unknown): GameAction | undefined => {
         !isGodId(value.godId) ||
         (
           value.skinId !== undefined &&
-          (
-            !isGodSkinFor(value.godId, value.skinId) ||
-            !isGodSkinUnlocked(value.godId, value.skinId)
-          )
+          !isGodSkinFor(value.godId, value.skinId)
         )
       ) return undefined;
       return {

@@ -20,6 +20,7 @@ import {
   Zap,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { AchievementId } from "../achievements";
 import { GameResultPresentation } from "../GameResultPresentation";
 import { MatchEscapeMenu } from "../MatchEscapeMenu";
 import { BoardViewport } from "../components/BoardViewport";
@@ -280,6 +281,7 @@ function ThreePlayerDraft({
   canUndo,
   onUndo,
   roomCode,
+  completedAchievements,
 }: {
   state: UiState;
   actions: UiAction[];
@@ -290,12 +292,13 @@ function ThreePlayerDraft({
   canUndo: boolean;
   onUndo: () => void;
   roomCode?: string;
+  completedAchievements: Partial<Record<AchievementId, string>>;
 }) {
   const [inspected, setInspected] = useState<GodId>(GODS[0].id);
   const [level, setLevel] = useState(1);
   const [favorites] = useState<GodSkinSelections>(loadFavoriteGodSkins);
   const [selectedSkinId, setSelectedSkinId] = useState<GodSkinId>(() =>
-    favoriteGodSkin(favorites, GODS[0].id)
+    favoriteGodSkin(favorites, GODS[0].id, completedAchievements)
   );
   const pantheonGridRef = useRef<HTMLDivElement>(null);
   const inspectorRef = useRef<HTMLElement>(null);
@@ -307,7 +310,11 @@ function ThreePlayerDraft({
   const activePlayer = state.players[currentSeat];
   const currentGod = GOD_BY_ID[inspected];
   const currentOwner = claimed.get(inspected);
-  const selectedSkinUnlocked = isGodSkinUnlocked(inspected, selectedSkinId);
+  const selectedSkinUnlocked = isGodSkinUnlocked(
+    inspected,
+    selectedSkinId,
+    completedAchievements,
+  );
   const draftAction = actions.find(
     (action) => action.type === "draft" &&
       actionValue<GodId>(action, "godId") === inspected,
@@ -315,8 +322,10 @@ function ThreePlayerDraft({
 
   useEffect(() => {
     setLevel(1);
-    setSelectedSkinId(favoriteGodSkin(favorites, inspected));
-  }, [inspected]);
+    setSelectedSkinId(
+      favoriteGodSkin(favorites, inspected, completedAchievements),
+    );
+  }, [completedAchievements, favorites, inspected]);
 
   useEffect(() => {
     const grid = pantheonGridRef.current;
@@ -420,7 +429,11 @@ function ThreePlayerDraft({
             const owner = claimed.get(god.id);
             const skinId = owner
               ? draftedGodSkin(state.players[owner].godSkins, god.id)
-              : favoriteGodSkin(favorites, god.id);
+              : favoriteGodSkin(
+                favorites,
+                god.id,
+                completedAchievements,
+              );
             return (
               <button
                 type="button"
@@ -474,6 +487,7 @@ function ThreePlayerDraft({
             godId={currentGod.id}
             selectedSkinId={selectedSkinId}
             onSelect={setSelectedSkinId}
+            completedAchievements={completedAchievements}
           />
           <LevelSelector
             level={level}
@@ -965,6 +979,7 @@ export interface ThreePlayerGameProps {
     action: ThreePlayerAction | undefined,
     source: "human" | "ai" | "online",
   ) => void;
+  completedAchievements?: Partial<Record<AchievementId, string>>;
 }
 
 export function ThreePlayerGame({
@@ -983,6 +998,7 @@ export function ThreePlayerGame({
   onChallengeComplete,
   onlineSession,
   onAchievementTransition,
+  completedAchievements = {},
 }: ThreePlayerGameProps) {
   const [state, setState] = useState<UiState>(() => clone(initialState) as UiState);
   const stateRef = useRef(state);
@@ -1227,7 +1243,11 @@ export function ThreePlayerGame({
     setAutoDraftPending(true);
     dispatchAction({
       ...action,
-      skinId: favoriteGodSkin(favorites, action.godId),
+      skinId: favoriteGodSkin(
+        favorites,
+        action.godId,
+        completedAchievements,
+      ),
     });
   };
 
@@ -1255,7 +1275,11 @@ export function ThreePlayerGame({
         if (!action) break;
         dispatchAction({
           ...action,
-          skinId: favoriteGodSkin(favorites, action.godId),
+          skinId: favoriteGodSkin(
+            favorites,
+            action.godId,
+            completedAchievements,
+          ),
         }, "human", true);
       }
     } finally {
@@ -1603,6 +1627,7 @@ export function ThreePlayerGame({
           canUndo={canUndo}
           onUndo={undo}
           roomCode={onlineSession?.roomCode}
+          completedAchievements={completedAchievements}
         />
         <MatchEscapeMenu
           onOpenRules={() => setHelpOpen(true)}
