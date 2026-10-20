@@ -220,6 +220,58 @@ describe("Divine AI", () => {
     expect(state.players.white.upgrades[upgradedAbility]).toBe(priorLevel + 1);
   });
 
+  it("avoids the Queen checkmate threat in the October 19 Daily position", () => {
+    let state = createDailyPuzzleGame("daily-2026-10-19");
+    for (const action of [
+      { type: "select-god", godId: "death" },
+      { type: "select-ability", abilityId: "resurrect" },
+      { type: "grave", pieceId: "black-queen-3" },
+      { type: "square", square: "e6" },
+      { type: "select-god", godId: "artemis" },
+      { type: "select-ability", abilityId: "take-cover" },
+      { type: "square", square: "e1" },
+      { type: "square", square: "d1" },
+      { type: "select-god", godId: "ares" },
+      { type: "select-ability", abilityId: "threaten" },
+      { type: "square", square: "e6" },
+      { type: "square", square: "d6" },
+      { type: "upgrade", abilityId: "charge" },
+      { type: "upgrade", abilityId: "air-strike" },
+      { type: "select-god", godId: "artemis" },
+      { type: "select-ability", abilityId: "take-cover" },
+      { type: "square", square: "g2" },
+      { type: "square", square: "g3" },
+      { type: "select-god", godId: "ares" },
+      { type: "select-ability", abilityId: "cull-the-weak" },
+      { type: "square", square: "d6" },
+      { type: "square", square: "f4" },
+      { type: "square", square: "g3" },
+    ] as const) {
+      state = gameReducer(state, action);
+    }
+
+    expect(state.activeColor).toBe("white");
+    expect(kingSquare(state.board, "white")).toBe("d1");
+
+    const defense = chooseAiPlan(state, () => 0);
+    const defended = defense.reduce(gameReducer, state);
+    const blackPlans = enumerateTurnPlans(defended, "black");
+    const immediateBlackMate = blackPlans.some(
+      (plan) => {
+        const result = plan.actions.reduce(gameReducer, defended);
+        return result.phase === "gameover" && result.winner === "black";
+      },
+    );
+
+    expect(immediateBlackMate).toBe(false);
+    expect(defense).not.toEqual([
+      { type: "select-god", godId: "medusa" },
+      { type: "select-ability", abilityId: "captivate" },
+      { type: "square", square: "a8" },
+      { type: "square", square: "a4" },
+    ]);
+  });
+
   it("confirms an instant ability after its affected pieces are previewed", () => {
     let state = createGame(2, { mode: "ai", aiDifficulty: 10 });
     state.phase = "play";

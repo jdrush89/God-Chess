@@ -53,6 +53,7 @@ import {
 import {
   availableThreePlayerActions,
   canStartThreePlayerMoveFirst,
+  hasCommittedThreePlayerAction,
   threePlayerAbilityMoveSources,
   threePlayerMoveFirstCandidates,
   threePlayerMoveFirstSources,
@@ -1510,7 +1511,25 @@ export function ThreePlayerGame({
     });
   };
 
+  const canCancelDivineSelection =
+    !inputDisabled &&
+    state.phase === "play" &&
+    Boolean(state.selectedGod) &&
+    !hasCommittedThreePlayerAction(state as ThreePlayerState);
+
   const undo = () => {
+    const current = stateRef.current;
+    if (
+      !inputDisabled &&
+      current.phase === "play" &&
+      current.selectedGod &&
+      !hasCommittedThreePlayerAction(current as ThreePlayerState)
+    ) {
+      setLocalSelectedCell(undefined);
+      setMoveFirstDraft(undefined);
+      dispatchAction({ type: "clear-god" });
+      return;
+    }
     if (onlineSession) {
       if (
         onlineSession.undoAvailable &&
@@ -1522,7 +1541,6 @@ export function ThreePlayerGame({
       return;
     }
     if ((!undoEnabled && !puzzle) || !isStableState(stateRef.current)) return;
-    const current = stateRef.current;
     const snapshot = undoStack.current.pop();
     if (!snapshot) return;
     chainStart.current = undefined;
@@ -1561,15 +1579,16 @@ export function ThreePlayerGame({
   };
 
   const canUndo = puzzle
-    ? undoDepth > 0 && isStableState(state)
+    ? canCancelDivineSelection || (undoDepth > 0 && isStableState(state))
     : onlineSession
-    ? (
+    ? canCancelDivineSelection || (
       onlineSession.undoAvailable &&
       onlineSession.status !== "paused" &&
       !onlineSession.awaitingSync &&
       !onlineSession.undoProposal
     )
-    : undoEnabled && undoDepth > 0 && isStableState(state);
+    : canCancelDivineSelection ||
+      (undoEnabled && undoDepth > 0 && isStableState(state));
 
   if (state.phase === "draft") {
     return (

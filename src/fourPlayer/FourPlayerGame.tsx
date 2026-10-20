@@ -1977,17 +1977,36 @@ export function FourPlayerGame({
     !animating &&
     !aiWorking &&
     aiPlan.current.length === 0;
-  const canUndo = onlineSession
+  const canCancelDivineSelection =
+    state.phase === "play" &&
+    Boolean(state.selectedGod) &&
+    !hasCommittedFourPlayerAction(state) &&
+    (
+      onlineSession
+        ? onlineSession.status === "playing" &&
+          !onlineSession.awaitingSync &&
+          Boolean(onlineSession.participantSeat) &&
+          state.activeSeat === onlineSession.participantSeat
+        : !animating &&
+          !aiWorking &&
+          state.players[state.activeSeat].control.kind === "human"
+    );
+  const canUndoCompletedAction = onlineSession
     ? onlineSession.undoAvailable &&
       !onlineSession.awaitingSync &&
       onlineSession.status !== "paused"
     : undoPreferred && undoDepth > 0 && undoStable;
+  const canUndo = canCancelDivineSelection || canUndoCompletedAction;
   const applyUndo = () => {
-    if (onlineSession) {
-      if (canUndo) onlineSession.onUndo();
+    if (canCancelDivineSelection) {
+      humanDispatch({ type: "clear-god" });
       return;
     }
-    if (!canUndo) return;
+    if (onlineSession) {
+      if (canUndoCompletedAction) onlineSession.onUndo();
+      return;
+    }
+    if (!canUndoCompletedAction) return;
     const current = stateRef.current;
     let restored = undoStack.current.pop();
     if (!restored) return;
@@ -2409,7 +2428,11 @@ export function FourPlayerGame({
           <button
             onClick={applyUndo}
             disabled={!canUndo}
-            title={undoPreferred ? "Undo the latest stable Human turn and AI chain" : "Enable undo in Settings"}
+            title={canCancelDivineSelection
+              ? "Return to God selection"
+              : undoPreferred
+                ? "Undo the latest stable Human turn and AI chain"
+                : "Enable undo in Settings"}
           >
             <Undo2 size={18} /><span>Undo</span>
           </button>

@@ -18,7 +18,12 @@ import {
   squareAt,
   squareColor,
 } from "./chess";
-import { abilityLevel, GOD_BY_ID, GODS } from "./gods";
+import {
+  abilityLevel,
+  canUsePickAFightDestination,
+  GOD_BY_ID,
+  GODS,
+} from "./gods";
 import { hasCompleteTurn } from "./completeTurnSearch";
 import { isClassicDeadPosition } from "./deadPosition";
 import { qualifyingSnake } from "./slither";
@@ -1386,8 +1391,6 @@ const sourceTargets = (state: GameState, square: Square) => {
     }));
   }
   if (abilityId === "pick-a-fight") {
-    const eligible = level >= 3 || piece.type === "knight" || piece.type === "bishop";
-    if (!eligible) return [];
     return constrainLure(allSquares.filter((target) => {
       if (state.board[target]) return false;
       const simulated = { ...state.board, [target]: piece };
@@ -1404,7 +1407,12 @@ const sourceTargets = (state: GameState, square: Square) => {
         target,
         state.bananas,
       ).length >= 2;
-      return attacked || (level >= 2 && attacksTwo);
+      return canUsePickAFightDestination(
+        level,
+        piece.type,
+        attacked,
+        attacksTwo,
+      );
     }));
   }
   if (abilityId === "enchant") {

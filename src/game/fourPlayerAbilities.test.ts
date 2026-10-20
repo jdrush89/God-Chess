@@ -766,6 +766,20 @@ describe("four-player ability safety regressions", () => {
     })).toEqual(state);
   };
 
+  it("clears an uncommitted paid ability when returning to God selection", () => {
+    let state = gameFor("ares", 3);
+    const initialLightOrbs = state.players.north.orbs.light;
+    state = activate(state, "ares", "pick-a-fight");
+    expect(state.players.north.orbs.light).toBe(initialLightOrbs - 2);
+
+    state = fourPlayerReducer(state, { type: "clear-god" });
+
+    expect(state.selectedGod).toBeUndefined();
+    expect(state.selectedAbility).toBeUndefined();
+    expect(state.pending).toBeUndefined();
+    expect(state.players.north.orbs.light).toBe(initialLightOrbs);
+  });
+
   it("locks cancellation and ability switching after irreversible pending progress", () => {
     let state = gameFor("death");
     state.board.g8 = piece(state, "rook", "north", "siphon");

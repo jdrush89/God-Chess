@@ -57,7 +57,12 @@ import {
   type ThreePlayerSeat,
   type ThreePlayerState,
 } from "./threePlayerTypes";
-import { abilityLevel, GOD_BY_ID, GODS } from "./gods";
+import {
+  abilityLevel,
+  canUsePickAFightDestination,
+  GOD_BY_ID,
+  GODS,
+} from "./gods";
 import { hasCompleteTurn } from "./completeTurnSearch";
 import { qualifyingSnake } from "./slither";
 import type { GodId, PieceType } from "./types";
@@ -1572,7 +1577,6 @@ const sourceTargets = (state: ThreePlayerState, cell: string): string[] => {
     );
   }
   if (abilityId === "pick-a-fight") {
-    if (level < 3 && !["knight", "bishop"].includes(piece.type)) return [];
     return constrainLure(
       state,
       cell,
@@ -1595,7 +1599,12 @@ const sourceTargets = (state: ThreePlayerState, cell: string): string[] => {
           ).filter((candidate) =>
             hostilePiece(state, simulated.board[candidate])
           ).length >= 2;
-          return attacked || (level >= 2 && attacksTwo);
+          return canUsePickAFightDestination(
+            level,
+            piece.type,
+            attacked,
+            attacksTwo,
+          );
         }),
       ),
     );
@@ -4443,8 +4452,14 @@ export const threePlayerReducer = (
     if (action.type === "select-god" && !hasCommittedThreePlayerAction(next)) {
       selectGod(next, action.godId);
     }
-    else if (action.type === "clear-god" && !next.selectedAbility) {
+    else if (
+      action.type === "clear-god" &&
+      next.selectedGod &&
+      !hasCommittedThreePlayerAction(next)
+    ) {
+      clearSelection(next);
       next.selectedGod = undefined;
+      next.notice = `${name(next, next.activeSeat)} to act. Choose a God.`;
     } else if (
       action.type === "select-ability" &&
       !hasCommittedThreePlayerAction(next)
