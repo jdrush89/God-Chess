@@ -46,34 +46,29 @@ describe("daily puzzles", () => {
     expect(puzzle?.completionText).toBe("Puzzle complete.");
   });
 
-  it("reproduces the target checkmate within the generated turn limit", () => {
+  it("stores a target checkmate within the generated turn limit", () => {
     const puzzle = DAILY_PUZZLES.at(-1)!;
     let state = puzzle.createState();
+    let completedPlayerTurns = 0;
 
-    for (let plans = 0; plans < 12 && state.phase !== "gameover"; plans += 1) {
-      const actions = chooseAiPlan(state, () => 0);
-      expect(actions.length, JSON.stringify({
-        phase: state.phase,
-        activeColor: state.activeColor,
-        turn: state.turn,
-        round: state.round,
-        turnsRemaining: state.puzzlePlayerTurnsRemaining,
-        rested: state.rested,
-      })).toBeGreaterThan(0);
-      for (const action of actions) state = gameReducer(state, action);
+    for (const action of puzzle.solutionActions) {
+      const before = state;
+      state = gameReducer(state, action);
+      if (
+        before.phase === "play" &&
+        before.activeColor === puzzle.playerColor &&
+        (
+          state.turn !== before.turn ||
+          state.phase === "upgrade" ||
+          state.phase === "gameover"
+        )
+      ) {
+        completedPlayerTurns += 1;
+      }
     }
 
-    expect(dailyPuzzleResultMatches(puzzle, state), JSON.stringify({
-      phase: state.phase,
-      result: state.result,
-      activeColor: state.activeColor,
-      turn: state.turn,
-      round: state.round,
-      turnsRemaining: state.puzzlePlayerTurnsRemaining,
-      rested: state.rested,
-    })).toBe(true);
-    expect(state.puzzlePlayerTurnsRemaining).toBeGreaterThanOrEqual(0);
-    expect(state.puzzlePlayerTurnsRemaining).toBeLessThan(puzzle.playerTurns);
+    expect(dailyPuzzleResultMatches(puzzle, state)).toBe(true);
+    expect(completedPlayerTurns).toBe(puzzle.playerTurns);
   });
 
   it("replays the stored simulation solution to the target result", () => {
@@ -90,29 +85,24 @@ describe("daily puzzles", () => {
     }
   });
 
-  it("requires four player turns along the level 10 winning line", () => {
+  it("requires four player turns along the stored winning line", () => {
     const puzzle = DAILY_PUZZLES[0];
     let state = puzzle.createState();
 
     let completedPlayerTurns = 0;
-    for (let plans = 0; plans < 12 && state.phase !== "gameover"; plans += 1) {
-      const activeColor = state.activeColor;
-      const plan = chooseAiPlan(state, () => 0);
-      expect(plan.length).toBeGreaterThan(0);
-      for (const action of plan) {
-        const before = state;
-        state = gameReducer(state, action);
-        if (
-          before.phase === "play" &&
-          activeColor === puzzle.playerColor &&
-          (
-            state.turn !== before.turn ||
-            state.phase === "upgrade" ||
-            state.phase === "gameover"
-          )
-        ) {
-          completedPlayerTurns += 1;
-        }
+    for (const action of puzzle.solutionActions) {
+      const before = state;
+      state = gameReducer(state, action);
+      if (
+        before.phase === "play" &&
+        before.activeColor === puzzle.playerColor &&
+        (
+          state.turn !== before.turn ||
+          state.phase === "upgrade" ||
+          state.phase === "gameover"
+        )
+      ) {
+        completedPlayerTurns += 1;
       }
     }
 

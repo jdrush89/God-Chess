@@ -453,7 +453,10 @@ const bestOptimalPlan = (
     state.aiDifficulty >= 8 &&
       (
         state.gameMode === "simulation" ||
-        state.puzzleId?.startsWith("daily-")
+        (
+          state.puzzleId?.startsWith("daily-") &&
+          state.activeColor === state.aiColor
+        )
       )
     ? bestImmediateMateAvoidance(state, color, plans)
     : undefined;
