@@ -102,7 +102,9 @@ describe("account modal", () => {
     expect(searchButton.classList.contains("friend-search-button")).toBe(true);
     fireEvent.click(searchButton);
     expect(await screen.findByText("gc-ares3344")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
+    const addButton = screen.getByRole("button", { name: /^add$/i });
+    expect(addButton.classList.contains("friend-add-button")).toBe(true);
+    fireEvent.click(addButton);
     await waitFor(() =>
       expect(contract.sendFriendRequest).toHaveBeenCalledWith("gc-ares3344")
     );

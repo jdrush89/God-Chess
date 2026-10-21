@@ -35,4 +35,10 @@ describe("social schema privacy contract", () => {
       "alter publication supabase_realtime add table public.game_invitations",
     );
   });
+
+  it("does not shadow PostgreSQL's current_user identifier in UUID comparisons", () => {
+    expect(socialSchema).not.toContain("current_user uuid := auth.uid()");
+    expect(socialSchema.match(/current_user_id uuid := auth\.uid\(\)/g))
+      .toHaveLength(2);
+  });
 });

@@ -346,11 +346,11 @@ security definer
 set search_path = public
 as $$
 declare
-  current_user uuid := auth.uid();
+  current_user_id uuid := auth.uid();
   target_user uuid;
   existing_request public.friend_requests%rowtype;
 begin
-  if current_user is null then
+  if current_user_id is null then
     raise exception 'Authentication required';
   end if;
   select id into target_user
@@ -359,14 +359,14 @@ begin
   if target_user is null then
     raise exception 'Player not found';
   end if;
-  if target_user = current_user then
+  if target_user = current_user_id then
     raise exception 'You cannot add yourself';
   end if;
 
   select * into existing_request
   from public.friend_requests
-  where (requester_id = current_user and recipient_id = target_user)
-     or (requester_id = target_user and recipient_id = current_user)
+  where (requester_id = current_user_id and recipient_id = target_user)
+     or (requester_id = target_user and recipient_id = current_user_id)
   for update;
 
   if found and existing_request.status = 'accepted' then
@@ -382,7 +382,7 @@ begin
   end if;
 
   insert into public.friend_requests(requester_id, recipient_id)
-  values (current_user, target_user);
+  values (current_user_id, target_user);
 end;
 $$;
 
@@ -470,7 +470,7 @@ security definer
 set search_path = public
 as $$
 declare
-  current_user uuid := auth.uid();
+  current_user_id uuid := auth.uid();
   target_user uuid;
   normalized_code text := upper(btrim(invite_room_code));
   normalized_expiry timestamptz := coalesce(
@@ -479,16 +479,16 @@ declare
   );
   invitation_id uuid;
 begin
-  if current_user is null then
+  if current_user_id is null then
     raise exception 'Authentication required';
   end if;
   select id into target_user
   from public.profiles
   where public_id = public.normalize_public_id(target_public_id);
-  if target_user is null or target_user = current_user then
+  if target_user is null or target_user = current_user_id then
     raise exception 'Invalid invitation recipient';
   end if;
-  if not public.are_friends(current_user, target_user) then
+  if not public.are_friends(current_user_id, target_user) then
     raise exception 'Only accepted friends can be invited';
   end if;
   if normalized_code !~ '^[A-Z2-9]{5}$' then
@@ -511,7 +511,7 @@ begin
 
   if exists (
     select 1 from public.game_invitations
-    where sender_id = current_user
+    where sender_id = current_user_id
       and recipient_id = target_user
       and variant = invite_variant
       and room_code = normalized_code
@@ -530,7 +530,7 @@ begin
     expires_at
   )
   values (
-    current_user,
+    current_user_id,
     target_user,
     invite_variant,
     invite_player_count,

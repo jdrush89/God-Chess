@@ -206,7 +206,7 @@ function FriendsView({
                 <span>{result.publicId}</span>
               </div>
               <button
-                className="secondary-button compact-button"
+                className="secondary-button compact-button friend-add-button"
                 disabled={pendingIds.has(result.publicId)}
                 onClick={() => void run(async () => {
                   await social.sendFriendRequest(result.publicId);
