@@ -6,6 +6,7 @@ export type StartView =
   | "menu"
   | "roster"
   | "achievements"
+  | "stats"
   | "play"
   | "load"
   | "setup"
@@ -82,6 +83,7 @@ export const appRouteFromPath = (pathname: string): AppNavigationRoute => {
     play: "play",
     roster: "roster",
     achievements: "achievements",
+    stats: "stats",
     load: "load",
     tutorial: "tutorial",
   };
@@ -101,6 +103,8 @@ export const appPathForRoute = (route: AppNavigationRoute) => {
       return "/roster";
     case "achievements":
       return "/achievements";
+    case "stats":
+      return "/stats";
     case "load":
       return "/load";
     case "tutorial":

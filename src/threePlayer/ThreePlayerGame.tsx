@@ -42,6 +42,7 @@ import {
   recordActionTransition,
   recordDiagnostic,
 } from "../diagnostics";
+import { applyMatchStatisticsTransition } from "../matchStatistics";
 import {
   chooseThreePlayerAiPlan,
   isThreePlayerAiTurn,
@@ -979,6 +980,7 @@ export interface ThreePlayerGameProps {
     action: ThreePlayerAction | undefined,
     source: "human" | "ai" | "online",
   ) => void;
+  onStatisticsChange?: (state: ThreePlayerState) => void;
   completedAchievements?: Partial<Record<AchievementId, string>>;
 }
 
@@ -998,11 +1000,15 @@ export function ThreePlayerGame({
   onChallengeComplete,
   onlineSession,
   onAchievementTransition,
+  onStatisticsChange,
   completedAchievements = {},
 }: ThreePlayerGameProps) {
   const [state, setState] = useState<UiState>(() => clone(initialState) as UiState);
   const stateRef = useRef(state);
   stateRef.current = state;
+  useEffect(() => {
+    onStatisticsChange?.(state as ThreePlayerState);
+  }, [onStatisticsChange, state]);
   const [localSelectedCell, setLocalSelectedCell] = useState<ThreePlayerCell>();
   const [moveFirstDraft, setMoveFirstDraft] = useState<MoveFirstDraft>();
   const [inspectedCell, setInspectedCell] = useState<ThreePlayerCell>();
@@ -1176,8 +1182,12 @@ export function ThreePlayerGame({
     if (source === "human" && isStableState(current) && !chainStart.current) {
       chainStart.current = clone(current);
     }
-    const next = threePlayerReducer(
+    const next = applyMatchStatisticsTransition(
       current as ThreePlayerState,
+      threePlayerReducer(
+        current as ThreePlayerState,
+        action as ThreePlayerAction,
+      ),
       action as ThreePlayerAction,
     ) as UiState;
     onAchievementTransition?.(

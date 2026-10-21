@@ -7,6 +7,7 @@ import type {
   Square,
 } from "./types";
 import type { GodSkinId, GodSkinSelections } from "../godSkins";
+import type { MatchStatisticsState } from "../matchStatistics";
 
 export const FOUR_PLAYER_SEATS = ["north", "east", "south", "west"] as const;
 export type Seat = (typeof FOUR_PLAYER_SEATS)[number];
@@ -203,6 +204,7 @@ export interface FourPlayerState {
   history: string[];
   lastAction?: string;
   notice: string;
+  matchStats?: MatchStatisticsState;
 }
 
 export interface FourPlayerMove {

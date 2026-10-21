@@ -40,6 +40,7 @@ import type {
   PieceType,
   Square,
 } from "./types";
+import { createMatchStatisticsState } from "../matchStatistics";
 import { opposite } from "./types";
 import {
   isGodSkinFor,
@@ -258,6 +259,7 @@ export const createGame = (
   captureAnimations: [],
   nextCaptureAnimationId: 1,
   nextPresentationId: 1,
+  matchStats: createMatchStatisticsState(),
   history: [
     gameMode === "simulation"
       ? "Hidden CPU simulation started."

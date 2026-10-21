@@ -42,6 +42,7 @@ import {
   type OrbAffinity,
   type Seat,
 } from "./fourPlayerTypes";
+import { createMatchStatisticsState } from "../matchStatistics";
 import {
   isGodSkinFor,
   type GodSkinId,
@@ -770,6 +771,7 @@ export const createFourPlayerGame = (
     legalSeats: [],
     bananas: [],
     stealth: { north: [], east: [], south: [], west: [] },
+    matchStats: createMatchStatisticsState(),
     history: [],
     notice: `${name(turnOrder[0])} drafts first. Choose a God.`,
   };

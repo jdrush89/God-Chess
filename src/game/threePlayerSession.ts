@@ -22,6 +22,7 @@ import type { GodId } from "./types";
 import {
   isGodSkinFor,
 } from "../godSkins";
+import { applyMatchStatisticsTransition } from "../matchStatistics";
 
 export interface ThreePlayerActionEnvelope {
   revision: number;
@@ -376,7 +377,11 @@ export const applyAuthorizedThreePlayerAction = (
       "Three-player action is not authorized for this participant and seat.",
     );
   }
-  const next = threePlayerReducer(state, envelope.action);
+  const next = applyMatchStatisticsTransition(
+    state,
+    threePlayerReducer(state, envelope.action),
+    envelope.action,
+  );
   return {
     revision: next.revision,
     lastActionId: envelope.actionId,

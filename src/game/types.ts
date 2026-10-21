@@ -1,4 +1,5 @@
 export type Color = "white" | "black";
+import type { MatchStatisticsState } from "../matchStatistics";
 export type GameMode = "local" | "ai" | "online" | "puzzle" | "simulation";
 export type ChallengeId =
   | "phalanx"
@@ -305,6 +306,7 @@ export interface GameState {
   history: string[];
   lastAction?: string;
   notice: string;
+  matchStats?: MatchStatisticsState;
 }
 
 export interface Move {

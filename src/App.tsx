@@ -12,6 +12,7 @@ import {
   ArrowLeft,
   Bot,
   BookOpen,
+  ChartNoAxesColumnIncreasing,
   Check,
   ChevronRight,
   Copy,
@@ -154,6 +155,10 @@ import {
   upsertCloudAchievementProgress,
 } from "./account/cloudAchievementProgress";
 import {
+  loadCloudPlayerStatistics,
+  upsertCloudPlayerStatistics,
+} from "./account/cloudPlayerStatistics";
+import {
   completedAchievementIds,
   loadLocalAchievementProgress,
   mergeNormalizedAchievementProgress,
@@ -170,6 +175,17 @@ import {
   type AchievementProgress,
   type AchievementTransition,
 } from "./achievements";
+import {
+  createPlayerStatisticsProgress,
+  createPlayerStatisticsSnapshot,
+  loadLocalPlayerStatistics,
+  mergePlayerStatisticsProgress,
+  persistLocalPlayerStatistics,
+  updatePlayerMatchStatistics,
+  type PlayerStatisticsProgress,
+  type PlayerStatisticsSnapshot,
+  type StatisticsBoard,
+} from "./playerStatistics";
 import {
   onlinePlayerColor,
   onlineTurnInputDisabled,
@@ -216,6 +232,7 @@ import {
   recordActionTransition,
   recordDiagnostic,
 } from "./diagnostics";
+import { applyMatchStatisticsTransition } from "./matchStatistics";
 import {
   createSavedGame,
   loadLocalSavedGames,
@@ -2448,6 +2465,7 @@ function PlayMenu({
   onOpenTutorial,
   onOpenRoster,
   onOpenAchievements,
+  onOpenStats,
   onOpenLoad,
 }: {
   savedGames: SavedGame[];
@@ -2462,6 +2480,7 @@ function PlayMenu({
   onOpenTutorial: () => void;
   onOpenRoster: () => void;
   onOpenAchievements: () => void;
+  onOpenStats: () => void;
   onOpenLoad: () => void;
 }) {
   const loadDescription = savesLoading
@@ -2505,6 +2524,10 @@ function PlayMenu({
           <Trophy size={30} />
           <strong>Achievements</strong>
         </button>
+        <button onClick={onOpenStats}>
+          <ChartNoAxesColumnIncreasing size={30} />
+          <strong>Stats</strong>
+        </button>
         <button
           onClick={onOpenLoad}
           disabled={savesLoading || savedGames.length === 0}
@@ -2519,6 +2542,210 @@ function PlayMenu({
         {loadDescription}
       </p>
       {saveError && <p className="main-menu-error" role="alert">{saveError}</p>}
+    </SetupNavigationShell>
+  );
+}
+
+const STATISTICS_BOARD_LABELS: Record<StatisticsBoard, string> = {
+  classic: "Classic",
+  "three-player": "Yalta",
+  "three-hexagonal": "Three Hexagonal",
+  triad: "Triad",
+  "three-circular": "Circular",
+  "three-half": "Three Half",
+  "four-player-ffa": "Four-player free-for-all",
+  "four-player-teams": "Four-player teams",
+};
+
+const statistic = (
+  label: string,
+  value: number,
+  Icon: LucideIcon,
+) => (
+  <article className="stat-summary-card" key={label}>
+    <span><Icon size={20} /></span>
+    <div>
+      <strong>{value.toLocaleString()}</strong>
+      <p>{label}</p>
+    </div>
+  </article>
+);
+
+function StatisticsScreen({
+  statistics,
+  account,
+  accountControl,
+  loading,
+  error,
+  onDismissError,
+  onBack,
+}: {
+  statistics: PlayerStatisticsSnapshot;
+  account?: AccountProfile;
+  accountControl: ReactNode;
+  loading: boolean;
+  error?: string;
+  onDismissError: () => void;
+  onBack: () => void;
+}) {
+  const gods = GODS
+    .map((god) => ({
+      ...god,
+      uses: statistics.godsUsed[god.id] ?? 0,
+    }))
+    .sort((first, second) =>
+      second.uses - first.uses || first.name.localeCompare(second.name)
+    );
+  return (
+    <SetupNavigationShell
+      backLabel="Back to Play"
+      onBack={onBack}
+      headerAction={accountControl}
+    >
+      <section className="statistics-page">
+        <header className="statistics-heading">
+          <div>
+            <p className="eyebrow">PLAYER STATS</p>
+            <h1>Your divine record</h1>
+            <p>
+              {account
+                ? "Statistics are synced to your account."
+                : "Statistics are saved on this device until you sign in."}
+            </p>
+          </div>
+          <div className="statistics-record">
+            <strong>{statistics.gamesWon.toLocaleString()}</strong>
+            <span>wins from {statistics.gamesPlayed.toLocaleString()} games</span>
+          </div>
+        </header>
+        {error && (
+          <div className="save-error-banner statistics-error" role="alert">
+            <span>{error}</span>
+            <button onClick={onDismissError} aria-label="Dismiss statistics error">
+              <X size={15} />
+            </button>
+          </div>
+        )}
+        {loading ? (
+          <div className="achievements-loading">
+            <LoaderCircle className="spin" size={24} />
+            <span>Restoring player statistics</span>
+          </div>
+        ) : (
+          <>
+            <div className="stat-summary-grid">
+              {statistic("Games played", statistics.gamesPlayed, Swords)}
+              {statistic("Games won", statistics.gamesWon, Trophy)}
+              {statistic("Stalemates", statistics.stalemates, Shield)}
+              {statistic(
+                "White / Light orbs gained",
+                statistics.lightOrbsGained,
+                Sparkles,
+              )}
+              {statistic(
+                "Black / Dark orbs gained",
+                statistics.darkOrbsGained,
+                Coins,
+              )}
+              {statistic(
+                "Pieces captured",
+                statistics.piecesCaptured,
+                Crosshair,
+              )}
+              {statistic("Pieces lost", statistics.piecesLost, Skull)}
+              {statistic(
+                "God abilities used",
+                statistics.abilitiesUsed,
+                Zap,
+              )}
+              {statistic(
+                "Daily puzzles completed",
+                statistics.dailyPuzzlesCompleted,
+                Flame,
+              )}
+              {statistic(
+                "Total puzzles completed",
+                statistics.totalPuzzlesCompleted,
+                Check,
+              )}
+            </div>
+            <div className="statistics-sections">
+              <section className="statistics-panel">
+                <div className="statistics-panel-heading">
+                  <div>
+                    <p className="eyebrow">BATTLEFIELDS</p>
+                    <h2>Boards played</h2>
+                  </div>
+                  <span>{statistics.gamesPlayed.toLocaleString()} total</span>
+                </div>
+                <div className="board-stat-list">
+                  {Object.entries(STATISTICS_BOARD_LABELS).map(
+                    ([board, label]) => {
+                      const value =
+                        statistics.boardsPlayed[board as StatisticsBoard];
+                      const percentage = statistics.gamesPlayed > 0
+                        ? Math.round((value / statistics.gamesPlayed) * 100)
+                        : 0;
+                      return (
+                        <div className="board-stat-row" key={board}>
+                          <div>
+                            <strong>{label}</strong>
+                            <span>{value.toLocaleString()} played</span>
+                          </div>
+                          <div className="statistics-meter" aria-hidden="true">
+                            <i style={{ width: `${percentage}%` }} />
+                          </div>
+                          <b>{percentage}%</b>
+                        </div>
+                      );
+                    },
+                  )}
+                </div>
+              </section>
+              <section className="statistics-panel">
+                <div className="statistics-panel-heading">
+                  <div>
+                    <p className="eyebrow">PANTHEON</p>
+                    <h2>God pick rate</h2>
+                  </div>
+                  <span>
+                    {statistics.godPickDenominator.toLocaleString()} selections
+                  </span>
+                </div>
+                <p className="statistics-definition">
+                  Pick rate is each God&apos;s share of all God selections made
+                  by locally controlled seats in tracked matches.
+                </p>
+                <div className="god-stat-grid">
+                  {gods.map((god) => {
+                    const percentage = statistics.godPickDenominator > 0
+                      ? (god.uses / statistics.godPickDenominator) * 100
+                      : 0;
+                    return (
+                      <article className="god-stat-card" key={god.id}>
+                        <GodPortrait godId={god.id} alt="" />
+                        <div>
+                          <strong>{god.name}</strong>
+                          <span>
+                            {god.uses.toLocaleString()} pick
+                            {god.uses === 1 ? "" : "s"}
+                          </span>
+                        </div>
+                        <b>{percentage.toFixed(1)}%</b>
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
+            </div>
+            <p className="statistics-footnote">
+              Local hot-seat games include every Human seat controlled on this
+              device. Puzzles, tutorials, challenges, and simulations never
+              contribute to match totals.
+            </p>
+          </>
+        )}
+      </section>
     </SetupNavigationShell>
   );
 }
@@ -4952,6 +5179,13 @@ export default function App() {
     useState<string>();
   const [achievementProgressLoading, setAchievementProgressLoading] =
     useState(false);
+  const [playerStatistics, setPlayerStatistics] = useState(
+    loadLocalPlayerStatistics,
+  );
+  const [playerStatisticsLoadedFor, setPlayerStatisticsLoadedFor] =
+    useState<string>();
+  const [playerStatisticsLoading, setPlayerStatisticsLoading] =
+    useState(false);
   const [accountImportWorking, setAccountImportWorking] = useState(false);
   const [accountImportError, setAccountImportError] = useState<string>();
   const savedGames = accountService.account
@@ -4987,7 +5221,8 @@ export default function App() {
       cloudPuzzleProgress.userId !== accountService.account.userId ||
       cloudDailyPuzzleRatings.userId !== accountService.account.userId ||
       cloudChallengeProgress.userId !== accountService.account.userId ||
-      achievementProgressLoadedFor !== accountService.account.userId
+      achievementProgressLoadedFor !== accountService.account.userId ||
+      playerStatisticsLoadedFor !== accountService.account.userId
     )
   );
   const visibleAchievementProgress =
@@ -4995,6 +5230,18 @@ export default function App() {
       achievementProgressLoadedFor !== accountService.account.userId
       ? createAchievementProgress()
       : achievementProgress;
+  const visiblePlayerStatistics =
+    accountService.account &&
+      playerStatisticsLoadedFor !== accountService.account.userId
+      ? createPlayerStatisticsProgress()
+      : playerStatistics;
+  const playerStatisticsSnapshot = useMemo(
+    () => createPlayerStatisticsSnapshot(
+      visiblePlayerStatistics,
+      completedPuzzleIds,
+    ),
+    [completedPuzzleIds, visiblePlayerStatistics],
+  );
   const completedPuzzleCounts = useMemo(() => {
     const dailyStats = dailyPuzzleCompletionStats(completedPuzzleIds);
     return completedPuzzleIds.reduce(
@@ -5070,6 +5317,11 @@ export default function App() {
   const turnStart = useRef<GameState | undefined>(undefined);
   const cloudSaveQueue = useRef<Promise<void>>(Promise.resolve());
   const cloudAchievementQueue = useRef<Promise<void>>(Promise.resolve());
+  const cloudPlayerStatisticsQueue = useRef<Promise<void>>(Promise.resolve());
+  const playerStatisticsRef = useRef(playerStatistics);
+  playerStatisticsRef.current = playerStatistics;
+  const completedPuzzleIdsRef = useRef(completedPuzzleIds);
+  completedPuzzleIdsRef.current = completedPuzzleIds;
   const restoringNavigation = useRef(false);
   const navigationInitialized = useRef(false);
 
@@ -5284,6 +5536,124 @@ export default function App() {
   useEffect(() => {
     const account = accountService.account;
     if (!account) {
+      setPlayerStatisticsLoadedFor(undefined);
+      setPlayerStatisticsLoading(false);
+      setPlayerStatistics(loadLocalPlayerStatistics());
+      return;
+    }
+    let active = true;
+    setPlayerStatisticsLoadedFor(undefined);
+    setPlayerStatisticsLoading(true);
+    setPlayerStatistics(createPlayerStatisticsProgress());
+    void loadCloudPlayerStatistics(account.userId)
+      .then((progress) => {
+        if (!active) return;
+        setPlayerStatistics(progress);
+        setPlayerStatisticsLoadedFor(account.userId);
+      })
+      .catch((error) => {
+        console.error("Unable to load cloud player statistics.", error);
+        if (active) {
+          setPlayerStatistics(createPlayerStatisticsProgress());
+          setPlayerStatisticsLoadedFor(account.userId);
+          setSaveError(
+            error instanceof Error
+              ? error.message
+              : "Unable to load player statistics.",
+          );
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setPlayerStatisticsLoadedFor(account.userId);
+          setPlayerStatisticsLoading(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [accountService.account?.userId]);
+
+  const savePlayerStatistics = useCallback((
+    update: (
+      current: PlayerStatisticsProgress,
+    ) => PlayerStatisticsProgress,
+  ) => {
+    setPlayerStatistics((current) => {
+      const next = update(current);
+      if (next === current) return current;
+      const account = accountService.account;
+      if (
+        account &&
+        playerStatisticsLoadedFor === account.userId &&
+        !playerStatisticsLoading
+      ) {
+        cloudPlayerStatisticsQueue.current =
+          cloudPlayerStatisticsQueue.current
+            .then(() => upsertCloudPlayerStatistics(
+              account.userId,
+              next,
+              completedPuzzleIdsRef.current,
+            ))
+            .catch((error) => {
+              console.error("Unable to save cloud player statistics.", error);
+              setSaveError(
+                error instanceof Error
+                  ? error.message
+                  : "Unable to save player statistics.",
+              );
+            });
+      } else if (!account) {
+        try {
+          persistLocalPlayerStatistics(next);
+        } catch (error) {
+          console.error("Unable to save local player statistics.", error);
+          setSaveError(
+            error instanceof Error
+              ? error.message
+              : "Unable to save player statistics.",
+          );
+        }
+      }
+      return next;
+    });
+  }, [
+    accountService.account,
+    playerStatisticsLoadedFor,
+    playerStatisticsLoading,
+  ]);
+
+  useEffect(() => {
+    const account = accountService.account;
+    if (
+      !account ||
+      playerStatisticsLoadedFor !== account.userId ||
+      playerStatisticsLoading
+    ) return;
+    cloudPlayerStatisticsQueue.current = cloudPlayerStatisticsQueue.current
+      .then(() => upsertCloudPlayerStatistics(
+        account.userId,
+        playerStatisticsRef.current,
+        completedPuzzleIds,
+      ))
+      .catch((error) => {
+        console.error("Unable to update cloud puzzle statistics.", error);
+        setSaveError(
+          error instanceof Error
+            ? error.message
+            : "Unable to update puzzle statistics.",
+        );
+      });
+  }, [
+    accountService.account,
+    completedPuzzleIds,
+    playerStatisticsLoadedFor,
+    playerStatisticsLoading,
+  ]);
+
+  useEffect(() => {
+    const account = accountService.account;
+    if (!account) {
       setCloudPuzzleProgress({ completed: [] });
       setPuzzleProgressLoading(false);
       return;
@@ -5392,6 +5762,10 @@ export default function App() {
           achievementProgress,
           loadLocalAchievementProgress(),
         );
+        const importedPlayerStatistics = mergePlayerStatisticsProgress(
+          playerStatistics,
+          loadLocalPlayerStatistics(),
+        );
 
         await Promise.all([
           ...importedSaves.map((game) =>
@@ -5406,6 +5780,11 @@ export default function App() {
           upsertCloudAchievementProgress(
             account.userId,
             importedAchievements,
+          ),
+          upsertCloudPlayerStatistics(
+            account.userId,
+            importedPlayerStatistics,
+            importedPuzzles,
           ),
         ]);
 
@@ -5425,6 +5804,8 @@ export default function App() {
         });
         setAchievementProgress(importedAchievements);
         setAchievementProgressLoadedFor(account.userId);
+        setPlayerStatistics(importedPlayerStatistics);
+        setPlayerStatisticsLoadedFor(account.userId);
       }
       await accountService.completeLocalDataImportDecision();
     } catch (error) {
@@ -5446,6 +5827,7 @@ export default function App() {
     cloudDailyPuzzleRatings.ratings,
     cloudPuzzleProgress.completed,
     cloudSavedGames,
+    playerStatistics,
   ]);
 
   const recordChallengeCompletion = useCallback((challengeId: ChallengeId) => {
@@ -5694,6 +6076,21 @@ export default function App() {
     return [current.aiColor === "white" ? "black" : "white"];
   };
 
+  const recordPlayerMatchState = (
+    matchId: string,
+    current: GameState | ThreePlayerState | FourPlayerState,
+    localActors: string[],
+  ) => {
+    savePlayerStatistics((progress) =>
+      updatePlayerMatchStatistics(
+        progress,
+        matchId,
+        current,
+        localActors,
+      )
+    );
+  };
+
   const receiveState = (next: GameState) => {
     stateRef.current = next;
     baseDispatch({ type: "load-game", state: next });
@@ -5733,7 +6130,11 @@ export default function App() {
         structuredClone(action),
       ];
     }
-    const next = gameReducer(current, action);
+    const next = applyMatchStatisticsTransition(
+      current,
+      gameReducer(current, action),
+      action,
+    );
     const completedDefensivePuzzle =
       current.gameMode === "puzzle" &&
       Boolean(current.puzzleEscapeAbilityId) &&
@@ -5870,6 +6271,25 @@ export default function App() {
   });
   const [fourOnline, fourOnlineActions] = useFourPlayerOnlineGame();
   const [threeOnline, threeOnlineActions] = useThreePlayerOnlineGame();
+  useEffect(() => {
+    if (
+      startView !== "none" ||
+      state.gameMode === "puzzle" ||
+      state.gameMode === "simulation" ||
+      state.challengeId
+    ) return;
+    const matchId = activeSaveId.current ??
+      (state.gameMode === "online" && online.roomCode
+        ? `online-classic:${online.roomCode}`
+        : undefined);
+    if (!matchId) return;
+    recordPlayerMatchState(matchId, state, classicLocalActors(state));
+  }, [
+    online.roomCode,
+    savePlayerStatistics,
+    startView,
+    state,
+  ]);
   const threeOnlineActive = threeOnline.connecting ||
     threeOnline.role !== "none" ||
     Boolean(threeOnline.roomCode) ||
@@ -6985,6 +7405,20 @@ export default function App() {
     );
   }
 
+  if (startView === "stats") {
+    return (
+      <StatisticsScreen
+        statistics={playerStatisticsSnapshot}
+        account={accountService.account}
+        accountControl={renderAccountControl()}
+        loading={playerStatisticsLoading}
+        error={saveError}
+        onDismissError={() => setSaveError(undefined)}
+        onBack={() => setStartView("play")}
+      />
+    );
+  }
+
   if (startView === "play") {
     return (
       <PlayMenu
@@ -7003,6 +7437,7 @@ export default function App() {
         onOpenTutorial={() => setStartView("tutorial")}
         onOpenRoster={() => setStartView("roster")}
         onOpenAchievements={() => setStartView("achievements")}
+        onOpenStats={() => setStartView("stats")}
         onOpenLoad={() => setStartView("load")}
       />
     );
@@ -7205,6 +7640,16 @@ export default function App() {
             action,
           });
         }}
+        onStatisticsChange={(current) => {
+          const localSeat = threePlayerOnlineLocalSeat(threeOnline);
+          if (localSeat) {
+            recordPlayerMatchState(
+              `online-three:${threeOnline.roomCode}`,
+              current,
+              [localSeat],
+            );
+          }
+        }}
         onQuit={() => {
           threeOnlineActions.disconnect();
           setStartView("menu");
@@ -7256,6 +7701,16 @@ export default function App() {
             after,
             action,
           });
+        }}
+        onStatisticsChange={(current) => {
+          const localSeat = fourPlayerOnlineLocalSeat(fourOnline);
+          if (localSeat) {
+            recordPlayerMatchState(
+              `online-four:${fourOnline.roomCode}`,
+              current,
+              [localSeat],
+            );
+          }
         }}
         undoPreferred={fourOnline.snapshot.localUndoConsent}
         onUndoPreferenceChange={fourOnlineActions.setUndoConsent}
@@ -7321,6 +7776,19 @@ export default function App() {
               action,
             });
           }}
+          onStatisticsChange={fourPlayerSession.challengeId
+            ? undefined
+            : (current) => {
+              const localActors = FOUR_PLAYER_SEATS.filter((seat) => {
+                const control = current.players[seat].control;
+                return control.kind === "human" && control.local !== false;
+              });
+              recordPlayerMatchState(
+                fourPlayerSession.key,
+                current,
+                localActors,
+              );
+            }}
           initialUndoHistory={fourPlayerSession.undoHistory}
           initialTurnStart={fourPlayerSession.turnStart}
           undoPreferred={undoPreferred}
@@ -7377,6 +7845,21 @@ export default function App() {
             action,
           });
         }}
+        onStatisticsChange={
+          threePlayerPuzzle || threePlayerSession.challengeId
+            ? undefined
+            : (current) => {
+              const localActors = THREE_PLAYER_SEATS.filter((seat) => {
+                const control = current.players[seat].control;
+                return control.kind === "human" && control.local !== false;
+              });
+              recordPlayerMatchState(
+                threePlayerSession.key,
+                current,
+                localActors,
+              );
+            }
+        }
         initialUndoHistory={threePlayerSession.undoHistory}
         initialTurnStart={threePlayerSession.turnStart}
         undoPreferred={undoPreferred}

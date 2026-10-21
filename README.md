@@ -268,9 +268,9 @@ must update this documentation.
 ## Accounts and cloud saves
 
 God Chess supports optional Supabase email/password accounts. Signed-out players
-continue using saves stored only in their browser. Signed-in players use a
-separate set of cloud saves and their account display name is reused for online
-rooms and games against the Divine AI.
+continue using saves and player statistics stored only in their browser.
+Signed-in players use separate cloud saves and synced statistics, and their
+account display name is reused for online rooms and games against the Divine AI.
 
 1. Create a Supabase project.
 2. Open the Supabase SQL editor and run [`supabase/schema.sql`](supabase/schema.sql).
@@ -286,9 +286,11 @@ rooms and games against the Divine AI.
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_PUBLISHABLE_KEY`
 
-Supabase row-level-security policies restrict profiles and saves to their
-authenticated owner. Passwords and sessions are managed by Supabase and are
-never stored in the game database or browser save records.
+Supabase row-level-security policies restrict profiles, saves, and private
+statistics to their authenticated owner. A separate sanitized statistics
+snapshot is maintained for future social visibility without exposing private
+match records or saved-game payloads. Passwords and sessions are managed by
+Supabase and are never stored in the game database or browser save records.
 
 ## Commands
 

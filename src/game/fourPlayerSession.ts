@@ -16,6 +16,7 @@ import type { GodId, Square } from "./types";
 import {
   isGodSkinFor,
 } from "../godSkins";
+import { applyMatchStatisticsTransition } from "../matchStatistics";
 
 export interface FourPlayerActionEnvelope {
   revision: number;
@@ -260,7 +261,11 @@ export const applyAuthorizedFourPlayerAction = (
   return {
     revision: expectedRevision + 1,
     lastActionId: envelope.actionId,
-    state: fourPlayerReducer(state, envelope.action),
+    state: applyMatchStatisticsTransition(
+      state,
+      fourPlayerReducer(state, envelope.action),
+      envelope.action,
+    ),
   } satisfies FourPlayerStateEnvelope;
 };
 

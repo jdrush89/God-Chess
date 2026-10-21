@@ -1197,7 +1197,7 @@ span.move-target-dot {
 }
 .play-menu-heading > p:last-child { margin: 0; color: #85868d; font-size: 11px; line-height: 1.65; }
 .play-menu-grid {
-  width: min(1120px, calc(100% - 32px)); display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+  width: min(1120px, calc(100% - 32px)); display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px; margin: 0 auto;
 }
 .play-menu-grid > button {
@@ -1322,6 +1322,180 @@ span.move-target-dot {
   gap: 10px;
   min-height: 240px;
   color: #9a9ba1;
+}
+.statistics-page {
+  width: min(1180px, calc(100% - 32px));
+  margin: 28px auto 64px;
+}
+.statistics-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+.statistics-heading h1 {
+  margin: 6px 0 8px;
+  font: 600 clamp(28px, 4vw, 48px) "Cinzel";
+}
+.statistics-heading p:last-child,
+.statistics-definition,
+.statistics-footnote {
+  margin: 0;
+  color: #8d8e95;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.statistics-record {
+  flex: none;
+  display: grid;
+  justify-items: end;
+  gap: 3px;
+}
+.statistics-record strong {
+  color: var(--gold-bright);
+  font: 600 clamp(28px, 4vw, 44px) "Cinzel";
+}
+.statistics-record span {
+  color: #8d8e95;
+  font-size: 10px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.statistics-error { margin-bottom: 18px; }
+.stat-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+.stat-summary-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  min-height: 96px;
+  padding: 16px;
+  border: 1px solid #34363d;
+  background: linear-gradient(145deg, rgba(31, 32, 37, .96), rgba(19, 20, 24, .98));
+}
+.stat-summary-card > span {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(198, 161, 91, .45);
+  border-radius: 50%;
+  color: var(--gold-bright);
+}
+.stat-summary-card div { min-width: 0; }
+.stat-summary-card strong {
+  display: block;
+  color: #f2e7c8;
+  font: 600 22px "Cinzel";
+}
+.stat-summary-card p {
+  margin: 4px 0 0;
+  color: #93949a;
+  font-size: 10px;
+  line-height: 1.35;
+}
+.statistics-sections {
+  display: grid;
+  grid-template-columns: minmax(300px, .8fr) minmax(420px, 1.2fr);
+  gap: 14px;
+  margin-top: 14px;
+}
+.statistics-panel {
+  min-width: 0;
+  padding: 22px;
+  border: 1px solid #34363d;
+  background: rgba(16, 18, 23, .88);
+}
+.statistics-panel-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.statistics-panel-heading h2 {
+  margin: 5px 0 0;
+  color: #e9e3d5;
+  font: 600 22px "Cinzel";
+}
+.statistics-panel-heading > span {
+  color: #9b9ca1;
+  font-size: 10px;
+  text-transform: uppercase;
+}
+.board-stat-list { display: grid; gap: 15px; }
+.board-stat-row {
+  display: grid;
+  grid-template-columns: minmax(130px, 1fr) minmax(70px, 1fr) 38px;
+  align-items: center;
+  gap: 12px;
+}
+.board-stat-row > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+.board-stat-row strong { color: #d4d0c7; font-size: 12px; }
+.board-stat-row span { color: #777980; font-size: 10px; }
+.board-stat-row b {
+  color: #c9b888;
+  font-size: 10px;
+  text-align: right;
+}
+.statistics-meter {
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #303239;
+}
+.statistics-meter i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #8d6d32, var(--gold-bright));
+}
+.statistics-definition { margin: -5px 0 16px; }
+.god-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.god-stat-card {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px;
+  border: 1px solid #30323a;
+  background: rgba(28, 30, 36, .72);
+}
+.god-stat-card .god-portrait {
+  width: 42px;
+  height: 42px;
+  object-fit: cover;
+}
+.god-stat-card div { display: grid; gap: 3px; min-width: 0; }
+.god-stat-card strong {
+  overflow: hidden;
+  color: #d8d4ca;
+  font: 600 12px "Cinzel";
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.god-stat-card span { color: #777980; font-size: 9px; }
+.god-stat-card b {
+  color: var(--gold-bright);
+  font: 600 11px "Cinzel";
+}
+.statistics-footnote {
+  max-width: 840px;
+  margin: 18px auto 0;
+  text-align: center;
 }
 .play-load-status {
   min-height: 18px; margin: 16px auto 42px; padding: 0 18px; color: #7c7d83;
@@ -3016,6 +3190,8 @@ span.move-target-dot {
 @media (max-width: 980px) {
   .play-menu-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .achievement-grid { grid-template-columns: 1fr; }
+  .stat-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .statistics-sections { grid-template-columns: 1fr; }
   .four-game-page .header-actions span { display: none; }
   .four-seat-setup-grid { grid-template-columns: 1fr 1fr; }
   .four-online-seats { grid-template-columns: 1fr 1fr; }
@@ -3052,6 +3228,17 @@ span.move-target-dot {
   .achievements-page { width: calc(100% - 24px); margin-top: 20px; }
   .achievements-heading { align-items: start; }
   .achievements-heading > strong { font-size: 16px; }
+  .statistics-page { width: calc(100% - 24px); margin-top: 20px; }
+  .statistics-heading { align-items: start; }
+  .statistics-record { justify-items: start; }
+  .stat-summary-grid { grid-template-columns: 1fr; }
+  .statistics-panel { padding: 18px 14px; }
+  .statistics-panel-heading { align-items: start; }
+  .god-stat-grid { grid-template-columns: 1fr; }
+  .board-stat-row {
+    grid-template-columns: minmax(120px, 1fr) 72px 34px;
+    gap: 8px;
+  }
   .tutorial-highlight { border-radius: 4px; }
   .tutorial-card,
   .tutorial-card.side-left {

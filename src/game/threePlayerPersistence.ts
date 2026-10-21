@@ -581,6 +581,7 @@ const isThreePlayerStateVersion = (value: unknown): boolean => {
         "nextPresentationEventId",
         "result",
         "lastAction",
+        "matchStats",
       ],
     ) ||
     "redAffinity" in value ||
