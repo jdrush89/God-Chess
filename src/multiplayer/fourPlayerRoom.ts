@@ -24,6 +24,7 @@ import {
   type FourPlayerState,
   type Seat,
 } from "../game/fourPlayerTypes";
+import { applyMatchStatisticsTransition } from "../matchStatistics";
 import {
   generateRoomCode,
   NetworkManager,
@@ -534,7 +535,11 @@ export class FourPlayerRoomHost {
   private applyAiAction(action: FourPlayerAction) {
     if (!this.canonical || this.status !== "playing") return false;
     const current = this.canonical.state;
-    const nextState = fourPlayerReducer(current, action);
+    const nextState = applyMatchStatisticsTransition(
+      current,
+      fourPlayerReducer(current, action),
+      action,
+    );
     if (!stateChanged(current, nextState)) return false;
     this.recordBoundary(current, action, nextState);
     const actionId = opaqueId("ai-action");

@@ -30,6 +30,7 @@ import {
   type ThreePlayerSeat,
   type ThreePlayerState,
 } from "../game/threePlayerTypes";
+import { applyMatchStatisticsTransition } from "../matchStatistics";
 import {
   generateRoomCode,
   NetworkManager,
@@ -621,7 +622,11 @@ export class ThreePlayerRoomHost {
     if (!available.some((candidate) =>
       JSON.stringify(candidate) === JSON.stringify(action)
     )) return false;
-    const nextState = threePlayerReducer(current, action);
+    const nextState = applyMatchStatisticsTransition(
+      current,
+      threePlayerReducer(current, action),
+      action,
+    );
     if (!stateChanged(current, nextState)) return false;
     this.beginBoundary(current, "ai");
     this.completeBoundary(nextState);

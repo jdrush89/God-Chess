@@ -56,6 +56,7 @@ import {
   type ThreePlayerSeat,
   type ThreePlayerState,
 } from "./threePlayerTypes";
+import { createMatchStatisticsState } from "../matchStatistics";
 import {
   abilityLevel,
   canUsePickAFightDestination,
@@ -814,6 +815,7 @@ export const createThreePlayerGame = (
     nextOrbEventId: 1,
     presentationEvents: [],
     nextPresentationEventId: 1,
+    matchStats: createMatchStatisticsState(),
     history: [],
     notice: `${config.seats.white.name} drafts first. Choose a God.`,
   };

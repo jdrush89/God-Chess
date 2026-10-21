@@ -6,6 +6,7 @@ import type {
   PieceType,
 } from "./types";
 import type { GodSkinId, GodSkinSelections } from "../godSkins";
+import type { MatchStatisticsState } from "../matchStatistics";
 
 export const THREE_PLAYER_SEATS = ["white", "red", "black"] as const;
 export type ThreePlayerSeat = (typeof THREE_PLAYER_SEATS)[number];
@@ -248,6 +249,7 @@ export interface ThreePlayerState {
   history: string[];
   lastAction?: string;
   notice: string;
+  matchStats?: MatchStatisticsState;
 }
 
 export type ThreePlayerPromotion = Extract<

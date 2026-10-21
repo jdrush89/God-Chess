@@ -33,5 +33,10 @@ describe("app navigation", () => {
       startView: "achievements",
       setupCategory: "local",
     })).toBe("/achievements");
+    expect(appRouteFromPath("/stats").startView).toBe("stats");
+    expect(appPathForRoute({
+      startView: "stats",
+      setupCategory: "local",
+    })).toBe("/stats");
   });
 });

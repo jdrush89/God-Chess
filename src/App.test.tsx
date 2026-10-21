@@ -53,6 +53,8 @@ const cloudProgressHarness = vi.hoisted(() => ({
   upsertChallenges: vi.fn(async () => undefined),
   loadAchievements: vi.fn(),
   upsertAchievements: vi.fn(async () => undefined),
+  loadStatistics: vi.fn(),
+  upsertStatistics: vi.fn(async () => undefined),
 }));
 
 const aiHarness = vi.hoisted(() => ({
@@ -150,6 +152,11 @@ vi.mock("./account/cloudAchievementProgress", () => ({
   upsertCloudAchievementProgress: cloudProgressHarness.upsertAchievements,
 }));
 
+vi.mock("./account/cloudPlayerStatistics", () => ({
+  loadCloudPlayerStatistics: cloudProgressHarness.loadStatistics,
+  upsertCloudPlayerStatistics: cloudProgressHarness.upsertStatistics,
+}));
+
 vi.mock("./game/ai", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./game/ai")>();
   return {
@@ -173,6 +180,13 @@ import App, {
 } from "./App";
 import { persistLocalAchievementProgress } from "./achievementProgress";
 import { createAchievementProgress } from "./achievements";
+import {
+  createPlayerStatisticsProgress,
+  createPlayerStatisticsSnapshot,
+  loadLocalPlayerStatistics,
+  persistLocalPlayerStatistics,
+  updatePlayerMatchStatistics,
+} from "./playerStatistics";
 import { persistLocalCompletedChallenges } from "./challengeProgress";
 import type { ClassicAiPlanStrategy } from "./game/ai";
 import { chooseAiPlan } from "./game/ai";
@@ -328,7 +342,9 @@ const openPlayMenu = () => {
   if (start) fireEvent.click(start);
 };
 
-const openPlayOption = (name: "Local" | "Online" | "Puzzles" | "Tutorial" | "Load") => {
+const openPlayOption = (
+  name: "Local" | "Online" | "Puzzles" | "Tutorial" | "Stats" | "Load",
+) => {
   openPlayMenu();
   fireEvent.click(screen.getByRole("button", {
     name: new RegExp(`^${name}$`, "i"),
@@ -478,6 +494,11 @@ beforeEach(() => {
     createAchievementProgress(),
   );
   cloudProgressHarness.upsertAchievements.mockClear();
+  cloudProgressHarness.loadStatistics.mockReset();
+  cloudProgressHarness.loadStatistics.mockResolvedValue(
+    createPlayerStatisticsProgress(),
+  );
+  cloudProgressHarness.upsertStatistics.mockClear();
   threeOnlineHarness.state = {
     role: "none",
     connecting: false,
@@ -501,6 +522,44 @@ describe("game startup", () => {
       expect(dailyGolfScoreForTurnsRemaining(turnsRemaining)).toBe(score);
     },
   );
+
+  it("opens the responsive Stats screen from the Play menu", () => {
+    render(<App />);
+    openPlayOption("Stats");
+
+    expect(screen.getByRole("heading", {
+      name: /your divine record/i,
+    })).toBeTruthy();
+    expect(screen.getByText(/saved on this device/i)).toBeTruthy();
+    expect(screen.getByText(/pick rate is each god's share/i)).toBeTruthy();
+    expect(screen.getByText(/puzzles, tutorials, challenges, and simulations never/i))
+      .toBeTruthy();
+  });
+
+  it("records an actual match when it begins but excludes Daily puzzles", async () => {
+    const { unmount } = render(<App />);
+    openPlayOption("Local");
+    fireEvent.click(screen.getByRole("button", { name: /^2 player$/i }));
+    fireEvent.click(screen.getByRole("button", {
+      name: /^divine ai challenge a computer opponent/i,
+    }));
+    fireEvent.click(screen.getByRole("button", { name: /challenge the ai/i }));
+
+    await waitFor(() => {
+      expect(
+        createPlayerStatisticsSnapshot(loadLocalPlayerStatistics()).gamesPlayed,
+      ).toBe(1);
+    });
+
+    unmount();
+    window.localStorage.clear();
+    window.history.replaceState(null, "", "/daily");
+    render(<App />);
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+    expect(
+      createPlayerStatisticsSnapshot(loadLocalPlayerStatistics()).gamesPlayed,
+    ).toBe(0);
+  });
 
   it.each([
     [0, "0:00"],
@@ -800,6 +859,7 @@ describe("game startup", () => {
       "Tutorial",
       "Roster",
       "Achievements",
+      "Stats",
       "Load",
     ]);
     fireEvent.click(screen.getByRole("button", { name: /^load$/i }));
@@ -848,6 +908,9 @@ describe("game startup", () => {
       .toBe("simulation");
     expect(FakeClassicAiWorker.instances[0].message?.state.aiDifficulty).toBe(10);
     expect(FakeClassicAiWorker.instances[0].message?.strategy).toBe("random");
+    expect(
+      createPlayerStatisticsSnapshot(loadLocalPlayerStatistics()).gamesPlayed,
+    ).toBe(0);
   });
 
   it("closes the signed-in account menu when clicking outside it", () => {
@@ -1069,6 +1132,14 @@ describe("game startup", () => {
     const localAchievements = createAchievementProgress();
     localAchievements.completed["it-begins"] = "2026-10-12T12:00:00.000Z";
     persistLocalAchievementProgress(localAchievements);
+    const localStatistics = updatePlayerMatchStatistics(
+      createPlayerStatisticsProgress(),
+      "local-match",
+      createGame(1),
+      ["white", "black"],
+      "2026-10-12T12:00:00.000Z",
+    );
+    persistLocalPlayerStatistics(localStatistics);
     accountHarness.configured = true;
     accountHarness.account = {
       userId: "new-account",
@@ -1111,6 +1182,11 @@ describe("game startup", () => {
           "it-begins": "2026-10-12T12:00:00.000Z",
         }),
       }),
+    );
+    expect(cloudProgressHarness.upsertStatistics).toHaveBeenCalledWith(
+      "new-account",
+      localStatistics,
+      ["centaurs-lance"],
     );
   });
 

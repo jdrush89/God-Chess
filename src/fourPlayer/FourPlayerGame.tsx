@@ -53,6 +53,7 @@ import {
   recordActionTransition,
   recordDiagnostic,
 } from "../diagnostics";
+import { applyMatchStatisticsTransition } from "../matchStatistics";
 import {
   chooseFourPlayerAiPlan,
   isFourPlayerAiTurn,
@@ -1718,6 +1719,7 @@ export interface FourPlayerGameProps {
     action: FourPlayerAction | undefined,
     source: "human" | "ai" | "online",
   ) => void;
+  onStatisticsChange?: (state: FourPlayerState) => void;
   completedAchievements?: Partial<Record<AchievementId, string>>;
 }
 
@@ -1733,6 +1735,7 @@ export function FourPlayerGame({
   onChallengeComplete,
   onlineSession,
   onAchievementTransition,
+  onStatisticsChange,
   completedAchievements = {},
 }: FourPlayerGameProps) {
   const [state, baseDispatch] = useReducer(
@@ -1742,6 +1745,9 @@ export function FourPlayerGame({
   );
   const stateRef = useRef(state);
   stateRef.current = state;
+  useEffect(() => {
+    onStatisticsChange?.(state);
+  }, [onStatisticsChange, state]);
   const undoStack = useRef(initialUndoHistory.map(prepareFourPlayerState));
   const turnStart = useRef(
     initialTurnStart
@@ -1916,7 +1922,11 @@ export function FourPlayerGame({
     source: "human" | "ai" = "human",
   ) => {
     const current = stateRef.current;
-    const next = fourPlayerReducer(current, action);
+    const next = applyMatchStatisticsTransition(
+      current,
+      fourPlayerReducer(current, action),
+      action,
+    );
     onAchievementTransition?.(current, next, action, source);
     recordActionTransition({
       variant: "four-player",

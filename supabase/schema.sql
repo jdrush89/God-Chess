@@ -13,8 +13,22 @@ create table if not exists public.game_saves (
   primary key (user_id, id)
 );
 
+create table if not exists public.player_stats (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  updated_at timestamptz not null default now(),
+  progress jsonb not null
+);
+
+create table if not exists public.player_stats_public (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  updated_at timestamptz not null default now(),
+  snapshot jsonb not null
+);
+
 alter table public.profiles enable row level security;
 alter table public.game_saves enable row level security;
+alter table public.player_stats enable row level security;
+alter table public.player_stats_public enable row level security;
 
 drop policy if exists "Users can read their profile" on public.profiles;
 create policy "Users can read their profile"
@@ -51,6 +65,48 @@ create policy "Users can update their saves"
 drop policy if exists "Users can delete their saves" on public.game_saves;
 create policy "Users can delete their saves"
   on public.game_saves for delete
+  using (auth.uid() = user_id);
+
+drop policy if exists "Users can read their private stats" on public.player_stats;
+create policy "Users can read their private stats"
+  on public.player_stats for select
+  using (auth.uid() = user_id);
+
+drop policy if exists "Users can create their private stats" on public.player_stats;
+create policy "Users can create their private stats"
+  on public.player_stats for insert
+  with check (auth.uid() = user_id);
+
+drop policy if exists "Users can update their private stats" on public.player_stats;
+create policy "Users can update their private stats"
+  on public.player_stats for update
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+drop policy if exists "Users can delete their private stats" on public.player_stats;
+create policy "Users can delete their private stats"
+  on public.player_stats for delete
+  using (auth.uid() = user_id);
+
+drop policy if exists "Users can read their public stats" on public.player_stats_public;
+create policy "Users can read their public stats"
+  on public.player_stats_public for select
+  using (auth.uid() = user_id);
+
+drop policy if exists "Users can create their public stats" on public.player_stats_public;
+create policy "Users can create their public stats"
+  on public.player_stats_public for insert
+  with check (auth.uid() = user_id);
+
+drop policy if exists "Users can update their public stats" on public.player_stats_public;
+create policy "Users can update their public stats"
+  on public.player_stats_public for update
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+drop policy if exists "Users can delete their public stats" on public.player_stats_public;
+create policy "Users can delete their public stats"
+  on public.player_stats_public for delete
   using (auth.uid() = user_id);
 
 create or replace function public.handle_new_user()
