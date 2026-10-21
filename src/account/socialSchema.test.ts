@@ -41,4 +41,13 @@ describe("social schema privacy contract", () => {
     expect(socialSchema.match(/current_user_id uuid := auth\.uid\(\)/g))
       .toHaveLength(2);
   });
+
+  it("qualifies invitation expiry columns inside table-returning RPCs", () => {
+    const prepareInvite = socialSchema.slice(
+      socialSchema.indexOf("create or replace function public.prepare_game_invite"),
+      socialSchema.indexOf("create or replace function public.respond_game_invite"),
+    );
+    expect(prepareInvite).toContain("and invitation.expires_at <= now()");
+    expect(prepareInvite).not.toContain("and expires_at <= now()");
+  });
 });

@@ -174,6 +174,7 @@ import App, {
   dailyShareText,
   dailyGolfScoreForTurnsRemaining,
   formatDailyCompletionTime,
+  FriendProfileScreen,
   GameScreen,
   SimulationExportDialog,
   rewindSimulationForExport,
@@ -1129,6 +1130,44 @@ describe("game startup", () => {
     expect(backdrop).toBeTruthy();
     expect(backdrop?.parentElement).toBe(document.body);
     expect(container.querySelector(".modal-backdrop")).toBeNull();
+  });
+
+  it("shows a friend's complete public stats and achievement catalog on a full page", async () => {
+    const onRemove = vi.fn(async () => undefined);
+    render(
+      <FriendProfileScreen
+        friend={{
+          publicId: "gc-zeus5566",
+          displayName: "Zeus",
+          completedAchievementIds: ["it-begins"],
+          stats: {
+            ...createPlayerStatisticsSnapshot(
+              createPlayerStatisticsProgress(),
+              [],
+            ),
+            gamesPlayed: 12,
+            gamesWon: 7,
+            piecesCaptured: 44,
+          },
+        }}
+        loading={false}
+        accountControl={null}
+        onBack={vi.fn()}
+        onRemove={onRemove}
+      />,
+    );
+
+    expect(screen.getByText("Games played")).toBeTruthy();
+    expect(screen.getByText("Boards played")).toBeTruthy();
+    expect(screen.getByText("God pick rate")).toBeTruthy();
+    expect(screen.getByText("It Begins").closest(".achievement-card")
+      ?.classList.contains("completed")).toBe(true);
+    const removeButton = screen.getByRole("button", {
+      name: /remove friend/i,
+    });
+    expect(removeButton.classList.contains("friend-remove-button")).toBe(true);
+    fireEvent.click(removeButton);
+    await waitFor(() => expect(onRemove).toHaveBeenCalledTimes(1));
   });
 
   it("prompts for a display name when the signed-in profile has none", async () => {

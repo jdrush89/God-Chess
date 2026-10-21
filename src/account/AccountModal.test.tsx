@@ -7,7 +7,7 @@ import {
   createPlayerStatisticsSnapshot,
 } from "../playerStatistics";
 import { AccountModal } from "./AccountModal";
-import type { SocialContract } from "./social";
+import type { FriendProfile, SocialContract } from "./social";
 
 const baseProps = {
   configured: true,
@@ -110,7 +110,22 @@ describe("account modal", () => {
     );
   });
 
-  it("accepts incoming requests and shows sanitized friend stats and achievements", async () => {
+  it("accepts incoming requests and opens the full friend profile page", async () => {
+    const friend: FriendProfile = {
+      publicId: "gc-zeus5566",
+      displayName: "Zeus",
+      completedAchievementIds: ["it-begins"],
+      stats: {
+        ...createPlayerStatisticsSnapshot(
+          createPlayerStatisticsProgress(),
+          [],
+        ),
+        gamesPlayed: 12,
+        gamesWon: 7,
+        piecesCaptured: 44,
+        totalPuzzlesCompleted: 5,
+      },
+    };
     const contract = social({
       incomingRequests: [{
         publicId: "gc-ares3344",
@@ -118,29 +133,17 @@ describe("account modal", () => {
         status: "pending",
         incoming: true,
       }],
-      friends: [{
-        publicId: "gc-zeus5566",
-        displayName: "Zeus",
-        completedAchievementIds: ["it-begins"],
-        stats: {
-          ...createPlayerStatisticsSnapshot(
-            createPlayerStatisticsProgress(),
-            [],
-          ),
-          gamesPlayed: 12,
-          gamesWon: 7,
-          piecesCaptured: 44,
-          totalPuzzlesCompleted: 5,
-        },
-      }],
+      friends: [friend],
       unreadCount: 1,
     });
+    const onViewFriendProfile = vi.fn();
     render(
       <AccountModal
         {...baseProps}
         account={account}
         social={contract}
         initialSection="friends"
+        onViewFriendProfile={onViewFriendProfile}
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /^accept$/i }));
@@ -148,10 +151,7 @@ describe("account modal", () => {
       expect(contract.acceptFriendRequest).toHaveBeenCalledWith("gc-ares3344")
     );
     fireEvent.click(screen.getByRole("button", { name: /Zeus.*View profile/i }));
-    expect(screen.getByText("12")).toBeTruthy();
-    expect(screen.getByText("44")).toBeTruthy();
-    expect(screen.getByText("It Begins")).toBeTruthy();
-    expect(screen.queryByText(/matches/i)).toBeNull();
+    expect(onViewFriendProfile).toHaveBeenCalledWith(friend);
   });
 
   it("joins a persistent game invitation without requesting a room code", async () => {

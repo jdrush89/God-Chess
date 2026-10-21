@@ -1,18 +1,15 @@
 import { useEffect, useState, type FormEvent } from "react";
 import {
   Bell,
-  Check,
   LoaderCircle,
   LogIn,
   LogOut,
   Search,
-  UserMinus,
   UserPlus,
   UserRound,
   Users,
   X,
 } from "lucide-react";
-import { ACHIEVEMENT_BY_ID } from "../achievements";
 import type {
   FriendProfile,
   GameInvite,
@@ -23,95 +20,23 @@ import type { AccountProfile } from "./useAccount";
 
 type AccountSection = "profile" | "friends";
 
-const Stat = ({ label, value }: { label: string; value: number }) => (
-  <div className="friend-stat">
-    <strong>{value}</strong>
-    <span>{label}</span>
-  </div>
-);
-
-function FriendProfileView({
-  friend,
-  onBack,
-  onRemove,
-}: {
-  friend: FriendProfile;
-  onBack: () => void;
-  onRemove: () => Promise<void>;
-}) {
-  const achievements = friend.completedAchievementIds
-    .map((id) => ACHIEVEMENT_BY_ID[id])
-    .filter(Boolean);
-  return (
-    <div className="friend-profile">
-      <button className="text-button" onClick={onBack}>Back to friends</button>
-      <UserRound className="account-hero-icon" size={32} />
-      <h2>{friend.displayName}</h2>
-      <p className="account-public-id">{friend.publicId}</p>
-      {friend.stats ? (
-        <div className="friend-stats" aria-label={`${friend.displayName} statistics`}>
-          <Stat label="Games" value={friend.stats.gamesPlayed} />
-          <Stat label="Wins" value={friend.stats.gamesWon} />
-          <Stat label="Captures" value={friend.stats.piecesCaptured} />
-          <Stat label="Puzzles" value={friend.stats.totalPuzzlesCompleted} />
-        </div>
-      ) : (
-        <p className="account-empty">No public game statistics yet.</p>
-      )}
-      <h3>Completed achievements</h3>
-      {achievements.length ? (
-        <div className="friend-achievements">
-          {achievements.map((achievement) => (
-            <article key={achievement.id}>
-              <Check size={14} />
-              <div>
-                <strong>{achievement.title}</strong>
-                <span>{achievement.description}</span>
-              </div>
-            </article>
-          ))}
-        </div>
-      ) : (
-        <p className="account-empty">No completed achievements yet.</p>
-      )}
-      <button className="secondary-button account-danger" onClick={() => void onRemove()}>
-        <UserMinus size={16} /> Remove friend
-      </button>
-    </div>
-  );
-}
-
 function FriendsView({
   social,
   onAcceptInvite,
+  onViewFriendProfile,
   run,
 }: {
   social?: SocialContract;
   onAcceptInvite?: (invite: GameInvite) => Promise<void>;
+  onViewFriendProfile?: (friend: FriendProfile) => void;
   run: (action: () => Promise<string | void>) => Promise<void>;
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [results, setResults] = useState<SocialProfile[]>([]);
   const [searching, setSearching] = useState(false);
-  const [selectedFriend, setSelectedFriend] = useState<FriendProfile>();
 
   if (!social) {
     return <p className="account-empty">Friends are unavailable for this account.</p>;
-  }
-  if (selectedFriend) {
-    return (
-      <FriendProfileView
-        friend={selectedFriend}
-        onBack={() => setSelectedFriend(undefined)}
-        onRemove={async () => {
-          await run(async () => {
-            await social.removeFriend(selectedFriend.publicId);
-            setSelectedFriend(undefined);
-            return "Friend removed.";
-          });
-        }}
-      />
-    );
   }
 
   const search = async (event: FormEvent) => {
@@ -279,7 +204,7 @@ function FriendsView({
             <button
               className="account-list-row friend-row"
               key={friend.publicId}
-              onClick={() => setSelectedFriend(friend)}
+              onClick={() => onViewFriendProfile?.(friend)}
             >
               <div>
                 <strong>{friend.displayName}</strong>
@@ -306,6 +231,7 @@ export function AccountModal({
   social,
   initialSection = "profile",
   onAcceptInvite,
+  onViewFriendProfile,
   onClose,
   onSignIn,
   onSignUp,
@@ -320,6 +246,7 @@ export function AccountModal({
   social?: SocialContract;
   initialSection?: AccountSection;
   onAcceptInvite?: (invite: GameInvite) => Promise<void>;
+  onViewFriendProfile?: (friend: FriendProfile) => void;
   onClose: () => void;
   onSignIn: (email: string, password: string) => Promise<string>;
   onSignUp: (email: string, password: string, displayName: string) => Promise<string>;
@@ -391,7 +318,12 @@ export function AccountModal({
               </button>
             </div>
             {section === "friends" ? (
-              <FriendsView social={social} onAcceptInvite={onAcceptInvite} run={run} />
+              <FriendsView
+                social={social}
+                onAcceptInvite={onAcceptInvite}
+                onViewFriendProfile={onViewFriendProfile}
+                run={run}
+              />
             ) : (
               <>
                 <UserRound className="account-hero-icon" size={32} />

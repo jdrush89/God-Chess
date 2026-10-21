@@ -55,7 +55,7 @@ export function FriendInviteControl({
         </select>
       </label>
       <button
-        className="secondary-button compact-button"
+        className="secondary-button friend-invite-button"
         disabled={!selected || pending.has(selected) || working}
         onClick={() => {
           setWorking(true);

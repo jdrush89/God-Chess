@@ -6,6 +6,7 @@ export type StartView =
   | "menu"
   | "roster"
   | "achievements"
+  | "friend-profile"
   | "stats"
   | "play"
   | "load"
@@ -26,6 +27,7 @@ export interface AppNavigationRoute {
   setupCategory: StartCategory;
   setupPlayerCount?: PlayerCount;
   puzzleCategory?: PuzzleCategory;
+  friendPublicId?: string;
 }
 
 const puzzleCategories = new Set<PuzzleCategory>([
@@ -62,6 +64,13 @@ export const appRouteFromPath = (pathname: string): AppNavigationRoute => {
       ? second as PuzzleCategory
       : undefined;
     return { ...base, startView: "puzzles", puzzleCategory: category };
+  }
+  if (first === "friends" && second) {
+    return {
+      ...base,
+      startView: "friend-profile",
+      friendPublicId: second.toLowerCase(),
+    };
   }
   if (first === "local" || first === "online") {
     const count = playerCount(second);
@@ -103,6 +112,10 @@ export const appPathForRoute = (route: AppNavigationRoute) => {
       return "/roster";
     case "achievements":
       return "/achievements";
+    case "friend-profile":
+      return route.friendPublicId
+        ? `/friends/${encodeURIComponent(route.friendPublicId)}`
+        : "/play";
     case "stats":
       return "/stats";
     case "load":
