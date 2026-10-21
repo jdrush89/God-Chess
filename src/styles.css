@@ -2049,7 +2049,7 @@ span.move-target-dot {
   min-width: 0; height: 40px; padding: 0 11px; color: #ece7dc; background: #0b0d12;
   border: 1px solid #30333b; outline: none;
 }
-.friend-search-button {
+.friend-search-button, .friend-add-button {
   display: inline-flex; align-items: center; justify-content: center; gap: 7px;
 }
 .friend-search input:focus, .friend-invite-control select:focus { border-color: var(--gold); }
