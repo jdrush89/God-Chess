@@ -17,6 +17,8 @@ import type {
 } from "../multiplayer/types";
 import type { ThreePlayerOnlineState } from "../multiplayer/useThreePlayerOnlineGame";
 import { RoomCodeCopyButton } from "../multiplayer/RoomCodeCopyButton";
+import { FriendInviteControl } from "../multiplayer/FriendInviteControl";
+import type { SocialProfile } from "../account/social";
 import {
   THREE_PLAYER_PALETTES,
   THREE_PLAYER_SEAT_LABELS,
@@ -57,6 +59,9 @@ export function ThreePlayerOnlineLobby({
   onUpdateConfig,
   onStart,
   onLeave,
+  friends = [],
+  pendingInvitePublicIds = [],
+  onInviteFriend,
 }: {
   online: ThreePlayerOnlineState;
   onReady: (ready: boolean) => void;
@@ -67,6 +72,9 @@ export function ThreePlayerOnlineLobby({
   onUpdateConfig: (config: ThreePlayerConfig) => void;
   onStart: () => void;
   onLeave: () => void;
+  friends?: SocialProfile[];
+  pendingInvitePublicIds?: string[];
+  onInviteFriend?: (publicId: string) => Promise<void>;
 }) {
   const snapshot = online.snapshot;
   if (!snapshot) {
@@ -112,6 +120,13 @@ export function ThreePlayerOnlineLobby({
         </div>
         <RoomCodeCopyButton roomCode={snapshot.roomCode} />
       </header>
+      {isHost && onInviteFriend && (
+        <FriendInviteControl
+          friends={friends}
+          pendingPublicIds={pendingInvitePublicIds}
+          onInvite={onInviteFriend}
+        />
+      )}
 
       <div className="three-online-participants">
         {snapshot.participants.map((participant, index) => (

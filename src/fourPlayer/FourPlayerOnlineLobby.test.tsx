@@ -60,6 +60,7 @@ describe("four-player online lobby", () => {
   it("lets the host configure seats and blocks start until everyone is ready", () => {
     const assign = vi.fn();
     const updateConfig = vi.fn();
+    const invite = vi.fn(async () => undefined);
     render(
       <FourPlayerOnlineLobby
         online={onlineState("host")}
@@ -68,6 +69,8 @@ describe("four-player online lobby", () => {
         onUpdateConfig={updateConfig}
         onStart={vi.fn()}
         onLeave={vi.fn()}
+        friends={[{ publicId: "gc-athena22", displayName: "Athena" }]}
+        onInviteFriend={invite}
       />,
     );
 
@@ -85,6 +88,11 @@ describe("four-player online lobby", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /2v2 teams/i }));
     expect(updateConfig).toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText(/invite a friend/i), {
+      target: { value: "gc-athena22" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^invite$/i }));
+    expect(invite).toHaveBeenCalledWith("gc-athena22");
   });
 
   it("keeps host-only controls hidden from guests while showing their assigned seat", () => {
@@ -97,11 +105,14 @@ describe("four-player online lobby", () => {
         onUpdateConfig={vi.fn()}
         onStart={vi.fn()}
         onLeave={vi.fn()}
+        friends={[{ publicId: "gc-athena22", displayName: "Athena" }]}
+        onInviteFriend={vi.fn()}
       />,
     );
 
     expect(screen.queryByRole("button", { name: /begin four-player draft/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /2v2 teams/i })).toBeNull();
+    expect(screen.queryByLabelText(/invite a friend/i)).toBeNull();
     expect(screen.getAllByText(/east/i).length).toBeGreaterThan(0);
     const readyButton = screen.getByRole("button", { name: /^ready$/i });
     expect((readyButton as HTMLButtonElement).disabled).toBe(false);

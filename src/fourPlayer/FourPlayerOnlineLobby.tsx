@@ -17,6 +17,8 @@ import {
 import type { FourPlayerOnlineState } from "../multiplayer/useFourPlayerOnlineGame";
 import type { FourPlayerHostRoomSnapshot } from "../multiplayer/types";
 import { RoomCodeCopyButton } from "../multiplayer/RoomCodeCopyButton";
+import { FriendInviteControl } from "../multiplayer/FriendInviteControl";
+import type { SocialProfile } from "../account/social";
 import {
   FOUR_PLAYER_PALETTES,
   FOUR_PLAYER_SEAT_LABELS,
@@ -51,6 +53,9 @@ export function FourPlayerOnlineLobby({
   onUpdateConfig,
   onStart,
   onLeave,
+  friends = [],
+  pendingInvitePublicIds = [],
+  onInviteFriend,
 }: {
   online: FourPlayerOnlineState;
   onReady: (ready: boolean) => void;
@@ -58,6 +63,9 @@ export function FourPlayerOnlineLobby({
   onUpdateConfig: (config: FourPlayerConfig) => void;
   onStart: () => void;
   onLeave: () => void;
+  friends?: SocialProfile[];
+  pendingInvitePublicIds?: string[];
+  onInviteFriend?: (publicId: string) => Promise<void>;
 }) {
   const snapshot = online.snapshot;
   if (!snapshot) {
@@ -112,6 +120,13 @@ export function FourPlayerOnlineLobby({
         </div>
         <RoomCodeCopyButton roomCode={snapshot.roomCode} />
       </header>
+      {isHost && onInviteFriend && (
+        <FriendInviteControl
+          friends={friends}
+          pendingPublicIds={pendingInvitePublicIds}
+          onInvite={onInviteFriend}
+        />
+      )}
 
       <div className="four-online-participants">
         {snapshot.participants.map((participant, index) => (

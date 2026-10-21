@@ -6,6 +6,7 @@ export interface AccountProfile {
   userId: string;
   email: string;
   displayName: string;
+  publicId?: string;
   needsDisplayName?: boolean;
   needsLocalDataImport?: boolean;
 }
@@ -49,7 +50,7 @@ const loadProfile = async (user: User): Promise<AccountProfile> => {
   if (!supabase) throw new Error("Account services are not configured.");
   const { data, error } = await supabase
     .from("profiles")
-    .select("display_name")
+    .select("display_name, public_id")
     .eq("id", user.id)
     .maybeSingle();
   if (error) throw error;
@@ -73,6 +74,7 @@ const loadProfile = async (user: User): Promise<AccountProfile> => {
     userId: user.id,
     email: user.email ?? "",
     displayName,
+    publicId: data?.public_id ?? "",
     needsDisplayName,
     needsLocalDataImport: resolveLocalDataImportPending(
       user.user_metadata.local_data_import_pending,

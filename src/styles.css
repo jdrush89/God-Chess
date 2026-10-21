@@ -901,6 +901,12 @@ span.move-target-dot {
 }
 .main-account-button:hover { color: #fff2cf; border-color: var(--gold); }
 .main-account-button:disabled { cursor: wait; opacity: .72; }
+.account-badge, .account-menu-count {
+  min-width: 17px; height: 17px; display: inline-grid; place-items: center; padding: 0 4px;
+  color: #140f07; background: var(--gold-bright); border-radius: 9px;
+  font-size: 8px; font-weight: 800; letter-spacing: 0;
+}
+.account-menu-count { margin-left: auto; }
 .main-account-menu {
   width: 170px; margin-top: 7px; padding: 5px;
   background: rgba(9,11,16,.96); border: 1px solid rgba(218,181,105,.34);
@@ -1996,10 +2002,11 @@ span.move-target-dot {
 .undo-consent-status > span.enabled i { color: #17130c; background: var(--gold); border-color: var(--gold-bright); }
 .undo-consent-status p, .settings-note { grid-column: 1 / -1; margin: 4px 0 0; color: #777981; font-size: 10px; line-height: 1.5; }
 .settings-note { margin-top: 13px; }
-.account-modal { position: relative; width: min(460px, 100%); }
+.account-modal { position: relative; width: min(560px, 100%); max-height: min(760px, calc(100vh - 48px)); overflow: auto; }
 .account-modal h2 { margin: 10px 0 5px; font: 600 25px "Cinzel"; }
 .account-hero-icon { color: var(--gold-bright); margin-top: 18px; }
 .account-email { margin: 0 0 22px; color: #777981; font-size: 10px; }
+.account-public-id { margin: 0 0 8px; color: #d4b875; font: 700 10px monospace; letter-spacing: .08em; }
 .account-tabs { display: grid; grid-template-columns: 1fr 1fr; margin: 24px 0 18px; }
 .account-tabs button {
   min-height: 39px; color: #777981; background: transparent; border: 1px solid #30323a; cursor: pointer;
@@ -2032,6 +2039,52 @@ span.move-target-dot {
 .account-loading { color: #9b9ba0; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; }
 .account-unavailable > svg { color: var(--gold); }
 .account-unavailable p { max-width: 330px; margin: 0; color: #85868d; font-size: 11px; line-height: 1.6; }
+.friends-view, .friend-profile { display: grid; gap: 16px; text-align: left; }
+.friend-search { display: grid; gap: 7px; }
+.friend-search > label, .account-list-section > h3, .friend-profile > h3 {
+  margin: 0; color: #a7a49c; font-size: 9px; font-weight: 700; letter-spacing: .11em; text-transform: uppercase;
+}
+.friend-search > div { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.friend-search input, .friend-invite-control select {
+  min-width: 0; height: 40px; padding: 0 11px; color: #ece7dc; background: #0b0d12;
+  border: 1px solid #30333b; outline: none;
+}
+.friend-search input:focus, .friend-invite-control select:focus { border-color: var(--gold); }
+.account-list-section { display: grid; gap: 7px; }
+.account-list-section > h3, .friend-profile > h3 { display: flex; align-items: center; gap: 7px; }
+.account-list-row {
+  width: 100%; min-height: 52px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 9px 11px; color: #d8d2c5; background: #101217; border: 1px solid #292c34; text-align: left;
+}
+.account-list-row > div:first-child { min-width: 0; display: grid; gap: 3px; }
+.account-list-row > div:last-child { display: flex; align-items: center; gap: 7px; }
+.account-list-row strong { overflow: hidden; text-overflow: ellipsis; font-size: 11px; }
+.account-list-row span { color: #777981; font-size: 9px; }
+.friend-row { cursor: pointer; }
+.friend-row:hover { border-color: rgba(198,161,91,.55); }
+.compact-button { min-height: 32px; padding: 0 10px; }
+.account-pending { color: #c8ad70 !important; font-weight: 700; text-transform: uppercase; }
+.account-empty { margin: 0; padding: 13px; color: #777981; background: #0e1015; border: 1px dashed #2e3037; font-size: 10px; }
+.friend-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
+.friend-stat { display: grid; gap: 3px; padding: 11px 7px; background: #101217; border: 1px solid #292c34; text-align: center; }
+.friend-stat strong { color: #ead79f; font: 600 18px "Cinzel"; }
+.friend-stat span { color: #777981; font-size: 8px; text-transform: uppercase; }
+.friend-achievements { display: grid; gap: 6px; }
+.friend-achievements article { display: flex; gap: 9px; padding: 10px; background: #101217; border: 1px solid rgba(198,161,91,.28); }
+.friend-achievements article > svg { flex: none; color: var(--gold-bright); }
+.friend-achievements article > div { display: grid; gap: 3px; }
+.friend-achievements strong { color: #dfd5bc; font-size: 10px; }
+.friend-achievements span { color: #777981; font-size: 9px; line-height: 1.4; }
+.account-danger { justify-self: start; color: #e69a90; }
+.friend-invite-control {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px;
+  padding: 11px; background: rgba(198,161,91,.06); border: 1px solid rgba(198,161,91,.24); text-align: left;
+}
+.friend-invite-control label { display: grid; gap: 6px; color: #9c9b98; font-size: 9px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.friend-invite-control.empty { grid-template-columns: auto 1fr; align-items: center; color: #777981; font-size: 10px; }
+.friend-invite-feedback, .friend-invite-error { grid-column: 1 / -1; font-size: 9px; }
+.friend-invite-feedback { color: #9bc4ad; }
+.friend-invite-error { color: #e58b80; }
 
 @media (max-width: 960px) {
   .draft-layout { grid-template-columns: 1fr; }
