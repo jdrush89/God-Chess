@@ -186,7 +186,10 @@ function FriendsView({
             onChange={(event) => setSearchTerm(event.target.value)}
             placeholder="Athena or gc-ab12cd34"
           />
-          <button className="secondary-button" disabled={!searchTerm.trim() || searching}>
+          <button
+            className="secondary-button friend-search-button"
+            disabled={!searchTerm.trim() || searching}
+          >
             {searching ? <LoaderCircle className="spin" size={16} /> : <Search size={16} />}
             Search
           </button>

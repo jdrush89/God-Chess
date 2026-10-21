@@ -1109,6 +1109,25 @@ describe("game startup", () => {
     expect(screen.getByLabelText(/saved display name/i)).toBeTruthy();
   });
 
+  it("portals account dialogs to the viewport outside the current screen layout", () => {
+    accountHarness.configured = true;
+    accountHarness.account = {
+      userId: "account-1",
+      email: "player@example.com",
+      displayName: "Athena",
+    };
+    const { container } = render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: /^start$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^athena$/i }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /friends & invites/i }));
+
+    const backdrop = document.body.querySelector(".modal-backdrop");
+    expect(backdrop).toBeTruthy();
+    expect(backdrop?.parentElement).toBe(document.body);
+    expect(container.querySelector(".modal-backdrop")).toBeNull();
+  });
+
   it("prompts for a display name when the signed-in profile has none", async () => {
     accountHarness.configured = true;
     accountHarness.account = {
