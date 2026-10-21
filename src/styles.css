@@ -2009,11 +2009,11 @@ span.move-target-dot {
 .account-public-id { margin: 0 0 8px; color: #d4b875; font: 700 10px monospace; letter-spacing: .08em; }
 .account-tabs { display: grid; grid-template-columns: 1fr 1fr; margin: 24px 0 18px; }
 .account-tabs button {
-  min-height: 39px; color: #777981; background: transparent; border: 1px solid #30323a; cursor: pointer;
+  position: relative; min-height: 39px; color: #777981; background: transparent; border: 1px solid #30323a; cursor: pointer;
   font-size: 9px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
 }
-.account-tabs button + button { border-left: 0; }
-.account-tabs button.active { color: #f0dba8; border-color: var(--gold); background: rgba(198,161,91,.09); }
+.account-tabs button + button { margin-left: -1px; }
+.account-tabs button.active { z-index: 1; color: #f0dba8; border-color: var(--gold); background: rgba(198,161,91,.09); }
 .account-form { display: grid; gap: 14px; text-align: left; }
 .account-form label {
   display: grid; gap: 7px; color: #9c9b98;
