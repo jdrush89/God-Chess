@@ -98,7 +98,9 @@ describe("account modal", () => {
     fireEvent.change(screen.getByLabelText(/find by display name/i), {
       target: { value: "Ares" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /^search$/i }));
+    const searchButton = screen.getByRole("button", { name: /^search$/i });
+    expect(searchButton.classList.contains("friend-search-button")).toBe(true);
+    fireEvent.click(searchButton);
     expect(await screen.findByText("gc-ares3344")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
     await waitFor(() =>

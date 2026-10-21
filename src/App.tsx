@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import {
   ArrowLeft,
   Bell,
@@ -2420,30 +2421,36 @@ function AccountControl({
         )}
       </div>
       {accountModalMode === "import" && (
-        <LocalDataImportModal
-          loading={accountDataLoading}
-          working={accountImportWorking || accountWorking}
-          error={accountImportError}
-          onImport={onImportLocalData}
-          onStartFresh={onStartAccountFresh}
-        />
+        createPortal(
+          <LocalDataImportModal
+            loading={accountDataLoading}
+            working={accountImportWorking || accountWorking}
+            error={accountImportError}
+            onImport={onImportLocalData}
+            onStartFresh={onStartAccountFresh}
+          />,
+          document.body,
+        )
       )}
       {accountModalMode && accountModalMode !== "import" && (
-        <AccountModal
-          account={account}
-          configured={accountConfigured}
-          loading={accountLoading}
-          working={accountWorking}
-          serviceError={accountError}
-          social={social}
-          initialSection={accountModalMode === "friends" ? "friends" : "profile"}
-          onAcceptInvite={onAcceptInvite}
-          onClose={() => setAccountModalMode(undefined)}
-          onSignIn={onSignIn}
-          onSignUp={onSignUp}
-          onSignOut={onSignOut}
-          onUpdateDisplayName={updateDisplayName}
-        />
+        createPortal(
+          <AccountModal
+            account={account}
+            configured={accountConfigured}
+            loading={accountLoading}
+            working={accountWorking}
+            serviceError={accountError}
+            social={social}
+            initialSection={accountModalMode === "friends" ? "friends" : "profile"}
+            onAcceptInvite={onAcceptInvite}
+            onClose={() => setAccountModalMode(undefined)}
+            onSignIn={onSignIn}
+            onSignUp={onSignUp}
+            onSignOut={onSignOut}
+            onUpdateDisplayName={updateDisplayName}
+          />,
+          document.body,
+        )
       )}
     </>
   );
