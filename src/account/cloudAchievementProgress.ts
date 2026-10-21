@@ -1,4 +1,5 @@
 import {
+  completedAchievementIds,
   normalizeAchievementProgress,
 } from "../achievementProgress";
 import type { AchievementProgress } from "../achievements";
@@ -35,11 +36,20 @@ export const upsertCloudAchievementProgress = async (
     version: 1,
     progress: normalizeAchievementProgress(progress),
   };
-  const { error } = await supabase.from("game_saves").upsert({
-    user_id: userId,
-    id: ACHIEVEMENT_PROGRESS_SAVE_ID,
-    saved_at: new Date().toISOString(),
-    game: payload,
-  });
-  if (error) throw error;
+  const updatedAt = new Date().toISOString();
+  const [{ error: privateError }, { error: publicError }] = await Promise.all([
+    supabase.from("game_saves").upsert({
+      user_id: userId,
+      id: ACHIEVEMENT_PROGRESS_SAVE_ID,
+      saved_at: updatedAt,
+      game: payload,
+    }),
+    supabase.from("player_achievements_public").upsert({
+      user_id: userId,
+      completed_ids: completedAchievementIds(payload.progress),
+      updated_at: updatedAt,
+    }),
+  ]);
+  if (privateError) throw privateError;
+  if (publicError) throw publicError;
 };

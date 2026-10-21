@@ -10,6 +10,7 @@ import {
 } from "react";
 import {
   ArrowLeft,
+  Bell,
   Bot,
   BookOpen,
   ChartNoAxesColumnIncreasing,
@@ -122,6 +123,12 @@ import { randomItem } from "./game/random";
 import type { Ability, ActionPresentation, CaptureAnimation, ChallengeId, ClassicMoveFirstCandidate, ClassicMoveFirstMove, Color, DailyPuzzleId, GameMode, GameState, GodId, OrbAnimation, OrbColor, Piece, PuzzleId, Square, ThreePlayerPuzzleId } from "./game/types";
 import { AccountModal } from "./account/AccountModal";
 import {
+  joinGameFromInvite,
+  useSocial,
+  type GameInvite,
+  type SocialContract,
+} from "./account/social";
+import {
   deleteAllCloudSavedGames,
   deleteCloudSavedGame,
   loadCloudSavedGames,
@@ -194,6 +201,7 @@ import {
   type OnlineGameState,
 } from "./multiplayer/useOnlineGame";
 import { RoomCodeCopyButton } from "./multiplayer/RoomCodeCopyButton";
+import { FriendInviteControl } from "./multiplayer/FriendInviteControl";
 import {
   fourPlayerOnlineLocalSeat,
   useFourPlayerOnlineGame,
@@ -2280,6 +2288,8 @@ interface AccountControlProps {
   onUpdateDisplayName: (displayName: string) => Promise<string>;
   onImportLocalData: () => Promise<void>;
   onStartAccountFresh: () => Promise<void>;
+  social?: SocialContract;
+  onAcceptInvite?: (invite: GameInvite) => Promise<void>;
   className?: string;
 }
 
@@ -2298,10 +2308,12 @@ function AccountControl({
   onUpdateDisplayName,
   onImportLocalData,
   onStartAccountFresh,
+  social,
+  onAcceptInvite,
   className = "",
 }: AccountControlProps) {
   const [accountModalMode, setAccountModalMode] =
-    useState<"auth" | "name" | "import">();
+    useState<"auth" | "name" | "friends" | "import">();
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const accountAreaRef = useRef<HTMLDivElement>(null);
 
@@ -2369,6 +2381,11 @@ function AccountControl({
         >
           <UserRound size={16} />
           {accountLoading ? "Account" : account?.displayName ?? "Sign in"}
+          {Boolean(account && social?.unreadCount) && (
+            <span className="account-badge" aria-label={`${social?.unreadCount} notifications`}>
+              {social?.unreadCount}
+            </span>
+          )}
         </button>
         {account && accountMenuOpen && (
           <div className="main-account-menu" role="menu" aria-label="Account options">
@@ -2381,6 +2398,19 @@ function AccountControl({
             >
               <Pencil size={15} />
               Change name
+            </button>
+            <button
+              role="menuitem"
+              onClick={() => {
+                setAccountMenuOpen(false);
+                setAccountModalMode("friends");
+              }}
+            >
+              <Bell size={15} />
+              Friends & invites
+              {Boolean(social?.unreadCount) && (
+                <span className="account-menu-count">{social?.unreadCount}</span>
+              )}
             </button>
             <button role="menuitem" disabled={accountWorking} onClick={() => void signOut()}>
               <LogOut size={15} />
@@ -2405,6 +2435,9 @@ function AccountControl({
           loading={accountLoading}
           working={accountWorking}
           serviceError={accountError}
+          social={social}
+          initialSection={accountModalMode === "friends" ? "friends" : "profile"}
+          onAcceptInvite={onAcceptInvite}
           onClose={() => setAccountModalMode(undefined)}
           onSignIn={onSignIn}
           onSignUp={onSignUp}
@@ -3100,6 +3133,7 @@ function StartGamePrompt({
   threeOnline,
   defaultPlayerName,
   accountControl,
+  social,
   category,
   initialPlayerCount,
   onStart,
@@ -3129,6 +3163,7 @@ function StartGamePrompt({
   threeOnline: ThreePlayerOnlineState;
   defaultPlayerName?: string;
   accountControl: ReactNode;
+  social?: SocialContract;
   category: StartCategory;
   initialPlayerCount?: PlayerCount;
   onStart: (
@@ -3177,6 +3212,12 @@ function StartGamePrompt({
   const [playerName, setPlayerName] = useState(defaultPlayerName || "Player");
   const [roomCode, setRoomCode] = useState("");
   const simulationKeyCount = useRef(0);
+  const pendingInviteIds = (variant: GameInvite["variant"], code?: string) =>
+    social?.sentInvites
+      .filter((invite) =>
+        invite.variant === variant && invite.roomCode === code
+      )
+      .map((invite) => invite.recipientPublicId) ?? [];
 
   const back = () => {
     if (playerCount) {
@@ -3287,6 +3328,19 @@ function StartGamePrompt({
                 onUpdateConfig={onThreeUpdateConfig}
                 onStart={onStartThreeOnline}
                 onLeave={back}
+                friends={social?.friends}
+                pendingInvitePublicIds={pendingInviteIds(
+                  "three-player",
+                  threeOnline.roomCode,
+                )}
+                onInviteFriend={threeOnline.roomCode && social
+                  ? (publicId) => social.sendInvite(
+                    publicId,
+                    "three-player",
+                    3,
+                    threeOnline.roomCode!,
+                  )
+                  : undefined}
               />
             ) : playerCount === 4 && fourOnline.role !== "none" ? (
               <FourPlayerOnlineLobby
@@ -3296,6 +3350,19 @@ function StartGamePrompt({
                 onUpdateConfig={onFourUpdateConfig}
                 onStart={onStartFourOnline}
                 onLeave={back}
+                friends={social?.friends}
+                pendingInvitePublicIds={pendingInviteIds(
+                  "four-player",
+                  fourOnline.roomCode,
+                )}
+                onInviteFriend={fourOnline.roomCode && social
+                  ? (publicId) => social.sendInvite(
+                    publicId,
+                    "four-player",
+                    4,
+                    fourOnline.roomCode!,
+                  )
+                  : undefined}
               />
             ) : playerCount === 2 && online.role !== "none" ? (
               online.role === "host" ? (
@@ -3306,6 +3373,21 @@ function StartGamePrompt({
                     <RoomCodeCopyButton roomCode={online.roomCode} />
                   )}
                   <p>{online.guest ? `${online.guest.name} joined the room.` : "Waiting for another player to join..."}</p>
+                  {online.roomCode && social && (
+                    <FriendInviteControl
+                      friends={social.friends}
+                      pendingPublicIds={pendingInviteIds(
+                        "classic",
+                        online.roomCode,
+                      )}
+                      onInvite={(publicId) => social.sendInvite(
+                        publicId,
+                        "classic",
+                        2,
+                        online.roomCode!,
+                      )}
+                    />
+                  )}
                   <button className="primary-button" disabled={!online.guest} onClick={onStartOnline}>
                     Start online game
                   </button>
@@ -5134,6 +5216,7 @@ function TutorialScreen({ onExit }: { onExit: () => void }) {
 
 export default function App() {
   const accountService = useAccount();
+  const social = useSocial(accountService.account);
   const initialNavigation = useRef(
     appRouteFromPath(window.location.pathname),
   ).current;
@@ -5188,6 +5271,10 @@ export default function App() {
     useState(false);
   const [accountImportWorking, setAccountImportWorking] = useState(false);
   const [accountImportError, setAccountImportError] = useState<string>();
+  const [joiningInvite, setJoiningInvite] = useState<{
+    id: string;
+    variant: GameInvite["variant"];
+  }>();
   const savedGames = accountService.account
     ? cloudSavesLoadedFor === accountService.account.userId
       ? cloudSavedGames
@@ -6271,6 +6358,71 @@ export default function App() {
   });
   const [fourOnline, fourOnlineActions] = useFourPlayerOnlineGame();
   const [threeOnline, threeOnlineActions] = useThreePlayerOnlineGame();
+  const acceptGameInvite = useCallback(async (selectedInvite: GameInvite) => {
+    if (!accountService.account) {
+      throw new Error("Sign in before joining a friend invitation.");
+    }
+    const invite = await social.prepareInvite(selectedInvite.id);
+    setSetupCategory("online");
+    setSetupPlayerCount(invite.playerCount);
+    setSetupReturnView(startView === "menu" ? "menu" : "play");
+    setStartView("setup");
+    setJoiningInvite({ id: invite.id, variant: invite.variant });
+    await joinGameFromInvite(
+      invite,
+      accountService.account.displayName,
+      {
+        classic: async (roomCode, displayName) => {
+          fourOnlineActions.disconnect();
+          threeOnlineActions.disconnect();
+          await onlineActions.joinGame(roomCode, displayName);
+        },
+        threePlayer: async (roomCode, displayName) => {
+          onlineActions.disconnect();
+          fourOnlineActions.disconnect();
+          activeSaveId.current = undefined;
+          threeOnlineActiveRef.current = true;
+          await threeOnlineActions.joinGame(roomCode, displayName);
+        },
+        fourPlayer: async (roomCode, displayName) => {
+          onlineActions.disconnect();
+          threeOnlineActions.disconnect();
+          await fourOnlineActions.joinGame(roomCode, displayName);
+        },
+      },
+    );
+  }, [
+    accountService.account,
+    fourOnlineActions,
+    onlineActions,
+    social,
+    startView,
+    threeOnlineActions,
+  ]);
+
+  useEffect(() => {
+    if (!joiningInvite) return;
+    const target = joiningInvite.variant === "classic"
+      ? online
+      : joiningInvite.variant === "three-player"
+        ? threeOnline
+        : fourOnline;
+    if (target.error && !target.connecting) {
+      setJoiningInvite(undefined);
+      return;
+    }
+    if (target.role === "none" || target.connecting) return;
+    const inviteId = joiningInvite.id;
+    setJoiningInvite(undefined);
+    void social.respondInvite(inviteId, "accepted").catch((error) => {
+      console.error("Unable to mark the game invitation accepted.", error);
+      setSaveError(
+        error instanceof Error
+          ? error.message
+          : "Joined the room, but could not update the invitation.",
+      );
+    });
+  }, [fourOnline, joiningInvite, online, social, threeOnline]);
   useEffect(() => {
     if (
       startView !== "none" ||
@@ -7355,6 +7507,8 @@ export default function App() {
       onUpdateDisplayName={accountService.updateDisplayName}
       onImportLocalData={() => finishLocalDataImportDecision(true)}
       onStartAccountFresh={() => finishLocalDataImportDecision(false)}
+      social={social}
+      onAcceptInvite={acceptGameInvite}
       className={className}
     />
   );
@@ -7378,6 +7532,8 @@ export default function App() {
         onUpdateDisplayName={accountService.updateDisplayName}
         onImportLocalData={() => finishLocalDataImportDecision(true)}
         onStartAccountFresh={() => finishLocalDataImportDecision(false)}
+        social={social}
+        onAcceptInvite={acceptGameInvite}
       />
     );
   }
@@ -7546,6 +7702,7 @@ export default function App() {
         threeOnline={threeOnline}
         defaultPlayerName={accountService.account?.displayName}
         accountControl={renderAccountControl()}
+        social={accountService.account ? social : undefined}
         category={setupCategory}
         initialPlayerCount={setupPlayerCount}
         onStart={beginGame}

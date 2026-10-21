@@ -94,6 +94,7 @@ describe("three-player online lobby", () => {
   it("lets the host configure variants, seats, AI, and start gating", () => {
     const assign = vi.fn();
     const updateConfig = vi.fn();
+    const invite = vi.fn(async () => undefined);
     const { container } = render(
       <ThreePlayerOnlineLobby
         online={onlineState("host")}
@@ -102,6 +103,8 @@ describe("three-player online lobby", () => {
         onUpdateConfig={updateConfig}
         onStart={vi.fn()}
         onLeave={vi.fn()}
+        friends={[{ publicId: "gc-athena22", displayName: "Athena" }]}
+        onInviteFriend={invite}
       />,
     );
 
@@ -137,6 +140,11 @@ describe("three-player online lobby", () => {
       target: { value: "8" },
     });
     expect(updateConfig).toHaveBeenCalledTimes(4);
+    fireEvent.change(screen.getByLabelText(/invite a friend/i), {
+      target: { value: "gc-athena22" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^invite$/i }));
+    expect(invite).toHaveBeenCalledWith("gc-athena22");
   });
 
   it("keeps host-only controls read-only for guests and exposes readiness", () => {
@@ -149,6 +157,8 @@ describe("three-player online lobby", () => {
         onUpdateConfig={vi.fn()}
         onStart={vi.fn()}
         onLeave={vi.fn()}
+        friends={[{ publicId: "gc-athena22", displayName: "Athena" }]}
+        onInviteFriend={vi.fn()}
       />,
     );
 
@@ -156,6 +166,7 @@ describe("three-player online lobby", () => {
       name: /begin three-player draft/i,
     })).toBeNull();
     expect(screen.queryAllByLabelText(/controller/i)).toHaveLength(0);
+    expect(screen.queryByLabelText(/invite a friend/i)).toBeNull();
     expect((screen.getByRole("button", {
       name: /^Circular$/i,
     }) as HTMLButtonElement).disabled).toBe(true);

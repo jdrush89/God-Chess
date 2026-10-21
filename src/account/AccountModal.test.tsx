@@ -2,7 +2,12 @@
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  createPlayerStatisticsProgress,
+  createPlayerStatisticsSnapshot,
+} from "../playerStatistics";
 import { AccountModal } from "./AccountModal";
+import type { SocialContract } from "./social";
 
 const baseProps = {
   configured: true,
@@ -13,6 +18,33 @@ const baseProps = {
   onSignUp: vi.fn(async () => "Account created."),
   onSignOut: vi.fn(async () => undefined),
   onUpdateDisplayName: vi.fn(async () => "Display name updated."),
+};
+
+const social = (overrides: Partial<SocialContract> = {}): SocialContract => ({
+  friends: [],
+  incomingRequests: [],
+  outgoingRequests: [],
+  invites: [],
+  sentInvites: [],
+  unreadCount: 0,
+  loading: false,
+  refresh: vi.fn(async () => undefined),
+  search: vi.fn(async () => []),
+  sendFriendRequest: vi.fn(async () => undefined),
+  acceptFriendRequest: vi.fn(async () => undefined),
+  declineFriendRequest: vi.fn(async () => undefined),
+  removeFriend: vi.fn(async () => undefined),
+  sendInvite: vi.fn(async () => undefined),
+  prepareInvite: vi.fn(),
+  respondInvite: vi.fn(async () => undefined),
+  ...overrides,
+});
+
+const account = {
+  userId: "user-1",
+  email: "athena@example.com",
+  displayName: "Athena",
+  publicId: "gc-athena22",
 };
 
 afterEach(() => {
@@ -40,12 +72,107 @@ describe("account modal", () => {
     render(
       <AccountModal
         {...baseProps}
-        account={{ userId: "user-1", email: "athena@example.com", displayName: "Athena" }}
+        account={account}
       />,
     );
     fireEvent.change(screen.getByLabelText(/saved display name/i), { target: { value: "Pallas" } });
     fireEvent.click(screen.getByRole("button", { name: /save name/i }));
 
     await waitFor(() => expect(baseProps.onUpdateDisplayName).toHaveBeenCalledWith("Pallas"));
+  });
+
+  it("searches players by name and sends a friend request using the public ID", async () => {
+    const contract = social({
+      search: vi.fn(async () => [
+        { publicId: "gc-ares3344", displayName: "Ares" },
+      ]),
+    });
+    render(
+      <AccountModal
+        {...baseProps}
+        account={account}
+        social={contract}
+        initialSection="friends"
+      />,
+    );
+    fireEvent.change(screen.getByLabelText(/find by display name/i), {
+      target: { value: "Ares" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^search$/i }));
+    expect(await screen.findByText("gc-ares3344")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
+    await waitFor(() =>
+      expect(contract.sendFriendRequest).toHaveBeenCalledWith("gc-ares3344")
+    );
+  });
+
+  it("accepts incoming requests and shows sanitized friend stats and achievements", async () => {
+    const contract = social({
+      incomingRequests: [{
+        publicId: "gc-ares3344",
+        displayName: "Ares",
+        status: "pending",
+        incoming: true,
+      }],
+      friends: [{
+        publicId: "gc-zeus5566",
+        displayName: "Zeus",
+        completedAchievementIds: ["it-begins"],
+        stats: {
+          ...createPlayerStatisticsSnapshot(
+            createPlayerStatisticsProgress(),
+            [],
+          ),
+          gamesPlayed: 12,
+          gamesWon: 7,
+          piecesCaptured: 44,
+          totalPuzzlesCompleted: 5,
+        },
+      }],
+      unreadCount: 1,
+    });
+    render(
+      <AccountModal
+        {...baseProps}
+        account={account}
+        social={contract}
+        initialSection="friends"
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^accept$/i }));
+    await waitFor(() =>
+      expect(contract.acceptFriendRequest).toHaveBeenCalledWith("gc-ares3344")
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Zeus.*View profile/i }));
+    expect(screen.getByText("12")).toBeTruthy();
+    expect(screen.getByText("44")).toBeTruthy();
+    expect(screen.getByText("It Begins")).toBeTruthy();
+    expect(screen.queryByText(/matches/i)).toBeNull();
+  });
+
+  it("joins a persistent game invitation without requesting a room code", async () => {
+    const invite = {
+      id: "invite-1",
+      senderPublicId: "gc-ares3344",
+      senderDisplayName: "Ares",
+      variant: "classic" as const,
+      playerCount: 2 as const,
+      roomCode: "ABCDE",
+      status: "pending" as const,
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    };
+    const acceptInvite = vi.fn(async () => undefined);
+    render(
+      <AccountModal
+        {...baseProps}
+        account={account}
+        social={social({ invites: [invite], unreadCount: 1 })}
+        initialSection="friends"
+        onAcceptInvite={acceptInvite}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^join$/i }));
+    await waitFor(() => expect(acceptInvite).toHaveBeenCalledWith(invite));
+    expect(screen.queryByLabelText(/room code/i)).toBeNull();
   });
 });
