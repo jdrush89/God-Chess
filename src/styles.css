@@ -2033,6 +2033,7 @@ span.move-target-dot {
 .account-feedback, .account-error { margin: 14px 0 0; font-size: 10px; line-height: 1.5; }
 .account-feedback { color: #9bc4ad; }
 .account-error { color: #e58b80; }
+.account-modal-backdrop { z-index: 90; }
 .account-loading, .account-unavailable {
   min-height: 180px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 11px;
 }

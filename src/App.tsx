@@ -2236,7 +2236,7 @@ function LocalDataImportModal({
   onStartFresh: () => Promise<void>;
 }) {
   return (
-    <div className="modal-backdrop">
+    <div className="modal-backdrop account-modal-backdrop">
       <section className="account-modal" aria-modal="true" role="dialog">
         <p className="eyebrow">NEW ACCOUNT</p>
         <Download className="account-hero-icon" size={32} />
