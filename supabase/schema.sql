@@ -557,12 +557,12 @@ security definer
 set search_path = public
 as $$
 begin
-  update public.game_invitations
+  update public.game_invitations invitation
   set status = 'expired', updated_at = now()
-  where public.game_invitations.id = invite_id
-    and recipient_id = auth.uid()
-    and status = 'pending'
-    and expires_at <= now();
+  where invitation.id = invite_id
+    and invitation.recipient_id = auth.uid()
+    and invitation.status = 'pending'
+    and invitation.expires_at <= now();
 
   return query
   select

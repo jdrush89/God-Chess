@@ -19,7 +19,9 @@ describe("friend invite control", () => {
     fireEvent.change(screen.getByLabelText(/invite a friend/i), {
       target: { value: "gc-athena22" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /invite/i }));
+    const inviteButton = screen.getByRole("button", { name: /invite/i });
+    expect(inviteButton.classList.contains("friend-invite-button")).toBe(true);
+    fireEvent.click(inviteButton);
 
     await waitFor(() => expect(invite).toHaveBeenCalledWith("gc-athena22"));
     expect(await screen.findByText(/invitation sent/i)).toBeTruthy();

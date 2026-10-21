@@ -49,6 +49,7 @@ import {
   Trophy,
   Trash2,
   Undo2,
+  UserMinus,
   UserRound,
   Users,
   Wifi,
@@ -126,6 +127,7 @@ import { AccountModal } from "./account/AccountModal";
 import {
   joinGameFromInvite,
   useSocial,
+  type FriendProfile,
   type GameInvite,
   type SocialContract,
 } from "./account/social";
@@ -180,6 +182,7 @@ import {
   completeDailyAchievementsIfEligible,
   createAchievementProgress,
   dailyPuzzleCompletionStats,
+  type AchievementId,
   type AchievementProgress,
   type AchievementTransition,
 } from "./achievements";
@@ -2291,6 +2294,7 @@ interface AccountControlProps {
   onStartAccountFresh: () => Promise<void>;
   social?: SocialContract;
   onAcceptInvite?: (invite: GameInvite) => Promise<void>;
+  onViewFriendProfile?: (friend: FriendProfile) => void;
   className?: string;
 }
 
@@ -2311,6 +2315,7 @@ function AccountControl({
   onStartAccountFresh,
   social,
   onAcceptInvite,
+  onViewFriendProfile,
   className = "",
 }: AccountControlProps) {
   const [accountModalMode, setAccountModalMode] =
@@ -2443,6 +2448,10 @@ function AccountControl({
             social={social}
             initialSection={accountModalMode === "friends" ? "friends" : "profile"}
             onAcceptInvite={onAcceptInvite}
+            onViewFriendProfile={(friend) => {
+              setAccountModalMode(undefined);
+              onViewFriendProfile?.(friend);
+            }}
             onClose={() => setAccountModalMode(undefined)}
             onSignIn={onSignIn}
             onSignUp={onSignUp}
@@ -2619,6 +2628,11 @@ function StatisticsScreen({
   error,
   onDismissError,
   onBack,
+  embedded = false,
+  eyebrow = "PLAYER STATS",
+  title = "Your divine record",
+  description,
+  footnote = "Local hot-seat games include every Human seat controlled on this device. Puzzles, tutorials, challenges, and simulations never contribute to match totals.",
 }: {
   statistics: PlayerStatisticsSnapshot;
   account?: AccountProfile;
@@ -2627,6 +2641,11 @@ function StatisticsScreen({
   error?: string;
   onDismissError: () => void;
   onBack: () => void;
+  embedded?: boolean;
+  eyebrow?: string;
+  title?: string;
+  description?: string;
+  footnote?: string;
 }) {
   const gods = GODS
     .map((god) => ({
@@ -2636,21 +2655,16 @@ function StatisticsScreen({
     .sort((first, second) =>
       second.uses - first.uses || first.name.localeCompare(second.name)
     );
-  return (
-    <SetupNavigationShell
-      backLabel="Back to Play"
-      onBack={onBack}
-      headerAction={accountControl}
-    >
+  const content = (
       <section className="statistics-page">
         <header className="statistics-heading">
           <div>
-            <p className="eyebrow">PLAYER STATS</p>
-            <h1>Your divine record</h1>
+            <p className="eyebrow">{eyebrow}</p>
+            <h1>{title}</h1>
             <p>
-              {account
+              {description ?? (account
                 ? "Statistics are synced to your account."
-                : "Statistics are saved on this device until you sign in."}
+                : "Statistics are saved on this device until you sign in.")}
             </p>
           </div>
           <div className="statistics-record">
@@ -2779,13 +2793,20 @@ function StatisticsScreen({
               </section>
             </div>
             <p className="statistics-footnote">
-              Local hot-seat games include every Human seat controlled on this
-              device. Puzzles, tutorials, challenges, and simulations never
-              contribute to match totals.
+              {footnote}
             </p>
           </>
         )}
       </section>
+  );
+  if (embedded) return content;
+  return (
+    <SetupNavigationShell
+      backLabel="Back to Play"
+      onBack={onBack}
+      headerAction={accountControl}
+    >
+      {content}
     </SetupNavigationShell>
   );
 }
@@ -2797,6 +2818,12 @@ function AchievementsScreen({
   loading,
   puzzleCounts,
   onBack,
+  completedIds,
+  showProgress = true,
+  embedded = false,
+  eyebrow = "ACHIEVEMENTS",
+  title = "Chronicle of legends",
+  description,
 }: {
   progress: AchievementProgress;
   account?: AccountProfile;
@@ -2810,23 +2837,26 @@ function AchievementsScreen({
     dailyStreak: number;
   };
   onBack: () => void;
+  completedIds?: AchievementId[];
+  showProgress?: boolean;
+  embedded?: boolean;
+  eyebrow?: string;
+  title?: string;
+  description?: string;
 }) {
-  const completed = new Set(completedAchievementIds(progress));
-  return (
-    <SetupNavigationShell
-      backLabel="Back to Play"
-      onBack={onBack}
-      headerAction={accountControl}
-    >
+  const completed = new Set(
+    completedIds ?? completedAchievementIds(progress),
+  );
+  const content = (
       <section className="achievements-page">
         <header className="achievements-heading">
           <div>
-            <p className="eyebrow">ACHIEVEMENTS</p>
-            <h1>Chronicle of legends</h1>
+            <p className="eyebrow">{eyebrow}</p>
+            <h1>{title}</h1>
             <p>
-              {account
+              {description ?? (account
                 ? "Progress is saved to your account."
-                : "Progress is saved on this device until you sign in."}
+                : "Progress is saved on this device until you sign in.")}
             </p>
           </div>
           <strong>{completed.size} / {ACHIEVEMENT_DEFINITIONS.length}</strong>
@@ -2857,7 +2887,7 @@ function AchievementsScreen({
                   <div>
                     <h2>{achievement.title}</h2>
                     <p>{achievement.description}</p>
-                    {achievement.goal && (
+                    {achievement.goal && showProgress && (
                       <div className="achievement-progress">
                         <div>
                           <i
@@ -2881,6 +2911,136 @@ function AchievementsScreen({
           </div>
         )}
       </section>
+  );
+  if (embedded) return content;
+  return (
+    <SetupNavigationShell
+      backLabel="Back to Play"
+      onBack={onBack}
+      headerAction={accountControl}
+    >
+      {content}
+    </SetupNavigationShell>
+  );
+}
+
+export function FriendProfileScreen({
+  friend,
+  loading,
+  accountControl,
+  onBack,
+  onRemove,
+}: {
+  friend?: FriendProfile;
+  loading: boolean;
+  accountControl: ReactNode;
+  onBack: () => void;
+  onRemove: (friend: FriendProfile) => Promise<void>;
+}) {
+  const [removing, setRemoving] = useState(false);
+  const [error, setError] = useState("");
+  const emptyProgress = useMemo(createAchievementProgress, []);
+  const emptyPuzzleCounts = useMemo(() => ({
+    easy: 0,
+    medium: 0,
+    hard: 0,
+    daily: 0,
+    dailyStreak: 0,
+  }), []);
+
+  useEffect(() => setError(""), [friend?.publicId]);
+
+  return (
+    <SetupNavigationShell
+      backLabel="Back"
+      onBack={onBack}
+      headerAction={accountControl}
+    >
+      <div className="friend-profile-page">
+        {loading ? (
+          <div className="achievements-loading">
+            <LoaderCircle className="spin" size={24} />
+            <span>Loading friend profile</span>
+          </div>
+        ) : !friend ? (
+          <section className="statistics-page">
+            <p className="account-empty">
+              This friend profile is unavailable. The friendship may have been removed.
+            </p>
+          </section>
+        ) : (
+          <>
+            <header className="friend-profile-page-heading">
+              <div>
+                <p className="eyebrow">FRIEND PROFILE</p>
+                <h1>{friend.displayName}</h1>
+                <p>{friend.publicId}</p>
+              </div>
+              <button
+                className="secondary-button account-danger friend-remove-button"
+                disabled={removing}
+                onClick={() => {
+                  setRemoving(true);
+                  setError("");
+                  void onRemove(friend)
+                    .catch((nextError) => {
+                      console.error("Unable to remove friend.", nextError);
+                      setError(
+                        nextError instanceof Error
+                          ? nextError.message
+                          : "Unable to remove friend.",
+                      );
+                    })
+                    .finally(() => setRemoving(false));
+                }}
+              >
+                {removing
+                  ? <LoaderCircle className="spin" size={16} />
+                  : <UserMinus size={16} />}
+                Remove friend
+              </button>
+            </header>
+            {error && <p className="account-error" role="alert">{error}</p>}
+            {friend.stats ? (
+              <StatisticsScreen
+                statistics={friend.stats}
+                accountControl={null}
+                loading={false}
+                onDismissError={() => undefined}
+                onBack={() => undefined}
+                embedded
+                eyebrow="FRIEND STATS"
+                title={`${friend.displayName}'s divine record`}
+                description="Complete public match and puzzle statistics."
+                footnote="Statistics reflect tracked matches on this player's account. Puzzles, tutorials, challenges, and simulations do not contribute to match totals."
+              />
+            ) : (
+              <section className="statistics-page friend-profile-section">
+                <header className="statistics-heading">
+                  <div>
+                    <p className="eyebrow">FRIEND STATS</p>
+                    <h1>{friend.displayName}&apos;s divine record</h1>
+                    <p>No public game statistics yet.</p>
+                  </div>
+                </header>
+              </section>
+            )}
+            <AchievementsScreen
+              progress={emptyProgress}
+              accountControl={null}
+              loading={false}
+              puzzleCounts={emptyPuzzleCounts}
+              onBack={() => undefined}
+              completedIds={friend.completedAchievementIds}
+              showProgress={false}
+              embedded
+              eyebrow="FRIEND ACHIEVEMENTS"
+              title={`${friend.displayName}'s chronicle`}
+              description="Completed achievements are shared; in-progress counters remain private."
+            />
+          </>
+        )}
+      </div>
     </SetupNavigationShell>
   );
 }
@@ -5369,6 +5529,11 @@ export default function App() {
   const [puzzleCategory, setPuzzleCategory] = useState<PuzzleCategory | undefined>(
     initialNavigation.puzzleCategory,
   );
+  const [friendPublicId, setFriendPublicId] = useState<string | undefined>(
+    initialNavigation.friendPublicId,
+  );
+  const [friendProfileReturnView, setFriendProfileReturnView] =
+    useState<StartView>("play");
   const [fourPlayerSession, setFourPlayerSession] = useState<FourPlayerSession>();
   const [threePlayerSession, setThreePlayerSession] = useState<ThreePlayerSession>();
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -5431,6 +5596,7 @@ export default function App() {
       setSetupCategory(route.setupCategory);
       setSetupPlayerCount(route.setupPlayerCount);
       setPuzzleCategory(route.puzzleCategory);
+      setFriendPublicId(route.friendPublicId);
       setStartView(route.startView);
     };
     window.addEventListener("popstate", restore);
@@ -5443,6 +5609,7 @@ export default function App() {
       setupCategory,
       setupPlayerCount,
       puzzleCategory,
+      friendPublicId,
     };
     const path = startView === "none"
       ? state.gameMode === "puzzle" && state.puzzleId?.startsWith("daily-")
@@ -5467,6 +5634,7 @@ export default function App() {
     }
   }, [
     puzzleCategory,
+    friendPublicId,
     setupCategory,
     setupPlayerCount,
     startView,
@@ -7498,6 +7666,13 @@ export default function App() {
   };
   const fourOnlineCanonical = fourOnline.snapshot?.canonical;
   const threeOnlineCanonical = threeOnline.snapshot?.canonical;
+  const openFriendProfile = (friend: FriendProfile) => {
+    setFriendProfileReturnView((current) =>
+      startView === "friend-profile" ? current : startView
+    );
+    setFriendPublicId(friend.publicId);
+    setStartView("friend-profile");
+  };
   const renderAccountControl = (className = "setup-account-area") => (
     <AccountControl
       account={accountService.account}
@@ -7516,6 +7691,7 @@ export default function App() {
       onStartAccountFresh={() => finishLocalDataImportDecision(false)}
       social={social}
       onAcceptInvite={acceptGameInvite}
+      onViewFriendProfile={openFriendProfile}
       className={className}
     />
   );
@@ -7541,6 +7717,26 @@ export default function App() {
         onStartAccountFresh={() => finishLocalDataImportDecision(false)}
         social={social}
         onAcceptInvite={acceptGameInvite}
+        onViewFriendProfile={openFriendProfile}
+      />
+    );
+  }
+
+  if (startView === "friend-profile") {
+    const friend = social.friends.find(
+      (candidate) => candidate.publicId === friendPublicId,
+    );
+    const leaveFriendProfile = () => setStartView(friendProfileReturnView);
+    return (
+      <FriendProfileScreen
+        friend={friend}
+        loading={social.loading}
+        accountControl={renderAccountControl()}
+        onBack={leaveFriendProfile}
+        onRemove={async (profile) => {
+          await social.removeFriend(profile.publicId);
+          leaveFriendProfile();
+        }}
       />
     );
   }

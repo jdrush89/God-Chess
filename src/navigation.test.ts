@@ -38,5 +38,14 @@ describe("app navigation", () => {
       startView: "stats",
       setupCategory: "local",
     })).toBe("/stats");
+    expect(appRouteFromPath("/friends/gc-athena22")).toMatchObject({
+      startView: "friend-profile",
+      friendPublicId: "gc-athena22",
+    });
+    expect(appPathForRoute({
+      startView: "friend-profile",
+      setupCategory: "local",
+      friendPublicId: "gc-athena22",
+    })).toBe("/friends/gc-athena22");
   });
 });
