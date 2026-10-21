@@ -361,7 +361,7 @@ export function AccountModal({
   };
 
   return (
-    <div className="modal-backdrop">
+    <div className="modal-backdrop account-modal-backdrop">
       <section className="account-modal">
         <button className="close-button" onClick={onClose} aria-label="Close account">
           <X size={20} />

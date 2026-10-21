@@ -1091,7 +1091,10 @@ describe("game startup", () => {
     accountHarness.configured = true;
     const { rerender } = render(<App />);
     fireEvent.click(screen.getByRole("button", { name: /^sign in$/i }));
-    expect(screen.getByRole("button", { name: /close account/i })).toBeTruthy();
+    const accountDialog = screen.getByRole("button", {
+      name: /close account/i,
+    }).closest(".modal-backdrop");
+    expect(accountDialog?.classList.contains("account-modal-backdrop")).toBe(true);
 
     accountHarness.account = {
       userId: "account-1",
