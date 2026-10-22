@@ -342,7 +342,8 @@ body::before {
   .piece-info-column .square-info-panel { position: sticky; top: 94px; max-height: calc(100dvh - 130px); }
   .game-layout .side-square-info { display: none; }
 }
-.board-column > .player-bar { width: min(100%, var(--board-size)); }
+.board-column > .player-bar,
+.board-column > .board-result-control { width: min(100%, var(--board-size)); }
 .side-column {
   min-width: 0; height: calc(var(--board-size) + 118px);
   display: flex; flex-direction: column;
@@ -1137,6 +1138,10 @@ span.move-target-dot {
 .finished-result-control small { overflow: hidden; color: #8f9096; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .finished-result-control button {
   min-height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+}
+.board-result-control {
+  position: static; z-index: auto; left: auto; bottom: auto; box-sizing: border-box;
+  margin-top: 10px; justify-self: end; transform: none;
 }
 .finished-view .turn-notice p { color: #a6a096; }
 .escape-menu-trigger {
@@ -2190,7 +2195,9 @@ span.move-target-dot {
   .pantheon-grid { grid-template-columns: repeat(2, 1fr); }
   .game-layout { grid-template-columns: 1fr; max-width: 760px; }
   .board-column { width: 100%; max-width: none; justify-self: stretch; }
-  .board-column > .player-bar, .board-shell { width: 100%; }
+  .board-column > .player-bar,
+  .board-column > .board-result-control,
+  .board-shell { width: 100%; }
   .side-column { width: 100%; height: auto; }
   .action-panel { height: auto; min-height: auto; flex: none; overflow-y: visible; scrollbar-gutter: auto; }
   .god-selection-panel .god-list { display: grid; grid-template-rows: none; }
@@ -2233,7 +2240,9 @@ span.move-target-dot {
   .draft-roster > small { display: none; }
   .draft-roster > div { grid-column: 1 / -1; justify-content: flex-start; }
   .game-layout { width: 100%; margin-top: 0; gap: 14px; }
-  .board-column > .player-bar, .board-shell {
+  .board-column > .player-bar,
+  .board-column > .board-result-control,
+  .board-shell {
     width: 100vw; max-width: 100%; min-width: 0;
   }
   .board-frame { padding: 5px; }

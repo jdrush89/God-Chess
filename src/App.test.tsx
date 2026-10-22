@@ -1944,6 +1944,12 @@ describe("game startup", () => {
     fireEvent.click(screen.getByRole("button", { name: /view board/i }));
     expect(screen.queryByText("PUZZLE SOLVED")).toBeNull();
     expect(screen.getByRole("button", { name: /view result/i })).toBeTruthy();
+    const finishedControl = screen.getByRole("status", {
+      name: /puzzle finished/i,
+    });
+    expect(finishedControl.classList.contains("board-result-control")).toBe(true);
+    expect(finishedControl.parentElement?.classList.contains("board-column"))
+      .toBe(true);
   });
 
   it("completes a defensive puzzle immediately without starting an AI reply", async () => {
