@@ -1925,13 +1925,17 @@ describe("game startup", () => {
     const puzzle = PUZZLES[0];
     let solvedState = puzzle.createState("Solver");
     for (const action of puzzle.solutionTurns[0]) solvedState = gameReducer(solvedState, action);
+    const capturedKing = [...solvedState.captureAnimations]
+      .reverse()
+      .find((event) => event.piece.type === "king");
+    expect(capturedKing).toBeTruthy();
     window.localStorage.setItem(LEGACY_SAVE_KEY, JSON.stringify({
       version: 1,
       savedAt: new Date().toISOString(),
       state: solvedState,
     }));
 
-    render(<App />);
+    const { container } = render(<App />);
     openPlayOption("Load");
     fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
 
@@ -1950,6 +1954,16 @@ describe("game startup", () => {
     expect(finishedControl.classList.contains("board-result-control")).toBe(true);
     expect(finishedControl.parentElement?.classList.contains("board-column"))
       .toBe(true);
+    expect(
+      container.querySelector(
+        `[data-defeated-king="${capturedKing!.source}"]`,
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("gridcell", {
+        name: new RegExp(`${capturedKing!.source}.*defeated .* king`, "i"),
+      }),
+    ).toBeTruthy();
   });
 
   it("completes a defensive puzzle immediately without starting an AI reply", async () => {

@@ -130,6 +130,7 @@ export interface Piece {
 export interface GravePiece {
   piece: Piece;
   capturedOnTurn: number;
+  capturedFrom?: Square;
 }
 
 export interface PlayerState {

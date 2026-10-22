@@ -368,7 +368,10 @@ describe("game flow", () => {
 
     expect(state.board.f6).toMatchObject({ id: "white-king", type: "king" });
     expect(state.board.g7).toMatchObject({ id: "white-escort", type: "rook" });
-    expect(state.players.black.graveyard.at(-1)?.piece.id).toBe("black-king");
+    expect(state.players.black.graveyard.at(-1)).toMatchObject({
+      piece: { id: "black-king" },
+      capturedFrom: "g7",
+    });
     expect(state.phase).toBe("gameover");
     expect(state.winner).toBe("white");
   });
@@ -731,6 +734,7 @@ describe("game flow", () => {
     state = gameReducer(state, { type: "square", square: "d5" });
 
     expect(state.players.black.graveyard).toHaveLength(1);
+    expect(state.players.black.graveyard.at(-1)?.capturedFrom).toBe("d5");
     expect(state.captureAnimations.at(-1)).toMatchObject({
       player: "black",
       source: "d5",

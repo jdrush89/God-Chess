@@ -644,6 +644,16 @@ span.move-target-dot {
 .chess-piece.white { color: #f5f0e6; -webkit-text-stroke: 1px #6f6557; text-shadow: 0 1px 0 #fff; }
 .chess-piece.black { color: #17191d; -webkit-text-stroke: 1px #060708; text-shadow: 0 1px 0 #5c5e63; }
 .chess-piece.hired { text-shadow: 0 0 10px var(--gold-bright); }
+.defeated-king-marker {
+  position: absolute; z-index: 5; inset: 7%; display: grid; place-items: center;
+  pointer-events: none;
+}
+.defeated-king-marker > * { grid-area: 1 / 1; }
+.defeated-king-piece { opacity: .58; filter: grayscale(.35); }
+.defeated-king-marker svg {
+  width: 72%; height: 72%; color: #b32f27; stroke-width: 3.6;
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,.9));
+}
 .status-markers {
   position: absolute; top: -5px; right: -10px; z-index: 5; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 2px;
   width: 30px; pointer-events: none; -webkit-text-stroke: 0;
