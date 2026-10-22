@@ -4886,6 +4886,24 @@ export function GameScreen({
             graveyardArriving={arrivingGraveyards.has("white")}
             portraitId={playerPortraits?.white}
           />
+          {puzzleResultReady && !puzzleResultOpen && (
+            <aside
+              className="finished-result-control board-result-control"
+              role="status"
+              aria-label="Puzzle finished"
+            >
+              <span>
+                <strong>Puzzle finished</strong>
+                <small>{puzzleSolved ? "Solved" : "Winning line missed"}</small>
+              </span>
+              <button
+                className="primary-button"
+                onClick={() => setPuzzleResultOpen(true)}
+              >
+                View result
+              </button>
+            </aside>
+          )}
         </section>
         <div className="side-column" data-tutorial="divine-actions">
           {state.phase === "upgrade" ? (
@@ -4988,24 +5006,6 @@ export function GameScreen({
         leaveLabel={leaveLabel}
         onQuitWithoutSaving={onQuitWithoutSaving}
       />
-      {puzzleResultReady && !puzzleResultOpen && (
-        <aside
-          className="finished-result-control"
-          role="status"
-          aria-label="Puzzle finished"
-        >
-          <span>
-            <strong>Puzzle finished</strong>
-            <small>{puzzleSolved ? "Solved" : "Winning line missed"}</small>
-          </span>
-          <button
-            className="primary-button"
-            onClick={() => setPuzzleResultOpen(true)}
-          >
-            View result
-          </button>
-        </aside>
-      )}
       {puzzleSolved && puzzleVictoryReady && puzzle && puzzleResultOpen && (
         <div className="modal-backdrop">
           <section className="gameover-modal">
