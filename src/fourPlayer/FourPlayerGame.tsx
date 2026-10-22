@@ -299,6 +299,7 @@ function FourPlayerDraft({
   canUndo,
   onUndo,
   completedAchievements,
+  playerPortraits,
 }: {
   state: FourPlayerState;
   dispatch: FourPlayerDispatch;
@@ -307,6 +308,7 @@ function FourPlayerDraft({
   canUndo: boolean;
   onUndo: () => void;
   completedAchievements: Partial<Record<AchievementId, string>>;
+  playerPortraits?: Partial<Record<Seat, AccountPortraitId>>;
 }) {
   const [inspected, setInspected] = useState<GodId>(state.draft.available[0]);
   const [godPreviewLevel, setGodPreviewLevel] = useState<number>();
@@ -342,7 +344,14 @@ function FourPlayerDraft({
             className="four-seat-dot"
             style={{ "--seat-color": state.config.seats[state.activeSeat].displayColor } as React.CSSProperties}
           />
-          {activePlayer.name} · {seatName(state.activeSeat)} picks
+          {playerPortraits?.[state.activeSeat] && (
+            <AccountPortrait
+              portraitId={playerPortraits[state.activeSeat]}
+              className="draft-player-portrait"
+              alt=""
+            />
+          )}
+          <span>{activePlayer.name} · {seatName(state.activeSeat)} picks</span>
           {activePlayer.control.kind === "ai" && <LoaderCircle className="spin" size={15} />}
         </div>
         <div className="header-actions">
@@ -519,7 +528,16 @@ function FourPlayerDraft({
             >
               <Crown size={14} />
             </span>
-            <strong>{state.players[seat].name}</strong>
+            <span className="draft-player-identity">
+              {playerPortraits?.[seat] && (
+                <AccountPortrait
+                  portraitId={playerPortraits[seat]}
+                  className="draft-player-portrait"
+                  alt=""
+                />
+              )}
+              <strong>{state.players[seat].name}</strong>
+            </span>
             <small>{seatName(seat)}</small>
             <div>
               {state.players[seat].gods.map((godId) => (
@@ -2353,6 +2371,7 @@ export function FourPlayerGame({
           canUndo={canUndo}
           onUndo={applyUndo}
           completedAchievements={completedAchievements}
+          playerPortraits={playerPortraits}
         />
         <MatchEscapeMenu
           onOpenRules={() => setRulesOpen(true)}

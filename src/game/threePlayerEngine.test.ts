@@ -8,6 +8,8 @@ import {
   createThreePlayerGame,
   threePlayerReducer,
 } from "./threePlayerEngine";
+import { threePlayerLegalMoves } from "./threePlayerChess";
+import { threePlayerCellNotation } from "./threePlayerTopology";
 import { enumerateCompleteThreePlayerPlans } from "./threePlayerPlans";
 import { GODS } from "./gods";
 
@@ -83,6 +85,22 @@ describe("three-player deterministic lifecycle", () => {
     state = playFirstPlan(state);
     expect(state.completedTurns.red).toBe(1);
     expect(threePlayerPieceAffinity(state, redPiece)).toBe("dark");
+  });
+
+  it("records Yalta move history with piece and sector coordinates", () => {
+    let state = finishDraft();
+    const actor = state.activeSeat;
+    const move = threePlayerLegalMoves(state, actor)[0];
+    const moving = state.board[move.from];
+
+    state = threePlayerReducer(state, { type: "move", ...move });
+
+    expect(state.lastAction).toBe(
+      `${state.players[actor].name} moved ${moving.type} from ${
+        threePlayerCellNotation("three-player", move.from)
+      } to ${threePlayerCellNotation("three-player", move.to)}.`,
+    );
+    expect(state.lastAction).not.toContain("three-player:");
   });
 
   it("enumerates stable ordinary actions on all five topologies", () => {

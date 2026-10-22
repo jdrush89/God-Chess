@@ -724,12 +724,14 @@ function DraftScreen({
   onQuickDraft,
   inputDisabled = false,
   completedAchievements,
+  playerPortraits,
 }: {
   state: GameState;
   dispatch: GameDispatch;
   onQuickDraft?: () => void;
   inputDisabled?: boolean;
   completedAchievements: AchievementProgress["completed"];
+  playerPortraits?: Partial<Record<Color, AccountPortraitId>>;
 }) {
   const [inspected, setInspected] = useState<GodId>(state.draft.available[0]);
   const [godPreviewLevel, setGodPreviewLevel] = useState<number>();
@@ -768,7 +770,14 @@ function DraftScreen({
         <Brand />
         <div className="draft-turn">
           <span className={`turn-dot ${state.activeColor}`} />
-          {activePlayer.name} · {state.activeColor} picks
+          {playerPortraits?.[state.activeColor] && (
+            <AccountPortrait
+              portraitId={playerPortraits[state.activeColor]}
+              className="draft-player-portrait"
+              alt=""
+            />
+          )}
+          <span>{activePlayer.name} · {state.activeColor} picks</span>
         </div>
         <div className="header-actions" aria-hidden="true" />
       </header>
@@ -919,7 +928,16 @@ function DraftScreen({
         {(["white", "black"] as Color[]).map((color) => (
           <div className="draft-roster" key={color}>
             <span className={`player-crest ${color}`}><Crown size={14} /></span>
-            <strong>{state.players[color].name}</strong>
+            <span className="draft-player-identity">
+              {playerPortraits?.[color] && (
+                <AccountPortrait
+                  portraitId={playerPortraits[color]}
+                  className="draft-player-portrait"
+                  alt=""
+                />
+              )}
+              <strong>{state.players[color].name}</strong>
+            </span>
             <small>{color}</small>
             <div>
               {state.players[color].gods.map((godId, index) => (
@@ -8489,6 +8507,7 @@ export default function App() {
                 : quickDraft
             }
             inputDisabled={inputDisabled}
+            playerPortraits={classicPlayerPortraits}
           />
         )
         : (

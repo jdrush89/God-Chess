@@ -155,6 +155,68 @@ const installDeterministicAiWorker = () => {
 };
 
 describe("ThreePlayerGame", () => {
+  it("switches Sing between the rook, Queen, and Knight", () => {
+    let state = createThreePlayerGame();
+    state.phase = "play";
+    state.activeSeat = "white";
+    state.players.white.gods = ["teles"];
+    const relocate = (from: string, to: string) => {
+      state.board[to] = state.board[from];
+      delete state.board[from];
+    };
+    for (const [from, to] of [
+      ["three-player:18", "three-player:10"],
+      ["three-player:49", "three-player:41"],
+      ["three-player:81", "three-player:73"],
+      ["three-player:30", "three-player:13"],
+      ["three-player:48", "three-player:40"],
+      ["three-player:80", "three-player:72"],
+    ]) relocate(from, to);
+    state = threePlayerReducer(state, {
+      type: "select-god",
+      godId: "teles",
+    });
+    state = threePlayerReducer(state, {
+      type: "select-ability",
+      abilityId: "resonance",
+    });
+    state = threePlayerReducer(state, {
+      type: "cell",
+      cell: "three-player:31",
+    });
+
+    renderGame(state);
+
+    fireEvent.click(screen.getByRole("gridcell", {
+      name: /three-player:27, white queen, legal move source/i,
+    }));
+    expect(
+      screen.getAllByText(/choose a destination for the queen/i).length,
+    ).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole("gridcell", {
+      name: /three-player:13, white knight, legal move source/i,
+    }));
+    expect(
+      screen.getAllByText(/choose a destination for the knight/i).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("shows player portraits beside names throughout the draft", () => {
+    const { container } = render(
+      <ThreePlayerGame
+        initialState={createThreePlayerGame()}
+        playerPortraits={{ white: "ares", red: "medusa" }}
+        onQuit={() => undefined}
+        onNewGame={() => undefined}
+      />,
+    );
+
+    expect(container.querySelector(".draft-turn .portrait-ares")).toBeTruthy();
+    expect(container.querySelector(".three-draft-rosters .portrait-ares")).toBeTruthy();
+    expect(container.querySelector(".three-draft-rosters .portrait-medusa")).toBeTruthy();
+  });
+
   it("shows three-player puzzle objectives and reports a solved position", async () => {
     const puzzle = THREE_PLAYER_PUZZLES[0];
     const solved = puzzle.solutionTurns

@@ -88,6 +88,23 @@ const completeFourPlayerDraft = (
 };
 
 describe("four-player app integration", () => {
+  it("shows player portraits beside names throughout the draft", () => {
+    const { container } = render(
+      <FourPlayerGame
+        initialState={createFourPlayerGame()}
+        playerPortraits={{ north: "ares", east: "medusa" }}
+        undoPreferred={false}
+        onUndoPreferenceChange={vi.fn()}
+        onQuit={vi.fn()}
+        onNewGame={vi.fn()}
+      />,
+    );
+
+    expect(container.querySelector(".draft-turn .portrait-ares")).toBeTruthy();
+    expect(container.querySelector(".four-draft-rosters .portrait-ares")).toBeTruthy();
+    expect(container.querySelector(".four-draft-rosters .portrait-medusa")).toBeTruthy();
+  });
+
   it("uses Undo to return an uncommitted God or ability selection to the God list", () => {
     const state = completeFourPlayerDraft();
     state.phase = "play";
