@@ -30,21 +30,21 @@ export function GameResultPresentation({
 }: GameResultPresentationProps) {
   const titleId = useId();
   const descriptionId = useId();
-  const seeBoardRef = useRef<HTMLButtonElement>(null);
+  const viewBoardRef = useRef<HTMLButtonElement>(null);
   const viewResultRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLElement>(null);
   const restoreBoardFocus = useRef(false);
 
   useEffect(() => {
     if (open) {
-      seeBoardRef.current?.focus();
+      viewBoardRef.current?.focus();
     } else if (restoreBoardFocus.current) {
       restoreBoardFocus.current = false;
       viewResultRef.current?.focus();
     }
   }, [open]);
 
-  const seeBoard = () => {
+  const viewBoard = () => {
     restoreBoardFocus.current = true;
     onOpenChange(false);
   };
@@ -93,7 +93,7 @@ export function GameResultPresentation({
       onKeyDown={(event) => {
         if (event.key === "Escape") {
           event.preventDefault();
-          seeBoard();
+          viewBoard();
           return;
         }
         if (event.key !== "Tab") return;
@@ -125,8 +125,8 @@ export function GameResultPresentation({
         <h2 id={titleId} aria-live="assertive">{title}</h2>
         <p id={descriptionId}>{description}</p>
         <div className="game-result-actions">
-          <button className="primary-button" onClick={seeBoard} ref={seeBoardRef}>
-            See board
+          <button className="primary-button" onClick={viewBoard} ref={viewBoardRef}>
+            View board
           </button>
           {undoControl}
           <button className="secondary-button" onClick={onNewGame}>

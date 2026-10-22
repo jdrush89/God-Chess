@@ -113,7 +113,7 @@ const usesAuthoredPuzzleRules = (state: GameState) =>
   state.gameMode === "puzzle" &&
   !state.puzzleId?.startsWith("daily-");
 const allowsPuzzleKingCapture = (state: GameState) =>
-  usesAuthoredPuzzleRules(state);
+  state.gameMode === "puzzle";
 
 const present = (
   state: GameState,

@@ -23,13 +23,13 @@ describe("GameResultPresentation", () => {
       />,
     );
 
-    const seeBoard = screen.getByRole("button", { name: /see board/i });
+    const viewBoard = screen.getByRole("button", { name: /view board/i });
     const newGame = screen.getByRole("button", { name: /new game/i });
-    await waitFor(() => expect(document.activeElement).toBe(seeBoard));
+    await waitFor(() => expect(document.activeElement).toBe(viewBoard));
 
-    fireEvent.keyDown(seeBoard, { key: "Tab", shiftKey: true });
+    fireEvent.keyDown(viewBoard, { key: "Tab", shiftKey: true });
     expect(document.activeElement).toBe(newGame);
     fireEvent.keyDown(newGame, { key: "Tab" });
-    expect(document.activeElement).toBe(seeBoard);
+    expect(document.activeElement).toBe(viewBoard);
   });
 });

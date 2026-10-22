@@ -177,6 +177,10 @@ describe("ThreePlayerGame", () => {
       .toBeTruthy();
     expect(screen.getByText("Both rivals checkmated")).toBeTruthy();
     await waitFor(() => expect(onPuzzleComplete).toHaveBeenCalledWith(puzzle.id));
+
+    fireEvent.click(screen.getByRole("button", { name: /view board/i }));
+    expect(screen.queryByRole("heading", { name: /puzzle solved/i })).toBeNull();
+    expect(screen.getByRole("button", { name: /view result/i })).toBeTruthy();
   });
 
   it("undoes a completed three-player puzzle without requiring the undo setting", () => {
@@ -1505,7 +1509,7 @@ describe("ThreePlayerGame", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /see board/i }));
+    fireEvent.click(screen.getByRole("button", { name: /view board/i }));
     expect(screen.getByRole("button", { name: /view result/i })).toBeTruthy();
     expect(screen.getAllByRole("gridcell")[0].getAttribute("aria-disabled")).toBe("true");
     expect(container.querySelector(".finished-view")).toBeTruthy();
@@ -1560,7 +1564,7 @@ describe("ThreePlayerGame", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /see board/i }));
+    fireEvent.click(screen.getByRole("button", { name: /view board/i }));
     expect(screen.getAllByRole("gridcell")[0].getAttribute("aria-disabled")).toBe("true");
     fireEvent.click(screen.getByRole("button", { name: /view result/i }));
     expect((screen.getByRole("button", { name: /undo unavailable/i }) as HTMLButtonElement).disabled).toBe(true);

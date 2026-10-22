@@ -153,7 +153,7 @@ describe("daily puzzles", () => {
     expect(state.puzzlePlayerTurnsRemaining).toBe(3);
   });
 
-  it("requires the same terminal reason as the source simulation", () => {
+  it("accepts capturing the target King as an alternate Daily win", () => {
     const puzzle = DAILY_PUZZLES[0];
     const state = puzzle.createState();
     state.phase = "gameover";
@@ -164,8 +164,34 @@ describe("daily puzzles", () => {
       reason: "king-death",
     };
 
-    expect(dailyPuzzleResultMatches(puzzle, state)).toBe(false);
+    expect(dailyPuzzleResultMatches(puzzle, state)).toBe(true);
     state.result.reason = "checkmate";
+    expect(dailyPuzzleResultMatches(puzzle, state)).toBe(true);
+  });
+
+  it("lets Charge capture the adjacent King in the October 21 Daily", () => {
+    const puzzle = currentDailyPuzzle(new Date("2026-10-21T12:00:00"))!;
+    let state = puzzle.createState();
+    state.rested = state.rested.filter((godId) => godId !== "chiron");
+
+    state = gameReducer(state, { type: "select-god", godId: "chiron" });
+    state = gameReducer(state, {
+      type: "select-ability",
+      abilityId: "charge",
+    });
+    state = gameReducer(state, { type: "square", square: "f7" });
+
+    expect(state.legalTargets).toContain("g7");
+
+    state = gameReducer(state, { type: "square", square: "g7" });
+    expect(state).toMatchObject({
+      phase: "gameover",
+      result: {
+        kind: "winner",
+        winner: "white",
+        reason: "king-death",
+      },
+    });
     expect(dailyPuzzleResultMatches(puzzle, state)).toBe(true);
   });
 });
