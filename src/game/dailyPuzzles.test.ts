@@ -51,11 +51,30 @@ describe("daily puzzles", () => {
     let state = puzzle.createState();
     let completedPlayerTurns = 0;
 
+    expect(puzzle.playerTurns).toBeGreaterThanOrEqual(3);
+    expect(puzzle.playerTurns).toBeLessThanOrEqual(5);
+    expect(state.phase).toBe("play");
+    expect(state.activeColor).toBe(puzzle.playerColor);
+    expect(state.aiDifficulty).toBe(10);
+    expect(state.selectedGod).toBeUndefined();
+    expect(state.selectedAbility).toBeUndefined();
+    expect(state.selectedSquare).toBeUndefined();
+    expect(state.pending).toBeUndefined();
+    expect(state.upgradeQueue).toHaveLength(0);
+    expect(puzzle.hint).toMatch(
+      /^Start by moving a (king|queen|rook|bishop|knight|pawn)\./,
+    );
+    expect(puzzle.abilityHint).toMatch(
+      /^The winning CPU line (used .+|did not require a named God ability)\.$/,
+    );
+    expect(`${puzzle.hint} ${puzzle.abilityHint}`).not.toMatch(/simulation/i);
+
     for (const action of puzzle.solutionActions) {
       const before = state;
       state = gameReducer(state, action);
       if (
         before.phase === "play" &&
+        action.type !== "adjudicate-no-turn" &&
         before.activeColor === puzzle.playerColor &&
         (
           state.turn !== before.turn ||
