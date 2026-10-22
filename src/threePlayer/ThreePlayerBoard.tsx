@@ -3,6 +3,7 @@ import { useBoardDrag } from "../components/useBoardDrag";
 import { threePlayerHasAlternatingNeutralCells } from "../game/threePlayerDivineGeometry";
 import {
   getThreePlayerTopology,
+  threePlayerCellCoordinate,
   type ThreePlayerTopology,
 } from "../game/threePlayerTopology";
 import type {
@@ -11,12 +12,14 @@ import type {
   ThreePlayerPiece,
   ThreePlayerState,
 } from "../game/threePlayerTypes";
+import { THREE_PLAYER_SEATS } from "../game/threePlayerTypes";
 import {
   THREE_PLAYER_PIECE_SYMBOLS,
   threePlayerPieceStatusLabels,
 } from "./presentation";
 
 const RENDER_PADDING = 0.6;
+const YALTA_COORDINATE_PADDING = 1.25;
 const ENLARGED_PIECE_VARIANTS = new Set<ThreePlayerBoardVariant>([
   "three-hexagonal",
   "triad",
@@ -173,17 +176,104 @@ export function ThreePlayerBoard({
     () => getThreePlayerTopology(state.config.boardVariant),
     [state.config.boardVariant],
   );
+  const variant = state.config.boardVariant;
+  const yaltaCoordinateGuides = useMemo(() => {
+    if (variant !== "three-player" || preview) return [];
+    const center = [
+      topology.renderBounds.minX + topology.renderBounds.width / 2,
+      topology.renderBounds.minY + topology.renderBounds.height / 2,
+    ] as const;
+    const normalized = (x: number, y: number) => {
+      const length = Math.hypot(x, y) || 1;
+      return [x / length, y / length] as const;
+    };
+    return THREE_PLAYER_SEATS.map((seat) => {
+      const cells = topology.cellDescriptors.filter(
+        (descriptor) => descriptor.half === seat && descriptor.local,
+      );
+      const sectorCenter = cells.reduce(
+        ([x, y], descriptor) => [
+          x + descriptor.render.x / cells.length,
+          y + descriptor.render.y / cells.length,
+        ],
+        [0, 0],
+      );
+      const outward = normalized(
+        sectorCenter[0] - center[0],
+        sectorCenter[1] - center[1],
+      );
+      const backRank = cells
+        .filter((descriptor) => descriptor.local?.rank === 3)
+        .sort((left, right) =>
+          left.local!.file - right.local!.file
+        );
+      const backCenter = backRank.reduce(
+        ([x, y], descriptor) => [
+          x + descriptor.render.x / backRank.length,
+          y + descriptor.render.y / backRank.length,
+        ],
+        [0, 0],
+      );
+      const files = backRank.map((descriptor) => {
+        const coordinate = threePlayerCellCoordinate(variant, descriptor.id)!;
+        const inward = cells.find((candidate) =>
+          candidate.local?.file === descriptor.local?.file &&
+          candidate.local?.rank === 2
+        )!;
+        const edgeDirection = normalized(
+          descriptor.render.x - inward.render.x,
+          descriptor.render.y - inward.render.y,
+        );
+        return {
+          label: coordinate.file,
+          x: descriptor.render.x + edgeDirection[0] * 0.58,
+          y: descriptor.render.y + edgeDirection[1] * 0.58,
+        };
+      });
+      const ranks = cells
+        .filter((descriptor) => descriptor.local?.file === 0)
+        .sort((left, right) =>
+          right.local!.rank - left.local!.rank
+        )
+        .map((descriptor) => {
+          const inward = cells.find((candidate) =>
+            candidate.local?.file === 1 &&
+            candidate.local?.rank === descriptor.local?.rank
+          )!;
+          const edgeDirection = normalized(
+            descriptor.render.x - inward.render.x,
+            descriptor.render.y - inward.render.y,
+          );
+          const coordinate = threePlayerCellCoordinate(variant, descriptor.id)!;
+          return {
+            label: String(coordinate.rank),
+            x: descriptor.render.x + edgeDirection[0] * 0.58,
+            y: descriptor.render.y + edgeDirection[1] * 0.58,
+          };
+        });
+      return {
+        seat,
+        name: `${seat[0].toUpperCase()}${seat.slice(1)}`,
+        x: backCenter[0] + outward[0] * 1.05,
+        y: backCenter[1] + outward[1] * 1.05,
+        files,
+        ranks,
+      };
+    });
+  }, [preview, topology, variant]);
   const bounds = topology.renderBounds;
+  const renderPadding = yaltaCoordinateGuides.length
+    ? YALTA_COORDINATE_PADDING
+    : RENDER_PADDING;
   const viewBox = {
-    minX: bounds.minX - RENDER_PADDING,
-    minY: bounds.minY - RENDER_PADDING,
-    width: bounds.width + RENDER_PADDING * 2,
-    height: bounds.height + RENDER_PADDING * 2,
+    minX: bounds.minX - renderPadding,
+    minY: bounds.minY - renderPadding,
+    width: bounds.width + renderPadding * 2,
+    height: bounds.height + renderPadding * 2,
   };
   const legal = new Set(legalCells);
   const sources = new Set(sourceCells);
   const path = new Set(pathCells);
-  const variant = state.config.boardVariant;
   const enchantSourceChoice = (
     state.pending?.step === "enchant-enemy-move" ||
     state.pending?.step === "enchant-followup-move"
@@ -231,6 +321,10 @@ export function ThreePlayerBoard({
         const isProvisionalDestination = descriptor.id === provisionalDestination;
         const isDraggedSource = drag.draggingSource === descriptor.id;
         const statusLabels = piece ? threePlayerPieceStatusLabels(piece) : [];
+        const coordinateLabel = threePlayerCellCoordinate(
+          variant,
+          descriptor.id,
+        )?.label;
         const visualClass = descriptor.geometricClass === 2 &&
           threePlayerHasAlternatingNeutralCells(variant)
           ? "neutral"
@@ -262,6 +356,7 @@ export function ThreePlayerBoard({
           isProvisionalDestination
             ? "provisional move destination, not committed"
             : undefined,
+          coordinateLabel,
         ].filter(Boolean).join(", ");
         const shared = {
           className: cellClass,
@@ -318,6 +413,7 @@ export function ThreePlayerBoard({
             }}
             key={descriptor.id}
           >
+            {coordinateLabel && <title>{coordinateLabel}</title>}
             {shape}
             {isMoveTarget && !piece && (
               <circle
@@ -368,6 +464,37 @@ export function ThreePlayerBoard({
           </g>
         );
       })}
+      {yaltaCoordinateGuides.length > 0 && (
+        <g
+          className="three-yalta-coordinates"
+          aria-label="Yalta board coordinates"
+        >
+          {yaltaCoordinateGuides.map((guide) => (
+            <g
+              key={guide.seat}
+              aria-label={`${guide.name} sector coordinates`}
+            >
+              <text
+                className="three-yalta-sector-label"
+                x={guide.x}
+                y={guide.y}
+              >
+                {guide.name}
+              </text>
+              {[...guide.files, ...guide.ranks].map((label, index) => (
+                <text
+                  className="three-yalta-coordinate-label"
+                  x={label.x}
+                  y={label.y}
+                  key={`${label.label}-${index}`}
+                >
+                  {label.label}
+                </text>
+              ))}
+            </g>
+          ))}
+        </g>
+      )}
       </svg>
       {drag.preview && state.board[drag.preview.source] && (
         <div

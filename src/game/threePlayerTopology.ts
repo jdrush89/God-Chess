@@ -214,6 +214,21 @@ export interface ThreePlayerTopology {
   ): ThreePlayerCell | undefined;
 }
 
+export interface ThreePlayerCellCoordinate {
+  sector: ThreePlayerSeat;
+  file: string;
+  rank: number;
+  square: string;
+  label: string;
+}
+
+const YALTA_FILES = "abcdefgh";
+const THREE_PLAYER_SEAT_NAMES: Record<ThreePlayerSeat, string> = {
+  white: "White",
+  red: "Red",
+  black: "Black",
+};
+
 export const hexCellAffinity = (
   geometricClass: 0 | 1 | 2,
   q: number,
@@ -242,3 +257,27 @@ export const threePlayerTopologies = () => {
 export const getThreePlayerTopology = (
   variant: ThreePlayerBoardVariant,
 ): ThreePlayerTopology => threePlayerTopologies()[variant];
+
+export const threePlayerCellCoordinate = (
+  variant: ThreePlayerBoardVariant,
+  cell: ThreePlayerCell,
+): ThreePlayerCellCoordinate | undefined => {
+  if (variant !== "three-player") return undefined;
+  const descriptor = getThreePlayerTopology(variant).cellById.get(cell);
+  if (!descriptor?.half || !descriptor.local) return undefined;
+  const file = YALTA_FILES[descriptor.local.file];
+  const rank = 4 - descriptor.local.rank;
+  const square = `${file}${rank}`;
+  return {
+    sector: descriptor.half,
+    file,
+    rank,
+    square,
+    label: `${THREE_PLAYER_SEAT_NAMES[descriptor.half]} ${square}`,
+  };
+};
+
+export const threePlayerCellNotation = (
+  variant: ThreePlayerBoardVariant,
+  cell: ThreePlayerCell,
+) => threePlayerCellCoordinate(variant, cell)?.label ?? cell;

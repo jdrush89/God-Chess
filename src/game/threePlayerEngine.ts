@@ -43,7 +43,10 @@ import { prepareThreePlayerState } from "./threePlayerPersistence";
 import {
   isGodSkinFor,
 } from "../godSkins";
-import { getThreePlayerTopology } from "./threePlayerTopology";
+import {
+  getThreePlayerTopology,
+  threePlayerCellNotation,
+} from "./threePlayerTopology";
 import {
   THREE_PLAYER_SEATS,
   type ThreePlayerAction,
@@ -323,6 +326,9 @@ const emptyRecency = (): ThreePlayerState["kingAttackRecency"] => ({
 
 const name = (state: ThreePlayerState, seat: ThreePlayerSeat) =>
   state.players[seat].name;
+
+const cellNotation = (state: ThreePlayerState, cell: string) =>
+  threePlayerCellNotation(state.config.boardVariant, cell);
 
 const livingSeats = (state: ThreePlayerState) =>
   THREE_PLAYER_SEATS.filter((seat) => !state.players[seat].eliminated);
@@ -875,6 +881,7 @@ const reduceMove = (
 
   const previous = clone(state);
   const actor = state.activeSeat;
+  const moving = state.board[action.from];
   const applied = threePlayerApplyMove(state, move);
   state.board = applied.board;
   state.castlingRights = applied.castlingRights;
@@ -886,7 +893,9 @@ const reduceMove = (
   if (actor === "black") state.round += 1;
   appendHistory(
     state,
-    `${name(state, actor)} moved ${action.from} to ${action.to}.`,
+    `${name(state, actor)} moved ${moving?.type ?? "piece"} from ${
+      cellNotation(state, action.from)
+    } to ${cellNotation(state, action.to)}.`,
   );
   recordKingAttackChanges(previous, state);
   if (state.result) return true;
@@ -1667,7 +1676,6 @@ export const threePlayerAbilityMoveSources = (
 ): ThreePlayerCell[] => {
   if (
     !state.selectedAbility ||
-    state.selectedCell ||
     state.pending?.step !== "source"
   ) return [];
   return Object.keys(state.board).filter((cell) =>
@@ -2395,7 +2403,10 @@ const executeEscort = (
   mutatePosition(state);
   finishDivineTurn(
     state,
-    abilityDescription(state, `: escorted to ${plan.kingDestination}`),
+    abilityDescription(
+      state,
+      `: escorted to ${cellNotation(state, plan.kingDestination)}`,
+    ),
   );
 };
 
@@ -2454,7 +2465,10 @@ const executeMarchHome = (
   mutatePosition(state);
   finishDivineTurn(
     state,
-    abilityDescription(state, `: returned to ${destination}`),
+    abilityDescription(
+      state,
+      `: returned to ${cellNotation(state, destination)}`,
+    ),
   );
 };
 
@@ -2485,7 +2499,9 @@ const executeMovement = (
       state,
       abilityDescription(
         state,
-        `: enchanted a hostile piece, then moved ${pieceName(moving)} at ${from} -> ${result.to}`,
+        `: enchanted a hostile piece, then moved ${pieceName(moving)} from ${
+          cellNotation(state, from)
+        } to ${cellNotation(state, result.to)}`,
       ),
     );
     return;
@@ -2510,7 +2526,10 @@ const executeMovement = (
     mutatePosition(state);
     finishDivineTurn(
       state,
-      abilityDescription(state, `: entered stealth toward ${to}`),
+      abilityDescription(
+        state,
+        `: entered stealth toward ${cellNotation(state, to)}`,
+      ),
     );
     return;
   }
@@ -2638,7 +2657,9 @@ const executeMovement = (
     state,
     abilityDescription(
       state,
-      `: ${pieceName(moving)} at ${from} -> ${result.to}`,
+      `: moved ${pieceName(moving)} from ${cellNotation(state, from)} to ${
+        cellNotation(state, result.to)
+      }`,
     ),
   );
 };
@@ -2733,7 +2754,10 @@ const chooseTarget = (state: ThreePlayerState, cell: string) => {
       : "Confirm Rage.";
     return;
   }
-  finishDivineTurn(state, abilityDescription(state, ` on ${cell}`));
+  finishDivineTurn(
+    state,
+    abilityDescription(state, ` on ${cellNotation(state, cell)}`),
+  );
 };
 
 const chooseGravePiece = (
@@ -2768,7 +2792,10 @@ const completeSpecialTarget = (
       expires: "god",
       level: level as 1 | 2 | 3,
     });
-    finishDivineTurn(state, abilityDescription(state, ` on ${cell}`));
+    finishDivineTurn(
+      state,
+      abilityDescription(state, ` on ${cellNotation(state, cell)}`),
+    );
   } else if (pending.step === "hire") {
     const target = state.board[cell];
     if (!target?.controller || target.type === "king") return;
@@ -2778,7 +2805,10 @@ const completeSpecialTarget = (
     addOrbs(state, target.controller, 0, 4 + extra, cell);
     target.controller = state.activeSeat;
     target.status.hired = true;
-    finishDivineTurn(state, abilityDescription(state, ` on ${cell}`));
+    finishDivineTurn(
+      state,
+      abilityDescription(state, ` on ${cellNotation(state, cell)}`),
+    );
   } else if (pending.step === "revive-place" && pending.movedPieceId) {
     const graveyard = activePlayer(state).graveyard;
     const index = graveyard.findIndex(({ piece }) =>
@@ -2809,7 +2839,10 @@ const completeSpecialTarget = (
       state.notice = "Spend 2 more light orbs to resurrect another piece?";
       return;
     }
-    finishDivineTurn(state, abilityDescription(state, ` on ${cell}`));
+    finishDivineTurn(
+      state,
+      abilityDescription(state, ` on ${cellNotation(state, cell)}`),
+    );
   } else if (pending.step === "monument-sacrifice") {
     const selected = [...(pending.selected ?? []), cell];
     const required = 4 - currentLevel(state, "monument");
@@ -2842,7 +2875,10 @@ const completeSpecialTarget = (
       status: {},
     };
     mutatePosition(state);
-    finishDivineTurn(state, abilityDescription(state, ` on ${cell}`));
+    finishDivineTurn(
+      state,
+      abilityDescription(state, ` on ${cellNotation(state, cell)}`),
+    );
   }
 };
 
@@ -3673,7 +3709,10 @@ const handleCell = (state: ThreePlayerState, cell: string) => {
     ));
     if (threePlayerPieceValue(victim.type) === lowest) captureAt(state, cell);
     else moveDirect(state, attacker, cell);
-    finishDivineTurn(state, abilityDescription(state, ` on ${cell}`));
+    finishDivineTurn(
+      state,
+      abilityDescription(state, ` on ${cellNotation(state, cell)}`),
+    );
     return;
   }
   if (state.selectedCell) {
@@ -4195,7 +4234,9 @@ const applyThreePlayerMoveFirstCommit = (
       revision: action.expectedRevision,
       pieceId,
     };
-    state.notice = `${state.notice} The ${action.move.from} -> ${action.move.to} move is queued and has not changed the board.`;
+    const source = cellNotation(state, action.move.from);
+    const destination = cellNotation(state, action.move.to);
+    state.notice = `${state.notice} The ${source} to ${destination} move is queued and has not changed the board.`;
     return true;
   }
   return executeCanonicalMoveFirstMove(state, action.move);
@@ -4405,11 +4446,12 @@ export const availableThreePlayerActions = (
     type: "cell",
     cell,
   }));
-  if (
-    !state.legalCells!.length &&
-    state.pending?.step === "source"
-  ) {
+  if (state.pending?.step === "source") {
+    const availableCells = new Set(actions
+      .filter((action) => action.type === "cell")
+      .map((action) => action.cell));
     actions.push(...threePlayerAbilityMoveSources(state)
+      .filter((cell) => !availableCells.has(cell))
       .map((cell) => ({ type: "cell", cell } as ThreePlayerAction)));
   }
   if (canPassAction(state)) actions.push({ type: "pass" });

@@ -285,6 +285,7 @@ function ThreePlayerDraft({
   onUndo,
   roomCode,
   completedAchievements,
+  playerPortraits,
 }: {
   state: UiState;
   actions: UiAction[];
@@ -296,6 +297,7 @@ function ThreePlayerDraft({
   onUndo: () => void;
   roomCode?: string;
   completedAchievements: Partial<Record<AchievementId, string>>;
+  playerPortraits?: Partial<Record<ThreePlayerSeat, AccountPortraitId>>;
 }) {
   const [inspected, setInspected] = useState<GodId>(GODS[0].id);
   const [level, setLevel] = useState(1);
@@ -371,7 +373,14 @@ function ThreePlayerDraft({
             className="three-draft-seat-dot"
             style={{ "--seat-color": THREE_PLAYER_PALETTES[currentSeat] } as React.CSSProperties}
           />
-          {activePlayer.name} · {THREE_PLAYER_SEAT_LABELS[currentSeat]} picks
+          {playerPortraits?.[currentSeat] && (
+            <AccountPortrait
+              portraitId={playerPortraits[currentSeat]}
+              className="draft-player-portrait"
+              alt=""
+            />
+          )}
+          <span>{activePlayer.name} · {THREE_PLAYER_SEAT_LABELS[currentSeat]} picks</span>
           {activePlayer.control.kind === "ai" && <LoaderCircle className="spin" size={15} />}
         </div>
         <div className="three-game-actions">
@@ -563,7 +572,16 @@ function ThreePlayerDraft({
             >
               <Crown size={14} />
             </span>
-            <strong>{state.players[seat].name}</strong>
+            <span className="draft-player-identity">
+              {playerPortraits?.[seat] && (
+                <AccountPortrait
+                  portraitId={playerPortraits[seat]}
+                  className="draft-player-portrait"
+                  alt=""
+                />
+              )}
+              <strong>{state.players[seat].name}</strong>
+            </span>
             <small>{THREE_PLAYER_SEAT_LABELS[seat]}</small>
             <div>
               {state.players[seat].gods.map((godId) => (
@@ -1020,6 +1038,7 @@ export function ThreePlayerGame({
     onStatisticsChange?.(state as ThreePlayerState);
   }, [onStatisticsChange, state]);
   const [localSelectedCell, setLocalSelectedCell] = useState<ThreePlayerCell>();
+  const [selectionFeedback, setSelectionFeedback] = useState<string>();
   const [moveFirstDraft, setMoveFirstDraft] = useState<MoveFirstDraft>();
   const [inspectedCell, setInspectedCell] = useState<ThreePlayerCell>();
   const [previewLevel, setPreviewLevel] = useState<number>();
@@ -1138,7 +1157,7 @@ export function ThreePlayerGame({
     [state],
   );
   const moveActions = actions.filter((action) => action.type === "move");
-  const legalCells = state.legalCells?.length
+  const destinationCells = state.legalCells?.length
     ? state.legalCells
     : actions
       .filter((action) => action.type === "cell")
@@ -1158,9 +1177,12 @@ export function ThreePlayerGame({
         .map((action) => actionValue<string>(action, "to"))
         .filter((cell): cell is string => Boolean(cell))
       : [];
+  const legalCells = state.pending?.step === "source"
+    ? [...new Set([...destinationCells, ...abilityMoveSources])]
+    : destinationCells;
   const sourceCells = moveFirstEnabled && !moveFirstDraft
     ? [...moveFirstSources]
-    : !selectedCell && state.pending?.step === "source"
+    : state.pending?.step === "source"
       ? abilityMoveSources
       : !selectedCell && (
           state.pending?.step === "enchant-enemy-move" ||
@@ -1523,7 +1545,19 @@ export function ThreePlayerGame({
       (action) => action.type === "cell" && actionCell(action) === cell,
     );
     if (primitive) {
+      setSelectionFeedback(undefined);
       dispatchAction(primitive);
+      return;
+    }
+    const blockedSource = state.board[cell];
+    if (
+      state.pending?.step === "source" &&
+      state.selectedAbility &&
+      blockedSource?.controller === state.activeSeat
+    ) {
+      setSelectionFeedback(
+        `That ${blockedSource.type} has no legal destination for this ability. Choose another piece.`,
+      );
       return;
     }
     if (selectedCell) {
@@ -1648,6 +1682,7 @@ export function ThreePlayerGame({
           onUndo={undo}
           roomCode={onlineSession?.roomCode}
           completedAchievements={completedAchievements}
+          playerPortraits={playerPortraits}
         />
         <MatchEscapeMenu
           onOpenRules={() => setHelpOpen(true)}
@@ -2101,7 +2136,9 @@ export function ThreePlayerGame({
                     >
                       {active && state.pending && (
                         <div aria-label={`${ability.name} follow-up actions`}>
-                          <p className="ability-pending-prompt" role="status">{state.notice}</p>
+                          <p className="ability-pending-prompt" role="status">
+                            {selectionFeedback ?? state.notice}
+                          </p>
                           {attachedGenericActions.length > 0 && (
                             <div className="three-generic-actions">
                               {attachedGenericActions.map((pendingAction, index) => (

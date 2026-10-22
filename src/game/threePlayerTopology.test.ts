@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { threePlayerCellAffinity } from "./threePlayerDivineGeometry";
 import {
   getThreePlayerTopology,
+  threePlayerCellCoordinate,
+  threePlayerCellNotation,
   threePlayerTopologies,
   type ThreePlayerTopology,
 } from "./threePlayerTopology";
@@ -387,6 +389,23 @@ describe("hex topologies", () => {
 });
 
 describe("branched and wrapped topologies", () => {
+  it("formats Yalta cells as sector, file, and rank coordinates", () => {
+    expect(threePlayerCellCoordinate("three-player", "three-player:27"))
+      .toEqual({
+        sector: "white",
+        file: "d",
+        rank: 1,
+        square: "d1",
+        label: "White d1",
+      });
+    expect(threePlayerCellNotation("three-player", "three-player:18"))
+      .toBe("White c2");
+    expect(threePlayerCellNotation("three-player", "three-player:44"))
+      .toBe("Red e3");
+    expect(threePlayerCellNotation("three-circular", "three-circular:0"))
+      .toBe("three-circular:0");
+  });
+
   it("uses the exact Yalta rook and color-preserving bishop center continuations", () => {
     const topology = getThreePlayerTopology("three-player");
     const indexes = (cells: readonly string[]) =>
@@ -428,6 +447,7 @@ describe("branched and wrapped topologies", () => {
       "26",
       "8",
     ].sort());
+    expect(rayIndexes(27, "bishop")).toContain("18,9,0");
     for (const source of [1, 2, 17]) {
       const origin = topology.cellFromSourceIndex(source)!;
       const color = topology.cellById.get(origin)!.geometricClass;

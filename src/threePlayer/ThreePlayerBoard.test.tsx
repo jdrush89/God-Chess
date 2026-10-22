@@ -73,6 +73,24 @@ const polygonInradius = (
 }));
 
 describe("ThreePlayerBoard", () => {
+  it("shows file, rank, and sector guides on Yalta", () => {
+    const state = createThreePlayerGame();
+    render(<ThreePlayerBoard state={state} />);
+
+    const coordinates = screen.getByLabelText("Yalta board coordinates");
+    for (const seat of ["White", "Red", "Black"]) {
+      const sector = screen.getByLabelText(`${seat} sector coordinates`);
+      expect(coordinates.contains(sector)).toBe(true);
+      expect(sector.textContent).toContain(seat);
+      for (const file of "abcdefgh") {
+        expect(sector.textContent).toContain(file);
+      }
+      for (const rank of "1234") {
+        expect(sector.textContent).toContain(rank);
+      }
+    }
+  });
+
   it("drags a legal source piece to a destination cell", () => {
     const state = createThreePlayerGame(createDefaultThreePlayerConfig());
     const source = Object.keys(state.board).find(

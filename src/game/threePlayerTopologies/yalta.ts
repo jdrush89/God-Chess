@@ -427,30 +427,32 @@ export const createYaltaTopology = (): ThreePlayerTopology => {
           const boundary = prefix.at(-1) ?? origin;
           if (boundary.rank === 0) {
             const continuations = bishopCrossings(boundary, fileStep);
-            continuations.forEach((crossing, branch) => {
-              const ray = [...prefix, crossing];
-              const crossingFileStep = -fileStep;
-              for (
-                let nextFile = crossing.file + crossingFileStep, nextRank = 1;
-                nextFile >= 0 && nextFile < 8 && nextRank < 4;
-                nextFile += crossingFileStep, nextRank += 1
-              ) {
-                ray.push({
-                  half: crossing.half,
-                  file: nextFile,
-                  rank: nextRank,
+            if (continuations.length) {
+              continuations.forEach((crossing, branch) => {
+                const ray = [...prefix, crossing];
+                const crossingFileStep = -fileStep;
+                for (
+                  let nextFile = crossing.file + crossingFileStep, nextRank = 1;
+                  nextFile >= 0 && nextFile < 8 && nextRank < 4;
+                  nextFile += crossingFileStep, nextRank += 1
+                ) {
+                  ray.push({
+                    half: crossing.half,
+                    file: nextFile,
+                    rank: nextRank,
+                  });
+                }
+                traces.push({
+                  id: `three-player:bishop:${from}:${fileStep}:${rankStep}:${branch}`,
+                  kind: "bishop",
+                  origin: from,
+                  direction: `bishop:${fileStep}:${rankStep}:${branch}`,
+                  cells: ids(ray),
+                  context: traceContext(origin.half, ray),
                 });
-              }
-              traces.push({
-                id: `three-player:bishop:${from}:${fileStep}:${rankStep}:${branch}`,
-                kind: "bishop",
-                origin: from,
-                direction: `bishop:${fileStep}:${rankStep}:${branch}`,
-                cells: ids(ray),
-                context: traceContext(origin.half, ray),
               });
-            });
-            continue;
+              continue;
+            }
           }
         }
         if (prefix.length) {

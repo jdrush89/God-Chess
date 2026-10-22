@@ -2,6 +2,7 @@
 
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import type { AccountPortraitId } from "./account/portraits";
 import type { GameAction } from "./game/engine";
 import type { ThreePlayerOnlineState } from "./multiplayer/useThreePlayerOnlineGame";
 
@@ -22,6 +23,7 @@ const accountHarness = vi.hoisted(() => ({
       userId: string;
       email: string;
       displayName: string;
+      portraitId?: AccountPortraitId;
       needsDisplayName?: boolean;
       needsLocalDataImport?: boolean;
     }
@@ -2478,6 +2480,27 @@ describe("game startup", () => {
     fireEvent.click(screen.getByRole("button", { name: /^resume$/i }));
     expect(screen.getByText(/black picks/i)).toBeTruthy();
     expect(screen.getByRole("button", { name: /auto-pick random god/i })).toBeTruthy();
+  });
+
+  it("shows the signed-in player's portrait beside their draft names", () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.1);
+    accountHarness.configured = true;
+    accountHarness.account = {
+      userId: "account-1",
+      email: "athena@example.com",
+      displayName: "Athena",
+      portraitId: "ares",
+    };
+    render(<App />);
+    openPlayOption("Local");
+    fireEvent.click(screen.getByRole("button", { name: /^2 player$/i }));
+    fireEvent.click(screen.getByRole("button", {
+      name: /^divine ai challenge a computer opponent/i,
+    }));
+    fireEvent.click(screen.getByRole("button", { name: /challenge the ai/i }));
+
+    expect(document.querySelector(".draft-turn .portrait-ares")).toBeTruthy();
+    expect(document.querySelector(".draft-rosters .portrait-ares")).toBeTruthy();
   });
 
   it("randomly quick-drafts the remaining two-player picks without changing prior ownership", async () => {

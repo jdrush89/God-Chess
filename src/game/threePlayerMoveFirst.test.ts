@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createDefaultThreePlayerConfig } from "./threePlayerConfig";
 import { threePlayerIsInCheck } from "./threePlayerChess";
 import {
+  availableThreePlayerActions,
   canStartThreePlayerMoveFirst,
   createThreePlayerGame,
   threePlayerMoveFirstCandidates,
@@ -127,6 +128,70 @@ const semanticState = (state: ThreePlayerState) => {
 };
 
 describe("three-player move-first contracts", () => {
+  it("switches Sing from a selected rook to a legal Knight in the Yalta turn-seven position", () => {
+    let state = playableState("teles", 1, "three-player");
+    const relocate = (from: string, to: string) => {
+      state.board[to] = state.board[from];
+      delete state.board[from];
+    };
+    for (const [from, to] of [
+      ["three-player:18", "three-player:10"],
+      ["three-player:49", "three-player:41"],
+      ["three-player:81", "three-player:73"],
+      ["three-player:30", "three-player:13"],
+      ["three-player:48", "three-player:40"],
+      ["three-player:80", "three-player:72"],
+    ]) relocate(from, to);
+    state.turn = 7;
+    state.activeSeat = "white";
+    const queen = Object.entries(state.board).find(([, candidate]) =>
+      candidate.controller === "white" && candidate.type === "queen"
+    )![0];
+    expect(queen).toBe("three-player:27");
+    expect(threePlayerMoveFirstTargets(state, queen)).toEqual([
+      "three-player:18",
+      "three-player:9",
+      "three-player:0",
+    ]);
+    state = threePlayerReducer(state, {
+      type: "select-god",
+      godId: "teles",
+    });
+    state = threePlayerReducer(state, {
+      type: "select-ability",
+      abilityId: "resonance",
+    });
+    state = threePlayerReducer(state, {
+      type: "cell",
+      cell: "three-player:31",
+    });
+
+    expect(state.notice).toBe("Choose a destination for the rook.");
+    expect(availableThreePlayerActions(state)).toContainEqual({
+      type: "cell",
+      cell: "three-player:13",
+    });
+    expect(availableThreePlayerActions(state)).toContainEqual({
+      type: "cell",
+      cell: queen,
+    });
+
+    state = threePlayerReducer(state, {
+      type: "cell",
+      cell: queen,
+    });
+    expect(state.selectedCell).toBe(queen);
+    expect(state.notice).toBe("Choose a destination for the queen.");
+    expect(state.legalCells).toContain("three-player:18");
+
+    state = threePlayerReducer(state, {
+      type: "cell",
+      cell: "three-player:13",
+    });
+    expect(state.selectedCell).toBe("three-player:13");
+    expect(state.notice).toBe("Choose a destination for the knight.");
+  });
+
   it.each(THREE_PLAYER_BOARD_VARIANTS)(
     "uses topology-aware ordinary sources and targets on %s",
     (boardVariant) => {

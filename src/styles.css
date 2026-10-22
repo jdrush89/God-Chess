@@ -246,6 +246,13 @@ body::before {
 .draft-roster strong { font-size: 12px; }
 .draft-roster small { color: #666870; font-size: 8px; text-transform: uppercase; }
 .draft-roster > div { display: flex; gap: 10px; justify-content: flex-end; }
+.draft-player-identity { min-width: 0; display: flex; align-items: center; gap: 8px; }
+.draft-player-identity strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.draft-player-portrait.account-portrait {
+  width: 28px; height: 28px; flex: 0 0 auto; border-radius: 50%;
+  border: 1px solid rgba(198,161,91,.42);
+}
+.draft-turn .draft-player-portrait.account-portrait { width: 30px; height: 30px; }
 .player-crest { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; }
 .player-crest.white { background: #ece7dc; color: #17181b; }
 .player-crest.black { background: #050608; color: #ddd; border: 1px solid #555; }
@@ -2408,6 +2415,25 @@ span.move-target-dot {
   filter: drop-shadow(0 .05px .03px rgba(0,0,0,.7));
 }
 .three-board.preview .three-board-cell { pointer-events: none; }
+.three-yalta-coordinates {
+  pointer-events: none;
+  fill: #d8ceb8;
+  paint-order: stroke;
+  stroke: rgba(8,10,14,.88);
+  stroke-width: .08;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+.three-yalta-coordinate-label {
+  font: 700 .3px Inter, system-ui, sans-serif;
+  text-transform: none;
+}
+.three-yalta-sector-label {
+  fill: #eadba9;
+  font: 700 .34px "Cinzel", serif;
+  letter-spacing: .05px;
+  text-transform: uppercase;
+}
 
 .three-draft-page { min-height: 100vh; padding-bottom: 122px; overflow-x: hidden; background: #0b0d12; }
 .three-game-topbar {
