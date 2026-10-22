@@ -931,7 +931,7 @@ describe("game startup", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /^athena$/i }));
     expect(screen.getByRole("menu", { name: /account options/i })).toBeTruthy();
-    expect(screen.getByRole("menuitem", { name: /change name/i })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: /edit profile/i })).toBeTruthy();
     expect(screen.getByRole("menuitem", { name: /sign out/i })).toBeTruthy();
     fireEvent.pointerDown(screen.getByRole("heading", { name: /choose your path/i }));
     expect(screen.queryByRole("menu", { name: /account options/i })).toBeNull();
@@ -1113,7 +1113,7 @@ describe("game startup", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /^athena$/i }));
     expect(screen.getByRole("menu", { name: /account options/i })).toBeTruthy();
-    fireEvent.click(screen.getByRole("menuitem", { name: /change name/i }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /edit profile/i }));
     expect(screen.getByLabelText(/saved display name/i)).toBeTruthy();
   });
 
