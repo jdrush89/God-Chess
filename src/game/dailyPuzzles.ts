@@ -275,7 +275,10 @@ export const dailyPuzzleResultMatches = (
   }
   return state.result.kind === "winner" &&
     state.result.winner === puzzle.targetResult.winner &&
-    state.result.reason === puzzle.targetResult.reason;
+    (
+      state.result.reason === puzzle.targetResult.reason ||
+      state.result.reason === "king-death"
+    );
 };
 
 export const createDailyPuzzleGame = (

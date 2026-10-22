@@ -47,6 +47,14 @@ export const resolveAuthRedirectUrl = (
 export const resolveLocalDataImportPending = (value: unknown) =>
   value === true;
 
+export const isMissingPortraitColumnError = (error: unknown) => {
+  if (!error || typeof error !== "object") return false;
+  const source = error as { code?: unknown; message?: unknown };
+  return source.code === "42703" &&
+    typeof source.message === "string" &&
+    source.message.includes("portrait_id");
+};
+
 export const createSignUpMetadata = (
   displayName: string,
   portraitId: AccountPortraitId = DEFAULT_ACCOUNT_PORTRAIT_ID,
@@ -56,13 +64,37 @@ export const createSignUpMetadata = (
   local_data_import_pending: true,
 });
 
+export const createProfileUpsert = (
+  id: string,
+  displayName: string,
+  portraitId: AccountPortraitId,
+  supportsPortraits: boolean,
+) => ({
+  id,
+  display_name: displayName,
+  ...(supportsPortraits ? { portrait_id: portraitId } : {}),
+});
+
 const loadProfile = async (user: User): Promise<AccountProfile> => {
   if (!supabase) throw new Error("Account services are not configured.");
-  const { data, error } = await supabase
+  let supportsPortraits = true;
+  let { data, error } = await supabase
     .from("profiles")
     .select("display_name, public_id, portrait_id")
     .eq("id", user.id)
     .maybeSingle();
+  if (isMissingPortraitColumnError(error)) {
+    supportsPortraits = false;
+    const legacy = await supabase
+      .from("profiles")
+      .select("display_name, public_id")
+      .eq("id", user.id)
+      .maybeSingle();
+    data = legacy.data
+      ? { ...legacy.data, portrait_id: undefined }
+      : legacy.data;
+    error = legacy.error;
+  }
   if (error) throw error;
   const {
     savedDisplayName,
@@ -80,11 +112,12 @@ const loadProfile = async (user: User): Promise<AccountProfile> => {
   if ((!data || !savedDisplayName) && metadataDisplayName) {
     const { error: createError } = await supabase
       .from("profiles")
-      .upsert({
-        id: user.id,
-        display_name: metadataDisplayName,
-        portrait_id: portraitId,
-      });
+      .upsert(createProfileUpsert(
+        user.id,
+        metadataDisplayName,
+        portraitId,
+        supportsPortraits,
+      ));
     if (createError) throw createError;
   }
   return {

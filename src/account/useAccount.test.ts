@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  createProfileUpsert,
   createSignUpMetadata,
+  isMissingPortraitColumnError,
   resolveAuthRedirectUrl,
   resolveDisplayName,
   resolveLocalDataImportPending,
@@ -19,6 +21,29 @@ describe("resolveAuthRedirectUrl", () => {
       display_name: "Athena",
       portrait_id: "quetzacoatl",
       local_data_import_pending: true,
+    });
+  });
+
+  it("recognizes the pre-portrait production schema error", () => {
+    expect(isMissingPortraitColumnError({
+      code: "42703",
+      message: "column profiles.portrait_id does not exist",
+    })).toBe(true);
+    expect(isMissingPortraitColumnError({
+      code: "42703",
+      message: "column profiles.public_id does not exist",
+    })).toBe(false);
+  });
+
+  it("omits portraits when creating a profile against the legacy schema", () => {
+    expect(createProfileUpsert(
+      "player-id",
+      "Athena",
+      "quetzacoatl",
+      false,
+    )).toEqual({
+      id: "player-id",
+      display_name: "Athena",
     });
   });
 

@@ -676,6 +676,10 @@ describe("game startup", () => {
       name: /thumbs down this daily puzzle/i,
     }));
     expect(loadLocalDailyPuzzleRatings()[daily.id]).toBeUndefined();
+
+    fireEvent.click(screen.getByRole("button", { name: /view board/i }));
+    expect(screen.queryByText(/player turns left and scored/i)).toBeNull();
+    expect(screen.getByRole("button", { name: /view result/i })).toBeTruthy();
   });
 
   it("resets and replays the Daily solution after giving up without awarding completion", async () => {
@@ -1487,7 +1491,7 @@ describe("game startup", () => {
         .toBeTruthy();
       expect(screen.getByText(/no complete legal turn while its King is safe/i))
         .toBeTruthy();
-      fireEvent.click(screen.getByRole("button", { name: /see board/i }));
+      fireEvent.click(screen.getByRole("button", { name: /view board/i }));
       expect(container.querySelector(".finished-view")).toBeTruthy();
       expect(screen.getAllByText(finished.lastAction).length).toBeGreaterThan(0);
 
@@ -1934,6 +1938,10 @@ describe("game startup", () => {
     expect(screen.getByText(/you found a winning line/i)).toBeTruthy();
     expect(screen.queryByText(puzzle.solutionSummary)).toBeNull();
     expect(JSON.parse(window.localStorage.getItem("god-chess-puzzle-progress-v1") ?? "[]")).toContain(puzzle.id);
+
+    fireEvent.click(screen.getByRole("button", { name: /view board/i }));
+    expect(screen.queryByText("PUZZLE SOLVED")).toBeNull();
+    expect(screen.getByRole("button", { name: /view result/i })).toBeTruthy();
   });
 
   it("completes a defensive puzzle immediately without starting an AI reply", async () => {

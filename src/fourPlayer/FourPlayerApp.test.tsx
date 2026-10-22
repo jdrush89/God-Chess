@@ -1235,7 +1235,7 @@ describe("four-player app integration", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /see board/i }));
+    fireEvent.click(screen.getByRole("button", { name: /view board/i }));
     expect(screen.getByRole("button", { name: /view result/i })).toBeTruthy();
     expect(container.querySelector(".finished-view")).toBeTruthy();
     fireEvent.click(screen.getAllByTitle(/ares/i)[0]);

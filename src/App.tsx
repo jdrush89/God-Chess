@@ -4264,6 +4264,7 @@ export function GameScreen({
   const showGameResult =
     gameFinished && state.gameMode !== "simulation";
   const [resultOpen, setResultOpen] = useState(showGameResult);
+  const [puzzleResultOpen, setPuzzleResultOpen] = useState(true);
   const kingInCheck = state.phase === "play" && isInCheck(state.board, state.activeColor, state.bananas);
   const undoReturnsToGodSelection =
     state.phase === "play" &&
@@ -4416,6 +4417,13 @@ export function GameScreen({
     const timer = window.setTimeout(() => setPuzzleVictoryReady(true), 1050);
     return () => window.clearTimeout(timer);
   }, [puzzleSolved, state.puzzleId, state.puzzleSolved, winningKingCaptureId]);
+
+  const puzzleResultReady =
+    Boolean(puzzleSolved && puzzleVictoryReady) || puzzleFailed;
+
+  useEffect(() => {
+    if (puzzleResultReady) setPuzzleResultOpen(true);
+  }, [puzzleResultReady, state.puzzleId]);
 
   useEffect(() => {
     const event = state.presentation;
@@ -4962,7 +4970,25 @@ export function GameScreen({
         leaveLabel={leaveLabel}
         onQuitWithoutSaving={onQuitWithoutSaving}
       />
-      {puzzleSolved && puzzleVictoryReady && puzzle && (
+      {puzzleResultReady && !puzzleResultOpen && (
+        <aside
+          className="finished-result-control"
+          role="status"
+          aria-label="Puzzle finished"
+        >
+          <span>
+            <strong>Puzzle finished</strong>
+            <small>{puzzleSolved ? "Solved" : "Winning line missed"}</small>
+          </span>
+          <button
+            className="primary-button"
+            onClick={() => setPuzzleResultOpen(true)}
+          >
+            View result
+          </button>
+        </aside>
+      )}
+      {puzzleSolved && puzzleVictoryReady && puzzle && puzzleResultOpen && (
         <div className="modal-backdrop">
           <section className="gameover-modal">
             <div className="victory-crown"><Crown size={38} /></div>
@@ -5004,11 +5030,17 @@ export function GameScreen({
                   : "Next puzzle"}
               </button>
               <button className="secondary-button" onClick={onRestartPuzzle}>Play again</button>
+              <button
+                className="secondary-button"
+                onClick={() => setPuzzleResultOpen(false)}
+              >
+                View board
+              </button>
             </div>
           </section>
         </div>
       )}
-      {puzzleFailed && puzzle && (
+      {puzzleFailed && puzzle && puzzleResultOpen && (
         <div className="modal-backdrop">
           <section className="gameover-modal">
             <div className="victory-crown"><Crosshair size={38} /></div>
@@ -5022,6 +5054,12 @@ export function GameScreen({
             <div className="puzzle-result-actions">
               <button className="primary-button" onClick={onRestartPuzzle}>Retry puzzle</button>
               <button className="secondary-button" onClick={onRestart}>Choose another puzzle</button>
+              <button
+                className="secondary-button"
+                onClick={() => setPuzzleResultOpen(false)}
+              >
+                View board
+              </button>
             </div>
           </section>
         </div>
