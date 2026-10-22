@@ -276,9 +276,10 @@ const isPlayerState = (
   Array.isArray(value.graveyard) &&
   value.graveyard.every((entry) =>
     isRecord(entry) &&
-    hasOnlyKeys(entry, ["piece", "capturedOnTurn"]) &&
+    hasOnlyKeys(entry, ["piece", "capturedOnTurn", "capturedFrom"]) &&
     isPiece(entry.piece) &&
-    isInteger(entry.capturedOnTurn, 1)
+    isInteger(entry.capturedOnTurn, 1) &&
+    (entry.capturedFrom === undefined || isSquare(entry.capturedFrom))
   ) &&
   isUpgrades(value.upgrades);
 

@@ -342,7 +342,11 @@ const safeBananaPlacementsAfterMove = (state: GameState, from: Square, requested
 };
 
 const sendCapturedPieceToGraveyard = (state: GameState, piece: Piece, source: Square) => {
-  state.players[piece.color].graveyard.push({ piece, capturedOnTurn: state.turn });
+  state.players[piece.color].graveyard.push({
+    piece,
+    capturedOnTurn: state.turn,
+    capturedFrom: source,
+  });
   state.captureAnimations.push({
     id: state.nextCaptureAnimationId,
     player: piece.color,
@@ -2439,7 +2443,11 @@ const completeSpecialTarget = (state: GameState, square: Square) => {
       const pawn = state.board[pawnSquare];
       if (!pawn) continue;
       delete state.board[pawnSquare];
-      state.players[pawn.color].graveyard.push({ piece: pawn, capturedOnTurn: state.turn });
+      state.players[pawn.color].graveyard.push({
+        piece: pawn,
+        capturedOnTurn: state.turn,
+        capturedFrom: pawnSquare,
+      });
     }
     state.board[square] = {
       id: `${state.activeColor}-monument-${state.turn}`,

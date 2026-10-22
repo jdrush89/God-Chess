@@ -147,6 +147,37 @@ describe("saved-game variants", () => {
     expect(normalized && !isFourPlayerSavedGame(normalized)).toBe(true);
   });
 
+  it("round-trips capture squares while accepting legacy graveyard entries", () => {
+    const state = createGame(1);
+    const capturedKing = state.board.e8;
+    delete state.board.e8;
+    state.players.black.graveyard.push({
+      piece: capturedKing,
+      capturedOnTurn: state.turn,
+      capturedFrom: "e8",
+    });
+
+    const normalized = normalizeSavedGame(JSON.parse(JSON.stringify(
+      createSavedGame("captured-king", state, []),
+    )));
+    expect(
+      normalized &&
+        !isFourPlayerSavedGame(normalized) &&
+        !isThreePlayerSavedGame(normalized),
+    ).toBe(true);
+    if (
+      !normalized ||
+      isFourPlayerSavedGame(normalized) ||
+      isThreePlayerSavedGame(normalized)
+    ) return;
+    expect(normalized?.state.players.black.graveyard.at(-1)?.capturedFrom).toBe("e8");
+
+    const legacyState = structuredClone(state);
+    delete legacyState.players.black.graveyard[0].capturedFrom;
+    expect(normalizeSavedGame(createSavedGame("legacy-graveyard", legacyState, [])))
+      .toBeTruthy();
+  });
+
   it("persists the human upgrade handoff without transient AI presentation state", () => {
     let state = createGame(2, { mode: "ai" });
     for (const godId of ["ares", "medusa", "midas", "death", "artemis", "chiron"] as const) {

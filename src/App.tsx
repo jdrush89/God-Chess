@@ -1225,6 +1225,7 @@ export function ChessBoard({
   state,
   dispatch,
   onInspectSquare,
+  defeatedKing,
   moveFirstDraft,
   moveFirstSources = [],
   moveFirstTargets = [],
@@ -1233,6 +1234,7 @@ export function ChessBoard({
   state: GameState;
   dispatch: GameDispatch;
   onInspectSquare: (square: Square) => void;
+  defeatedKing?: { square: Square; piece: Piece };
   moveFirstDraft?: MoveFirstDraft;
   moveFirstSources?: Square[];
   moveFirstTargets?: Square[];
@@ -1294,6 +1296,9 @@ export function ChessBoard({
           {displaySquares.map((square) => {
             const [file, rank] = [square[0], square[1]];
             const piece = state.board[square];
+            const defeatedKingHere = defeatedKing?.square === square
+              ? defeatedKing
+              : undefined;
             const selected = state.selectedSquare === square;
             const provisionalSource = moveFirstDraft?.source === square;
             const provisionalDestination = moveFirstDraft?.destination === square;
@@ -1306,7 +1311,7 @@ export function ChessBoard({
             return (
               <button
                 role="gridcell"
-                aria-label={`${square}${piece ? `, ${piece.color} ${piece.type}` : ""}${effectPreview ? ", affected by selected ability" : ""}${provisionalSource ? ", provisional move source" : ""}${provisionalDestination ? ", provisional move destination, not committed" : ""}`}
+                aria-label={`${square}${piece ? `, ${piece.color} ${piece.type}` : ""}${defeatedKingHere ? `, defeated ${defeatedKingHere.piece.color} king` : ""}${effectPreview ? ", affected by selected ability" : ""}${provisionalSource ? ", provisional move source" : ""}${provisionalDestination ? ", provisional move destination, not committed" : ""}`}
                 data-square={square}
                 className={`board-square ${(file.charCodeAt(0) + Number(rank)) % 2 ? "light" : "dark"} ${selected ? "selected" : ""} ${provisionalSource ? "provisional-source" : ""} ${provisionalDestination ? "provisional-destination" : ""} ${legal ? "legal" : ""} ${legal && piece ? "legal-occupied" : ""} ${legal && enchantSourceChoice ? "legal-source" : ""} ${legal && !enchantSourceChoice ? "legal-destination" : ""} ${effectPreview ? "effect-preview" : ""}`}
                 key={square}
@@ -1328,6 +1333,20 @@ export function ChessBoard({
                 {banana && <span className="banana" title="Banana peel">⌁</span>}
                 {piece && drag.draggingSource !== square && (
                   <PieceView piece={piece} />
+                )}
+                {defeatedKingHere && (
+                  <span
+                    className="defeated-king-marker"
+                    data-defeated-king={square}
+                    aria-hidden="true"
+                  >
+                    <span
+                      className={`chess-piece defeated-king-piece ${defeatedKingHere.piece.color}`}
+                    >
+                      {PIECES[defeatedKingHere.piece.color].king}
+                    </span>
+                    <X />
+                  </span>
                 )}
               </button>
             );
@@ -4331,11 +4350,19 @@ export function GameScreen({
   const dailyGolfScore = dailyGolfScoreForTurnsRemaining(
     dailyTurnsRemaining,
   );
-  const winningKingCaptureId = puzzleSolved
+  const winningKingCapture = puzzleSolved
     ? [...(state.captureAnimations ?? [])]
       .reverse()
-      .find((event) => event.piece.type === "king" && event.player === state.aiColor)?.id
+      .find((event) => event.piece.type === "king")
     : undefined;
+  const defeatedKingGrave = puzzleSolved
+    ? Object.values(state.players)
+      .flatMap((player) => player.graveyard)
+      .find(({ piece, capturedFrom }) =>
+        piece.type === "king" && Boolean(capturedFrom)
+      )
+    : undefined;
+  const winningKingCaptureId = winningKingCapture?.id;
   const [puzzleVictoryReady, setPuzzleVictoryReady] = useState(false);
   const [displayedOrbs, setDisplayedOrbs] = useState<OrbTotals>(() => orbTotals(state));
   const [orbFlights, setOrbFlights] = useState<OrbFlight[]>([]);
@@ -4438,6 +4465,15 @@ export function GameScreen({
 
   const puzzleResultReady =
     Boolean(puzzleSolved && puzzleVictoryReady) || puzzleFailed;
+  const defeatedPuzzleKing =
+    puzzleResultReady &&
+      !puzzleResultOpen &&
+      (winningKingCapture || defeatedKingGrave?.capturedFrom)
+      ? {
+        square: winningKingCapture?.source ?? defeatedKingGrave!.capturedFrom!,
+        piece: winningKingCapture?.piece ?? defeatedKingGrave!.piece,
+      }
+      : undefined;
 
   useEffect(() => {
     if (puzzleResultReady) setPuzzleResultOpen(true);
@@ -4870,6 +4906,7 @@ export function GameScreen({
             state={state}
             dispatch={gameDispatch}
             onInspectSquare={setInspectedSquare}
+            defeatedKing={defeatedPuzzleKing}
             moveFirstDraft={moveFirstDraft}
             moveFirstSources={[...moveFirstSources]}
             moveFirstTargets={moveFirstDraft ? moveFirstTargets : []}
