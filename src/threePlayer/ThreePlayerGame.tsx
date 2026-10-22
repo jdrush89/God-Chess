@@ -21,6 +21,8 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { AchievementId } from "../achievements";
+import { AccountPortrait } from "../account/AccountPortrait";
+import type { AccountPortraitId } from "../account/portraits";
 import { GameResultPresentation } from "../GameResultPresentation";
 import { MatchEscapeMenu } from "../MatchEscapeMenu";
 import { BoardViewport } from "../components/BoardViewport";
@@ -587,11 +589,13 @@ function PlayerPanel({
   seat,
   legalSeat,
   onSeat,
+  portraitId,
 }: {
   state: UiState;
   seat: ThreePlayerSeat;
   legalSeat: boolean;
   onSeat: () => void;
+  portraitId?: AccountPortraitId;
 }) {
   const player = state.players[seat];
   const affinity = threePlayerOwnerAffinity(seat, state.completedTurns.red);
@@ -606,7 +610,11 @@ function PlayerPanel({
     >
       <button className="three-seat-summary" disabled={!legalSeat} onClick={onSeat}>
         <span className="three-player-avatar">
-          {player.control.kind === "ai" ? <Bot size={17} /> : <UserRound size={17} />}
+          {player.control.kind === "ai"
+            ? <Bot size={17} />
+            : portraitId
+              ? <AccountPortrait portraitId={portraitId} alt="" />
+              : <UserRound size={17} />}
         </span>
         <span>
           <strong>{player.name}</strong>
@@ -982,6 +990,7 @@ export interface ThreePlayerGameProps {
   ) => void;
   onStatisticsChange?: (state: ThreePlayerState) => void;
   completedAchievements?: Partial<Record<AchievementId, string>>;
+  playerPortraits?: Partial<Record<ThreePlayerSeat, AccountPortraitId>>;
 }
 
 export function ThreePlayerGame({
@@ -1002,6 +1011,7 @@ export function ThreePlayerGame({
   onAchievementTransition,
   onStatisticsChange,
   completedAchievements = {},
+  playerPortraits,
 }: ThreePlayerGameProps) {
   const [state, setState] = useState<UiState>(() => clone(initialState) as UiState);
   const stateRef = useRef(state);
@@ -1792,6 +1802,7 @@ export function ThreePlayerGame({
                 seat={seat}
                 legalSeat={legalSeats.has(seat)}
                 onSeat={() => seatAction && dispatchAction(seatAction)}
+                portraitId={playerPortraits?.[seat]}
                 key={seat}
               />
             );

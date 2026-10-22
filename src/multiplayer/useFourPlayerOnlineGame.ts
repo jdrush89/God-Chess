@@ -12,6 +12,9 @@ import type {
   FourPlayerHostRoomSnapshot,
   FourPlayerRoomSnapshot,
 } from "./types";
+import {
+  type AccountPortraitId,
+} from "../account/portraits";
 
 export type FourPlayerOnlineRole = "none" | "host" | "peer";
 
@@ -138,7 +141,10 @@ export const useFourPlayerOnlineGame = () => {
     peer?.disconnect();
   }, []);
 
-  const hostGame = useCallback(async (hostName: string) => {
+  const hostGame = useCallback(async (
+    hostName: string,
+    portraitId?: AccountPortraitId,
+  ) => {
     const generation = attemptGeneration.current + 1;
     attemptGeneration.current = generation;
     const previousHost = hostRef.current;
@@ -177,7 +183,7 @@ export const useFourPlayerOnlineGame = () => {
           error,
         }));
       },
-    });
+    }, undefined, portraitId);
     hostRef.current = host;
     try {
       const roomCode = await host.start();
@@ -209,6 +215,7 @@ export const useFourPlayerOnlineGame = () => {
   const joinGame = useCallback(async (
     roomCode: string,
     playerName: string,
+    portraitId?: AccountPortraitId,
   ) => {
     const generation = attemptGeneration.current + 1;
     attemptGeneration.current = generation;
@@ -291,7 +298,11 @@ export const useFourPlayerOnlineGame = () => {
     });
     peerRef.current = peer;
     try {
-      await peer.connect(normalizedCode, normalizedName, token);
+      if (portraitId) {
+        await peer.connect(normalizedCode, normalizedName, token, portraitId);
+      } else {
+        await peer.connect(normalizedCode, normalizedName, token);
+      }
       if (!isCurrent()) peer.disconnect();
     } catch (error) {
       if (!isCurrent()) return;

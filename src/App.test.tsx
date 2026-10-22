@@ -1139,6 +1139,7 @@ describe("game startup", () => {
         friend={{
           publicId: "gc-zeus5566",
           displayName: "Zeus",
+          portraitId: "leonidas",
           completedAchievementIds: ["it-begins"],
           stats: {
             ...createPlayerStatisticsSnapshot(

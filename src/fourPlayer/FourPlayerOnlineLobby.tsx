@@ -19,6 +19,7 @@ import type { FourPlayerHostRoomSnapshot } from "../multiplayer/types";
 import { RoomCodeCopyButton } from "../multiplayer/RoomCodeCopyButton";
 import { FriendInviteControl } from "../multiplayer/FriendInviteControl";
 import type { SocialProfile } from "../account/social";
+import { AccountPortrait } from "../account/AccountPortrait";
 import {
   FOUR_PLAYER_PALETTES,
   FOUR_PLAYER_SEAT_LABELS,
@@ -134,7 +135,7 @@ export function FourPlayerOnlineLobby({
             className={`${participant.connected ? "" : "disconnected"} ${participant.ready ? "ready" : ""}`}
             key={`${participant.host ? "host" : "guest"}-${participant.seat ?? "unassigned"}-${index}`}
           >
-            <UserRound size={17} />
+            <AccountPortrait portraitId={participant.portraitId} alt="" />
             <div>
               <strong>{participant.name}</strong>
               <small>

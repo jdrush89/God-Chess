@@ -35,6 +35,8 @@ import {
   type ReactNode,
 } from "react";
 import type { AchievementId } from "../achievements";
+import { AccountPortrait } from "../account/AccountPortrait";
+import type { AccountPortraitId } from "../account/portraits";
 import { GameResultPresentation } from "../GameResultPresentation";
 import { MatchEscapeMenu } from "../MatchEscapeMenu";
 import { BoardViewport } from "../components/BoardViewport";
@@ -546,6 +548,7 @@ function FourPlayerPanel({
   dispatch,
   displayedOrbs,
   arrivingOrbs,
+  portraitId,
 }: {
   state: FourPlayerState;
   seat: Seat;
@@ -554,6 +557,7 @@ function FourPlayerPanel({
   dispatch: FourPlayerDispatch;
   displayedOrbs: Record<OrbAffinity, number>;
   arrivingOrbs: Set<string>;
+  portraitId?: AccountPortraitId;
 }) {
   const player = state.players[seat];
   const active = state.activeSeat === seat && state.phase !== "gameover";
@@ -572,7 +576,11 @@ function FourPlayerPanel({
         onClick={() => selectableSeat && dispatch({ type: "seat", seat })}
         disabled={!selectableSeat}
       >
-        <span className="four-player-avatar"><Crown size={18} /></span>
+        <span className="four-player-avatar">
+          {portraitId
+            ? <AccountPortrait portraitId={portraitId} alt="" />
+            : <Crown size={18} />}
+        </span>
         <span className="four-seat-identity">
           <strong>{player.name}</strong>
           <small>
@@ -1721,6 +1729,7 @@ export interface FourPlayerGameProps {
   ) => void;
   onStatisticsChange?: (state: FourPlayerState) => void;
   completedAchievements?: Partial<Record<AchievementId, string>>;
+  playerPortraits?: Partial<Record<Seat, AccountPortraitId>>;
 }
 
 export function FourPlayerGame({
@@ -1737,6 +1746,7 @@ export function FourPlayerGame({
   onAchievementTransition,
   onStatisticsChange,
   completedAchievements = {},
+  playerPortraits,
 }: FourPlayerGameProps) {
   const [state, baseDispatch] = useReducer(
     fourPlayerReducer,
@@ -2510,6 +2520,7 @@ export function FourPlayerGame({
           dispatch={humanDispatch}
           displayedOrbs={displayedOrbs.north}
           arrivingOrbs={arrivingOrbs}
+          portraitId={playerPortraits?.north}
         />
         <FourPlayerPanel
           state={state}
@@ -2519,6 +2530,7 @@ export function FourPlayerGame({
           dispatch={humanDispatch}
           displayedOrbs={displayedOrbs.west}
           arrivingOrbs={arrivingOrbs}
+          portraitId={playerPortraits?.west}
         />
         <section className="four-board-column">
           <FourPlayerBoard
@@ -2545,6 +2557,7 @@ export function FourPlayerGame({
           dispatch={humanDispatch}
           displayedOrbs={displayedOrbs.east}
           arrivingOrbs={arrivingOrbs}
+          portraitId={playerPortraits?.east}
         />
         <FourPlayerPanel
           state={state}
@@ -2554,6 +2567,7 @@ export function FourPlayerGame({
           dispatch={humanDispatch}
           displayedOrbs={displayedOrbs.south}
           arrivingOrbs={arrivingOrbs}
+          portraitId={playerPortraits?.south}
         />
         <FourActionPanel
           state={state}

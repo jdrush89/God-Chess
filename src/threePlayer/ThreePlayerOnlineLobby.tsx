@@ -19,6 +19,7 @@ import type { ThreePlayerOnlineState } from "../multiplayer/useThreePlayerOnline
 import { RoomCodeCopyButton } from "../multiplayer/RoomCodeCopyButton";
 import { FriendInviteControl } from "../multiplayer/FriendInviteControl";
 import type { SocialProfile } from "../account/social";
+import { AccountPortrait } from "../account/AccountPortrait";
 import {
   THREE_PLAYER_PALETTES,
   THREE_PLAYER_SEAT_LABELS,
@@ -134,7 +135,7 @@ export function ThreePlayerOnlineLobby({
             className={`${participant.connected ? "" : "disconnected"} ${participant.ready ? "ready" : ""}`}
             key={`${participant.name}-${participant.seat ?? index}`}
           >
-            <UserRound size={17} />
+            <AccountPortrait portraitId={participant.portraitId} alt="" />
             <div>
               <strong>{participant.name}{participant.local ? " (You)" : ""}</strong>
               <small>

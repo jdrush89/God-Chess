@@ -4,6 +4,10 @@ import type { Color, GameState } from "../game/types";
 import { MultiplayerHost } from "./host";
 import { MultiplayerPeer } from "./peer";
 import type { OnlinePlayer } from "./types";
+import {
+  normalizeAccountPortraitId,
+  type AccountPortraitId,
+} from "../account/portraits";
 
 export type OnlineRole = "none" | "host" | "peer";
 
@@ -11,6 +15,7 @@ export interface OnlineGameState {
   role: OnlineRole;
   roomCode?: string;
   hostName?: string;
+  hostPortraitId?: AccountPortraitId;
   guest?: OnlinePlayer;
   connecting: boolean;
   started: boolean;
@@ -75,7 +80,10 @@ export const useOnlineGame = (callbacks: OnlineCallbacks) => {
     peer?.disconnect();
   }, []);
 
-  const hostGame = useCallback(async (hostName: string) => {
+  const hostGame = useCallback(async (
+    hostName: string,
+    portraitId?: AccountPortraitId,
+  ) => {
     const generation = attemptGeneration.current + 1;
     attemptGeneration.current = generation;
     const previousHost = hostRef.current;
@@ -89,6 +97,7 @@ export const useOnlineGame = (callbacks: OnlineCallbacks) => {
     const isCurrent = () =>
       attemptGeneration.current === generation &&
       hostRef.current === host;
+    const normalizedPortraitId = normalizeAccountPortraitId(portraitId);
     host = new MultiplayerHost(hostName, {
       getState: () => callbacksRef.current.getState(),
       applyRemoteAction: (action) => callbacksRef.current.applyRemoteAction(action),
@@ -122,7 +131,7 @@ export const useOnlineGame = (callbacks: OnlineCallbacks) => {
           setState((current) => ({ ...current, error, connecting: false }));
         }
       },
-    });
+    }, undefined, normalizedPortraitId);
     hostRef.current = host;
     try {
       const roomCode = await host.start();
@@ -135,6 +144,7 @@ export const useOnlineGame = (callbacks: OnlineCallbacks) => {
         role: "host",
         roomCode,
         hostName,
+        hostPortraitId: normalizedPortraitId,
       });
     } catch (error) {
       if (!isCurrent()) return;
@@ -148,7 +158,11 @@ export const useOnlineGame = (callbacks: OnlineCallbacks) => {
     }
   }, []);
 
-  const joinGame = useCallback(async (roomCode: string, playerName: string) => {
+  const joinGame = useCallback(async (
+    roomCode: string,
+    playerName: string,
+    portraitId?: AccountPortraitId,
+  ) => {
     const generation = attemptGeneration.current + 1;
     attemptGeneration.current = generation;
     const previousHost = hostRef.current;
@@ -179,8 +193,15 @@ export const useOnlineGame = (callbacks: OnlineCallbacks) => {
           awaitingSync: false,
         }));
       },
-      onLobbyState: (hostName, guest) => {
-        if (isCurrent()) setState((current) => ({ ...current, hostName, guest }));
+      onLobbyState: (hostName, hostPortraitId, guest) => {
+        if (isCurrent()) {
+          setState((current) => ({
+            ...current,
+            hostName,
+            hostPortraitId,
+            guest,
+          }));
+        }
       },
       onGameStart: (gameState, guestColor) => {
         if (!isCurrent()) return;
@@ -234,7 +255,12 @@ export const useOnlineGame = (callbacks: OnlineCallbacks) => {
     });
     peerRef.current = peer;
     try {
-      await peer.connect(normalizedCode, playerName.trim().slice(0, 24) || "Guest");
+      const normalizedName = playerName.trim().slice(0, 24) || "Guest";
+      if (portraitId) {
+        await peer.connect(normalizedCode, normalizedName, portraitId);
+      } else {
+        await peer.connect(normalizedCode, normalizedName);
+      }
       if (!isCurrent()) peer.disconnect();
     } catch (error) {
       if (!isCurrent()) return;

@@ -37,6 +37,10 @@ import {
   isStrictOnlineTwoPlayerGameState,
   prepareTwoPlayerState,
 } from "../saves";
+import {
+  normalizeAccountPortraitId,
+  type AccountPortraitId,
+} from "../account/portraits";
 
 export const MULTIPLAYER_PROTOCOL = "god-chess-online";
 export const MULTIPLAYER_PROTOCOL_VERSION = 1;
@@ -47,10 +51,15 @@ export type MessageDirection = "peer" | "host";
 export interface OnlinePlayer {
   id: string;
   name: string;
+  portraitId?: AccountPortraitId;
 }
 
 export type PeerMessage =
-  | { type: "join_request"; playerName: string }
+  | {
+    type: "join_request";
+    playerName: string;
+    portraitId?: AccountPortraitId;
+  }
   | { type: "game_action"; action: GameAction }
   | { type: "undo_consent"; enabled: boolean }
   | { type: "undo_request" };
@@ -58,7 +67,13 @@ export type PeerMessage =
 export type HostMessage =
   | { type: "join_accepted"; player: OnlinePlayer; roomCode: string }
   | { type: "join_rejected"; reason: string }
-  | { type: "lobby_state"; hostName: string; guest?: OnlinePlayer; roomCode: string }
+  | {
+    type: "lobby_state";
+    hostName: string;
+    hostPortraitId?: AccountPortraitId;
+    guest?: OnlinePlayer;
+    roomCode: string;
+  }
   | { type: "game_start"; state: GameState; hostColor: Color; guestColor: Color }
   | { type: "state_sync"; state: GameState }
   | { type: "undo_settings"; hostEnabled: boolean; guestEnabled: boolean; canUndo: boolean }
@@ -74,6 +89,7 @@ export interface FourPlayerParticipant {
   ready: boolean;
   local: boolean;
   seat?: Seat;
+  portraitId?: AccountPortraitId;
 }
 
 export interface FourPlayerHostParticipant extends FourPlayerParticipant {
@@ -100,7 +116,12 @@ export interface FourPlayerHostRoomSnapshot extends Omit<
 }
 
 export type FourPlayerPeerMessage =
-  | { type: "join_request"; playerName: string; reconnectToken?: string }
+  | {
+    type: "join_request";
+    playerName: string;
+    portraitId?: AccountPortraitId;
+    reconnectToken?: string;
+  }
   | { type: "ready"; ready: boolean }
   | {
     type: "action";
@@ -135,6 +156,7 @@ export interface ThreePlayerParticipant {
   ready: boolean;
   local: boolean;
   seat?: ThreePlayerSeat;
+  portraitId?: AccountPortraitId;
 }
 
 export interface ThreePlayerHostParticipant extends ThreePlayerParticipant {
@@ -171,7 +193,12 @@ export interface ThreePlayerHostRoomSnapshot extends Omit<
 }
 
 export type ThreePlayerPeerMessage =
-  | { type: "join_request"; playerName: string; reconnectToken?: string }
+  | {
+    type: "join_request";
+    playerName: string;
+    portraitId?: AccountPortraitId;
+    reconnectToken?: string;
+  }
   | { type: "ready"; ready: boolean }
   | {
     type: "action";
@@ -426,21 +453,33 @@ const normalizeGameAction = (value: unknown): GameAction | undefined => {
 const normalizeOnlinePlayer = (value: unknown): OnlinePlayer | undefined => {
   if (
     !isRecord(value) ||
-    !hasExactKeys(value, ["id", "name"]) ||
+    !hasExactKeys(value, ["id", "name"], ["portraitId"]) ||
     !isBoundedString(value.id, 128) ||
     !isBoundedString(value.name, 24)
   ) return undefined;
-  return { id: value.id, name: value.name };
+  return {
+    id: value.id,
+    name: value.name,
+    ...(value.portraitId !== undefined
+      ? { portraitId: normalizeAccountPortraitId(value.portraitId) }
+      : {}),
+  };
 };
 
 const normalizeClassicPeerMessage = (value: unknown): PeerMessage | undefined => {
   if (!isRecord(value) || typeof value.type !== "string") return undefined;
   switch (value.type) {
     case "join_request":
-      return hasExactKeys(value, ["type", "playerName"]) &&
+      return hasExactKeys(value, ["type", "playerName"], ["portraitId"]) &&
           typeof value.playerName === "string" &&
           value.playerName.length <= 128
-        ? { type: "join_request", playerName: value.playerName }
+        ? {
+          type: "join_request",
+          playerName: value.playerName,
+          ...(value.portraitId !== undefined
+            ? { portraitId: normalizeAccountPortraitId(value.portraitId) }
+            : {}),
+        }
         : undefined;
     case "game_action": {
       if (!hasExactKeys(value, ["type", "action"])) return undefined;
@@ -479,7 +518,11 @@ const normalizeClassicHostMessage = (value: unknown): HostMessage | undefined =>
         : undefined;
     case "lobby_state": {
       if (
-        !hasExactKeys(value, ["type", "hostName", "roomCode"], ["guest"]) ||
+        !hasExactKeys(
+          value,
+          ["type", "hostName", "roomCode"],
+          ["hostPortraitId", "guest"],
+        ) ||
         typeof value.hostName !== "string" ||
         !isRoomCode(value.roomCode)
       ) return undefined;
@@ -490,6 +533,13 @@ const normalizeClassicHostMessage = (value: unknown): HostMessage | undefined =>
       return {
         type: "lobby_state",
         hostName: value.hostName,
+        ...(value.hostPortraitId !== undefined
+          ? {
+            hostPortraitId: normalizeAccountPortraitId(
+              value.hostPortraitId,
+            ),
+          }
+          : {}),
         roomCode: value.roomCode,
         ...(guest ? { guest } : {}),
       };
@@ -554,7 +604,7 @@ const normalizeFourPlayerParticipant = (
     !hasExactKeys(
       value,
       ["name", "host", "connected", "ready", "local"],
-      ["seat"],
+      ["seat", "portraitId"],
     ) ||
     typeof value.name !== "string" ||
     value.name.length > 24 ||
@@ -571,6 +621,9 @@ const normalizeFourPlayerParticipant = (
     ready: value.ready,
     local: value.local,
     ...(value.seat ? { seat: value.seat } : {}),
+    ...(value.portraitId !== undefined
+      ? { portraitId: normalizeAccountPortraitId(value.portraitId) }
+      : {}),
   };
 };
 
@@ -704,7 +757,7 @@ const normalizeFourPlayerPeerMessage = (
       return hasExactKeys(
         value,
         ["type", "playerName"],
-        ["reconnectToken"],
+        ["portraitId", "reconnectToken"],
       ) &&
           typeof value.playerName === "string" &&
           value.playerName.length <= 128 &&
@@ -713,6 +766,9 @@ const normalizeFourPlayerPeerMessage = (
         ? {
           type: "join_request",
           playerName: value.playerName,
+          ...(value.portraitId !== undefined
+            ? { portraitId: normalizeAccountPortraitId(value.portraitId) }
+            : {}),
           ...(value.reconnectToken
             ? { reconnectToken: value.reconnectToken }
             : {}),
@@ -815,7 +871,7 @@ const normalizeThreePlayerParticipant = (
     !hasExactKeys(
       value,
       ["name", "host", "connected", "ready", "local"],
-      ["seat"],
+      ["seat", "portraitId"],
     ) ||
     typeof value.name !== "string" ||
     value.name.length > 24 ||
@@ -832,6 +888,9 @@ const normalizeThreePlayerParticipant = (
     ready: value.ready,
     local: value.local,
     ...(value.seat ? { seat: value.seat } : {}),
+    ...(value.portraitId !== undefined
+      ? { portraitId: normalizeAccountPortraitId(value.portraitId) }
+      : {}),
   };
 };
 
@@ -1020,7 +1079,7 @@ const normalizeThreePlayerPeerMessage = (
       return hasExactKeys(
         value,
         ["type", "playerName"],
-        ["reconnectToken"],
+        ["portraitId", "reconnectToken"],
       ) &&
           typeof value.playerName === "string" &&
           value.playerName.length <= 128 &&
@@ -1031,6 +1090,9 @@ const normalizeThreePlayerPeerMessage = (
         ? {
           type: "join_request",
           playerName: value.playerName,
+          ...(value.portraitId !== undefined
+            ? { portraitId: normalizeAccountPortraitId(value.portraitId) }
+            : {}),
           ...(value.reconnectToken
             ? { reconnectToken: value.reconnectToken }
             : {}),

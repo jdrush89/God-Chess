@@ -3,6 +3,10 @@ import type { AchievementId } from "../achievements";
 import type { PlayerStatisticsSnapshot } from "../playerStatistics";
 import { supabase } from "./supabase";
 import type { AccountProfile } from "./useAccount";
+import {
+  normalizeAccountPortraitId,
+  type AccountPortraitId,
+} from "./portraits";
 
 export type InviteVariant = "classic" | "three-player" | "four-player";
 export type InvitePlayerCount = 2 | 3 | 4;
@@ -10,6 +14,7 @@ export type InvitePlayerCount = 2 | 3 | 4;
 export interface SocialProfile {
   publicId: string;
   displayName: string;
+  portraitId?: AccountPortraitId;
 }
 
 export interface FriendProfile extends SocialProfile {
@@ -111,21 +116,34 @@ export const isUsableGameInvite = (
 export const joinGameFromInvite = async (
   invite: GameInvite,
   displayName: string,
+  portraitId: AccountPortraitId,
   actions: {
-    classic: (roomCode: string, playerName: string) => Promise<void>;
-    threePlayer: (roomCode: string, playerName: string) => Promise<void>;
-    fourPlayer: (roomCode: string, playerName: string) => Promise<void>;
+    classic: (
+      roomCode: string,
+      playerName: string,
+      portraitId: AccountPortraitId,
+    ) => Promise<void>;
+    threePlayer: (
+      roomCode: string,
+      playerName: string,
+      portraitId: AccountPortraitId,
+    ) => Promise<void>;
+    fourPlayer: (
+      roomCode: string,
+      playerName: string,
+      portraitId: AccountPortraitId,
+    ) => Promise<void>;
   },
 ) => {
   if (!isUsableGameInvite(invite)) {
     throw new Error("This game invitation is no longer available.");
   }
   if (invite.variant === "classic") {
-    await actions.classic(invite.roomCode, displayName);
+    await actions.classic(invite.roomCode, displayName, portraitId);
   } else if (invite.variant === "three-player") {
-    await actions.threePlayer(invite.roomCode, displayName);
+    await actions.threePlayer(invite.roomCode, displayName, portraitId);
   } else {
-    await actions.fourPlayer(invite.roomCode, displayName);
+    await actions.fourPlayer(invite.roomCode, displayName, portraitId);
   }
 };
 
@@ -144,13 +162,19 @@ const normalizeInbox = (value: unknown): SocialInbox => {
     return EMPTY_INBOX;
   }
   const source = value as Partial<SocialInbox>;
+  const normalizeProfile = <T extends SocialProfile>(profile: T): T => ({
+    ...profile,
+    portraitId: normalizeAccountPortraitId(profile.portraitId),
+  }) as T;
   return {
-    friends: Array.isArray(source.friends) ? source.friends : [],
+    friends: Array.isArray(source.friends)
+      ? source.friends.map(normalizeProfile)
+      : [],
     incomingRequests: Array.isArray(source.incomingRequests)
-      ? source.incomingRequests
+      ? source.incomingRequests.map(normalizeProfile)
       : [],
     outgoingRequests: Array.isArray(source.outgoingRequests)
-      ? source.outgoingRequests
+      ? source.outgoingRequests.map(normalizeProfile)
       : [],
     invites: Array.isArray(source.invites)
       ? source.invites.filter(isUsableGameInvite)
@@ -168,12 +192,14 @@ export const searchSocialProfiles = async (term: string) => {
   const rows = await callRpc<Array<{
     public_id: string;
     display_name: string;
+    portrait_id: string;
   }>>("search_profiles", {
     search_term: normalized,
   });
   return rows.map((row) => ({
     publicId: row.public_id,
     displayName: row.display_name,
+    portraitId: normalizeAccountPortraitId(row.portrait_id),
   }));
 };
 

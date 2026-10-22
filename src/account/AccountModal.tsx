@@ -17,8 +17,32 @@ import type {
   SocialProfile,
 } from "./social";
 import type { AccountProfile } from "./useAccount";
+import {
+  AccountPortrait,
+  AccountPortraitPicker,
+} from "./AccountPortrait";
+import {
+  DEFAULT_ACCOUNT_PORTRAIT_ID,
+  type AccountPortraitId,
+} from "./portraits";
 
 type AccountSection = "profile" | "friends";
+
+function SocialIdentity({
+  profile,
+}: {
+  profile: SocialProfile;
+}) {
+  return (
+    <div className="account-list-identity">
+      <AccountPortrait portraitId={profile.portraitId} alt="" />
+      <div>
+        <strong>{profile.displayName}</strong>
+        <span>{profile.publicId}</span>
+      </div>
+    </div>
+  );
+}
 
 function FriendsView({
   social,
@@ -126,10 +150,7 @@ function FriendsView({
           <h3>Search results</h3>
           {results.map((result) => (
             <article className="account-list-row" key={result.publicId}>
-              <div>
-                <strong>{result.displayName}</strong>
-                <span>{result.publicId}</span>
-              </div>
+              <SocialIdentity profile={result} />
               <button
                 className="secondary-button compact-button friend-add-button"
                 disabled={pendingIds.has(result.publicId)}
@@ -151,10 +172,7 @@ function FriendsView({
           <h3>Incoming requests</h3>
           {social.incomingRequests.map((request) => (
             <article className="account-list-row" key={request.publicId}>
-              <div>
-                <strong>{request.displayName}</strong>
-                <span>{request.publicId}</span>
-              </div>
+              <SocialIdentity profile={request} />
               <div>
                 <button
                   className="primary-button compact-button"
@@ -185,10 +203,7 @@ function FriendsView({
           <h3>Sent requests</h3>
           {social.outgoingRequests.map((request) => (
             <article className="account-list-row" key={request.publicId}>
-              <div>
-                <strong>{request.displayName}</strong>
-                <span>{request.publicId}</span>
-              </div>
+              <SocialIdentity profile={request} />
               <span className="account-pending">Pending</span>
             </article>
           ))}
@@ -206,10 +221,7 @@ function FriendsView({
               key={friend.publicId}
               onClick={() => onViewFriendProfile?.(friend)}
             >
-              <div>
-                <strong>{friend.displayName}</strong>
-                <span>{friend.publicId}</span>
-              </div>
+              <SocialIdentity profile={friend} />
               <span>View profile</span>
             </button>
           ))
@@ -237,6 +249,7 @@ export function AccountModal({
   onSignUp,
   onSignOut,
   onUpdateDisplayName,
+  onUpdatePortrait,
 }: {
   account?: AccountProfile;
   configured: boolean;
@@ -249,24 +262,39 @@ export function AccountModal({
   onViewFriendProfile?: (friend: FriendProfile) => void;
   onClose: () => void;
   onSignIn: (email: string, password: string) => Promise<string>;
-  onSignUp: (email: string, password: string, displayName: string) => Promise<string>;
+  onSignUp: (
+    email: string,
+    password: string,
+    displayName: string,
+    portraitId: AccountPortraitId,
+  ) => Promise<string>;
   onSignOut: () => Promise<void>;
   onUpdateDisplayName: (displayName: string) => Promise<string>;
+  onUpdatePortrait: (portraitId: AccountPortraitId) => Promise<string>;
 }) {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [section, setSection] = useState<AccountSection>(initialSection);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState(account?.displayName ?? "");
+  const [portraitId, setPortraitId] = useState<AccountPortraitId>(
+    account?.portraitId ?? DEFAULT_ACCOUNT_PORTRAIT_ID,
+  );
   const [feedback, setFeedback] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
     setDisplayName(account?.displayName ?? "");
+    setPortraitId(account?.portraitId ?? DEFAULT_ACCOUNT_PORTRAIT_ID);
     setSection(initialSection);
     setFeedback("");
     setError("");
-  }, [account?.userId, account?.displayName, initialSection]);
+  }, [
+    account?.userId,
+    account?.displayName,
+    account?.portraitId,
+    initialSection,
+  ]);
 
   const run = async (action: () => Promise<string | void>) => {
     setFeedback("");
@@ -284,7 +312,7 @@ export function AccountModal({
     event.preventDefault();
     void run(() => mode === "signin"
       ? onSignIn(email.trim(), password)
-      : onSignUp(email.trim(), password, displayName.trim()));
+      : onSignUp(email.trim(), password, displayName.trim(), portraitId));
   };
 
   return (
@@ -326,7 +354,10 @@ export function AccountModal({
               />
             ) : (
               <>
-                <UserRound className="account-hero-icon" size={32} />
+                <AccountPortrait
+                  portraitId={account.portraitId}
+                  className="account-hero-portrait"
+                />
                 <h2>{account.needsDisplayName ? "Choose a display name" : account.displayName}</h2>
                 <p className="account-public-id">{account.publicId || "Public ID pending"}</p>
                 <p className="account-email">{account.email}</p>
@@ -348,6 +379,18 @@ export function AccountModal({
                     {account.needsDisplayName ? "Save display name" : "Save name"}
                   </button>
                 </form>
+                <AccountPortraitPicker
+                  value={portraitId}
+                  disabled={working}
+                  onChange={setPortraitId}
+                />
+                <button
+                  className="secondary-button account-save-portrait"
+                  disabled={working || portraitId === account.portraitId}
+                  onClick={() => void run(() => onUpdatePortrait(portraitId))}
+                >
+                  Save portrait
+                </button>
                 <button className="secondary-button account-signout" disabled={working} onClick={() => void run(onSignOut)}>
                   <LogOut size={16} /> Sign out
                 </button>
@@ -366,16 +409,23 @@ export function AccountModal({
             </div>
             <form className="account-form" onSubmit={submit}>
               {mode === "signup" && (
-                <label>
-                  Display name
-                  <input
-                    maxLength={24}
-                    value={displayName}
-                    onChange={(event) => setDisplayName(event.target.value)}
-                    autoComplete="nickname"
-                    required
+                <>
+                  <label>
+                    Display name
+                    <input
+                      maxLength={24}
+                      value={displayName}
+                      onChange={(event) => setDisplayName(event.target.value)}
+                      autoComplete="nickname"
+                      required
+                    />
+                  </label>
+                  <AccountPortraitPicker
+                    value={portraitId}
+                    disabled={working}
+                    onChange={setPortraitId}
                   />
-                </label>
+                </>
               )}
               <label>
                 Email

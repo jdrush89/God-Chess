@@ -39,6 +39,10 @@ import {
   type FourPlayerRoomSnapshot,
   type ProtocolMessage,
 } from "./types";
+import {
+  DEFAULT_ACCOUNT_PORTRAIT_ID,
+  type AccountPortraitId,
+} from "../account/portraits";
 
 interface PrivateParticipant {
   id: string;
@@ -49,6 +53,7 @@ interface PrivateParticipant {
   seat?: Seat;
   peerId?: string;
   reconnectToken: string;
+  portraitId?: AccountPortraitId;
 }
 
 export interface FourPlayerHostCallbacks {
@@ -140,6 +145,7 @@ export class FourPlayerRoomHost {
     private callbacks: FourPlayerHostCallbacks,
     transportFactory: TransportFactory = (networkCallbacks) =>
       new NetworkManager(networkCallbacks),
+    hostPortraitId: AccountPortraitId = DEFAULT_ACCOUNT_PORTRAIT_ID,
   ) {
     const host: PrivateParticipant = {
       id: this.hostParticipantId,
@@ -149,6 +155,7 @@ export class FourPlayerRoomHost {
       ready: false,
       seat: "north",
       reconnectToken: reconnectToken(),
+      portraitId: hostPortraitId,
     };
     this.participants.set(host.id, host);
     this.undoConsents.set(host.id, false);
@@ -401,6 +408,7 @@ export class FourPlayerRoomHost {
       participant.peerId = peerId;
       participant.connected = true;
       participant.ready = true;
+      if (message.portraitId) participant.portraitId = message.portraitId;
       this.peerParticipants.set(peerId, participant.id);
       this.undoConsents.set(participant.id, false);
       this.accept(peerId, participant);
@@ -436,6 +444,7 @@ export class FourPlayerRoomHost {
       ready: false,
       peerId,
       reconnectToken: reconnectToken(),
+      portraitId: message.portraitId,
     };
     this.participants.set(participant.id, participant);
     this.peerParticipants.set(peerId, participant.id);
@@ -758,6 +767,7 @@ export class FourPlayerRoomHost {
       ready: participant.ready,
       local: participant.id === localParticipantId,
       ...(participant.seat ? { seat: participant.seat } : {}),
+      portraitId: participant.portraitId,
     }));
   }
 
@@ -799,6 +809,7 @@ export class FourPlayerRoomHost {
         ready: participant.ready,
         local: participant.host,
         ...(participant.seat ? { seat: participant.seat } : {}),
+        portraitId: participant.portraitId,
       })),
       config: structuredClone(this.config),
       ...(this.canonical
@@ -908,11 +919,13 @@ export class FourPlayerRoomPeer {
     roomCode: string,
     playerName: string,
     token?: string,
+    portraitId: AccountPortraitId = DEFAULT_ACCOUNT_PORTRAIT_ID,
   ) {
     await this.network.joinRoom(roomCode);
     this.send({
       type: "join_request",
       playerName,
+      portraitId,
       ...(token ? { reconnectToken: token } : {}),
     });
   }

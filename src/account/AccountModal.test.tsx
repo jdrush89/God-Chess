@@ -18,6 +18,7 @@ const baseProps = {
   onSignUp: vi.fn(async () => "Account created."),
   onSignOut: vi.fn(async () => undefined),
   onUpdateDisplayName: vi.fn(async () => "Display name updated."),
+  onUpdatePortrait: vi.fn(async () => "Account portrait updated."),
 };
 
 const social = (overrides: Partial<SocialContract> = {}): SocialContract => ({
@@ -45,6 +46,7 @@ const account = {
   email: "athena@example.com",
   displayName: "Athena",
   publicId: "gc-athena22",
+  portraitId: "quetzacoatl" as const,
 };
 
 afterEach(() => {
@@ -65,7 +67,18 @@ describe("account modal", () => {
       "athena@example.com",
       "divine-pass",
       "Athena",
+      "quetzacoatl",
     ));
+  });
+
+  it("lets a signed-in player change their account portrait", async () => {
+    render(<AccountModal {...baseProps} account={account} />);
+    fireEvent.click(screen.getByRole("radio", { name: "Ares" }));
+    fireEvent.click(screen.getByRole("button", { name: /save portrait/i }));
+
+    await waitFor(() =>
+      expect(baseProps.onUpdatePortrait).toHaveBeenCalledWith("ares")
+    );
   });
 
   it("updates the saved display name for a signed-in account", async () => {
@@ -84,7 +97,11 @@ describe("account modal", () => {
   it("searches players by name and sends a friend request using the public ID", async () => {
     const contract = social({
       search: vi.fn(async () => [
-        { publicId: "gc-ares3344", displayName: "Ares" },
+        {
+          publicId: "gc-ares3344",
+          displayName: "Ares",
+          portraitId: "ares" as const,
+        },
       ]),
     });
     render(
@@ -114,6 +131,7 @@ describe("account modal", () => {
     const friend: FriendProfile = {
       publicId: "gc-zeus5566",
       displayName: "Zeus",
+      portraitId: "leonidas",
       completedAchievementIds: ["it-begins"],
       stats: {
         ...createPlayerStatisticsSnapshot(
@@ -130,6 +148,7 @@ describe("account modal", () => {
       incomingRequests: [{
         publicId: "gc-ares3344",
         displayName: "Ares",
+        portraitId: "ares",
         status: "pending",
         incoming: true,
       }],

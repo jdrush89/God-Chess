@@ -124,6 +124,35 @@ describe("versioned multiplayer protocol", () => {
     expect(normalizeProtocolMessage(message)).toEqual(message);
   });
 
+  it("carries optional account portraits without breaking older protocol messages", () => {
+    const portrayed = createProtocolMessage("classic", "peer", {
+      type: "join_request",
+      playerName: "Athena",
+      portraitId: "artemis",
+    });
+    expect(normalizeProtocolMessage(portrayed)).toEqual(portrayed);
+
+    const legacy = createProtocolMessage("classic", "peer", {
+      type: "join_request",
+      playerName: "Athena",
+    });
+    expect(normalizeProtocolMessage(legacy)).toEqual(legacy);
+
+    expect(normalizeProtocolMessage({
+      ...portrayed,
+      payload: {
+        ...portrayed.payload,
+        portraitId: "unknown-portrait",
+      },
+    })).toEqual({
+      ...portrayed,
+      payload: {
+        ...portrayed.payload,
+        portraitId: "quetzacoatl",
+      },
+    });
+  });
+
   it("normalizes known classic draft skins and rejects mismatched ones", () => {
     const unlocked = createProtocolMessage("classic", "peer", {
       type: "game_action",

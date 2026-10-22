@@ -12,6 +12,10 @@ import {
   type PeerMessage,
   type ProtocolMessage,
 } from "./types";
+import {
+  DEFAULT_ACCOUNT_PORTRAIT_ID,
+  type AccountPortraitId,
+} from "../account/portraits";
 
 interface HostCallbacks {
   getState: () => GameState;
@@ -42,6 +46,8 @@ export class MultiplayerHost {
     callbacks: HostCallbacks,
     transportFactory: TransportFactory = (networkCallbacks) =>
       new NetworkManager(networkCallbacks),
+    private hostPortraitId: AccountPortraitId =
+      DEFAULT_ACCOUNT_PORTRAIT_ID,
   ) {
     this.callbacks = callbacks;
     this.network = transportFactory({
@@ -170,7 +176,11 @@ export class MultiplayerHost {
       return;
     }
     const name = message.playerName.trim().slice(0, 24) || "Guest";
-    this.guest = { id: peerId, name };
+    this.guest = {
+      id: peerId,
+      name,
+      portraitId: message.portraitId,
+    };
     this.guestUndoEnabled = false;
     this.network.send(peerId, createProtocolMessage("classic", "host", {
       type: "join_accepted",
@@ -180,6 +190,7 @@ export class MultiplayerHost {
     this.network.broadcast(createProtocolMessage("classic", "host", {
       type: "lobby_state",
       hostName: this.hostName,
+      hostPortraitId: this.hostPortraitId,
       guest: this.guest,
       roomCode: this.roomCode,
     }));

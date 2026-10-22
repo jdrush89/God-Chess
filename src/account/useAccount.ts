@@ -1,11 +1,17 @@
 import { useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { accountsConfigured, supabase } from "./supabase";
+import {
+  DEFAULT_ACCOUNT_PORTRAIT_ID,
+  normalizeAccountPortraitId,
+  type AccountPortraitId,
+} from "./portraits";
 
 export interface AccountProfile {
   userId: string;
   email: string;
   displayName: string;
+  portraitId: AccountPortraitId;
   publicId?: string;
   needsDisplayName?: boolean;
   needsLocalDataImport?: boolean;
@@ -41,8 +47,12 @@ export const resolveAuthRedirectUrl = (
 export const resolveLocalDataImportPending = (value: unknown) =>
   value === true;
 
-export const createSignUpMetadata = (displayName: string) => ({
+export const createSignUpMetadata = (
+  displayName: string,
+  portraitId: AccountPortraitId = DEFAULT_ACCOUNT_PORTRAIT_ID,
+) => ({
   display_name: displayName.trim().slice(0, 24),
+  portrait_id: normalizeAccountPortraitId(portraitId),
   local_data_import_pending: true,
 });
 
@@ -50,7 +60,7 @@ const loadProfile = async (user: User): Promise<AccountProfile> => {
   if (!supabase) throw new Error("Account services are not configured.");
   const { data, error } = await supabase
     .from("profiles")
-    .select("display_name, public_id")
+    .select("display_name, public_id, portrait_id")
     .eq("id", user.id)
     .maybeSingle();
   if (error) throw error;
@@ -64,16 +74,24 @@ const loadProfile = async (user: User): Promise<AccountProfile> => {
     user.user_metadata.display_name,
     user.email,
   );
+  const portraitId = normalizeAccountPortraitId(
+    data?.portrait_id ?? user.user_metadata.portrait_id,
+  );
   if ((!data || !savedDisplayName) && metadataDisplayName) {
     const { error: createError } = await supabase
       .from("profiles")
-      .upsert({ id: user.id, display_name: metadataDisplayName });
+      .upsert({
+        id: user.id,
+        display_name: metadataDisplayName,
+        portrait_id: portraitId,
+      });
     if (createError) throw createError;
   }
   return {
     userId: user.id,
     email: user.email ?? "",
     displayName,
+    portraitId,
     publicId: data?.public_id ?? "",
     needsDisplayName,
     needsLocalDataImport: resolveLocalDataImportPending(
@@ -147,7 +165,12 @@ export function useAccount() {
     }
   };
 
-  const signUp = async (email: string, password: string, displayName: string) => {
+  const signUp = async (
+    email: string,
+    password: string,
+    displayName: string,
+    portraitId: AccountPortraitId,
+  ) => {
     if (!supabase) throw new Error("Account services are not configured.");
     setWorking(true);
     try {
@@ -155,7 +178,7 @@ export function useAccount() {
         email,
         password,
         options: {
-          data: createSignUpMetadata(displayName),
+          data: createSignUpMetadata(displayName, portraitId),
           emailRedirectTo: resolveAuthRedirectUrl(),
         },
       });
@@ -206,6 +229,30 @@ export function useAccount() {
     }
   };
 
+  const updatePortrait = async (portraitId: AccountPortraitId) => {
+    if (!supabase || !account) {
+      throw new Error("You must be signed in to update your portrait.");
+    }
+    const normalized = normalizeAccountPortraitId(portraitId);
+    setWorking(true);
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .upsert({
+          id: account.userId,
+          display_name: account.displayName,
+          portrait_id: normalized,
+          updated_at: new Date().toISOString(),
+        });
+      if (error) throw error;
+      setAccount({ ...account, portraitId: normalized });
+      setError(undefined);
+      return "Account portrait updated.";
+    } finally {
+      setWorking(false);
+    }
+  };
+
   const completeLocalDataImportDecision = async () => {
     if (!supabase || !account) {
       throw new Error("You must be signed in to finish account setup.");
@@ -236,6 +283,7 @@ export function useAccount() {
     signUp,
     signOut,
     updateDisplayName,
+    updatePortrait,
     completeLocalDataImportDecision,
   };
 }
