@@ -6,14 +6,28 @@ const socialSchema = schema.slice(schema.indexOf("-- Social identity"));
 describe("social schema privacy contract", () => {
   it("searches only minimal public identity fields", () => {
     expect(socialSchema).toMatch(
-      /returns table\(public_id text, display_name text\)/,
+      /returns table\(public_id text, display_name text, portrait_id text\)/,
     );
     expect(
       socialSchema.slice(
-        socialSchema.indexOf("create or replace function public.search_profiles"),
+        socialSchema.indexOf("create function public.search_profiles"),
         socialSchema.indexOf("create or replace function public.send_friend_request"),
       ),
     ).not.toMatch(/\bemail\b|\bgame_saves\b/);
+  });
+
+  it("backfills validated portraits and exposes them through social identity payloads", () => {
+    expect(socialSchema).toContain(
+      "alter table public.profiles add column if not exists portrait_id text",
+    );
+    expect(socialSchema).toContain(
+      "alter table public.profiles alter column portrait_id set not null",
+    );
+    expect(socialSchema).toContain(
+      "select profile.public_id, profile.display_name, profile.portrait_id",
+    );
+    expect(socialSchema.match(/'portraitId', profile\.portrait_id/g))
+      .toHaveLength(3);
   });
 
   it("limits public stats and achievement snapshots to accepted friends", () => {

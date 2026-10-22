@@ -91,6 +91,7 @@ import {
   FOUR_PLAYER_SEATS,
   type FourPlayerConfig,
   type FourPlayerState,
+  type Seat,
 } from "./game/fourPlayerTypes";
 import { abilityLevel, GOD_BY_ID, GODS } from "./game/gods";
 import {
@@ -124,6 +125,11 @@ import {
 import { randomItem } from "./game/random";
 import type { Ability, ActionPresentation, CaptureAnimation, ChallengeId, ClassicMoveFirstCandidate, ClassicMoveFirstMove, Color, DailyPuzzleId, GameMode, GameState, GodId, OrbAnimation, OrbColor, Piece, PuzzleId, Square, ThreePlayerPuzzleId } from "./game/types";
 import { AccountModal } from "./account/AccountModal";
+import { AccountPortrait } from "./account/AccountPortrait";
+import {
+  DEFAULT_ACCOUNT_PORTRAIT_ID,
+  type AccountPortraitId,
+} from "./account/portraits";
 import {
   joinGameFromInvite,
   useSocial,
@@ -268,6 +274,7 @@ import { FourPlayerSetup } from "./fourPlayer/FourPlayerSetup";
 import { createThreePlayerGame } from "./game/threePlayerEngine";
 import type {
   ThreePlayerConfig,
+  ThreePlayerSeat,
   ThreePlayerState,
 } from "./game/threePlayerTypes";
 import { THREE_PLAYER_SEATS } from "./game/threePlayerTypes";
@@ -1075,6 +1082,7 @@ function PlayerBar({
   arrivingOrbs,
   displayedGraveyardCount,
   graveyardArriving,
+  portraitId,
 }: {
   state: GameState;
   color: Color;
@@ -1084,6 +1092,7 @@ function PlayerBar({
   arrivingOrbs: Set<string>;
   displayedGraveyardCount: number;
   graveyardArriving: boolean;
+  portraitId?: AccountPortraitId;
 }) {
   const player = state.players[color];
   const isActive = state.activeColor === color && state.phase !== "gameover";
@@ -1094,7 +1103,13 @@ function PlayerBar({
       data-player-tools-layout="container-responsive"
       data-tutorial={color === "white" ? "player-status" : "opponent-status"}
     >
-      <div className={`player-avatar ${color}`}><Crown size={19} /></div>
+      <div className={`player-avatar ${color}`}>
+        {portraitId ? (
+          <AccountPortrait portraitId={portraitId} alt="" />
+        ) : (
+          <Crown size={19} />
+        )}
+      </div>
       <div className="player-copy">
         <strong>{player.name}</strong>
         <span>{isActive ? "DIVINE TURN" : color.toUpperCase()}</span>
@@ -2287,9 +2302,15 @@ interface AccountControlProps {
   accountImportWorking: boolean;
   accountImportError?: string;
   onSignIn: (email: string, password: string) => Promise<string>;
-  onSignUp: (email: string, password: string, displayName: string) => Promise<string>;
+  onSignUp: (
+    email: string,
+    password: string,
+    displayName: string,
+    portraitId: AccountPortraitId,
+  ) => Promise<string>;
   onSignOut: () => Promise<void>;
   onUpdateDisplayName: (displayName: string) => Promise<string>;
+  onUpdatePortrait: (portraitId: AccountPortraitId) => Promise<string>;
   onImportLocalData: () => Promise<void>;
   onStartAccountFresh: () => Promise<void>;
   social?: SocialContract;
@@ -2311,6 +2332,7 @@ function AccountControl({
   onSignUp,
   onSignOut,
   onUpdateDisplayName,
+  onUpdatePortrait,
   onImportLocalData,
   onStartAccountFresh,
   social,
@@ -2385,7 +2407,11 @@ function AccountControl({
             else setAccountModalMode("auth");
           }}
         >
-          <UserRound size={16} />
+          {account ? (
+            <AccountPortrait portraitId={account.portraitId} alt="" />
+          ) : (
+            <UserRound size={16} />
+          )}
           {accountLoading ? "Account" : account?.displayName ?? "Sign in"}
           {Boolean(account && social?.unreadCount) && (
             <span className="account-badge" aria-label={`${social?.unreadCount} notifications`}>
@@ -2457,6 +2483,7 @@ function AccountControl({
             onSignUp={onSignUp}
             onSignOut={onSignOut}
             onUpdateDisplayName={updateDisplayName}
+            onUpdatePortrait={onUpdatePortrait}
           />,
           document.body,
         )
@@ -2971,6 +2998,10 @@ export function FriendProfileScreen({
         ) : (
           <>
             <header className="friend-profile-page-heading">
+              <AccountPortrait
+                portraitId={friend.portraitId}
+                className="friend-profile-portrait"
+              />
               <div>
                 <p className="eyebrow">FRIEND PROFILE</p>
                 <h1>{friend.displayName}</h1>
@@ -3539,6 +3570,24 @@ function StartGamePrompt({
                   {online.roomCode && (
                     <RoomCodeCopyButton roomCode={online.roomCode} />
                   )}
+                  <div className="classic-online-participants">
+                    <article>
+                      <AccountPortrait portraitId={online.hostPortraitId} alt="" />
+                      <div>
+                        <strong>{online.hostName ?? "Host"}</strong>
+                        <span>Host</span>
+                      </div>
+                    </article>
+                    {online.guest && (
+                      <article>
+                        <AccountPortrait portraitId={online.guest.portraitId} alt="" />
+                        <div>
+                          <strong>{online.guest.name}</strong>
+                          <span>Guest</span>
+                        </div>
+                      </article>
+                    )}
+                  </div>
                   <p>{online.guest ? `${online.guest.name} joined the room.` : "Waiting for another player to join..."}</p>
                   {online.roomCode && social && (
                     <FriendInviteControl
@@ -3564,6 +3613,24 @@ function StartGamePrompt({
                   <Wifi size={24} />
                   <span>JOINED ROOM {online.roomCode}</span>
                   <h3>Waiting for the host</h3>
+                  <div className="classic-online-participants">
+                    <article>
+                      <AccountPortrait portraitId={online.hostPortraitId} alt="" />
+                      <div>
+                        <strong>{online.hostName ?? "Host"}</strong>
+                        <span>Host</span>
+                      </div>
+                    </article>
+                    {online.guest && (
+                      <article>
+                        <AccountPortrait portraitId={online.guest.portraitId} alt="" />
+                        <div>
+                          <strong>{online.guest.name}</strong>
+                          <span>Guest</span>
+                        </div>
+                      </article>
+                    )}
+                  </div>
                   <p>The game will begin when the host starts the match.</p>
                 </div>
               )
@@ -4158,6 +4225,7 @@ export function GameScreen({
   leaveLabel,
   onQuitWithoutSaving,
   moveFirstDisabled = false,
+  playerPortraits,
 }: {
   state: GameState;
   dispatch: GameDispatch;
@@ -4182,6 +4250,7 @@ export function GameScreen({
   leaveLabel?: string;
   onQuitWithoutSaving?: () => void;
   moveFirstDisabled?: boolean;
+  playerPortraits?: Partial<Record<Color, AccountPortraitId>>;
 }) {
   const [rulesOpen, setRulesOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -4769,6 +4838,7 @@ export function GameScreen({
             arrivingOrbs={arrivingOrbs}
             displayedGraveyardCount={displayedGraveyards.black}
             graveyardArriving={arrivingGraveyards.has("black")}
+            portraitId={playerPortraits?.black}
           />
           <ChessBoard
             state={state}
@@ -4788,6 +4858,7 @@ export function GameScreen({
             arrivingOrbs={arrivingOrbs}
             displayedGraveyardCount={displayedGraveyards.white}
             graveyardArriving={arrivingGraveyards.has("white")}
+            portraitId={playerPortraits?.white}
           />
         </section>
         <div className="side-column" data-tutorial="divine-actions">
@@ -6546,23 +6617,32 @@ export default function App() {
     await joinGameFromInvite(
       invite,
       accountService.account.displayName,
+      accountService.account.portraitId,
       {
-        classic: async (roomCode, displayName) => {
+        classic: async (roomCode, displayName, portraitId) => {
           fourOnlineActions.disconnect();
           threeOnlineActions.disconnect();
-          await onlineActions.joinGame(roomCode, displayName);
+          await onlineActions.joinGame(roomCode, displayName, portraitId);
         },
-        threePlayer: async (roomCode, displayName) => {
+        threePlayer: async (roomCode, displayName, portraitId) => {
           onlineActions.disconnect();
           fourOnlineActions.disconnect();
           activeSaveId.current = undefined;
           threeOnlineActiveRef.current = true;
-          await threeOnlineActions.joinGame(roomCode, displayName);
+          await threeOnlineActions.joinGame(
+            roomCode,
+            displayName,
+            portraitId,
+          );
         },
-        fourPlayer: async (roomCode, displayName) => {
+        fourPlayer: async (roomCode, displayName, portraitId) => {
           onlineActions.disconnect();
           threeOnlineActions.disconnect();
-          await fourOnlineActions.joinGame(roomCode, displayName);
+          await fourOnlineActions.joinGame(
+            roomCode,
+            displayName,
+            portraitId,
+          );
         },
       },
     );
@@ -7687,6 +7767,7 @@ export default function App() {
       onSignUp={accountService.signUp}
       onSignOut={accountService.signOut}
       onUpdateDisplayName={accountService.updateDisplayName}
+      onUpdatePortrait={accountService.updatePortrait}
       onImportLocalData={() => finishLocalDataImportDecision(true)}
       onStartAccountFresh={() => finishLocalDataImportDecision(false)}
       social={social}
@@ -7713,6 +7794,7 @@ export default function App() {
         onSignUp={accountService.signUp}
         onSignOut={accountService.signOut}
         onUpdateDisplayName={accountService.updateDisplayName}
+        onUpdatePortrait={accountService.updatePortrait}
         onImportLocalData={() => finishLocalDataImportDecision(true)}
         onStartAccountFresh={() => finishLocalDataImportDecision(false)}
         social={social}
@@ -7923,23 +8005,41 @@ export default function App() {
         onHost={(name) => {
           fourOnlineActions.disconnect();
           threeOnlineActions.disconnect();
-          void onlineActions.hostGame(name);
+          void onlineActions.hostGame(
+            name,
+            accountService.account?.portraitId ??
+              DEFAULT_ACCOUNT_PORTRAIT_ID,
+          );
         }}
         onJoin={(code, name) => {
           fourOnlineActions.disconnect();
           threeOnlineActions.disconnect();
-          void onlineActions.joinGame(code, name);
+          void onlineActions.joinGame(
+            code,
+            name,
+            accountService.account?.portraitId ??
+              DEFAULT_ACCOUNT_PORTRAIT_ID,
+          );
         }}
         onStartOnline={startHostedGame}
         onHostFourOnline={(name) => {
           onlineActions.disconnect();
           threeOnlineActions.disconnect();
-          void fourOnlineActions.hostGame(name);
+          void fourOnlineActions.hostGame(
+            name,
+            accountService.account?.portraitId ??
+              DEFAULT_ACCOUNT_PORTRAIT_ID,
+          );
         }}
         onJoinFourOnline={(code, name) => {
           onlineActions.disconnect();
           threeOnlineActions.disconnect();
-          void fourOnlineActions.joinGame(code, name);
+          void fourOnlineActions.joinGame(
+            code,
+            name,
+            accountService.account?.portraitId ??
+              DEFAULT_ACCOUNT_PORTRAIT_ID,
+          );
         }}
         onFourReady={fourOnlineActions.setReady}
         onFourAssignSeat={fourOnlineActions.assignSeat}
@@ -7952,14 +8052,23 @@ export default function App() {
           fourOnlineActions.disconnect();
           activeSaveId.current = undefined;
           threeOnlineActiveRef.current = true;
-          void threeOnlineActions.hostGame(name);
+          void threeOnlineActions.hostGame(
+            name,
+            accountService.account?.portraitId ??
+              DEFAULT_ACCOUNT_PORTRAIT_ID,
+          );
         }}
         onJoinThreeOnline={(code, name) => {
           onlineActions.disconnect();
           fourOnlineActions.disconnect();
           activeSaveId.current = undefined;
           threeOnlineActiveRef.current = true;
-          void threeOnlineActions.joinGame(code, name);
+          void threeOnlineActions.joinGame(
+            code,
+            name,
+            accountService.account?.portraitId ??
+              DEFAULT_ACCOUNT_PORTRAIT_ID,
+          );
         }}
         onThreeReady={threeOnlineActions.setReady}
         onThreeAssignSeat={threeOnlineActions.assignSeat}
@@ -7984,10 +8093,19 @@ export default function App() {
 
   if (startView === "none" && threeOnlineCanonical && threeOnline.snapshot) {
     const pausedSeat = threeOnline.snapshot.pausedSeat;
+    const playerPortraits = threeOnline.snapshot.participants.reduce<
+      Partial<Record<ThreePlayerSeat, AccountPortraitId>>
+    >((portraits, participant) => {
+      if (participant.seat && participant.portraitId) {
+        portraits[participant.seat] = participant.portraitId;
+      }
+      return portraits;
+    }, {});
     return (
       <ThreePlayerGame
         key={`online-three-${threeOnline.roomCode}`}
         initialState={threeOnlineCanonical.state}
+        playerPortraits={playerPortraits}
         completedAchievements={visibleAchievementProgress.completed}
         onAchievementTransition={(before, after, action) => {
           const localSeat = threePlayerOnlineLocalSeat(threeOnline);
@@ -8046,10 +8164,19 @@ export default function App() {
 
   if (startView === "none" && fourOnlineCanonical && fourOnline.snapshot) {
     const pausedSeat = fourOnline.snapshot.pausedSeat;
+    const playerPortraits = fourOnline.snapshot.participants.reduce<
+      Partial<Record<Seat, AccountPortraitId>>
+    >((portraits, participant) => {
+      if (participant.seat && participant.portraitId) {
+        portraits[participant.seat] = participant.portraitId;
+      }
+      return portraits;
+    }, {});
     return (
       <FourPlayerGame
         key={`online-${fourOnline.roomCode}`}
         initialState={fourOnlineCanonical.state}
+        playerPortraits={playerPortraits}
         completedAchievements={visibleAchievementProgress.completed}
         onAchievementTransition={(before, after, action) => {
           const localSeat = fourPlayerOnlineLocalSeat(fourOnline);
@@ -8110,6 +8237,18 @@ export default function App() {
   }
 
   if (startView === "none" && fourPlayerSession) {
+    const playerPortraits: Partial<Record<Seat, AccountPortraitId>> = {};
+    if (accountService.account) {
+      FOUR_PLAYER_SEATS.forEach((seat) => {
+        const player = fourPlayerSession.state.players[seat];
+        if (
+          player.control.kind === "human" &&
+          player.name === accountService.account?.displayName
+        ) {
+          playerPortraits[seat] = accountService.account.portraitId;
+        }
+      });
+    }
     return (
       <>
         {saveError && (
@@ -8121,6 +8260,7 @@ export default function App() {
         <FourPlayerGame
           key={fourPlayerSession.key}
           initialState={fourPlayerSession.state}
+          playerPortraits={playerPortraits}
           completedAchievements={visibleAchievementProgress.completed}
           onAchievementTransition={(before, after, action) => {
             const localActors = FOUR_PLAYER_SEATS.filter((seat) => {
@@ -8183,10 +8323,25 @@ export default function App() {
     const threePlayerPuzzle = threePlayerSession.puzzleId
       ? THREE_PLAYER_PUZZLE_BY_ID[threePlayerSession.puzzleId]
       : undefined;
+    const playerPortraits: Partial<
+      Record<ThreePlayerSeat, AccountPortraitId>
+    > = {};
+    if (accountService.account) {
+      THREE_PLAYER_SEATS.forEach((seat) => {
+        const player = threePlayerSession.state.players[seat];
+        if (
+          player.control.kind === "human" &&
+          player.name === accountService.account?.displayName
+        ) {
+          playerPortraits[seat] = accountService.account.portraitId;
+        }
+      });
+    }
     return (
       <ThreePlayerGame
         key={threePlayerSession.key}
         initialState={threePlayerSession.state}
+        playerPortraits={playerPortraits}
         completedAchievements={visibleAchievementProgress.completed}
         onAchievementTransition={(before, after, action) => {
           if (threePlayerPuzzle) return;
@@ -8257,6 +8412,22 @@ export default function App() {
         }}
       />
     );
+  }
+
+  const classicPlayerPortraits: Partial<Record<Color, AccountPortraitId>> = {};
+  if (state.gameMode === "online" && state.onlineHostColor) {
+    classicPlayerPortraits[state.onlineHostColor] = online.hostPortraitId;
+    classicPlayerPortraits[
+      state.onlineHostColor === "white" ? "black" : "white"
+    ] = online.guest?.portraitId;
+  } else if (accountService.account) {
+    (["white", "black"] as const).forEach((color) => {
+      if (
+        state.players[color].name === accountService.account?.displayName
+      ) {
+        classicPlayerPortraits[color] = accountService.account.portraitId;
+      }
+    });
   }
 
   return (
@@ -8343,6 +8514,7 @@ export default function App() {
                 : undefined
             }
             onNextPuzzle={nextPuzzle}
+            playerPortraits={classicPlayerPortraits}
           />
         )}
       {settingsOpen && (

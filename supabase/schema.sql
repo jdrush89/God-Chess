@@ -1,6 +1,11 @@
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   display_name text not null check (char_length(display_name) between 1 and 24),
+  portrait_id text not null default 'quetzacoatl'
+    check (portrait_id in (
+      'quetzacoatl', 'chiron', 'anubis', 'artemis', 'teles', 'death',
+      'medusa', 'ares', 'midas', 'leonidas', 'kangus', 'salem'
+    )),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -115,10 +120,17 @@ language plpgsql
 security definer set search_path = public
 as $$
 begin
-  insert into public.profiles (id, display_name)
+  insert into public.profiles (id, display_name, portrait_id)
   values (
     new.id,
-    left(coalesce(new.raw_user_meta_data ->> 'display_name', split_part(new.email, '@', 1), 'Player'), 24)
+    left(coalesce(new.raw_user_meta_data ->> 'display_name', split_part(new.email, '@', 1), 'Player'), 24),
+    case
+      when new.raw_user_meta_data ->> 'portrait_id' in (
+        'quetzacoatl', 'chiron', 'anubis', 'artemis', 'teles', 'death',
+        'medusa', 'ares', 'midas', 'leonidas', 'kangus', 'salem'
+      ) then new.raw_user_meta_data ->> 'portrait_id'
+      else 'quetzacoatl'
+    end
   )
   on conflict (id) do nothing;
   return new;
@@ -132,6 +144,23 @@ create trigger on_auth_user_created
 
 -- Social identity, friendship, public achievements, and invitations.
 alter table public.profiles add column if not exists public_id text;
+alter table public.profiles add column if not exists portrait_id text;
+
+update public.profiles
+set portrait_id = 'quetzacoatl'
+where portrait_id is null or portrait_id not in (
+  'quetzacoatl', 'chiron', 'anubis', 'artemis', 'teles', 'death',
+  'medusa', 'ares', 'midas', 'leonidas', 'kangus', 'salem'
+);
+
+alter table public.profiles alter column portrait_id set default 'quetzacoatl';
+alter table public.profiles alter column portrait_id set not null;
+alter table public.profiles drop constraint if exists profiles_portrait_id_check;
+alter table public.profiles add constraint profiles_portrait_id_check
+  check (portrait_id in (
+    'quetzacoatl', 'chiron', 'anubis', 'artemis', 'teles', 'death',
+    'medusa', 'ares', 'midas', 'leonidas', 'kangus', 'salem'
+  ));
 
 create or replace function public.normalize_public_id(value text)
 returns text
@@ -316,14 +345,15 @@ create policy "Users can read involved invitations"
   on public.game_invitations for select
   using (auth.uid() = sender_id or auth.uid() = recipient_id);
 
-create or replace function public.search_profiles(search_term text)
-returns table(public_id text, display_name text)
+drop function if exists public.search_profiles(text);
+create function public.search_profiles(search_term text)
+returns table(public_id text, display_name text, portrait_id text)
 language sql
 security definer
 set search_path = public
 stable
 as $$
-  select profile.public_id, profile.display_name
+  select profile.public_id, profile.display_name, profile.portrait_id
   from public.profiles profile
   where auth.uid() is not null
     and profile.id <> auth.uid()
@@ -629,6 +659,7 @@ as $$
     select jsonb_build_object(
       'publicId', profile.public_id,
       'displayName', profile.display_name,
+      'portraitId', profile.portrait_id,
       'stats', stats.snapshot,
       'completedAchievementIds', coalesce(achievements.completed_ids, '[]'::jsonb)
     ) as value
@@ -643,6 +674,7 @@ as $$
     select jsonb_build_object(
       'publicId', profile.public_id,
       'displayName', profile.display_name,
+      'portraitId', profile.portrait_id,
       'status', request.status,
       'incoming', true
     ) as value
@@ -655,6 +687,7 @@ as $$
     select jsonb_build_object(
       'publicId', profile.public_id,
       'displayName', profile.display_name,
+      'portraitId', profile.portrait_id,
       'status', request.status,
       'incoming', false
     ) as value

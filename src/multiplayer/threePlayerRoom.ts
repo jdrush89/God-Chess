@@ -48,6 +48,10 @@ import {
   type ThreePlayerRoomSnapshot,
   type ThreePlayerUndoStatus,
 } from "./types";
+import {
+  DEFAULT_ACCOUNT_PORTRAIT_ID,
+  type AccountPortraitId,
+} from "../account/portraits";
 
 interface PrivateParticipant extends ThreePlayerHostParticipant {
   peerId?: string;
@@ -185,6 +189,7 @@ export class ThreePlayerRoomHost {
     transportFactory: TransportFactory = (networkCallbacks) =>
       new NetworkManager(networkCallbacks),
     private planAi: ThreePlayerAiPlanner = defaultAiPlanner,
+    hostPortraitId: AccountPortraitId = DEFAULT_ACCOUNT_PORTRAIT_ID,
   ) {
     const host: PrivateParticipant = {
       participantId: this.hostParticipantId,
@@ -195,6 +200,7 @@ export class ThreePlayerRoomHost {
       local: true,
       seat: "white",
       reconnectToken: reconnectToken(),
+      portraitId: hostPortraitId,
     };
     this.participants.set(host.participantId, host);
     this.applyAssignmentsToConfig();
@@ -472,6 +478,7 @@ export class ThreePlayerRoomHost {
       participant.peerId = peerId;
       participant.connected = true;
       participant.ready = true;
+      if (message.portraitId) participant.portraitId = message.portraitId;
       this.peerParticipants.set(peerId, participant.participantId);
       this.undoProposal = undefined;
       this.accept(peerId, participant);
@@ -508,6 +515,7 @@ export class ThreePlayerRoomHost {
       local: false,
       peerId,
       reconnectToken: reconnectToken(),
+      portraitId: message.portraitId,
     };
     this.participants.set(participant.participantId, participant);
     this.peerParticipants.set(peerId, participant.participantId);
@@ -936,6 +944,7 @@ export class ThreePlayerRoomHost {
       ready: participant.ready,
       local: participant.participantId === localParticipantId,
       ...(participant.seat ? { seat: participant.seat } : {}),
+      portraitId: participant.portraitId,
     }));
   }
 
@@ -978,6 +987,7 @@ export class ThreePlayerRoomHost {
         ready: participant.ready,
         local: participant.host,
         ...(participant.seat ? { seat: participant.seat } : {}),
+        portraitId: participant.portraitId,
       })),
       config: structuredClone(this.config),
       ...(this.canonical
@@ -1083,11 +1093,13 @@ export class ThreePlayerRoomPeer {
     roomCode: string,
     playerName: string,
     token?: string,
+    portraitId: AccountPortraitId = DEFAULT_ACCOUNT_PORTRAIT_ID,
   ) {
     await this.network.joinRoom(roomCode);
     this.send({
       type: "join_request",
       playerName,
+      portraitId,
       ...(token ? { reconnectToken: token } : {}),
     });
   }

@@ -11,10 +11,18 @@ import {
   type OnlinePlayer,
   type ProtocolMessage,
 } from "./types";
+import {
+  DEFAULT_ACCOUNT_PORTRAIT_ID,
+  type AccountPortraitId,
+} from "../account/portraits";
 
 interface PeerCallbacks {
   onJoinAccepted: (player: OnlinePlayer, roomCode: string) => void;
-  onLobbyState: (hostName: string, guest?: OnlinePlayer) => void;
+  onLobbyState: (
+    hostName: string,
+    hostPortraitId: AccountPortraitId | undefined,
+    guest?: OnlinePlayer,
+  ) => void;
   onGameStart: (state: GameState, guestColor: Color) => void;
   onStateSync: (state: GameState) => void;
   onUndoSettings: (hostEnabled: boolean, guestEnabled: boolean, canUndo: boolean) => void;
@@ -42,11 +50,16 @@ export class MultiplayerPeer {
     });
   }
 
-  async connect(roomCode: string, playerName: string) {
+  async connect(
+    roomCode: string,
+    playerName: string,
+    portraitId: AccountPortraitId = DEFAULT_ACCOUNT_PORTRAIT_ID,
+  ) {
     await this.network.joinRoom(roomCode);
     this.network.sendToHost(createProtocolMessage("classic", "peer", {
       type: "join_request",
       playerName,
+      portraitId,
     }));
   }
 
@@ -85,7 +98,11 @@ export class MultiplayerPeer {
         this.callbacks.onRejected(payload.reason);
         break;
       case "lobby_state":
-        this.callbacks.onLobbyState(payload.hostName, payload.guest);
+        this.callbacks.onLobbyState(
+          payload.hostName,
+          payload.hostPortraitId,
+          payload.guest,
+        );
         break;
       case "game_start":
         this.callbacks.onGameStart(payload.state, payload.guestColor);

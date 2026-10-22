@@ -59,7 +59,11 @@ describe("social account contracts", () => {
       error: null,
     });
     await expect(searchSocialProfiles(" Athena Prime ")).resolves.toEqual([
-      { publicId: "gc-athena22", displayName: "Athena Prime" },
+      {
+        publicId: "gc-athena22",
+        displayName: "Athena Prime",
+        portraitId: "quetzacoatl",
+      },
     ]);
     expect(mocks.rpc).toHaveBeenCalledWith("search_profiles", {
       search_term: "Athena Prime",
@@ -110,8 +114,12 @@ describe("social account contracts", () => {
         roomCode: "ABCDE",
         status: "pending",
         expiresAt: new Date(Date.now() + 60_000).toISOString(),
-      }, "Zeus", actions);
-      expect(actions[actionName]).toHaveBeenCalledWith("ABCDE", "Zeus");
+      }, "Zeus", "ares", actions);
+      expect(actions[actionName]).toHaveBeenCalledWith(
+        "ABCDE",
+        "Zeus",
+        "ares",
+      );
       expect(
         Object.values(actions).filter((action) => action.mock.calls.length),
       ).toHaveLength(1);
@@ -200,6 +208,7 @@ describe("social account contracts", () => {
       email: "athena@example.com",
       displayName: "Athena",
       publicId: "gc-athena22",
+      portraitId: "artemis",
     }));
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(mocks.channel).toHaveBeenCalledWith("social-inbox:user-1");

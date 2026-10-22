@@ -97,20 +97,34 @@ describe("classic online protocol compatibility", () => {
       onGuestLeft: vi.fn(),
       onUndoSettings: vi.fn(),
       onError: vi.fn(),
-    }, factory);
+    }, factory, "artemis");
     await host.start();
 
     transport.callbacks.onMessage("guest-peer", createProtocolMessage(
       "classic",
       "peer",
-      { type: "join_request", playerName: "Guest" },
+      {
+        type: "join_request",
+        playerName: "Guest",
+        portraitId: "ares",
+      },
     ));
     expect(transport.sent[0].message).toMatchObject({
       protocol: "god-chess-online",
       version: 1,
       variant: "classic",
       direction: "host",
-      payload: { type: "join_accepted" },
+      payload: {
+        type: "join_accepted",
+        player: { portraitId: "ares" },
+      },
+    });
+    expect(transport.broadcasts[0]).toMatchObject({
+      payload: {
+        type: "lobby_state",
+        hostPortraitId: "artemis",
+        guest: { portraitId: "ares" },
+      },
     });
 
     host.startGame(state);

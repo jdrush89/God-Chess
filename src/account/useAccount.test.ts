@@ -17,6 +17,7 @@ describe("resolveAuthRedirectUrl", () => {
   it("marks newly created accounts for the one-time import decision", () => {
     expect(createSignUpMetadata("  Athena  ")).toEqual({
       display_name: "Athena",
+      portrait_id: "quetzacoatl",
       local_data_import_pending: true,
     });
   });
