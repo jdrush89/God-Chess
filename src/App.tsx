@@ -4476,7 +4476,7 @@ export function GameScreen({
       : undefined;
 
   useEffect(() => {
-    if (puzzleResultReady) setPuzzleResultOpen(true);
+    if (puzzleResultReady && !puzzleResultOpen) setPuzzleResultOpen(true);
   }, [puzzleResultReady, state.puzzleId]);
 
   useEffect(() => {
