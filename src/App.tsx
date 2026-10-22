@@ -2429,7 +2429,7 @@ function AccountControl({
               }}
             >
               <Pencil size={15} />
-              Change name
+              Edit profile
             </button>
             <button
               role="menuitem"
