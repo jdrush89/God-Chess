@@ -1976,6 +1976,10 @@ describe("game startup", () => {
         name: new RegExp(`${capturedKing!.source}.*defeated .* king`, "i"),
       }),
     ).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /view result/i }));
+    fireEvent.click(screen.getByRole("button", { name: /puzzle menu/i }));
+    expect(screen.getByText("DIVINE PUZZLES")).toBeTruthy();
   });
 
   it("completes a defensive puzzle immediately without starting an AI reply", async () => {

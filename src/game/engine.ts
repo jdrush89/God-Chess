@@ -895,6 +895,32 @@ const allowedEnchantTypes = (level: number): PieceType[] =>
       ? ["pawn", "knight", "bishop", "rook"]
       : ["pawn", "knight", "bishop", "rook", "queen"];
 
+const leverageHireTargets = (
+  state: GameState,
+  board: GameState["board"],
+  destination: Square,
+  level: number,
+) => adjacentSquares(destination).filter((square) => {
+  const target = board[square];
+  if (
+    !target ||
+    target.controller === state.activeColor ||
+    target.type === "king" ||
+    !allowedEnchantTypes(level).includes(target.type)
+  ) return false;
+  const extraCost = target.type === "rook" ? 1 : target.type === "queen" ? 2 : 0;
+  if (state.players[state.activeColor].orbs.black < extraCost) return false;
+  const hiredBoard = {
+    ...board,
+    [square]: {
+      ...target,
+      controller: state.activeColor,
+      status: { ...target.status, hired: true },
+    },
+  };
+  return !isInCheck(hiredBoard, state.activeColor, state.bananas);
+});
+
 const compelledLuredSquares = (state: GameState) =>
   Object.entries(state.board)
     .filter(([source, candidate]) => {
@@ -1442,15 +1468,13 @@ const sourceTargets = (state: GameState, square: Square) => {
   }
   if (abilityId === "leverage") {
     return constrainLure(
-      legalTargets(state.board, square, { enPassant: state.enPassant, bananas: state.bananas }).filter((target) => {
+      legalTargets(state.board, square, {
+        enPassant: state.enPassant,
+        bananas: state.bananas,
+        ignoreCheck: true,
+      }).filter((target) => {
         const simulated = applyMove(state.board, { from: square, to: target }, state.enPassant).board;
-        return adjacentSquares(target).some((adjacent) => {
-          const hire = simulated[adjacent];
-          if (!hire || hire.controller === state.activeColor || hire.type === "king") return false;
-          if (!allowedEnchantTypes(level).includes(hire.type)) return false;
-          const extraCost = hire.type === "rook" ? 1 : hire.type === "queen" ? 2 : 0;
-          return state.players[state.activeColor].orbs.black >= extraCost;
-        });
+        return leverageHireTargets(state, simulated, target, level).length > 0;
       }),
     );
   }
@@ -1960,11 +1984,7 @@ const resolveMoveEffect = (
     }
   } else if (abilityId === "leverage") {
     state.pending = { godId: state.selectedGod!, abilityId, step: "hire", movedPieceId: moving.id };
-    state.legalTargets = adjacentSquares(to).filter((square) => {
-      const target = state.board[square];
-      if (!target || target.controller === color || target.type === "king") return false;
-      return allowedEnchantTypes(level).includes(target.type);
-    });
+    state.legalTargets = leverageHireTargets(state, state.board, to, level);
     if (state.legalTargets.length) {
       state.notice = "Choose an adjacent enemy piece to hire.";
       return "pending";

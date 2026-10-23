@@ -802,4 +802,16 @@ describe("puzzle mode", () => {
     for (const action of response) state = gameReducer(state, action);
     expect(state.activeColor).toBe("white");
   });
+
+  it("keeps Easy puzzle 8 on its intended Rage solution", () => {
+    const puzzle = PUZZLES.find((candidate) => candidate.id === "rage-break")!;
+    const state = puzzle.createState("Solver");
+
+    expect(state.players.white.orbs.black).toBe(3);
+    expect(state.players.white.gods).toContain("midas");
+    expect(
+      GOD_BY_ID.midas.abilities.find((ability) => ability.id === "leverage")
+        ?.cost?.black,
+    ).toBe(4);
+  });
 });

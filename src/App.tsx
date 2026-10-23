@@ -5222,6 +5222,9 @@ export function GameScreen({
               >
                 View board
               </button>
+              <button className="secondary-button" onClick={onRestart}>
+                Puzzle menu
+              </button>
             </div>
           </section>
         </div>
