@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createProfileUpsert,
   createSignUpMetadata,
+  isPasswordRecoveryUrl,
   isMissingPortraitColumnError,
   resolveAuthRedirectUrl,
   resolveDisplayName,
@@ -54,6 +55,18 @@ describe("resolveAuthRedirectUrl", () => {
         "./",
       ),
     ).toBe("https://jdrush89.github.io/God-Chess/");
+  });
+
+  it("recognizes Supabase password recovery redirects", () => {
+    expect(isPasswordRecoveryUrl(
+      "https://playgodchess.com/#access_token=token&type=recovery",
+    )).toBe(true);
+    expect(isPasswordRecoveryUrl(
+      "https://playgodchess.com/?type=recovery",
+    )).toBe(true);
+    expect(isPasswordRecoveryUrl(
+      "https://playgodchess.com/#type=signup",
+    )).toBe(false);
   });
 
   describe("resolveDisplayName", () => {

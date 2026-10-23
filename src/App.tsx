@@ -2343,6 +2343,7 @@ interface AccountControlProps {
   accountLoading: boolean;
   accountWorking: boolean;
   accountError?: string;
+  passwordRecovery: boolean;
   accountDataLoading: boolean;
   accountImportWorking: boolean;
   accountImportError?: string;
@@ -2354,6 +2355,8 @@ interface AccountControlProps {
     portraitId: AccountPortraitId,
   ) => Promise<string>;
   onSignOut: () => Promise<void>;
+  onRequestPasswordReset: (email: string) => Promise<string>;
+  onUpdatePassword: (password: string) => Promise<string>;
   onUpdateDisplayName: (displayName: string) => Promise<string>;
   onUpdatePortrait: (portraitId: AccountPortraitId) => Promise<string>;
   onImportLocalData: () => Promise<void>;
@@ -2370,12 +2373,15 @@ function AccountControl({
   accountLoading,
   accountWorking,
   accountError,
+  passwordRecovery,
   accountDataLoading,
   accountImportWorking,
   accountImportError,
   onSignIn,
   onSignUp,
   onSignOut,
+  onRequestPasswordReset,
+  onUpdatePassword,
   onUpdateDisplayName,
   onUpdatePortrait,
   onImportLocalData,
@@ -2391,6 +2397,11 @@ function AccountControl({
   const accountAreaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (passwordRecovery) {
+      setAccountMenuOpen(false);
+      setAccountModalMode("auth");
+      return;
+    }
     if (!account) {
       setAccountMenuOpen(false);
       return;
@@ -2405,7 +2416,7 @@ function AccountControl({
     ) {
       setAccountModalMode(undefined);
     }
-  }, [account, accountModalMode]);
+  }, [account, accountModalMode, passwordRecovery]);
 
   useEffect(() => {
     if (!accountMenuOpen) return;
@@ -2516,6 +2527,7 @@ function AccountControl({
             loading={accountLoading}
             working={accountWorking}
             serviceError={accountError}
+            passwordRecovery={passwordRecovery}
             social={social}
             initialSection={accountModalMode === "friends" ? "friends" : "profile"}
             onAcceptInvite={onAcceptInvite}
@@ -2527,6 +2539,8 @@ function AccountControl({
             onSignIn={onSignIn}
             onSignUp={onSignUp}
             onSignOut={onSignOut}
+            onRequestPasswordReset={onRequestPasswordReset}
+            onUpdatePassword={onUpdatePassword}
             onUpdateDisplayName={updateDisplayName}
             onUpdatePortrait={onUpdatePortrait}
           />,
@@ -8100,12 +8114,15 @@ export default function App() {
       accountLoading={accountService.loading}
       accountWorking={accountService.working}
       accountError={accountService.error}
+      passwordRecovery={accountService.passwordRecovery}
       accountDataLoading={accountDataLoading}
       accountImportWorking={accountImportWorking}
       accountImportError={accountImportError}
       onSignIn={accountService.signIn}
       onSignUp={accountService.signUp}
       onSignOut={accountService.signOut}
+      onRequestPasswordReset={accountService.requestPasswordReset}
+      onUpdatePassword={accountService.updatePassword}
       onUpdateDisplayName={accountService.updateDisplayName}
       onUpdatePortrait={accountService.updatePortrait}
       onImportLocalData={() => finishLocalDataImportDecision(true)}
@@ -8126,6 +8143,7 @@ export default function App() {
         accountLoading={accountService.loading}
         accountWorking={accountService.working}
         accountError={accountService.error}
+        passwordRecovery={accountService.passwordRecovery}
         accountDataLoading={accountDataLoading}
         accountImportWorking={accountImportWorking}
         accountImportError={accountImportError}
@@ -8133,6 +8151,8 @@ export default function App() {
         onSignIn={accountService.signIn}
         onSignUp={accountService.signUp}
         onSignOut={accountService.signOut}
+        onRequestPasswordReset={accountService.requestPasswordReset}
+        onUpdatePassword={accountService.updatePassword}
         onUpdateDisplayName={accountService.updateDisplayName}
         onUpdatePortrait={accountService.updatePortrait}
         onImportLocalData={() => finishLocalDataImportDecision(true)}
