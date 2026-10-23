@@ -2784,6 +2784,46 @@ describe("game startup", () => {
       .toContain("Last actionNone");
   });
 
+  it("labels and confirms the ranked match forfeit action", () => {
+    const state = completeClassicDraft();
+    const onRestart = vi.fn();
+    render(
+      <GameScreen
+        state={state}
+        dispatch={vi.fn()}
+        onRestart={onRestart}
+        onRestartPuzzle={vi.fn()}
+        onNextPuzzle={vi.fn()}
+        undoEnabled={false}
+        canUndo={false}
+        onUndo={vi.fn()}
+        onOpenSettings={vi.fn()}
+        rankedMatch
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: /new game/i })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /^forfeit$/i }));
+
+    const confirmation = screen.getByRole("dialog", {
+      name: /forfeit this match/i,
+    });
+    expect(within(confirmation).getByText(/count as a loss/i)).toBeTruthy();
+    expect(onRestart).not.toHaveBeenCalled();
+
+    fireEvent.click(within(confirmation).getByRole("button", {
+      name: /keep playing/i,
+    }));
+    expect(screen.queryByRole("dialog", {
+      name: /forfeit this match/i,
+    })).toBeNull();
+    expect(onRestart).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: /^forfeit$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /forfeit match/i }));
+    expect(onRestart).toHaveBeenCalledTimes(1);
+  });
+
   it("rewinds enough boundaries for the winning side to receive four player turns", () => {
     const {
       terminal,
