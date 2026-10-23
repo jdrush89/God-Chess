@@ -54,6 +54,15 @@ interface PrivateParticipant {
   peerId?: string;
   reconnectToken: string;
   portraitId?: AccountPortraitId;
+  rating?: number;
+}
+
+export interface FourPlayerRankedConnection {
+  matchId: string;
+  seat: Seat;
+  rating: number;
+  joinToken: string;
+  seatTokens?: Partial<Record<Seat, string>>;
 }
 
 export interface FourPlayerHostCallbacks {
@@ -121,6 +130,21 @@ export const createFourPlayerOnlineConfig = (): FourPlayerConfig => {
   return config;
 };
 
+export const createRankedFourPlayerOnlineConfig = (): FourPlayerConfig => {
+  const config = createFourPlayerOnlineConfig();
+  config.mode = "teams";
+  config.turnPolicy = "alternate-teams";
+  config.victoryMode = "last-survivor";
+  config.takeover = false;
+  config.teams = {
+    north: "team-a",
+    east: "team-b",
+    south: "team-a",
+    west: "team-b",
+  };
+  return config;
+};
+
 export class FourPlayerRoomHost {
   readonly roomCode = generateRoomCode();
   readonly hostParticipantId = opaqueId("participant");
@@ -139,6 +163,7 @@ export class FourPlayerRoomHost {
   private aiActionsThisTurn = 0;
   private aiNoPlanRevision?: number;
   private stopped = false;
+  private ranked?: FourPlayerRankedConnection;
 
   constructor(
     hostName: string,
@@ -146,16 +171,20 @@ export class FourPlayerRoomHost {
     transportFactory: TransportFactory = (networkCallbacks) =>
       new NetworkManager(networkCallbacks),
     hostPortraitId: AccountPortraitId = DEFAULT_ACCOUNT_PORTRAIT_ID,
+    ranked?: FourPlayerRankedConnection,
   ) {
+    this.ranked = ranked;
+    if (ranked) this.config = createRankedFourPlayerOnlineConfig();
     const host: PrivateParticipant = {
       id: this.hostParticipantId,
       name: hostName.trim().slice(0, 24) || "Host",
       host: true,
       connected: true,
-      ready: false,
-      seat: "north",
+      ready: Boolean(ranked),
+      seat: ranked?.seat ?? "north",
       reconnectToken: reconnectToken(),
       portraitId: hostPortraitId,
+      rating: ranked?.rating,
     };
     this.participants.set(host.id, host);
     this.undoConsents.set(host.id, false);
@@ -185,6 +214,7 @@ export class FourPlayerRoomHost {
   }
 
   setHostReady(ready: boolean) {
+    if (this.ranked) return;
     const host = this.participants.get(this.hostParticipantId);
     if (!host || this.status !== "lobby") return;
     host.ready = ready;
@@ -192,6 +222,7 @@ export class FourPlayerRoomHost {
   }
 
   assignSeat(participantId: string, seat?: Seat) {
+    if (this.ranked) return;
     if (this.status !== "lobby") return;
     const participant = this.participants.get(participantId);
     if (!participant || !participant.connected) return;
@@ -208,6 +239,7 @@ export class FourPlayerRoomHost {
   }
 
   updateConfig(value: FourPlayerConfig) {
+    if (this.ranked) return;
     if (this.status !== "lobby") return;
     const next = structuredClone(value);
     for (const seat of FOUR_PLAYER_SEATS) {
@@ -269,16 +301,19 @@ export class FourPlayerRoomHost {
   }
 
   setHostUndoConsent(enabled: boolean) {
+    if (this.ranked) return;
     if (!this.canonical) return;
     this.undoConsents.set(this.hostParticipantId, enabled);
     this.publish();
   }
 
   requestHostUndo() {
+    if (this.ranked) return;
     this.applyUndo(this.hostParticipantId);
   }
 
   replaceDisconnectedSeatWithAi(seat: Seat, difficulty: number) {
+    if (this.ranked) return false;
     if (this.status !== "paused" || !this.canonical) return false;
     const participant = [...this.participants.values()]
       .find((candidate) =>
@@ -324,6 +359,9 @@ export class FourPlayerRoomHost {
     if (connected.length < 2) {
       errors.push("At least two connected Human participants are required.");
     }
+    if (this.ranked && connected.length !== 4) {
+      errors.push("Ranked matches require all four queued players.");
+    }
     if (connected.length > 4) {
       errors.push("Four-player rooms support at most four Human participants.");
     }
@@ -363,6 +401,10 @@ export class FourPlayerRoomHost {
     }
     switch (payload.type) {
       case "ready":
+        if (this.ranked) {
+          this.resync(peerId, "Ranked players are readied automatically.");
+          return;
+        }
         if (this.status !== "lobby") {
           this.resync(peerId, "The match has already started.");
           return;
@@ -374,6 +416,10 @@ export class FourPlayerRoomHost {
         this.applyPeerAction(peerId, participant, payload);
         return;
       case "undo_consent":
+        if (this.ranked) {
+          this.resync(peerId, "Undo is disabled in ranked matches.");
+          return;
+        }
         if (!this.canonical) {
           this.resync(peerId, "Undo consent is available after the match starts.");
           return;
@@ -382,6 +428,10 @@ export class FourPlayerRoomHost {
         this.publish();
         return;
       case "undo_request":
+        if (this.ranked) {
+          this.resync(peerId, "Undo is disabled in ranked matches.");
+          return;
+        }
         this.applyUndo(participant.id, peerId);
         return;
     }
@@ -397,7 +447,7 @@ export class FourPlayerRoomHost {
           !candidate.host &&
           candidate.reconnectToken === message.reconnectToken
         );
-      if (!participant || this.status === "lobby") {
+      if (!participant || (this.status === "lobby" && !this.ranked)) {
         this.reject(peerId, "That reconnect token is not valid for this match.");
         return;
       }
@@ -412,9 +462,71 @@ export class FourPlayerRoomHost {
       this.peerParticipants.set(peerId, participant.id);
       this.undoConsents.set(participant.id, false);
       this.accept(peerId, participant);
-      this.resumeIfConnected();
-      this.publish();
-      this.scheduleAi();
+      if (
+        this.ranked &&
+        this.status === "lobby" &&
+        [...this.participants.values()].filter((candidate) =>
+          candidate.connected
+        ).length === 4
+      ) {
+        this.startGame();
+      } else {
+        this.resumeIfConnected();
+        this.publish();
+        this.scheduleAi();
+      }
+      return;
+    }
+    const existingParticipantId = this.peerParticipants.get(peerId);
+    if (existingParticipantId) {
+      const existing = this.participants.get(existingParticipantId);
+      if (existing) {
+        this.accept(peerId, existing);
+        this.publish();
+      }
+      return;
+    }
+    if (this.ranked) {
+      const ranked = message.ranked;
+      if (
+        !ranked ||
+        ranked.matchId !== this.ranked.matchId ||
+        this.ranked.seatTokens?.[ranked.seat] !== ranked.joinToken
+      ) {
+        this.reject(peerId, "This player is not assigned to the ranked match.");
+        return;
+      }
+      const assigned = [...this.participants.values()].find(
+        (candidate) => candidate.seat === ranked.seat,
+      );
+      if (assigned) {
+        if (assigned.connected) {
+          this.reject(peerId, "That ranked seat is already connected.");
+          return;
+        }
+        assigned.peerId = peerId;
+        assigned.connected = true;
+        assigned.ready = true;
+        if (message.portraitId) assigned.portraitId = message.portraitId;
+        this.peerParticipants.set(peerId, assigned.id);
+        this.undoConsents.set(assigned.id, false);
+        this.accept(peerId, assigned);
+        if (
+          this.status === "lobby" &&
+          [...this.participants.values()].filter((candidate) =>
+            candidate.connected
+          ).length === 4
+        ) {
+          this.startGame();
+        } else {
+          this.resumeIfConnected();
+          this.publish();
+          this.scheduleAi();
+        }
+        return;
+      }
+    } else if (message.ranked) {
+      this.reject(peerId, "That room is not a ranked match.");
       return;
     }
     if (this.status !== "lobby") {
@@ -427,30 +539,33 @@ export class FourPlayerRoomHost {
       this.reject(peerId, "That room already has four Human participants.");
       return;
     }
-    const existingParticipantId = this.peerParticipants.get(peerId);
-    if (existingParticipantId) {
-      const existing = this.participants.get(existingParticipantId);
-      if (existing) {
-        this.accept(peerId, existing);
-        this.publish();
-      }
-      return;
-    }
     const participant: PrivateParticipant = {
       id: opaqueId("participant"),
       name: message.playerName.trim().slice(0, 24) || "Guest",
       host: false,
       connected: true,
-      ready: false,
+      ready: Boolean(this.ranked),
+      seat: message.ranked?.seat,
       peerId,
       reconnectToken: reconnectToken(),
       portraitId: message.portraitId,
+      rating: message.ranked?.rating,
     };
     this.participants.set(participant.id, participant);
     this.peerParticipants.set(peerId, participant.id);
     this.undoConsents.set(participant.id, false);
+    this.applyAssignmentsToConfig();
     this.accept(peerId, participant);
-    this.publish();
+    if (
+      this.ranked &&
+      [...this.participants.values()].filter((candidate) =>
+        candidate.connected
+      ).length === 4
+    ) {
+      this.startGame();
+    } else {
+      this.publish();
+    }
   }
 
   private handleDisconnect(peerId: string) {
@@ -462,10 +577,15 @@ export class FourPlayerRoomHost {
     participant.peerId = undefined;
     this.undoConsents.set(participant.id, false);
     if (this.status === "lobby") {
-      this.participants.delete(participant.id);
-      this.undoConsents.delete(participant.id);
-      this.applyAssignmentsToConfig();
-      this.clearReadiness();
+      if (!this.ranked) {
+        this.participants.delete(participant.id);
+        this.undoConsents.delete(participant.id);
+        this.applyAssignmentsToConfig();
+        this.clearReadiness();
+      } else {
+        participant.connected = false;
+        participant.ready = true;
+      }
       this.publish();
       return;
     }
@@ -604,6 +724,10 @@ export class FourPlayerRoomHost {
   }
 
   private applyUndo(requestedBy: string, peerId?: string) {
+    if (this.ranked) {
+      if (peerId) this.resync(peerId, "Undo is disabled in ranked matches.");
+      return false;
+    }
     if (
       !this.canonical ||
       !this.undoAvailable() ||
@@ -715,6 +839,7 @@ export class FourPlayerRoomHost {
   }
 
   private undoAvailable() {
+    if (this.ranked) return false;
     if (
       (this.status !== "playing" && this.status !== "finished") ||
       !this.canonical ||
@@ -768,6 +893,7 @@ export class FourPlayerRoomHost {
       local: participant.id === localParticipantId,
       ...(participant.seat ? { seat: participant.seat } : {}),
       portraitId: participant.portraitId,
+      rating: participant.rating,
     }));
   }
 
@@ -778,6 +904,7 @@ export class FourPlayerRoomHost {
     return {
       roomCode: this.roomCode,
       status: this.status,
+      ...(this.ranked ? { ranked: true } : {}),
       participants: this.createParticipants(participantId),
       config: this.projectConfig(participantId),
       ...(this.canonical
@@ -810,7 +937,9 @@ export class FourPlayerRoomHost {
         local: participant.host,
         ...(participant.seat ? { seat: participant.seat } : {}),
         portraitId: participant.portraitId,
+        rating: participant.rating,
       })),
+      ...(this.ranked ? { ranked: true } : {}),
       config: structuredClone(this.config),
       ...(this.canonical
         ? {
@@ -920,6 +1049,7 @@ export class FourPlayerRoomPeer {
     playerName: string,
     token?: string,
     portraitId: AccountPortraitId = DEFAULT_ACCOUNT_PORTRAIT_ID,
+    ranked?: FourPlayerRankedConnection,
   ) {
     await this.network.joinRoom(roomCode);
     this.send({
@@ -927,6 +1057,16 @@ export class FourPlayerRoomPeer {
       playerName,
       portraitId,
       ...(token ? { reconnectToken: token } : {}),
+      ...(ranked
+        ? {
+          ranked: {
+            matchId: ranked.matchId,
+            seat: ranked.seat,
+            rating: ranked.rating,
+            joinToken: ranked.joinToken,
+          },
+        }
+        : {}),
     });
   }
 

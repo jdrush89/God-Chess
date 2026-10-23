@@ -6,6 +6,7 @@ import {
   acceptSocialFriendRequest,
   createPublicIdCandidate,
   joinGameFromInvite,
+  loadSocialInbox,
   normalizePublicId,
   onlinePathForInvite,
   playerCountForInviteVariant,
@@ -78,6 +79,46 @@ describe("social account contracts", () => {
     });
     expect(mocks.rpc).toHaveBeenNthCalledWith(2, "accept_friend_request", {
       target_public_id: "gc-ab12cd34",
+    });
+  });
+
+  it("normalizes friend portraits and ranked ratings from the social inbox", async () => {
+    mocks.rpc.mockResolvedValue({
+      data: {
+        friends: [{
+          publicId: "gc-athena22",
+          displayName: "Athena",
+          portraitId: "unknown",
+          rankedRating: {
+            rating: 1632.4,
+            deviation: 120.8,
+            volatility: 0.057,
+            gamesPlayed: 14.9,
+            wins: 9.2,
+            losses: 3.8,
+            draws: 2.1,
+          },
+          completedAchievementIds: [],
+        }],
+        incomingRequests: [],
+        outgoingRequests: [],
+        invites: [],
+        sentInvites: [],
+      },
+      error: null,
+    });
+
+    await expect(loadSocialInbox()).resolves.toMatchObject({
+      friends: [{
+        portraitId: "quetzacoatl",
+        rankedRating: {
+          rating: 1632.4,
+          gamesPlayed: 14,
+          wins: 9,
+          losses: 3,
+          draws: 2,
+        },
+      }],
     });
   });
 

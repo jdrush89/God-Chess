@@ -13,6 +13,7 @@ import type {
 } from "./network";
 import {
   createFourPlayerOnlineConfig,
+  createRankedFourPlayerOnlineConfig,
   FourPlayerRoomHost,
   FourPlayerRoomPeer,
 } from "./fourPlayerRoom";
@@ -96,16 +97,56 @@ const join = (
   peerId: string,
   playerName = "Guest",
   token?: string,
+  ranked?: {
+    matchId: string;
+    seat: "north" | "east" | "south" | "west";
+    rating: number;
+    joinToken?: string;
+  },
 ) => {
   transport.receive(peerId, {
     type: "join_request",
     playerName,
     ...(token ? { reconnectToken: token } : {}),
+    ...(ranked
+      ? {
+        ranked: {
+          ...ranked,
+          joinToken: ranked.joinToken ?? `${ranked.seat}-token`,
+        },
+      }
+      : {}),
   });
   return transport.hostPayloads(peerId).find(
     (payload): payload is Extract<FourPlayerHostMessage, { type: "join_accepted" }> =>
       payload.type === "join_accepted",
   );
+};
+
+const setupRanked = () => {
+  let transport!: FakeTransport;
+  const factory: TransportFactory = (callbacks) => {
+    transport = new FakeTransport(callbacks);
+    return transport;
+  };
+  const roomSnapshots: FourPlayerRoomHost["snapshot"][] = [];
+  const errors: string[] = [];
+  const host = new FourPlayerRoomHost("Ranked Host", {
+    onSnapshot: (snapshot) => roomSnapshots.push(snapshot),
+    onError: (error) => errors.push(error),
+  }, factory, undefined, {
+    matchId: "ranked-match",
+    seat: "north",
+    rating: 1612,
+    joinToken: "north-token",
+    seatTokens: {
+      north: "north-token",
+      east: "east-token",
+      south: "south-token",
+      west: "west-token",
+    },
+  });
+  return { host, transport, roomSnapshots, errors };
 };
 
 const latestRoomSnapshot = (
@@ -502,5 +543,175 @@ describe("four-player authoritative room", () => {
 
     expect(snapshots).toEqual([newer]);
     peer.disconnect();
+  });
+
+  it("uses fixed 2v2 settings and automatically starts four assigned ranked players", () => {
+    const { host, transport } = setupRanked();
+    expect(createRankedFourPlayerOnlineConfig()).toMatchObject({
+      mode: "teams",
+      turnPolicy: "alternate-teams",
+      victoryMode: "last-survivor",
+      takeover: false,
+      teams: {
+        north: "team-a",
+        east: "team-b",
+        south: "team-a",
+        west: "team-b",
+      },
+    });
+    expect(host.snapshot).toMatchObject({
+      ranked: true,
+      status: "lobby",
+      participants: [
+        expect.objectContaining({
+          name: "Ranked Host",
+          seat: "north",
+          ready: true,
+          rating: 1612,
+        }),
+      ],
+    });
+
+    join(transport, "peer-east", "East", undefined, {
+      matchId: "ranked-match",
+      seat: "east",
+      rating: 1498,
+    });
+    join(transport, "peer-south", "South", undefined, {
+      matchId: "ranked-match",
+      seat: "south",
+      rating: 1531,
+    });
+    join(transport, "peer-west", "West", undefined, {
+      matchId: "ranked-match",
+      seat: "west",
+      rating: 1704,
+    });
+
+    expect(host.snapshot.status).toBe("playing");
+    expect(host.snapshot.canonical?.state.config).toMatchObject({
+      mode: "teams",
+      turnPolicy: "alternate-teams",
+      takeover: false,
+    });
+    expect(host.snapshot.participants).toEqual(expect.arrayContaining([
+      expect.objectContaining({ seat: "east", rating: 1498, ready: true }),
+      expect.objectContaining({ seat: "south", rating: 1531, ready: true }),
+      expect.objectContaining({ seat: "west", rating: 1704, ready: true }),
+    ]));
+    expect(host.snapshot.undoAvailable).toBe(false);
+
+    transport.disconnectPeer("peer-east");
+    expect(host.snapshot.status).toBe("paused");
+    expect(join(transport, "peer-east-new-tab", "Spoofed", undefined, {
+      matchId: "ranked-match",
+      seat: "east",
+      rating: 3000,
+    })).toBeTruthy();
+    expect(host.snapshot.status).toBe("playing");
+    expect(host.snapshot.participants.find((participant) =>
+      participant.seat === "east"
+    )).toMatchObject({ name: "East", rating: 1498, connected: true });
+  });
+
+  it("binds ranked seats to join tokens and reclaims disconnected seats", () => {
+    const { host, transport } = setupRanked();
+    expect(join(transport, "wrong-match", "Wrong", undefined, {
+      matchId: "other-match",
+      seat: "east",
+      rating: 1500,
+    })).toBeUndefined();
+    expect(transport.hostPayloads("wrong-match")).toContainEqual({
+      type: "join_rejected",
+      reason: "This player is not assigned to the ranked match.",
+    });
+    expect(join(transport, "wrong-token", "Wrong", undefined, {
+      matchId: "ranked-match",
+      seat: "south",
+      rating: 1500,
+      joinToken: "stolen-token",
+    })).toBeUndefined();
+
+    const east = join(transport, "peer-east", "East", undefined, {
+      matchId: "ranked-match",
+      seat: "east",
+      rating: 1498,
+    })!;
+    expect(join(transport, "duplicate-east", "Duplicate", undefined, {
+      matchId: "ranked-match",
+      seat: "east",
+      rating: 1500,
+    })).toBeUndefined();
+
+    transport.disconnectPeer("peer-east");
+    expect(host.snapshot.status).toBe("lobby");
+    expect(host.snapshot.participants.find((participant) =>
+      participant.seat === "east"
+    )).toMatchObject({ connected: false, ready: true });
+    expect(join(
+      transport,
+      "peer-east-reconnected",
+      "Changed",
+      undefined,
+      {
+        matchId: "ranked-match",
+        seat: "east",
+        rating: 3000,
+      },
+    )?.participantId).toBe(east.participantId);
+    expect(host.snapshot.participants.find((participant) =>
+      participant.seat === "east"
+    )).toMatchObject({ name: "East", rating: 1498 });
+
+    join(transport, "peer-south", "South", undefined, {
+      matchId: "ranked-match",
+      seat: "south",
+      rating: 1531,
+    });
+    join(transport, "peer-west", "West", undefined, {
+      matchId: "ranked-match",
+      seat: "west",
+      rating: 1704,
+    });
+    expect(host.snapshot.status).toBe("playing");
+  });
+
+  it("ignores ranked readiness, AI replacement, and undo requests", () => {
+    const { host, transport } = setupRanked();
+    join(transport, "peer-east", "East", undefined, {
+      matchId: "ranked-match",
+      seat: "east",
+      rating: 1498,
+    });
+    join(transport, "peer-south", "South", undefined, {
+      matchId: "ranked-match",
+      seat: "south",
+      rating: 1531,
+    });
+    join(transport, "peer-west", "West", undefined, {
+      matchId: "ranked-match",
+      seat: "west",
+      rating: 1704,
+    });
+    expect(host.submitHostAction({ type: "draft", godId: GODS[0].id })).toBe(true);
+    const revision = host.snapshot.canonical?.revision;
+
+    host.setHostReady(false);
+    host.setHostUndoConsent(true);
+    host.requestHostUndo();
+    expect(host.replaceDisconnectedSeatWithAi("east", 10)).toBe(false);
+    transport.receive("peer-east", { type: "undo_consent", enabled: true });
+    transport.receive("peer-east", { type: "undo_request" });
+
+    expect(host.snapshot.canonical?.revision).toBe(revision);
+    expect(host.snapshot.undoAvailable).toBe(false);
+    expect(host.snapshot.participants.every((participant) =>
+      participant.ready
+    )).toBe(true);
+    expect(transport.hostPayloads("peer-east")).toContainEqual({
+      type: "error",
+      message: "Undo is disabled in ranked matches.",
+      resync: true,
+    });
   });
 });

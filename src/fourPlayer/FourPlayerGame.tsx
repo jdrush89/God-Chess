@@ -300,6 +300,7 @@ function FourPlayerDraft({
   onUndo,
   completedAchievements,
   playerPortraits,
+  playerRatings,
 }: {
   state: FourPlayerState;
   dispatch: FourPlayerDispatch;
@@ -309,6 +310,7 @@ function FourPlayerDraft({
   onUndo: () => void;
   completedAchievements: Partial<Record<AchievementId, string>>;
   playerPortraits?: Partial<Record<Seat, AccountPortraitId>>;
+  playerRatings?: Partial<Record<Seat, number>>;
 }) {
   const [inspected, setInspected] = useState<GodId>(state.draft.available[0]);
   const [godPreviewLevel, setGodPreviewLevel] = useState<number>();
@@ -351,7 +353,12 @@ function FourPlayerDraft({
               alt=""
             />
           )}
-          <span>{activePlayer.name} · {seatName(state.activeSeat)} picks</span>
+          <span>
+            {activePlayer.name}
+            {playerRatings?.[state.activeSeat] !== undefined &&
+              ` · Rating ${Math.round(playerRatings[state.activeSeat]!)}`}
+            {" · "}{seatName(state.activeSeat)} picks
+          </span>
           {activePlayer.control.kind === "ai" && <LoaderCircle className="spin" size={15} />}
         </div>
         <div className="header-actions">
@@ -537,6 +544,9 @@ function FourPlayerDraft({
                 />
               )}
               <strong>{state.players[seat].name}</strong>
+              {playerRatings?.[seat] !== undefined && (
+                <small>Rating {Math.round(playerRatings[seat]!)}</small>
+              )}
             </span>
             <small>{seatName(seat)}</small>
             <div>
@@ -567,6 +577,7 @@ function FourPlayerPanel({
   displayedOrbs,
   arrivingOrbs,
   portraitId,
+  rating,
 }: {
   state: FourPlayerState;
   seat: Seat;
@@ -576,6 +587,7 @@ function FourPlayerPanel({
   displayedOrbs: Record<OrbAffinity, number>;
   arrivingOrbs: Set<string>;
   portraitId?: AccountPortraitId;
+  rating?: number;
 }) {
   const player = state.players[seat];
   const active = state.activeSeat === seat && state.phase !== "gameover";
@@ -606,6 +618,7 @@ function FourPlayerPanel({
               ? `AI ${player.control.difficulty ?? 5}`
               : "Human"}
             {player.team ? ` · ${teamName(player.team)}` : ""}
+            {rating !== undefined ? ` · Rating ${Math.round(rating)}` : ""}
           </small>
         </span>
         {player.control.kind === "ai" ? <Bot size={16} /> : <UserRound size={16} />}
@@ -1600,10 +1613,12 @@ function FourGraveyardModal({
 function FourSettingsModal({
   undoPreferred,
   onUndoPreferenceChange,
+  ranked = false,
   onClose,
 }: {
   undoPreferred: boolean;
   onUndoPreferenceChange: (enabled: boolean) => void;
+  ranked?: boolean;
   onClose: () => void;
 }) {
   return (
@@ -1615,21 +1630,24 @@ function FourSettingsModal({
         <h2>Settings</h2>
         <div className="setting-row">
           <div>
-            <strong>Allow undo</strong>
+            <strong>{ranked ? "Ranked integrity" : "Allow undo"}</strong>
             <p>
-              Rewinds a stable draft pick, upgrade, or completed divine turn. AI
-              chains rewind with the preceding Human turn.
+              {ranked
+                ? "Undo is disabled for every ranked player."
+                : "Rewinds a stable draft pick, upgrade, or completed divine turn. AI chains rewind with the preceding Human turn."}
             </p>
           </div>
-          <button
-            className={`setting-switch ${undoPreferred ? "enabled" : ""}`}
-            role="switch"
-            aria-checked={undoPreferred}
-            aria-label="Allow undo"
-            onClick={() => onUndoPreferenceChange(!undoPreferred)}
-          >
-            <span />
-          </button>
+          {!ranked && (
+            <button
+              className={`setting-switch ${undoPreferred ? "enabled" : ""}`}
+              role="switch"
+              aria-checked={undoPreferred}
+              aria-label="Allow undo"
+              onClick={() => onUndoPreferenceChange(!undoPreferred)}
+            >
+              <span />
+            </button>
+          )}
         </div>
       </section>
     </div>
@@ -1663,11 +1681,13 @@ function FourPlayerPauseOverlay({
   participantName,
   canReplace,
   onReplace,
+  ranked = false,
 }: {
   seat?: Seat;
   participantName?: string;
   canReplace: boolean;
   onReplace?: (difficulty: number) => void;
+  ranked?: boolean;
 }) {
   const [difficulty, setDifficulty] = useState(5);
   return (
@@ -1681,6 +1701,7 @@ function FourPlayerPauseOverlay({
             ? `${seatName(seat)} remains reserved for secure reconnection.`
             : "Their seat remains reserved for secure reconnection."}
           {" "}No actions or AI turns will run while the room is paused.
+          {ranked && " Their team forfeits if they do not reconnect within 2 minutes."}
         </p>
         {canReplace && onReplace && (
           <div className="four-replace-ai">
@@ -1702,7 +1723,9 @@ function FourPlayerPauseOverlay({
             </button>
           </div>
         )}
-        {!canReplace && <small>Waiting for the host or the reserved participant.</small>}
+        {(!canReplace || !onReplace) && (
+          <small>Waiting for the host or the reserved participant.</small>
+        )}
       </section>
     </div>
   );
@@ -1718,6 +1741,7 @@ export interface FourPlayerOnlineSession {
   undoAvailable: boolean;
   pausedSeat?: Seat;
   pausedParticipantName?: string;
+  ranked?: boolean;
   onAction: (action: FourPlayerAction) => void;
   onUndo: () => void;
   onUndoConsentChange: (enabled: boolean) => void;
@@ -1748,6 +1772,7 @@ export interface FourPlayerGameProps {
   onStatisticsChange?: (state: FourPlayerState) => void;
   completedAchievements?: Partial<Record<AchievementId, string>>;
   playerPortraits?: Partial<Record<Seat, AccountPortraitId>>;
+  playerRatings?: Partial<Record<Seat, number>>;
 }
 
 export function FourPlayerGame({
@@ -1765,6 +1790,7 @@ export function FourPlayerGame({
   onStatisticsChange,
   completedAchievements = {},
   playerPortraits,
+  playerRatings,
 }: FourPlayerGameProps) {
   const [state, baseDispatch] = useReducer(
     fourPlayerReducer,
@@ -2372,14 +2398,19 @@ export function FourPlayerGame({
           onUndo={applyUndo}
           completedAchievements={completedAchievements}
           playerPortraits={playerPortraits}
+          playerRatings={playerRatings}
         />
         <MatchEscapeMenu
           onOpenRules={() => setRulesOpen(true)}
           onOpenSettings={() => setSettingsOpen(true)}
-          onLeave={() => onPersist ? void saveAndQuit() : onQuit()}
+          onLeave={() =>
+            onlineSession || !onPersist ? onQuit() : void saveAndQuit()
+          }
           leaveLabel={
             onlineSession
-              ? "Leave room"
+              ? onlineSession.ranked
+                ? "Forfeit ranked match"
+                : "Leave room"
               : onPersist
                 ? "Save & quit"
                 : "Leave challenge"
@@ -2396,6 +2427,7 @@ export function FourPlayerGame({
             onUndoPreferenceChange={
               onlineSession?.onUndoConsentChange ?? onUndoPreferenceChange
             }
+            ranked={onlineSession?.ranked}
             onClose={() => setSettingsOpen(false)}
           />
         )}
@@ -2403,8 +2435,11 @@ export function FourPlayerGame({
           <FourPlayerPauseOverlay
             seat={onlineSession.pausedSeat}
             participantName={onlineSession.pausedParticipantName}
-            canReplace={onlineSession.role === "host"}
+            canReplace={
+              onlineSession.role === "host" && !onlineSession.ranked
+            }
             onReplace={onlineSession.onReplaceWithAi}
+            ranked={onlineSession.ranked}
           />
         )}
       </>
@@ -2498,11 +2533,14 @@ export function FourPlayerGame({
             disabled={!canUndo}
             title={canCancelDivineSelection
               ? "Return to God selection"
-              : undoPreferred
-                ? "Undo the latest stable Human turn and AI chain"
-                : "Enable undo in Settings"}
+              : onlineSession?.ranked
+                ? "Undo is disabled in ranked matches"
+                : undoPreferred
+                  ? "Undo the latest stable Human turn and AI chain"
+                  : "Enable undo in Settings"}
           >
-            <Undo2 size={18} /><span>Undo</span>
+            <Undo2 size={18} />
+            <span>{canCancelDivineSelection ? "Back" : "Undo"}</span>
           </button>
           <button onClick={() => setHistoryOpen(true)}><History size={18} /><span>History</span></button>
           <button onClick={onNewGame}>
@@ -2540,6 +2578,7 @@ export function FourPlayerGame({
           displayedOrbs={displayedOrbs.north}
           arrivingOrbs={arrivingOrbs}
           portraitId={playerPortraits?.north}
+          rating={playerRatings?.north}
         />
         <FourPlayerPanel
           state={state}
@@ -2550,6 +2589,7 @@ export function FourPlayerGame({
           displayedOrbs={displayedOrbs.west}
           arrivingOrbs={arrivingOrbs}
           portraitId={playerPortraits?.west}
+          rating={playerRatings?.west}
         />
         <section className="four-board-column">
           <FourPlayerBoard
@@ -2577,6 +2617,7 @@ export function FourPlayerGame({
           displayedOrbs={displayedOrbs.east}
           arrivingOrbs={arrivingOrbs}
           portraitId={playerPortraits?.east}
+          rating={playerRatings?.east}
         />
         <FourPlayerPanel
           state={state}
@@ -2587,6 +2628,7 @@ export function FourPlayerGame({
           displayedOrbs={displayedOrbs.south}
           arrivingOrbs={arrivingOrbs}
           portraitId={playerPortraits?.south}
+          rating={playerRatings?.south}
         />
         <FourActionPanel
           state={state}
@@ -2675,6 +2717,7 @@ export function FourPlayerGame({
           onUndoPreferenceChange={
             onlineSession?.onUndoConsentChange ?? onUndoPreferenceChange
           }
+          ranked={onlineSession?.ranked}
           onClose={() => setSettingsOpen(false)}
         />
       )}
@@ -2682,17 +2725,24 @@ export function FourPlayerGame({
         <FourPlayerPauseOverlay
           seat={onlineSession.pausedSeat}
           participantName={onlineSession.pausedParticipantName}
-          canReplace={onlineSession.role === "host"}
+          canReplace={
+            onlineSession.role === "host" && !onlineSession.ranked
+          }
           onReplace={onlineSession.onReplaceWithAi}
+          ranked={onlineSession.ranked}
         />
       )}
       <MatchEscapeMenu
         onOpenRules={() => setRulesOpen(true)}
         onOpenSettings={() => setSettingsOpen(true)}
-        onLeave={() => onPersist ? void saveAndQuit() : onQuit()}
+        onLeave={() =>
+          onlineSession || !onPersist ? onQuit() : void saveAndQuit()
+        }
         leaveLabel={
           onlineSession
-            ? "Leave room"
+            ? onlineSession.ranked
+              ? "Forfeit ranked match"
+              : "Leave room"
             : onPersist
               ? "Save & quit"
               : "Leave challenge"

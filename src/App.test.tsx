@@ -1147,6 +1147,15 @@ describe("game startup", () => {
           displayName: "Zeus",
           portraitId: "leonidas",
           completedAchievementIds: ["it-begins"],
+          rankedRating: {
+            rating: 1642.4,
+            deviation: 118,
+            volatility: 0.057,
+            gamesPlayed: 18,
+            wins: 11,
+            losses: 5,
+            draws: 2,
+          },
           stats: {
             ...createPlayerStatisticsSnapshot(
               createPlayerStatisticsProgress(),
@@ -1165,6 +1174,9 @@ describe("game startup", () => {
     );
 
     expect(screen.getByText("Games played")).toBeTruthy();
+    expect(screen.getByText("Ranked 2v2 rating")).toBeTruthy();
+    expect(screen.getByText("1642")).toBeTruthy();
+    expect(screen.getByText("11W · 5L · 2D")).toBeTruthy();
     expect(screen.getByText("Boards played")).toBeTruthy();
     expect(screen.getByText("God pick rate")).toBeTruthy();
     expect(screen.getByText("It Begins").closest(".achievement-card")
@@ -2716,6 +2728,30 @@ describe("game startup", () => {
       godId: "chiron",
       abilityId: "gallop",
     });
+  });
+
+  it("reserves the Last action bar before the first completed turn", () => {
+    const state = completeClassicDraft();
+    expect(state.lastAction).toBeUndefined();
+    const { container } = render(
+      <GameScreen
+        state={state}
+        dispatch={vi.fn()}
+        onRestart={vi.fn()}
+        onRestartPuzzle={vi.fn()}
+        onNextPuzzle={vi.fn()}
+        undoEnabled={false}
+        canUndo={false}
+        onUndo={vi.fn()}
+        onOpenSettings={vi.fn()}
+      />,
+    );
+
+    expect(container.querySelector(".game-page")?.classList.contains(
+      "has-last-action",
+    )).toBe(true);
+    expect(container.querySelector(".last-action-notice")?.textContent)
+      .toContain("Last actionNone");
   });
 
   it("rewinds enough boundaries for the winning side to receive four player turns", () => {

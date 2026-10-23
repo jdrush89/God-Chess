@@ -332,9 +332,12 @@ body::before {
 .game-page.puzzle-mode.has-last-action .game-layout {
   --board-size: clamp(220px, calc(100dvh - 403px), 790px);
 }
-@media (min-width: 1280px) and (max-height: 900px), (min-width: 1500px) {
+@media (min-width: 1280px) {
   .game-layout {
-    grid-template-columns: 240px minmax(0, 790px) 350px;
+    grid-template-columns:
+      clamp(200px, calc(100vw - 1080px), 240px)
+      minmax(0, 790px)
+      350px;
     gap: 24px;
     width: min(1428px, calc(100% - 48px));
   }
@@ -1443,6 +1446,11 @@ span.move-target-dot {
   font-size: 10px;
   line-height: 1.35;
 }
+.ranked-stat-card {
+  border-color: rgba(198,161,91,.58);
+  background: linear-gradient(145deg, rgba(57,45,22,.72), rgba(19,20,24,.98));
+}
+.ranked-stat-card small { display: block; margin-top: 4px; color: #b8aa88; font-size: 9px; }
 .statistics-sections {
   display: grid;
   grid-template-columns: minmax(300px, .8fr) minmax(420px, 1.2fr);
@@ -1652,7 +1660,7 @@ span.move-target-dot {
 .start-game-heading.compact h1 { font-size: clamp(28px, 4vw, 42px); }
 .start-game-heading > p:last-child { margin: 0; color: #85868d; font-size: 11px; line-height: 1.65; }
 .player-count-grid {
-  width: min(900px, 100%); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px;
+  width: min(980px, 100%); display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px;
 }
 .player-count-grid > button {
   min-width: 0; min-height: clamp(190px, 30vh, 270px); display: flex; flex-direction: column;
@@ -1663,8 +1671,14 @@ span.move-target-dot {
 .player-count-grid > button:hover {
   color: #fff0c8; border-color: rgba(198,161,91,.72); background: rgba(198,161,91,.08);
 }
+.player-count-grid > button:disabled { cursor: not-allowed; opacity: .48; }
 .player-count-grid svg { color: var(--gold-bright); }
 .player-count-grid strong { font: 600 clamp(18px, 2.5vw, 25px) "Cinzel"; }
+.player-count-grid small { color: #777982; font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
+.player-count-grid .ranked-mode-button {
+  border-color: rgba(198,161,91,.62);
+  background: radial-gradient(circle at 50% 20%, rgba(198,161,91,.15), rgba(13,15,20,.88) 62%);
+}
 .two-player-mode-grid {
   width: min(760px, 100%); display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
 }
@@ -1739,6 +1753,44 @@ span.move-target-dot {
 .room-code.failed svg { color: #e58b80; }
 .online-error { margin: 13px 0 0; color: #e58b80; font-size: 10px; text-align: center; }
 .leave-room-button { display: block; margin: 12px auto 0; }
+.ranked-panel { display: grid; gap: 18px; }
+.ranked-panel > header {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px;
+  padding-bottom: 16px; border-bottom: 1px solid var(--line);
+}
+.ranked-panel > header > span {
+  display: grid; place-items: center; width: 46px; height: 46px; border-radius: 50%;
+  color: var(--gold-bright); background: rgba(198,161,91,.1); border: 1px solid rgba(198,161,91,.32);
+}
+.ranked-panel > header h1 { margin: 2px 0 4px; font: 600 clamp(24px, 4vw, 36px) "Cinzel"; }
+.ranked-panel > header p { margin: 0; color: #85868d; font-size: 10px; }
+.ranked-rating-card, .ranked-result-rating {
+  display: grid; justify-items: center; color: #f3dfaa; font: 600 30px "Cinzel";
+}
+.ranked-rating-card small, .ranked-result-rating small {
+  color: #85868d; font: 700 8px Inter, sans-serif; letter-spacing: .12em; text-transform: uppercase;
+}
+.ranked-idle, .ranked-waiting, .ranked-match-found, .ranked-complete {
+  display: grid; justify-items: center; gap: 11px; padding: 26px 18px; text-align: center;
+  background: rgba(8,9,13,.48); border: 1px solid #30323a;
+}
+.ranked-idle > svg, .ranked-waiting > svg, .ranked-match-found > svg, .ranked-complete > svg {
+  color: var(--gold-bright);
+}
+.ranked-panel h2 { margin: 0; font: 600 20px "Cinzel"; }
+.ranked-panel section > p { max-width: 520px; margin: 0; color: #8e9097; font-size: 11px; line-height: 1.65; }
+.ranked-panel section > small { color: #777982; font-size: 9px; }
+.ranked-roster { width: min(620px, 100%); display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ranked-roster article {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px;
+  padding: 10px; text-align: left; background: #111319; border: 1px solid #30333b;
+}
+.ranked-roster article.disconnected { opacity: .56; }
+.ranked-roster .account-portrait { width: 38px; height: 38px; }
+.ranked-roster strong, .ranked-roster small { display: block; }
+.ranked-roster strong { color: #e8e1d3; font-size: 11px; }
+.ranked-roster small { margin-top: 3px; color: #85868d; font-size: 8px; }
+.ranked-roster article > svg { color: #9a9ca4; }
 .four-online-lobby { display: grid; gap: 13px; }
 .four-online-room-header {
   display: flex; align-items: center; justify-content: space-between; gap: 14px;
@@ -2273,6 +2325,9 @@ span.move-target-dot {
   .start-game-content { justify-content: flex-start; padding: 28px 12px 36px; }
   .player-count-grid, .two-player-mode-grid { grid-template-columns: 1fr; }
   .player-count-grid > button { min-height: 128px; gap: 10px; }
+  .ranked-panel > header { grid-template-columns: auto 1fr; }
+  .ranked-panel > header .ranked-rating-card { grid-column: 1 / -1; }
+  .ranked-roster { grid-template-columns: 1fr; }
   .two-player-mode-grid > button { min-height: 132px; }
   .start-game-content .online-setup { padding: 14px 12px; }
   .puzzle-select-view { padding: 16px 12px 28px; }
