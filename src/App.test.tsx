@@ -2307,6 +2307,32 @@ describe("game startup", () => {
     expect(dispatch).toHaveBeenCalledWith({ type: "square", square: "f6" });
   });
 
+  it("marks selected Escort companions with the blue selection class", () => {
+    let state = createGame(1);
+    state.phase = "play";
+    state.players.white.gods = ["leonidas"];
+    state.players.white.orbs.black = 2;
+    state.players.white.upgrades.escort = 2;
+    state = gameReducer(state, { type: "select-god", godId: "leonidas" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "escort" });
+    state = gameReducer(state, { type: "square", square: "e1" });
+    state = gameReducer(state, { type: "square", square: "d1" });
+
+    const { container } = render(
+      <ChessBoard
+        state={state}
+        dispatch={vi.fn()}
+        onInspectSquare={vi.fn()}
+      />,
+    );
+
+    expect(container.querySelector('[data-square="d1"].escort-selected')).toBeTruthy();
+    expect(container.querySelector('[data-square="f1"].escort-selected')).toBeNull();
+    expect(
+      container.querySelector('[data-square="d1"]')?.getAttribute("aria-label"),
+    ).toContain("selected escort");
+  });
+
   it("keeps Rage cancellable until its capture choice is confirmed", () => {
     let state = createGame(1);
     state.phase = "play";

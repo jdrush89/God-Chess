@@ -575,6 +575,12 @@ body::before {
 .board-square:hover:not(.legal-destination)::after, .board-square.selected::after {
   content: ""; position: absolute; inset: 0; background: rgba(214,177,104,.25); box-shadow: inset 0 0 0 3px rgba(225,188,113,.78); z-index: 1;
 }
+.board-square.escort-selected::after,
+.four-board-square.escort-selected::after {
+  content: ""; position: absolute; inset: 0; z-index: 4; pointer-events: none;
+  background: rgba(58,149,210,.12);
+  box-shadow: inset 0 0 0 4px rgba(92,190,255,.96);
+}
 .board-square.legal { cursor: pointer; }
 .board-square.legal-occupied::before {
   content: ""; position: absolute; z-index: 2; inset: 5px;
@@ -2487,6 +2493,11 @@ span.move-target-dot {
 .three-board-cell.dark { fill: #514e4c; }
 .three-board-cell.neutral { fill: #777a80; }
 .three-board-cell.selected { stroke: #f5d98e; stroke-width: .18; filter: brightness(1.14); }
+.three-board-cell.escort-selected {
+  stroke: #5cbeff;
+  stroke-width: .22;
+  filter: brightness(1.12);
+}
 .three-board-cell.provisional-source {
   stroke: #6fbde0; stroke-width: .24; filter: brightness(1.18);
 }

@@ -317,6 +317,11 @@ export function ThreePlayerBoard({
           (sources.size === 0 && enchantSourceChoice)
         );
         const isSelected = descriptor.id === selectedCell;
+        const isEscortSelected = Boolean(
+          piece &&
+          state.pending?.abilityId === "escort" &&
+          state.pending.selected?.includes(piece.id),
+        );
         const isProvisionalSource = descriptor.id === provisionalSource;
         const isProvisionalDestination = descriptor.id === provisionalDestination;
         const isDraggedSource = drag.draggingSource === descriptor.id;
@@ -342,6 +347,7 @@ export function ThreePlayerBoard({
           isMoveTarget && !isSource ? "legal-destination" : "",
           isEffectPreview ? "effect-preview" : "",
           isSelected ? "selected" : "",
+          isEscortSelected ? "escort-selected" : "",
           isProvisionalSource ? "provisional-source" : "",
           isProvisionalDestination ? "provisional-destination" : "",
           path.has(descriptor.id) ? "path" : "",
@@ -352,6 +358,7 @@ export function ThreePlayerBoard({
           statusLabels.length ? statusLabels.join(", ") : undefined,
           banana ? `banana placed by ${banana.owner}` : undefined,
           isSource ? "legal move source" : undefined,
+          isEscortSelected ? "selected escort" : undefined,
           isProvisionalSource ? "provisional move source" : undefined,
           isProvisionalDestination
             ? "provisional move destination, not committed"
