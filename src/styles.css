@@ -2134,12 +2134,31 @@ span.move-target-dot {
   display: grid; gap: 7px; color: #9c9b98;
   font-size: 9px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
 }
+.account-field { display: grid; gap: 7px; }
+.account-field > label {
+  color: #9c9b98; font-size: 9px; font-weight: 700;
+  letter-spacing: .12em; text-transform: uppercase;
+}
 .account-form input {
   width: 100%; height: 42px; padding: 0 13px; color: #ece7dc; background: #0b0d12;
   border: 1px solid #30333b; outline: none;
 }
 .account-form input:focus { border-color: var(--gold); }
+.account-password-field { position: relative; }
+.account-password-field input { padding-right: 48px; }
+.account-password-field button {
+  position: absolute; top: 0; right: 0; width: 42px; height: 42px;
+  display: grid; place-items: center; padding: 0; color: #8c8d93;
+  background: transparent; border: 0; cursor: pointer;
+}
+.account-password-field button:hover,
+.account-password-field button:focus-visible { color: var(--gold-bright); }
 .account-form .primary-button { width: 100%; margin-top: 3px; }
+.account-forgot-password,
+.account-recovery-back { justify-self: center; }
+.account-recovery-copy {
+  margin: 0 0 22px; color: #8c8d93; font-size: 11px; line-height: 1.6;
+}
 .account-portrait-picker {
   display: grid; gap: 9px; margin-top: 16px; text-align: left;
 }

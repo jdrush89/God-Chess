@@ -17,6 +17,8 @@ const baseProps = {
   onSignIn: vi.fn(async () => "Signed in."),
   onSignUp: vi.fn(async () => "Account created."),
   onSignOut: vi.fn(async () => undefined),
+  onRequestPasswordReset: vi.fn(async () => "Reset email sent."),
+  onUpdatePassword: vi.fn(async () => "Password updated."),
   onUpdateDisplayName: vi.fn(async () => "Display name updated."),
   onUpdatePortrait: vi.fn(async () => "Account portrait updated."),
 };
@@ -55,12 +57,58 @@ afterEach(() => {
 });
 
 describe("account modal", () => {
+  it("shows and hides the password without changing its value", () => {
+    render(<AccountModal {...baseProps} />);
+    const password = screen.getByLabelText(/^password$/i) as HTMLInputElement;
+    fireEvent.change(password, { target: { value: "divine-pass" } });
+
+    expect(password.type).toBe("password");
+    fireEvent.click(screen.getByRole("button", { name: /show password/i }));
+    expect(password.type).toBe("text");
+    expect(password.value).toBe("divine-pass");
+    fireEvent.click(screen.getByRole("button", { name: /hide password/i }));
+    expect(password.type).toBe("password");
+  });
+
+  it("requests a password reset email from the sign-in form", async () => {
+    render(<AccountModal {...baseProps} />);
+    fireEvent.click(screen.getByRole("button", { name: /forgot password/i }));
+    fireEvent.change(screen.getByLabelText(/email/i), {
+      target: { value: "athena@example.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /send reset link/i }));
+
+    await waitFor(() =>
+      expect(baseProps.onRequestPasswordReset).toHaveBeenCalledWith(
+        "athena@example.com",
+      )
+    );
+    expect(screen.getByRole("status").textContent).toContain("Reset email sent");
+  });
+
+  it("updates the password after opening a recovery link", async () => {
+    render(<AccountModal {...baseProps} passwordRecovery />);
+    fireEvent.change(screen.getByLabelText(/^new password$/i), {
+      target: { value: "new-divine-pass" },
+    });
+    fireEvent.change(screen.getByLabelText(/^confirm new password$/i), {
+      target: { value: "new-divine-pass" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /update password/i }));
+
+    await waitFor(() =>
+      expect(baseProps.onUpdatePassword).toHaveBeenCalledWith(
+        "new-divine-pass",
+      )
+    );
+  });
+
   it("submits email, password, and display name when creating an account", async () => {
     render(<AccountModal {...baseProps} />);
     fireEvent.click(screen.getAllByRole("button", { name: /^create account$/i })[0]);
     fireEvent.change(screen.getByLabelText(/display name/i), { target: { value: "Athena" } });
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "athena@example.com" } });
-    fireEvent.change(screen.getByLabelText(/password/i), { target: { value: "divine-pass" } });
+    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: "divine-pass" } });
     fireEvent.click(screen.getAllByRole("button", { name: /^create account$/i }).at(-1)!);
 
     await waitFor(() => expect(baseProps.onSignUp).toHaveBeenCalledWith(

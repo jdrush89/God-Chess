@@ -1,6 +1,9 @@
 import { useEffect, useState, type FormEvent } from "react";
 import {
   Bell,
+  Eye,
+  EyeOff,
+  KeyRound,
   LoaderCircle,
   LogIn,
   LogOut,
@@ -27,6 +30,47 @@ import {
 } from "./portraits";
 
 type AccountSection = "profile" | "friends";
+type AuthMode = "signin" | "signup" | "forgot";
+
+function PasswordInput({
+  id,
+  label,
+  value,
+  onChange,
+  autoComplete,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  autoComplete: "current-password" | "new-password";
+}) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <div className="account-field">
+      <label htmlFor={id}>{label}</label>
+      <div className="account-password-field">
+        <input
+          id={id}
+          type={visible ? "text" : "password"}
+          minLength={6}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          autoComplete={autoComplete}
+          required
+        />
+        <button
+          type="button"
+          aria-label={`${visible ? "Hide" : "Show"} ${label.toLowerCase()}`}
+          aria-pressed={visible}
+          onClick={() => setVisible((current) => !current)}
+        >
+          {visible ? <EyeOff size={17} /> : <Eye size={17} />}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function SocialIdentity({
   profile,
@@ -248,6 +292,9 @@ export function AccountModal({
   onSignIn,
   onSignUp,
   onSignOut,
+  onRequestPasswordReset,
+  onUpdatePassword,
+  passwordRecovery = false,
   onUpdateDisplayName,
   onUpdatePortrait,
 }: {
@@ -269,13 +316,18 @@ export function AccountModal({
     portraitId: AccountPortraitId,
   ) => Promise<string>;
   onSignOut: () => Promise<void>;
+  onRequestPasswordReset: (email: string) => Promise<string>;
+  onUpdatePassword: (password: string) => Promise<string>;
+  passwordRecovery?: boolean;
   onUpdateDisplayName: (displayName: string) => Promise<string>;
   onUpdatePortrait: (portraitId: AccountPortraitId) => Promise<string>;
 }) {
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [mode, setMode] = useState<AuthMode>("signin");
   const [section, setSection] = useState<AccountSection>(initialSection);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [displayName, setDisplayName] = useState(account?.displayName ?? "");
   const [portraitId, setPortraitId] = useState<AccountPortraitId>(
     account?.portraitId ?? DEFAULT_ACCOUNT_PORTRAIT_ID,
@@ -335,6 +387,90 @@ export function AccountModal({
             <LoaderCircle className="spin" size={28} />
             <span>Restoring account</span>
           </div>
+        ) : passwordRecovery ? (
+          <>
+            <KeyRound className="account-hero-icon" size={34} />
+            <h2>Choose a new password</h2>
+            <p className="account-recovery-copy">
+              Enter a new password for your God Chess account.
+            </p>
+            <form className="account-form" onSubmit={(event) => {
+              event.preventDefault();
+              void run(() => {
+                if (newPassword !== confirmPassword) {
+                  throw new Error("Passwords do not match.");
+                }
+                return onUpdatePassword(newPassword);
+              });
+            }}>
+              <PasswordInput
+                id="account-new-password"
+                label="New password"
+                value={newPassword}
+                onChange={setNewPassword}
+                autoComplete="new-password"
+              />
+              <PasswordInput
+                id="account-confirm-password"
+                label="Confirm new password"
+                value={confirmPassword}
+                onChange={setConfirmPassword}
+                autoComplete="new-password"
+              />
+              <button
+                className="primary-button"
+                disabled={
+                  working ||
+                  newPassword.length < 6 ||
+                  confirmPassword.length < 6
+                }
+              >
+                {working
+                  ? <LoaderCircle className="spin" size={17} />
+                  : <KeyRound size={17} />}
+                Update password
+              </button>
+            </form>
+          </>
+        ) : !account && mode === "forgot" ? (
+          <>
+            <KeyRound className="account-hero-icon" size={34} />
+            <h2>Reset your password</h2>
+            <p className="account-recovery-copy">
+              We will email you a secure link to choose a new password.
+            </p>
+            <form className="account-form" onSubmit={(event) => {
+              event.preventDefault();
+              void run(() => onRequestPasswordReset(email.trim()));
+            }}>
+              <label>
+                Email
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  autoComplete="email"
+                  required
+                />
+              </label>
+              <button
+                className="primary-button"
+                disabled={working || !email.trim()}
+              >
+                {working
+                  ? <LoaderCircle className="spin" size={17} />
+                  : <KeyRound size={17} />}
+                Send reset link
+              </button>
+              <button
+                type="button"
+                className="text-button account-recovery-back"
+                onClick={() => setMode("signin")}
+              >
+                Back to sign in
+              </button>
+            </form>
+          </>
         ) : account ? (
           <>
             <div className="account-tabs">
@@ -437,17 +573,13 @@ export function AccountModal({
                   required
                 />
               </label>
-              <label>
-                Password
-                <input
-                  type="password"
-                  minLength={6}
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  autoComplete={mode === "signin" ? "current-password" : "new-password"}
-                  required
-                />
-              </label>
+              <PasswordInput
+                id="account-password"
+                label="Password"
+                value={password}
+                onChange={setPassword}
+                autoComplete={mode === "signin" ? "current-password" : "new-password"}
+              />
               <button
                 className="primary-button"
                 disabled={working || !email.trim() || password.length < 6 || (mode === "signup" && !displayName.trim())}
@@ -459,6 +591,15 @@ export function AccountModal({
                     : <UserPlus size={17} />}
                 {mode === "signin" ? "Sign in" : "Create account"}
               </button>
+              {mode === "signin" && (
+                <button
+                  type="button"
+                  className="text-button account-forgot-password"
+                  onClick={() => setMode("forgot")}
+                >
+                  Forgot password?
+                </button>
+              )}
             </form>
           </>
         )}

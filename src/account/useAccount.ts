@@ -44,6 +44,15 @@ export const resolveAuthRedirectUrl = (
   baseUrl = import.meta.env.BASE_URL,
 ) => new URL(baseUrl, href).href;
 
+export const isPasswordRecoveryUrl = (
+  href = window.location.href,
+) => {
+  const url = new URL(href);
+  const hash = new URLSearchParams(url.hash.replace(/^#/, ""));
+  return url.searchParams.get("type") === "recovery" ||
+    hash.get("type") === "recovery";
+};
+
 export const resolveLocalDataImportPending = (value: unknown) =>
   value === true;
 
@@ -138,6 +147,9 @@ export function useAccount() {
   const [loading, setLoading] = useState(accountsConfigured);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string>();
+  const [passwordRecovery, setPasswordRecovery] = useState(
+    accountsConfigured && isPasswordRecoveryUrl(),
+  );
 
   useEffect(() => {
     if (!supabase) return;
@@ -176,7 +188,8 @@ export function useAccount() {
       }
       void applyUser(data.session?.user);
     });
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY") setPasswordRecovery(true);
       void applyUser(session?.user);
     });
     return () => {
@@ -225,12 +238,49 @@ export function useAccount() {
     }
   };
 
+  const requestPasswordReset = async (email: string) => {
+    if (!supabase) throw new Error("Account services are not configured.");
+    const normalized = email.trim();
+    if (!normalized) throw new Error("Email is required.");
+    setWorking(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(normalized, {
+        redirectTo: resolveAuthRedirectUrl(),
+      });
+      if (error) throw error;
+      setError(undefined);
+      return "If an account exists for that email, a password reset link has been sent.";
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  const updatePassword = async (password: string) => {
+    if (!supabase || !passwordRecovery) {
+      throw new Error("Open a valid password reset link before changing your password.");
+    }
+    if (password.length < 6) {
+      throw new Error("Password must be at least 6 characters.");
+    }
+    setWorking(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) throw error;
+      setPasswordRecovery(false);
+      setError(undefined);
+      return "Password updated.";
+    } finally {
+      setWorking(false);
+    }
+  };
+
   const signOut = async () => {
     if (!supabase) return;
     setWorking(true);
     try {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
+      setPasswordRecovery(false);
       setError(undefined);
     } catch (error) {
       setError(error instanceof Error ? error.message : "Unable to sign out.");
@@ -312,8 +362,11 @@ export function useAccount() {
     loading,
     working,
     error,
+    passwordRecovery,
     signIn,
     signUp,
+    requestPasswordReset,
+    updatePassword,
     signOut,
     updateDisplayName,
     updatePortrait,
