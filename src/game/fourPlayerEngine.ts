@@ -2987,7 +2987,8 @@ const handleSquare = (state: FourPlayerState, square: Square) => {
     if (!state.legalTargets.includes(square) || !state.board[square]) return;
     const kingSquare = state.pending.source;
     const selected = [...(state.pending.selected ?? []), state.board[square].id];
-    if (currentLevel(state, "escort") === 1) {
+    const remaining = state.legalTargets.filter((target) => target !== square);
+    if (currentLevel(state, "escort") === 1 || remaining.length === 0) {
       state.pending = { ...state.pending, step: "escort-move", selected };
       state.selectedSquare = kingSquare;
       state.legalTargets = sourceTargets(state, kingSquare);
@@ -2995,7 +2996,7 @@ const handleSquare = (state: FourPlayerState, square: Square) => {
       return;
     }
     state.pending = { ...state.pending, selected };
-    state.legalTargets = state.legalTargets.filter((target) => target !== square);
+    state.legalTargets = remaining;
     state.notice = "Choose more escorts, or pass.";
     return;
   }

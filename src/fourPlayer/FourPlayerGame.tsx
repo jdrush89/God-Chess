@@ -774,6 +774,11 @@ function FourPlayerBoard({
               }
               const piece = state.board[square];
               const selected = state.selectedSquare === square;
+              const escortSelected = Boolean(
+                piece &&
+                state.pending?.abilityId === "escort" &&
+                state.pending.selected?.includes(piece.id),
+              );
               const legal = !previewing && legalTargets.includes(square);
               const effectPreview = previewing && state.legalTargets.includes(square);
               const isProvisionalSource = provisionalSource === square;
@@ -783,8 +788,8 @@ function FourPlayerBoard({
                 <button
                   role="gridcell"
                   data-square={square}
-                  aria-label={`${square}${piece ? `, ${state.players[piece.owner].name} ${piece.type}${piece.controller ? `, controlled by ${state.players[piece.controller].name}` : ", inert"}` : ""}${legal ? ", legal target" : ""}${isProvisionalSource ? ", provisional move source" : ""}${isProvisionalDestination ? ", provisional move destination, not committed" : ""}`}
-                  className={`four-board-square ${(file + rank) % 2 ? "light" : "dark"} ${selected ? "selected" : ""} ${legal ? "legal" : ""} ${legal && piece ? "legal-occupied" : ""} ${legal && enchantSourceChoice ? "legal-source" : ""} ${legal && !enchantSourceChoice ? "legal-destination" : ""} ${effectPreview ? "effect-preview" : ""} ${isProvisionalSource ? "provisional-source" : ""} ${isProvisionalDestination ? "provisional-destination" : ""}`}
+                  aria-label={`${square}${piece ? `, ${state.players[piece.owner].name} ${piece.type}${piece.controller ? `, controlled by ${state.players[piece.controller].name}` : ", inert"}` : ""}${escortSelected ? ", selected escort" : ""}${legal ? ", legal target" : ""}${isProvisionalSource ? ", provisional move source" : ""}${isProvisionalDestination ? ", provisional move destination, not committed" : ""}`}
+                  className={`four-board-square ${(file + rank) % 2 ? "light" : "dark"} ${selected ? "selected" : ""} ${escortSelected ? "escort-selected" : ""} ${legal ? "legal" : ""} ${legal && piece ? "legal-occupied" : ""} ${legal && enchantSourceChoice ? "legal-source" : ""} ${legal && !enchantSourceChoice ? "legal-destination" : ""} ${effectPreview ? "effect-preview" : ""} ${isProvisionalSource ? "provisional-source" : ""} ${isProvisionalDestination ? "provisional-destination" : ""}`}
                   onClick={() => {
                     if (drag.consumeClick()) return;
                     activateSquare(square);

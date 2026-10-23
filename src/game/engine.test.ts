@@ -454,9 +454,10 @@ describe("game flow", () => {
     state = gameReducer(state, { type: "select-ability", abilityId: "escort" });
     state = gameReducer(state, { type: "square", square: "e4" });
     state = gameReducer(state, { type: "square", square: "f4" });
+    expect(state.pending?.step).toBe("escort-companions");
     state = gameReducer(state, { type: "square", square: "e5" });
-    state = gameReducer(state, { type: "pass" });
 
+    expect(state.pending?.step).toBe("escort-move");
     expect(state.legalTargets).toContain("f4");
     state = gameReducer(state, { type: "square", square: "f4" });
 

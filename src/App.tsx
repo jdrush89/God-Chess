@@ -1329,6 +1329,11 @@ export function ChessBoard({
               ? defeatedKing
               : undefined;
             const selected = state.selectedSquare === square;
+            const escortSelected = Boolean(
+              piece &&
+              state.pending?.abilityId === "escort" &&
+              state.pending.selected?.includes(piece.id),
+            );
             const provisionalSource = moveFirstDraft?.source === square;
             const provisionalDestination = moveFirstDraft?.destination === square;
             const effectPreview = previewingEffect && state.legalTargets.includes(square);
@@ -1340,9 +1345,9 @@ export function ChessBoard({
             return (
               <button
                 role="gridcell"
-                aria-label={`${square}${piece ? `, ${piece.color} ${piece.type}` : ""}${defeatedKingHere ? `, defeated ${defeatedKingHere.piece.color} king` : ""}${effectPreview ? ", affected by selected ability" : ""}${provisionalSource ? ", provisional move source" : ""}${provisionalDestination ? ", provisional move destination, not committed" : ""}`}
+                aria-label={`${square}${piece ? `, ${piece.color} ${piece.type}` : ""}${escortSelected ? ", selected escort" : ""}${defeatedKingHere ? `, defeated ${defeatedKingHere.piece.color} king` : ""}${effectPreview ? ", affected by selected ability" : ""}${provisionalSource ? ", provisional move source" : ""}${provisionalDestination ? ", provisional move destination, not committed" : ""}`}
                 data-square={square}
-                className={`board-square ${(file.charCodeAt(0) + Number(rank)) % 2 ? "light" : "dark"} ${selected ? "selected" : ""} ${provisionalSource ? "provisional-source" : ""} ${provisionalDestination ? "provisional-destination" : ""} ${legal ? "legal" : ""} ${legal && piece ? "legal-occupied" : ""} ${legal && enchantSourceChoice ? "legal-source" : ""} ${legal && !enchantSourceChoice ? "legal-destination" : ""} ${effectPreview ? "effect-preview" : ""}`}
+                className={`board-square ${(file.charCodeAt(0) + Number(rank)) % 2 ? "light" : "dark"} ${selected ? "selected" : ""} ${escortSelected ? "escort-selected" : ""} ${provisionalSource ? "provisional-source" : ""} ${provisionalDestination ? "provisional-destination" : ""} ${legal ? "legal" : ""} ${legal && piece ? "legal-occupied" : ""} ${legal && enchantSourceChoice ? "legal-source" : ""} ${legal && !enchantSourceChoice ? "legal-destination" : ""} ${effectPreview ? "effect-preview" : ""}`}
                 key={square}
                 onClick={() => {
                   if (drag.consumeClick()) return;

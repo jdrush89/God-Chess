@@ -3651,14 +3651,15 @@ const handleCell = (state: ThreePlayerState, cell: string) => {
       state.board[cell].id,
     ];
     state.pending.selected = selected;
-    if (currentLevel(state, "escort") === 1) {
+    const remaining = state.legalCells!.filter(
+      (candidate) => candidate !== cell,
+    );
+    if (currentLevel(state, "escort") === 1 || remaining.length === 0) {
       state.pending.step = "escort-move";
       state.selectedCell = state.pending.source;
       state.legalCells = sourceTargets(state, state.pending.source);
     } else {
-      state.legalCells = state.legalCells!.filter(
-        (candidate) => candidate !== cell,
-      );
+      state.legalCells = remaining;
     }
     return;
   }

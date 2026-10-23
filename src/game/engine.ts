@@ -2857,7 +2857,8 @@ const handleSquare = (state: GameState, square: Square) => {
     const kingSquare = state.pending.source;
     const selected = [...(state.pending.selected ?? []), state.board[square].id];
     const level = currentLevel(state, "escort");
-    if (level === 1) {
+    const remaining = state.legalTargets.filter((target) => target !== square);
+    if (level === 1 || remaining.length === 0) {
       state.pending = {
         ...state.pending,
         step: "escort-move",
@@ -2872,7 +2873,7 @@ const handleSquare = (state: GameState, square: Square) => {
       ...state.pending,
       selected,
     };
-    state.legalTargets = state.legalTargets.filter((target) => target !== square);
+    state.legalTargets = remaining;
     state.notice = `Escort: ${selected.length} companion${selected.length === 1 ? "" : "s"} selected. Choose more or pass to move.`;
     return;
   }

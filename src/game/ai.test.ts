@@ -203,7 +203,6 @@ describe("Divine AI", () => {
       { type: "select-ability", abilityId: "escort" },
       { type: "square", square: "f3" },
       { type: "square", square: "e4" },
-      { type: "pass" },
       { type: "square", square: "e3" },
     ]);
     expect(result.phase).toBe("gameover");
