@@ -7,6 +7,10 @@ import {
   normalizeAccountPortraitId,
   type AccountPortraitId,
 } from "./portraits";
+import {
+  normalizeRankedRating,
+  type RankedRating,
+} from "../ranked/types";
 
 export type InviteVariant = "classic" | "three-player" | "four-player";
 export type InvitePlayerCount = 2 | 3 | 4;
@@ -19,6 +23,7 @@ export interface SocialProfile {
 
 export interface FriendProfile extends SocialProfile {
   stats?: PlayerStatisticsSnapshot;
+  rankedRating?: RankedRating;
   completedAchievementIds: AchievementId[];
 }
 
@@ -166,9 +171,16 @@ const normalizeInbox = (value: unknown): SocialInbox => {
     ...profile,
     portraitId: normalizeAccountPortraitId(profile.portraitId),
   }) as T;
+  const normalizeFriend = (profile: FriendProfile): FriendProfile => ({
+    ...normalizeProfile(profile),
+    rankedRating: profile.rankedRating &&
+        typeof profile.rankedRating === "object"
+      ? normalizeRankedRating(profile.rankedRating)
+      : undefined,
+  });
   return {
     friends: Array.isArray(source.friends)
-      ? source.friends.map(normalizeProfile)
+      ? source.friends.map(normalizeFriend)
       : [],
     incomingRequests: Array.isArray(source.incomingRequests)
       ? source.incomingRequests.map(normalizeProfile)

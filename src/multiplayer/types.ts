@@ -90,6 +90,7 @@ export interface FourPlayerParticipant {
   local: boolean;
   seat?: Seat;
   portraitId?: AccountPortraitId;
+  rating?: number;
 }
 
 export interface FourPlayerHostParticipant extends FourPlayerParticipant {
@@ -99,6 +100,7 @@ export interface FourPlayerHostParticipant extends FourPlayerParticipant {
 export interface FourPlayerRoomSnapshot {
   roomCode: string;
   status: FourPlayerRoomStatus;
+  ranked?: boolean;
   participants: FourPlayerParticipant[];
   config: FourPlayerConfig;
   canonical?: FourPlayerStateEnvelope;
@@ -121,6 +123,12 @@ export type FourPlayerPeerMessage =
     playerName: string;
     portraitId?: AccountPortraitId;
     reconnectToken?: string;
+    ranked?: {
+      matchId: string;
+      seat: Seat;
+      rating: number;
+      joinToken: string;
+    };
   }
   | { type: "ready"; ready: boolean }
   | {
@@ -604,7 +612,7 @@ const normalizeFourPlayerParticipant = (
     !hasExactKeys(
       value,
       ["name", "host", "connected", "ready", "local"],
-      ["seat", "portraitId"],
+      ["seat", "portraitId", "rating"],
     ) ||
     typeof value.name !== "string" ||
     value.name.length > 24 ||
@@ -612,7 +620,16 @@ const normalizeFourPlayerParticipant = (
     !isBoolean(value.connected) ||
     !isBoolean(value.ready) ||
     !isBoolean(value.local) ||
-    (value.seat !== undefined && !isSeat(value.seat))
+    (value.seat !== undefined && !isSeat(value.seat)) ||
+    (
+      value.rating !== undefined &&
+      (
+        typeof value.rating !== "number" ||
+        !Number.isFinite(value.rating) ||
+        value.rating < 100 ||
+        value.rating > 3000
+      )
+    )
   ) return undefined;
   return {
     name: value.name,
@@ -624,6 +641,7 @@ const normalizeFourPlayerParticipant = (
     ...(value.portraitId !== undefined
       ? { portraitId: normalizeAccountPortraitId(value.portraitId) }
       : {}),
+    ...(value.rating !== undefined ? { rating: value.rating } : {}),
   };
 };
 
@@ -656,7 +674,7 @@ export const normalizeFourPlayerRoomSnapshot = (
         "localUndoConsent",
         "undoAvailable",
       ],
-      ["canonical", "pausedSeat", "pausedParticipantName"],
+      ["canonical", "pausedSeat", "pausedParticipantName", "ranked"],
     ) ||
     !isRoomCode(value.roomCode) ||
     !["lobby", "playing", "paused", "finished"].includes(String(value.status)) ||
@@ -666,6 +684,7 @@ export const normalizeFourPlayerRoomSnapshot = (
     !isPublicFourPlayerConfig(value.config) ||
     !isBoolean(value.localUndoConsent) ||
     !isBoolean(value.undoAvailable) ||
+    (value.ranked !== undefined && !isBoolean(value.ranked)) ||
     (value.pausedSeat !== undefined && !isSeat(value.pausedSeat)) ||
     (
       value.pausedParticipantName !== undefined &&
@@ -736,6 +755,7 @@ export const normalizeFourPlayerRoomSnapshot = (
   return {
     roomCode: value.roomCode,
     status: value.status as FourPlayerRoomStatus,
+    ...(value.ranked === true ? { ranked: true } : {}),
     participants: normalizedParticipants,
     config: structuredClone(value.config),
     ...(canonical ? { canonical } : {}),
@@ -757,12 +777,29 @@ const normalizeFourPlayerPeerMessage = (
       return hasExactKeys(
         value,
         ["type", "playerName"],
-        ["portraitId", "reconnectToken"],
+        ["portraitId", "reconnectToken", "ranked"],
       ) &&
           typeof value.playerName === "string" &&
           value.playerName.length <= 128 &&
           (value.reconnectToken === undefined ||
-            isBoundedString(value.reconnectToken, 512))
+            isBoundedString(value.reconnectToken, 512)) &&
+          (
+            value.ranked === undefined ||
+            (
+              isRecord(value.ranked) &&
+              hasExactKeys(
+                value.ranked,
+                ["matchId", "seat", "rating", "joinToken"],
+              ) &&
+              isBoundedString(value.ranked.matchId, 64) &&
+              isSeat(value.ranked.seat) &&
+              isBoundedString(value.ranked.joinToken, 128) &&
+              typeof value.ranked.rating === "number" &&
+              Number.isFinite(value.ranked.rating) &&
+              value.ranked.rating >= 100 &&
+              value.ranked.rating <= 3000
+            )
+          )
         ? {
           type: "join_request",
           playerName: value.playerName,
@@ -771,6 +808,16 @@ const normalizeFourPlayerPeerMessage = (
             : {}),
           ...(value.reconnectToken
             ? { reconnectToken: value.reconnectToken }
+            : {}),
+          ...(isRecord(value.ranked)
+            ? {
+              ranked: {
+                matchId: value.ranked.matchId as string,
+                seat: value.ranked.seat as Seat,
+                rating: value.ranked.rating as number,
+                joinToken: value.ranked.joinToken as string,
+              },
+            }
             : {}),
         }
         : undefined;

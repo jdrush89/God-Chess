@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import schema from "../../supabase/schema.sql?raw";
 
-const socialSchema = schema.slice(schema.indexOf("-- Social identity"));
+const socialSchema = schema.slice(
+  schema.indexOf("-- Social identity"),
+  schema.indexOf("-- Ranked four-player"),
+);
 
 describe("social schema privacy contract", () => {
   it("searches only minimal public identity fields", () => {

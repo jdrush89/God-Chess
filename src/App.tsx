@@ -213,6 +213,7 @@ import {
 import { RoomCodeCopyButton } from "./multiplayer/RoomCodeCopyButton";
 import { FriendInviteControl } from "./multiplayer/FriendInviteControl";
 import {
+  fourPlayerOnlineMaintainsRankedHeartbeat,
   fourPlayerOnlineLocalSeat,
   useFourPlayerOnlineGame,
   type FourPlayerOnlineState,
@@ -283,6 +284,13 @@ import { ThreePlayerOnlineLobby } from "./threePlayer/ThreePlayerOnlineLobby";
 import { ThreePlayerSetup } from "./threePlayer/ThreePlayerSetup";
 import { SetupNavigationShell } from "./SetupNavigationShell";
 import { AbilityRules, LevelSelector } from "./UpgradePreview";
+import { RankedQueuePanel } from "./ranked/RankedQueuePanel";
+import { useRankedQueue } from "./ranked/useRankedQueue";
+import {
+  roundedRankedRating,
+  type RankedQueueState,
+  type RankedRating,
+} from "./ranked/types";
 
 type GameDispatch = (action: GameAction) => void;
 type MoveFirstDraft = {
@@ -2686,6 +2694,7 @@ const statistic = (
 
 function StatisticsScreen({
   statistics,
+  rankedRating,
   account,
   accountControl,
   loading,
@@ -2699,6 +2708,7 @@ function StatisticsScreen({
   footnote = "Local hot-seat games include every Human seat controlled on this device. Puzzles, tutorials, challenges, and simulations never contribute to match totals.",
 }: {
   statistics: PlayerStatisticsSnapshot;
+  rankedRating?: RankedRating;
   account?: AccountProfile;
   accountControl: ReactNode;
   loading: boolean;
@@ -2752,6 +2762,18 @@ function StatisticsScreen({
         ) : (
           <>
             <div className="stat-summary-grid">
+              {rankedRating && (
+                <article className="stat-summary-card ranked-stat-card">
+                  <span><Trophy size={20} /></span>
+                  <div>
+                    <strong>{roundedRankedRating(rankedRating)}</strong>
+                    <p>Ranked 2v2 rating</p>
+                    <small>
+                      {rankedRating.wins}W · {rankedRating.losses}L · {rankedRating.draws}D
+                    </small>
+                  </div>
+                </article>
+              )}
               {statistic("Games played", statistics.gamesPlayed, Swords)}
               {statistic("Games won", statistics.gamesWon, Trophy)}
               {statistic("Stalemates", statistics.stalemates, Shield)}
@@ -3072,6 +3094,7 @@ export function FriendProfileScreen({
             {friend.stats ? (
               <StatisticsScreen
                 statistics={friend.stats}
+                rankedRating={friend.rankedRating}
                 accountControl={null}
                 loading={false}
                 onDismissError={() => undefined}
@@ -3091,6 +3114,19 @@ export function FriendProfileScreen({
                     <p>No public game statistics yet.</p>
                   </div>
                 </header>
+                {friend.rankedRating && (
+                  <div className="stat-summary-grid">
+                    <article className="stat-summary-card ranked-stat-card">
+                      <span><Trophy size={20} /></span>
+                      <div>
+                        <strong>
+                          {roundedRankedRating(friend.rankedRating)}
+                        </strong>
+                        <p>Ranked 2v2 rating</p>
+                      </div>
+                    </article>
+                  </div>
+                )}
               </section>
             )}
             <AchievementsScreen
@@ -3335,26 +3371,46 @@ function SavedGameLibrary({
 function PlayerCountChooser({
   category,
   onSelect,
+  onRanked,
+  rankedAvailable,
 }: {
   category: StartCategory;
   onSelect: (playerCount: PlayerCount) => void;
+  onRanked?: () => void;
+  rankedAvailable?: boolean;
 }) {
   return (
     <>
       <div className="start-game-heading">
         <p className="eyebrow">{category === "local" ? "LOCAL PLAY" : "ONLINE PLAY"}</p>
-        <h1>Choose player count</h1>
+        <h1>{category === "online" ? "Choose online mode" : "Choose player count"}</h1>
         <p>
           {category === "local"
             ? "Share this device or challenge the Divine AI."
-            : "Host or join a room for the exact board you want to play."}
+            : "Queue for ranked 2v2 or host a casual room."}
         </p>
       </div>
       <div className="player-count-grid" aria-label={`${category} player count`}>
+        {category === "online" && (
+          <button
+            className="ranked-mode-button"
+            disabled={!rankedAvailable}
+            onClick={onRanked}
+          >
+            <Trophy size={34} />
+            <strong>Ranked 2v2</strong>
+            <small>{rankedAvailable ? "Automatic matchmaking" : "Sign in required"}</small>
+          </button>
+        )}
         {([2, 3, 4] as const).map((playerCount) => (
-          <button onClick={() => onSelect(playerCount)} key={playerCount}>
+          <button
+            aria-label={`${playerCount} Player`}
+            onClick={() => onSelect(playerCount)}
+            key={playerCount}
+          >
             <Users size={34} />
             <strong>{playerCount} Player</strong>
+            {category === "online" && <small>Casual room</small>}
           </button>
         ))}
       </div>
@@ -3369,6 +3425,7 @@ function StartGamePrompt({
   defaultPlayerName,
   accountControl,
   social,
+  ranked,
   category,
   initialPlayerCount,
   onStart,
@@ -3392,6 +3449,9 @@ function StartGamePrompt({
   onStartThreeOnline,
   onCancel,
   onDisconnect,
+  onStartRanked,
+  onLeaveRanked,
+  onResetRanked,
 }: {
   online: OnlineGameState;
   fourOnline: FourPlayerOnlineState;
@@ -3399,6 +3459,7 @@ function StartGamePrompt({
   defaultPlayerName?: string;
   accountControl: ReactNode;
   social?: SocialContract;
+  ranked: RankedQueueState;
   category: StartCategory;
   initialPlayerCount?: PlayerCount;
   onStart: (
@@ -3428,6 +3489,9 @@ function StartGamePrompt({
   onStartThreeOnline: () => void;
   onCancel: () => void;
   onDisconnect: () => void;
+  onStartRanked: () => void;
+  onLeaveRanked: () => void;
+  onResetRanked: () => void;
 }) {
   const [playerCount, setPlayerCount] = useState<PlayerCount | undefined>(
     initialPlayerCount ??
@@ -3455,6 +3519,14 @@ function StartGamePrompt({
       .map((invite) => invite.recipientPublicId) ?? [];
 
   const back = () => {
+    if (
+      ranked.phase === "queued" ||
+      ranked.phase === "matched" ||
+      ranked.phase === "playing"
+    ) {
+      onLeaveRanked();
+      return;
+    }
     if (playerCount) {
       onDisconnect();
       setPlayerCount(undefined);
@@ -3472,8 +3544,20 @@ function StartGamePrompt({
       contentClassName={category === "online" && playerCount ? "online-stage" : ""}
     >
       <section className={`start-game-content ${category === "online" && playerCount ? "online-stage" : ""}`}>
-        {!playerCount ? (
-          <PlayerCountChooser category={category} onSelect={(count) => {
+        {category === "online" && ranked.phase !== "idle" ? (
+          <RankedQueuePanel
+            state={ranked}
+            signedIn={Boolean(defaultPlayerName)}
+            onJoin={onStartRanked}
+            onLeave={onLeaveRanked}
+            onReset={onResetRanked}
+          />
+        ) : !playerCount ? (
+          <PlayerCountChooser
+            category={category}
+            rankedAvailable={Boolean(defaultPlayerName)}
+            onRanked={onStartRanked}
+            onSelect={(count) => {
             onDisconnect();
             if (category === "local" && count === 3) {
               onOpenThreePlayer();
@@ -4753,7 +4837,7 @@ export function GameScreen({
     });
   };
   return (
-    <main className={`game-page ${puzzle ? "puzzle-mode" : ""} ${challenge ? "challenge-mode" : ""} ${state.lastAction ? "has-last-action" : ""} ${gameFinished ? "finished-view" : ""} ${inputDisabled || opponentPresentation ? "input-locked" : ""}`}>
+    <main className={`game-page ${puzzle ? "puzzle-mode" : ""} ${challenge ? "challenge-mode" : ""} has-last-action ${gameFinished ? "finished-view" : ""} ${inputDisabled || opponentPresentation ? "input-locked" : ""}`}>
       <header className="topbar">
         <Brand />
         <div className="game-meta" data-tutorial="round-and-turn">
@@ -4874,13 +4958,11 @@ export function GameScreen({
               : state.notice}
         </p>
       </div>
-      {state.lastAction && (
-        <div className="last-action-notice" aria-live="polite">
-          <Swords size={15} />
-          <span>Last action</span>
-          <strong>{state.lastAction}</strong>
-        </div>
-      )}
+      <div className="last-action-notice" aria-live="polite">
+        <Swords size={15} />
+        <span>Last action</span>
+        <strong>{state.lastAction ?? "None"}</strong>
+      </div>
 
       <div className="game-layout">
         <div className="piece-info-column" data-layout-area="piece-inspector">
@@ -5548,6 +5630,7 @@ function TutorialScreen({ onExit }: { onExit: () => void }) {
 export default function App() {
   const accountService = useAccount();
   const social = useSocial(accountService.account);
+  const [ranked, rankedActions] = useRankedQueue(accountService.account);
   const initialNavigation = useRef(
     appRouteFromPath(window.location.pathname),
   ).current;
@@ -6697,6 +6780,170 @@ export default function App() {
   });
   const [fourOnline, fourOnlineActions] = useFourPlayerOnlineGame();
   const [threeOnline, threeOnlineActions] = useThreePlayerOnlineGame();
+  const rankedConnectionAttempt = useRef<string | undefined>(undefined);
+  const rankedResultReported = useRef<string | undefined>(undefined);
+  const [rankedReconnectVersion, setRankedReconnectVersion] = useState(0);
+  const [rankedResultRetryVersion, setRankedResultRetryVersion] = useState(0);
+
+  useEffect(() => {
+    if (ranked.phase !== "matched" && ranked.phase !== "playing") return;
+    const roomPublished = Boolean(ranked.match?.roomCode);
+    rankedActions.setMatchHeartbeat(
+      !roomPublished ||
+      fourPlayerOnlineMaintainsRankedHeartbeat(fourOnline),
+    );
+  }, [
+    fourOnline.hostEnded,
+    fourOnline.role,
+    ranked.match?.roomCode,
+    ranked.phase,
+    rankedActions.setMatchHeartbeat,
+  ]);
+
+  useEffect(() => {
+    const match = ranked.match;
+    if (
+      !match ||
+      (
+        ranked.phase !== "matched" &&
+        ranked.phase !== "playing"
+      ) ||
+      (!match.host && !match.roomCode) ||
+      fourOnline.role !== "none" ||
+      fourOnline.connecting ||
+      !fourOnline.error
+    ) return;
+    const timer = window.setTimeout(() => {
+      rankedConnectionAttempt.current = undefined;
+      setRankedReconnectVersion((value) => value + 1);
+    }, 3000);
+    return () => window.clearTimeout(timer);
+  }, [
+    fourOnline.connecting,
+    fourOnline.error,
+    fourOnline.role,
+    ranked.match?.host,
+    ranked.match?.id,
+    ranked.match?.roomCode,
+    ranked.phase,
+  ]);
+
+  useEffect(() => {
+    const account = accountService.account;
+    const match = ranked.match;
+    if (
+      !account ||
+      !match ||
+      (
+        ranked.phase !== "matched" &&
+        ranked.phase !== "playing"
+      )
+    ) {
+      rankedConnectionAttempt.current = undefined;
+      return;
+    }
+    const connection = {
+      matchId: match.id,
+      seat: match.seat,
+      rating: ranked.rating?.rating ?? 1500,
+      joinToken: match.joinToken,
+      ...(match.seatTokens ? { seatTokens: match.seatTokens } : {}),
+    };
+    if (match.host) {
+      if (
+        fourOnline.role === "none" &&
+        !fourOnline.connecting &&
+        rankedConnectionAttempt.current !== `host:${match.id}`
+      ) {
+        rankedConnectionAttempt.current = `host:${match.id}`;
+        void fourOnlineActions.hostGame(
+          account.displayName,
+          account.portraitId,
+          connection,
+        );
+      } else if (
+        fourOnline.roomCode &&
+        match.roomCode !== fourOnline.roomCode
+      ) {
+        void rankedActions.publishRoom(match.id, fourOnline.roomCode);
+      }
+      return;
+    }
+    if (
+      match.roomCode &&
+      fourOnline.role === "none" &&
+      !fourOnline.connecting &&
+      rankedConnectionAttempt.current !== `peer:${match.id}`
+    ) {
+      rankedConnectionAttempt.current = `peer:${match.id}`;
+      void fourOnlineActions.joinGame(
+        match.roomCode,
+        account.displayName,
+        account.portraitId,
+        connection,
+      );
+    }
+  }, [
+    accountService.account,
+    fourOnline.connecting,
+    fourOnline.role,
+    fourOnline.roomCode,
+    ranked.match,
+    ranked.phase,
+    ranked.rating?.rating,
+    rankedReconnectVersion,
+    rankedActions.publishRoom,
+    fourOnlineActions.hostGame,
+    fourOnlineActions.joinGame,
+  ]);
+
+  useEffect(() => {
+    const match = ranked.match;
+    const canonical = fourOnline.snapshot?.canonical?.state;
+    if (!match || !canonical || canonical.phase !== "gameover") return;
+    const result = canonical.winner?.team ?? "draw";
+    const reportKey = `${match.id}:${result}`;
+    if (rankedResultReported.current === reportKey) return;
+    rankedResultReported.current = reportKey;
+    let retryTimer: number | undefined;
+    let cancelled = false;
+    void rankedActions.reportResult(match.id, canonical.winner?.team)
+      .then((next) => {
+        if (next || cancelled) return;
+        if (rankedResultReported.current === reportKey) {
+          rankedResultReported.current = undefined;
+        }
+        retryTimer = window.setTimeout(() => {
+          setRankedResultRetryVersion((value) => value + 1);
+        }, 3000);
+      });
+    return () => {
+      cancelled = true;
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
+    };
+  }, [
+    fourOnline.snapshot?.canonical?.revision,
+    ranked.match?.id,
+    rankedResultRetryVersion,
+    rankedActions.reportResult,
+  ]);
+
+  useEffect(() => {
+    if (
+      (ranked.phase !== "completed" && ranked.phase !== "cancelled") ||
+      fourOnline.snapshot?.canonical?.state.phase === "gameover"
+    ) return;
+    fourOnlineActions.disconnect();
+    setSetupCategory("online");
+    setSetupPlayerCount(undefined);
+    setSetupReturnView("play");
+    setStartView("setup");
+  }, [
+    fourOnline.snapshot?.canonical?.state.phase,
+    fourOnlineActions.disconnect,
+    ranked.phase,
+  ]);
+
   const acceptGameInvite = useCallback(async (selectedInvite: GameInvite) => {
     if (!accountService.account) {
       throw new Error("Sign in before joining a friend invitation.");
@@ -7375,10 +7622,10 @@ export default function App() {
   useEffect(() => {
     if (!fourOnline.ended) return;
     setSetupCategory("online");
-    setSetupPlayerCount(4);
+    setSetupPlayerCount(ranked.match ? undefined : 4);
     setSetupReturnView("menu");
     setStartView("setup");
-  }, [fourOnline.ended]);
+  }, [fourOnline.ended, ranked.match]);
 
   useEffect(() => {
     if (threeOnline.snapshot?.canonical) {
@@ -7943,6 +8190,7 @@ export default function App() {
     return (
       <StatisticsScreen
         statistics={playerStatisticsSnapshot}
+        rankedRating={ranked.rating}
         account={accountService.account}
         accountControl={renderAccountControl()}
         loading={playerStatisticsLoading}
@@ -8081,6 +8329,7 @@ export default function App() {
         defaultPlayerName={accountService.account?.displayName}
         accountControl={renderAccountControl()}
         social={accountService.account ? social : undefined}
+        ranked={ranked}
         category={setupCategory}
         initialPlayerCount={setupPlayerCount}
         onStart={beginGame}
@@ -8168,6 +8417,29 @@ export default function App() {
         onThreeUpdateConfig={threeOnlineActions.updateConfig}
         onStartThreeOnline={() => {
           if (threeOnlineActions.startGame()) setStartView("none");
+        }}
+        onStartRanked={() => {
+          onlineActions.disconnect();
+          fourOnlineActions.disconnect();
+          threeOnlineActions.disconnect();
+          void rankedActions.join();
+        }}
+        onLeaveRanked={() => {
+          onlineActions.disconnect();
+          fourOnlineActions.disconnect();
+          threeOnlineActions.disconnect();
+          if (
+            ranked.match &&
+            fourOnline.snapshot?.canonical?.state.phase !== "gameover"
+          ) {
+            void rankedActions.forfeit(ranked.match.id);
+          } else if (!ranked.match) {
+            void rankedActions.leave();
+          }
+        }}
+        onResetRanked={() => {
+          fourOnlineActions.disconnect();
+          rankedActions.reset();
         }}
         onCancel={() => {
           onlineActions.disconnect();
@@ -8265,11 +8537,21 @@ export default function App() {
       }
       return portraits;
     }, {});
+    const playerRatings = fourOnline.snapshot.participants.reduce<
+      Partial<Record<Seat, number>>
+    >((ratings, participant) => {
+      if (participant.seat && participant.rating !== undefined) {
+        ratings[participant.seat] = participant.rating;
+      }
+      return ratings;
+    }, {});
+    const rankedMatch = ranked.match;
     return (
       <FourPlayerGame
         key={`online-${fourOnline.roomCode}`}
         initialState={fourOnlineCanonical.state}
         playerPortraits={playerPortraits}
+        playerRatings={playerRatings}
         completedAchievements={visibleAchievementProgress.completed}
         onAchievementTransition={(before, after, action) => {
           const localSeat = fourPlayerOnlineLocalSeat(fourOnline);
@@ -8297,11 +8579,34 @@ export default function App() {
         onPersist={async () => false}
         onQuit={() => {
           fourOnlineActions.disconnect();
-          setStartView("menu");
+          if (
+            rankedMatch &&
+            fourOnlineCanonical.state.phase !== "gameover"
+          ) {
+            void rankedActions.forfeit(rankedMatch.id);
+          }
+          if (rankedMatch) {
+            setSetupCategory("online");
+            setSetupPlayerCount(undefined);
+            setSetupReturnView("play");
+            setStartView("setup");
+          } else {
+            setStartView("menu");
+          }
         }}
         onNewGame={() => {
           fourOnlineActions.disconnect();
-          openStartFlow("online", 4);
+          if (rankedMatch) {
+            if (fourOnlineCanonical.state.phase !== "gameover") {
+              void rankedActions.forfeit(rankedMatch.id);
+            }
+            setSetupCategory("online");
+            setSetupPlayerCount(undefined);
+            setSetupReturnView("play");
+            setStartView("setup");
+          } else {
+            openStartFlow("online", 4);
+          }
         }}
         onlineSession={{
           roomCode: fourOnline.snapshot.roomCode,
@@ -8313,14 +8618,25 @@ export default function App() {
               ? "finished"
               : "playing",
           awaitingSync: Boolean(fourOnline.awaitingActionId),
-          undoConsent: fourOnline.snapshot.localUndoConsent,
-          undoAvailable: fourOnline.snapshot.undoAvailable,
+          undoConsent: fourOnline.snapshot.ranked
+            ? false
+            : fourOnline.snapshot.localUndoConsent,
+          undoAvailable: fourOnline.snapshot.ranked
+            ? false
+            : fourOnline.snapshot.undoAvailable,
+          ranked: fourOnline.snapshot.ranked,
           pausedSeat,
           pausedParticipantName: fourOnline.snapshot.pausedParticipantName,
           onAction: fourOnlineActions.sendAction,
-          onUndo: fourOnlineActions.requestUndo,
-          onUndoConsentChange: fourOnlineActions.setUndoConsent,
-          onReplaceWithAi: pausedSeat && fourOnline.role === "host"
+          onUndo: fourOnline.snapshot.ranked
+            ? () => undefined
+            : fourOnlineActions.requestUndo,
+          onUndoConsentChange: fourOnline.snapshot.ranked
+            ? () => undefined
+            : fourOnlineActions.setUndoConsent,
+          onReplaceWithAi: pausedSeat &&
+              fourOnline.role === "host" &&
+              !fourOnline.snapshot.ranked
             ? (difficulty) =>
               fourOnlineActions.replaceWithAi(pausedSeat, difficulty)
             : undefined,

@@ -19,7 +19,7 @@ import {
 } from "./presentation";
 
 const RENDER_PADDING = 0.6;
-const YALTA_COORDINATE_PADDING = 1.25;
+const YALTA_COORDINATE_PADDING = 2.1;
 const ENLARGED_PIECE_VARIANTS = new Set<ThreePlayerBoardVariant>([
   "three-hexagonal",
   "triad",
@@ -226,8 +226,8 @@ export function ThreePlayerBoard({
         );
         return {
           label: coordinate.file,
-          x: descriptor.render.x + edgeDirection[0] * 0.58,
-          y: descriptor.render.y + edgeDirection[1] * 0.58,
+          x: descriptor.render.x + edgeDirection[0] * 0.74,
+          y: descriptor.render.y + edgeDirection[1] * 0.74,
         };
       });
       const ranks = cells
@@ -247,15 +247,15 @@ export function ThreePlayerBoard({
           const coordinate = threePlayerCellCoordinate(variant, descriptor.id)!;
           return {
             label: String(coordinate.rank),
-            x: descriptor.render.x + edgeDirection[0] * 0.58,
-            y: descriptor.render.y + edgeDirection[1] * 0.58,
+            x: descriptor.render.x + edgeDirection[0] * 0.74,
+            y: descriptor.render.y + edgeDirection[1] * 0.74,
           };
         });
       return {
         seat,
         name: `${seat[0].toUpperCase()}${seat.slice(1)}`,
-        x: backCenter[0] + outward[0] * 1.05,
-        y: backCenter[1] + outward[1] * 1.05,
+        x: backCenter[0] + outward[0] * (seat === "black" ? 2.8 : 1.9),
+        y: backCenter[1] + outward[1] * (seat === "black" ? 2.8 : 1.9),
         files,
         ranks,
       };

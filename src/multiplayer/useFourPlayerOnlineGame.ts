@@ -5,6 +5,7 @@ import type {
   Seat,
 } from "../game/fourPlayerTypes";
 import {
+  type FourPlayerRankedConnection,
   FourPlayerRoomHost,
   FourPlayerRoomPeer,
 } from "./fourPlayerRoom";
@@ -27,6 +28,7 @@ export interface FourPlayerOnlineState {
   snapshot?: FourPlayerRoomSnapshot | FourPlayerHostRoomSnapshot;
   awaitingActionId?: string;
   ended?: boolean;
+  hostEnded?: boolean;
   error?: string;
 }
 
@@ -100,6 +102,8 @@ export const reconcileFourPlayerSnapshot = (
     awaitingActionId: actionAcknowledged
       ? undefined
       : current.awaitingActionId,
+    ended: undefined,
+    hostEnded: undefined,
   };
 };
 
@@ -123,6 +127,10 @@ export const fourPlayerOnlineInputDisabled = (
   );
 };
 
+export const fourPlayerOnlineMaintainsRankedHeartbeat = (
+  state: FourPlayerOnlineState,
+) => state.role !== "none" || state.hostEnded === true;
+
 export const useFourPlayerOnlineGame = () => {
   const [state, setState] = useState<FourPlayerOnlineState>(initialState);
   const stateRef = useRef(state);
@@ -144,6 +152,7 @@ export const useFourPlayerOnlineGame = () => {
   const hostGame = useCallback(async (
     hostName: string,
     portraitId?: AccountPortraitId,
+    ranked?: FourPlayerRankedConnection,
   ) => {
     const generation = attemptGeneration.current + 1;
     attemptGeneration.current = generation;
@@ -183,7 +192,7 @@ export const useFourPlayerOnlineGame = () => {
           error,
         }));
       },
-    }, undefined, portraitId);
+    }, undefined, portraitId, ranked);
     hostRef.current = host;
     try {
       const roomCode = await host.start();
@@ -216,6 +225,7 @@ export const useFourPlayerOnlineGame = () => {
     roomCode: string,
     playerName: string,
     portraitId?: AccountPortraitId,
+    ranked?: FourPlayerRankedConnection,
   ) => {
     const generation = attemptGeneration.current + 1;
     attemptGeneration.current = generation;
@@ -228,11 +238,14 @@ export const useFourPlayerOnlineGame = () => {
     const normalizedCode = roomCode.trim().toUpperCase();
     const normalizedName = playerName.trim().slice(0, 24) || "Guest";
     const token = readReconnectToken(normalizedCode);
+    const hostEnded = stateRef.current.hostEnded === true;
     setState({
       ...initialState,
       connecting: true,
       roomCode: normalizedCode,
       playerName: normalizedName,
+      ended: hostEnded || undefined,
+      hostEnded: hostEnded || undefined,
     });
     let peer: FourPlayerRoomPeer;
     const isCurrent = () =>
@@ -249,6 +262,8 @@ export const useFourPlayerOnlineGame = () => {
           participantId,
           roomCode: acceptedCode,
           error: undefined,
+          ended: undefined,
+          hostEnded: undefined,
         }));
       },
       onSnapshot: (snapshot) => {
@@ -268,6 +283,8 @@ export const useFourPlayerOnlineGame = () => {
           ...initialState,
           roomCode: normalizedCode,
           playerName: normalizedName,
+          ended: hostEnded || undefined,
+          hostEnded: hostEnded || undefined,
           error: reason,
         });
       },
@@ -280,6 +297,7 @@ export const useFourPlayerOnlineGame = () => {
           roomCode: current.roomCode,
           playerName: current.playerName,
           ended: true,
+          hostEnded: roomEnded || undefined,
           connecting: false,
           error: roomEnded
             ? "The host disconnected. This room has ended."
@@ -298,7 +316,15 @@ export const useFourPlayerOnlineGame = () => {
     });
     peerRef.current = peer;
     try {
-      if (portraitId) {
+      if (ranked) {
+        await peer.connect(
+          normalizedCode,
+          normalizedName,
+          token,
+          portraitId,
+          ranked,
+        );
+      } else if (portraitId) {
         await peer.connect(normalizedCode, normalizedName, token, portraitId);
       } else {
         await peer.connect(normalizedCode, normalizedName, token);
@@ -312,6 +338,8 @@ export const useFourPlayerOnlineGame = () => {
         ...initialState,
         roomCode: normalizedCode,
         playerName: normalizedName,
+        ended: hostEnded || undefined,
+        hostEnded: hostEnded || undefined,
         error: error instanceof Error
           ? error.message
           : "Unable to join the four-player room.",

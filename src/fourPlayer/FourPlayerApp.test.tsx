@@ -91,6 +91,7 @@ describe("four-player app integration", () => {
   it("shows player portraits beside names throughout the draft", () => {
     const { container } = render(
       <FourPlayerGame
+        key="ranked-draft"
         initialState={createFourPlayerGame()}
         playerPortraits={{ north: "ares", east: "medusa" }}
         undoPreferred={false}
@@ -103,6 +104,102 @@ describe("four-player app integration", () => {
     expect(container.querySelector(".draft-turn .portrait-ares")).toBeTruthy();
     expect(container.querySelector(".four-draft-rosters .portrait-ares")).toBeTruthy();
     expect(container.querySelector(".four-draft-rosters .portrait-medusa")).toBeTruthy();
+  });
+
+  it("shows ranked ratings throughout the draft and beside player names", () => {
+    const ratings = {
+      north: 1604,
+      east: 1528,
+      south: 1492,
+      west: 1711,
+    };
+    const { rerender } = render(
+      <FourPlayerGame
+        initialState={createFourPlayerGame()}
+        playerRatings={ratings}
+        undoPreferred={false}
+        onUndoPreferenceChange={vi.fn()}
+        onQuit={vi.fn()}
+        onNewGame={vi.fn()}
+      />,
+    );
+
+    expect(screen.getAllByText(/Rating 1604/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Rating 1528/i)).toBeTruthy();
+
+    rerender(
+      <FourPlayerGame
+        key="ranked-play"
+        initialState={completeFourPlayerDraft()}
+        playerRatings={ratings}
+        undoPreferred={false}
+        onUndoPreferenceChange={vi.fn()}
+        onQuit={vi.fn()}
+        onNewGame={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/North · Human · Rating 1604/i)).toBeTruthy();
+    expect(screen.getByText(/West · Human · Rating 1711/i)).toBeTruthy();
+  });
+
+  it("labels ranked forfeits, disables undo, and never offers AI replacement", () => {
+    const onQuit = vi.fn();
+    const onlineSession = {
+      role: "host" as const,
+      roomCode: "ABCDE",
+      participantSeat: "north" as const,
+      status: "paused" as const,
+      awaitingSync: false,
+      undoConsent: false,
+      undoAvailable: false,
+      pausedSeat: "east" as const,
+      pausedParticipantName: "East Player",
+      ranked: true,
+      onAction: vi.fn(),
+      onUndo: vi.fn(),
+      onUndoConsentChange: vi.fn(),
+      onReplaceWithAi: vi.fn(),
+    };
+    const { rerender } = render(
+      <FourPlayerGame
+        key="ranked-paused"
+        initialState={completeFourPlayerDraft()}
+        onlineSession={onlineSession}
+        undoPreferred={false}
+        onUndoPreferenceChange={vi.fn()}
+        onPersist={vi.fn(async () => false)}
+        onQuit={onQuit}
+        onNewGame={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/forfeits if they do not reconnect within 2 minutes/i))
+      .toBeTruthy();
+    expect(screen.queryByRole("button", { name: /replace with ai/i })).toBeNull();
+
+    rerender(
+      <FourPlayerGame
+        key="ranked-playing"
+        initialState={completeFourPlayerDraft()}
+        onlineSession={{ ...onlineSession, status: "playing" }}
+        undoPreferred={false}
+        onUndoPreferenceChange={vi.fn()}
+        onPersist={vi.fn(async () => false)}
+        onQuit={onQuit}
+        onNewGame={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /open match menu/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /forfeit ranked match/i }),
+    );
+    expect(onQuit).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole("button", { name: /open match menu/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^settings$/i }));
+    expect(screen.getByText("Ranked integrity")).toBeTruthy();
+    expect(screen.getByText(/Undo is disabled for every ranked player/i))
+      .toBeTruthy();
+    expect(screen.queryByRole("switch", { name: /allow undo/i })).toBeNull();
   });
 
   it("uses Undo to return an uncommitted God or ability selection to the God list", () => {
@@ -124,7 +221,7 @@ describe("four-player app integration", () => {
 
     const selectAres = () =>
       fireEvent.click(screen.getByRole("button", { name: /ares conflict/i }));
-    const undo = () => screen.getByRole("button", { name: /^undo$/i });
+    const undo = () => screen.getByRole("button", { name: /^back$/i });
 
     selectAres();
     expect((undo() as HTMLButtonElement).disabled).toBe(false);

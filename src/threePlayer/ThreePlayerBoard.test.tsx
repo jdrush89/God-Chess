@@ -89,6 +89,15 @@ describe("ThreePlayerBoard", () => {
         expect(sector.textContent).toContain(rank);
       }
     }
+    const blackSector = screen.getByLabelText("Black sector coordinates");
+    const blackName = blackSector.querySelector(".three-yalta-sector-label")!;
+    const blackE = [...blackSector.querySelectorAll(
+      ".three-yalta-coordinate-label",
+    )].find((label) => label.textContent === "e")!;
+    expect(Math.hypot(
+      Number(blackName.getAttribute("x")) - Number(blackE.getAttribute("x")),
+      Number(blackName.getAttribute("y")) - Number(blackE.getAttribute("y")),
+    )).toBeGreaterThan(1);
   });
 
   it("drags a legal source piece to a destination cell", () => {

@@ -153,6 +153,40 @@ describe("versioned multiplayer protocol", () => {
     });
   });
 
+  it("validates ranked seat assignments, ratings, and ranked snapshots", () => {
+    const join = createProtocolMessage("four-player", "peer", {
+      type: "join_request",
+      playerName: "Athena",
+      portraitId: "artemis",
+      ranked: {
+        matchId: "match-1",
+        seat: "south",
+        rating: 1624.5,
+        joinToken: "seat-token",
+      },
+    });
+    expect(normalizeProtocolMessage(join)).toEqual(join);
+    expect(normalizeProtocolMessage({
+      ...join,
+      payload: {
+        ...join.payload,
+        ranked: {
+          matchId: "match-1",
+          seat: "south",
+          rating: Number.NaN,
+        },
+      },
+    })).toBeUndefined();
+
+    const snapshot = fourSnapshot();
+    snapshot.ranked = true;
+    snapshot.participants[0].rating = 1624.5;
+    snapshot.participants[1].rating = 1512;
+    expect(normalizeFourPlayerRoomSnapshot(snapshot)).toEqual(snapshot);
+    snapshot.participants[1].rating = 5000;
+    expect(normalizeFourPlayerRoomSnapshot(snapshot)).toBeUndefined();
+  });
+
   it("normalizes known classic draft skins and rejects mismatched ones", () => {
     const unlocked = createProtocolMessage("classic", "peer", {
       type: "game_action",

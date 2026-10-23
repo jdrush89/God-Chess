@@ -82,6 +82,7 @@ vi.mock("./fourPlayerRoom", () => ({
 }));
 
 import {
+  fourPlayerOnlineMaintainsRankedHeartbeat,
   fourPlayerOnlineLocalSeat,
   reconcileFourPlayerSnapshot,
   useFourPlayerOnlineGame,
@@ -184,6 +185,9 @@ describe("four-player online hook state", () => {
     });
     expect(window.sessionStorage.getItem(reconnectStorageKey))
       .toBe("opaque-token");
+    expect(
+      fourPlayerOnlineMaintainsRankedHeartbeat(result.current[0]),
+    ).toBe(false);
 
     act(() => {
       result.current[1].disconnect();
@@ -277,6 +281,26 @@ describe("four-player online hook state", () => {
       peerHarness.instances[1].callbacks.onDisconnected(true);
     });
     expect(window.sessionStorage.getItem(reconnectStorageKey)).toBeNull();
+    expect(ended.result.current[0].hostEnded).toBe(true);
+    expect(
+      fourPlayerOnlineMaintainsRankedHeartbeat(ended.result.current[0]),
+    ).toBe(true);
+
+    await act(async () => {
+      await ended.result.current[1].joinGame("ABCDE", "Guest");
+    });
+    expect(ended.result.current[0].ended).toBe(true);
+    act(() => {
+      peerHarness.instances[2].callbacks.onAccepted(
+        "private-guest",
+        "next-token",
+        "ABCDE",
+      );
+    });
+    expect(ended.result.current[0].ended).toBeUndefined();
+    expect(
+      fourPlayerOnlineMaintainsRankedHeartbeat(ended.result.current[0]),
+    ).toBe(true);
   });
 
   it("ignores older snapshots and keeps action locks until acknowledgement", () => {
