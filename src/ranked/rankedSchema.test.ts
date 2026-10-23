@@ -4,6 +4,25 @@ import schema from "../../supabase/schema.sql?raw";
 const rankedSchema = schema.slice(schema.indexOf("-- Ranked classic"));
 
 describe("ranked schema integrity contract", () => {
+  it("drops functions whose 1v1 migration renames input parameters", () => {
+    const finalizeDrop = rankedSchema.indexOf(
+      "drop function if exists public.finalize_ranked_match(uuid, text, text)",
+    );
+    const finalizeCreate = rankedSchema.indexOf(
+      "create or replace function public.finalize_ranked_match",
+    );
+    const reportDrop = rankedSchema.indexOf(
+      "drop function if exists public.report_ranked_result(uuid, text)",
+    );
+    const reportCreate = rankedSchema.indexOf(
+      "create or replace function public.report_ranked_result",
+    );
+    expect(finalizeDrop).toBeGreaterThan(-1);
+    expect(finalizeDrop).toBeLessThan(finalizeCreate);
+    expect(reportDrop).toBeGreaterThan(-1);
+    expect(reportDrop).toBeLessThan(reportCreate);
+  });
+
   it("issues private color credentials and only returns them to the host", () => {
     expect(rankedSchema).toContain(
       "join_token uuid not null default gen_random_uuid()",
