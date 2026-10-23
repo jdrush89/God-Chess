@@ -1125,6 +1125,10 @@ span.move-target-dot {
 .saved-game-meta strong { font: 600 13px "Cinzel"; }
 .saved-game-meta span { color: #73757d; font-size: 8px; letter-spacing: .08em; text-transform: uppercase; }
 .saved-pantheon { display: grid; grid-template-columns: 28px 110px 1fr; gap: 10px; align-items: center; }
+.saved-player-portrait {
+  width: 28px; height: 28px; display: block; overflow: hidden; border-radius: 50%;
+  border: 1px solid rgba(198,161,91,.48);
+}
 .saved-pantheon > div:nth-child(2) { min-width: 0; }
 .saved-pantheon > div:nth-child(2) strong {
   display: block; overflow: hidden; color: #c9c5bc; font-size: 10px; text-overflow: ellipsis; white-space: nowrap;

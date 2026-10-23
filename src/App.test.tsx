@@ -771,6 +771,7 @@ describe("game startup", () => {
       userId: "account-1",
       email: "player@example.com",
       displayName: "Player",
+      portraitId: "ares",
     };
     accountHarness.configured = true;
     const existing = createSavedGame("cloud-existing", createGame(1), []);
@@ -797,7 +798,11 @@ describe("game startup", () => {
     });
 
     await waitFor(() => expect(load.disabled).toBe(false));
+    expect(screen.getByText("Saved games available.")).toBeTruthy();
+    expect(screen.queryByText(/cloud saved games?/i)).toBeNull();
     fireEvent.click(load);
+    expect(screen.getByRole("img", { name: /player 1's portrait/i }))
+      .toBeTruthy();
     expect(screen.getByRole("button", {
       name: new RegExp(`load saved game from ${new Date(existing.savedAt).toLocaleString()}`, "i"),
     })).toBeTruthy();
