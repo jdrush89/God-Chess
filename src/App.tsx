@@ -4393,6 +4393,7 @@ export function GameScreen({
   moveFirstDisabled = false,
   playerPortraits,
   playerRatings,
+  rankedMatch = false,
 }: {
   state: GameState;
   dispatch: GameDispatch;
@@ -4419,6 +4420,7 @@ export function GameScreen({
   moveFirstDisabled?: boolean;
   playerPortraits?: Partial<Record<Color, AccountPortraitId>>;
   playerRatings?: Partial<Record<Color, number>>;
+  rankedMatch?: boolean;
 }) {
   const [rulesOpen, setRulesOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -4428,7 +4430,9 @@ export function GameScreen({
   const [inspectedSquare, setInspectedSquare] = useState<Square>();
   const [moveFirstDraft, setMoveFirstDraft] = useState<MoveFirstDraft>();
   const [graveyardColor, setGraveyardColor] = useState<Color>();
+  const [forfeitConfirmationOpen, setForfeitConfirmationOpen] = useState(false);
   const gameFinished = !state.puzzleId && state.phase === "gameover";
+  const canForfeitRankedMatch = rankedMatch && !gameFinished;
   const showGameResult =
     gameFinished && state.gameMode !== "simulation";
   const [resultOpen, setResultOpen] = useState(showGameResult);
@@ -4883,6 +4887,20 @@ export function GameScreen({
       expectedTurn: state.turn,
     });
   };
+  const requestRestart = () => {
+    if (canForfeitRankedMatch) {
+      setForfeitConfirmationOpen(true);
+      return;
+    }
+    onRestart();
+  };
+  const requestLeave = canForfeitRankedMatch
+    ? () => setForfeitConfirmationOpen(true)
+    : onLeave;
+  const confirmForfeit = () => {
+    setForfeitConfirmationOpen(false);
+    onRestart();
+  };
   return (
     <main className={`game-page ${puzzle ? "puzzle-mode" : ""} ${challenge ? "challenge-mode" : ""} has-last-action ${gameFinished ? "finished-view" : ""} ${inputDisabled || opponentPresentation ? "input-locked" : ""}`}>
       <header className="topbar">
@@ -4920,9 +4938,22 @@ export function GameScreen({
             <span>Undo</span>
           </button>
           <button onClick={() => setHistoryOpen(!historyOpen)}><History size={18} /><span>History</span></button>
-          <button onClick={onRestart}>
-            <RotateCcw size={18} />
-            <span>{puzzle ? "Puzzles" : challenge ? "Restart" : "New game"}</span>
+          <button
+            className={canForfeitRankedMatch ? "forfeit-button" : undefined}
+            onClick={requestRestart}
+          >
+            {canForfeitRankedMatch
+              ? <Flag size={18} />
+              : <RotateCcw size={18} />}
+            <span>
+              {canForfeitRankedMatch
+                ? "Forfeit"
+                : puzzle
+                  ? "Puzzles"
+                  : challenge
+                    ? "Restart"
+                    : "New game"}
+            </span>
           </button>
         </div>
       </header>
@@ -5170,10 +5201,45 @@ export function GameScreen({
         onOpenSettings={state.gameMode === "puzzle"
           ? undefined
           : onOpenSettings}
-        onLeave={onLeave}
+        onLeave={requestLeave}
         leaveLabel={leaveLabel}
         onQuitWithoutSaving={onQuitWithoutSaving}
       />
+      {forfeitConfirmationOpen && (
+        <div className="modal-backdrop">
+          <section
+            className="gameover-modal forfeit-confirmation"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="forfeit-confirmation-title"
+          >
+            <div className="victory-crown"><Flag size={38} /></div>
+            <p className="eyebrow">RANKED MATCH</p>
+            <h2 id="forfeit-confirmation-title">Forfeit this match?</h2>
+            <p>
+              Are you sure you want to forfeit? This will count as a loss and
+              cannot be undone.
+            </p>
+            <div className="forfeit-confirmation-actions">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setForfeitConfirmationOpen(false)}
+              >
+                Keep playing
+              </button>
+              <button
+                type="button"
+                className="danger-button"
+                onClick={confirmForfeit}
+              >
+                <Flag size={15} />
+                Forfeit match
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
       {puzzleSolved && puzzleVictoryReady && puzzle && puzzleResultOpen && (
         <div className="modal-backdrop">
           <section className="gameover-modal">
@@ -9051,6 +9117,11 @@ export default function App() {
             onNextPuzzle={nextPuzzle}
             playerPortraits={classicPlayerPortraits}
             playerRatings={classicPlayerRatings}
+            rankedMatch={
+              online.ranked &&
+              online.started &&
+              state.gameMode === "online"
+            }
           />
         )}
       {settingsOpen && (
