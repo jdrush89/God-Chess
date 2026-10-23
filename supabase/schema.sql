@@ -1108,6 +1108,7 @@ begin
 end;
 $$;
 
+drop function if exists public.finalize_ranked_match(uuid, text, text);
 create or replace function public.finalize_ranked_match(
   target_match_id uuid,
   winning_color text,
@@ -1622,6 +1623,7 @@ begin
 end;
 $$;
 
+drop function if exists public.report_ranked_result(uuid, text);
 create or replace function public.report_ranked_result(
   target_match_id uuid,
   winning_color text default null
