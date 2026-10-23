@@ -2,7 +2,7 @@ import {
   normalizeAccountPortraitId,
   type AccountPortraitId,
 } from "../account/portraits";
-import type { Seat, TeamId } from "../game/fourPlayerTypes";
+import type { Color } from "../game/types";
 
 export interface RankedRating {
   rating: number;
@@ -18,8 +18,7 @@ export interface RankedParticipant {
   publicId: string;
   displayName: string;
   portraitId: AccountPortraitId;
-  seat: Seat;
-  team: TeamId;
+  color: Color;
   host: boolean;
   connected: boolean;
   rating: number;
@@ -36,12 +35,11 @@ export interface RankedMatch {
   phase: RankedMatchPhase;
   roomCode?: string;
   joinToken: string;
-  seatTokens?: Partial<Record<Seat, string>>;
-  seat: Seat;
-  team: TeamId;
+  colorTokens?: Partial<Record<Color, string>>;
+  color: Color;
   host: boolean;
   participants: RankedParticipant[];
-  winnerTeam?: TeamId;
+  winnerColor?: Color;
   resultReason?: "game" | "disconnect" | "forfeit" | "draw";
   rating?: RankedRating;
   ratingChange?: number;
@@ -67,8 +65,7 @@ export const DEFAULT_RANKED_RATING: RankedRating = {
   draws: 0,
 };
 
-const SEATS = new Set<Seat>(["north", "east", "south", "west"]);
-const TEAMS = new Set<TeamId>(["team-a", "team-b"]);
+const COLORS = new Set<Color>(["white", "black"]);
 const PHASES = new Set<RankedQueuePhase>([
   "idle",
   "queued",
@@ -104,15 +101,13 @@ const normalizeParticipant = (
   if (
     typeof value.publicId !== "string" ||
     typeof value.displayName !== "string" ||
-    !SEATS.has(value.seat as Seat) ||
-    !TEAMS.has(value.team as TeamId)
+    !COLORS.has(value.color as Color)
   ) return undefined;
   return {
     publicId: value.publicId,
     displayName: value.displayName.trim().slice(0, 24) || "Player",
     portraitId: normalizeAccountPortraitId(value.portraitId),
-    seat: value.seat as Seat,
-    team: value.team as TeamId,
+    color: value.color as Color,
     host: value.host === true,
     connected: value.connected !== false,
     rating: finite(value.rating, DEFAULT_RANKED_RATING.rating),
@@ -137,8 +132,7 @@ export const normalizeRankedQueueState = (
     typeof match.joinToken !== "string" ||
     !match.joinToken.trim() ||
     match.joinToken.length > 128 ||
-    !SEATS.has(match.seat as Seat) ||
-    !TEAMS.has(match.team as TeamId)
+    !COLORS.has(match.color as Color)
   ) {
     return { phase: "idle", loading: false, rating };
   }
@@ -148,8 +142,8 @@ export const normalizeRankedQueueState = (
       return normalized ? [normalized] : [];
     })
     : [];
-  const winnerTeam = TEAMS.has(match.winnerTeam as TeamId)
-    ? match.winnerTeam as TeamId
+  const winnerColor = COLORS.has(match.winnerColor as Color)
+    ? match.winnerColor as Color
     : undefined;
   const resultReason = (
     match.resultReason === "game" ||
@@ -157,16 +151,16 @@ export const normalizeRankedQueueState = (
     match.resultReason === "forfeit" ||
     match.resultReason === "draw"
   ) ? match.resultReason : undefined;
-  const seatTokens = match.host === true && isRecord(match.seatTokens)
+  const colorTokens = match.host === true && isRecord(match.colorTokens)
     ? Object.fromEntries(
-      Object.entries(match.seatTokens).filter(
-        ([seat, token]) =>
-          SEATS.has(seat as Seat) &&
+      Object.entries(match.colorTokens).filter(
+        ([color, token]) =>
+          COLORS.has(color as Color) &&
           typeof token === "string" &&
           Boolean(token.trim()) &&
           token.length <= 128,
       ),
-    ) as Partial<Record<Seat, string>>
+    ) as Partial<Record<Color, string>>
     : undefined;
   return {
     phase,
@@ -179,12 +173,11 @@ export const normalizeRankedQueueState = (
         ? match.roomCode
         : undefined,
       joinToken: match.joinToken,
-      seatTokens,
-      seat: match.seat as Seat,
-      team: match.team as TeamId,
+      colorTokens,
+      color: match.color as Color,
       host: match.host === true,
       participants,
-      winnerTeam,
+      winnerColor,
       resultReason,
       rating,
       ratingChange: typeof match.ratingChange === "number" &&

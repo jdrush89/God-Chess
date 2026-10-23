@@ -1,9 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { GameAction } from "../game/engine";
 import type { Color, GameState } from "../game/types";
-import { MultiplayerHost } from "./host";
+import {
+  MultiplayerHost,
+  type ClassicRankedHostConfig,
+} from "./host";
 import { MultiplayerPeer } from "./peer";
-import type { OnlinePlayer } from "./types";
+import type {
+  ClassicRankedCredentials,
+  OnlinePlayer,
+} from "./types";
 import {
   normalizeAccountPortraitId,
   type AccountPortraitId,
@@ -21,6 +27,9 @@ export interface OnlineGameState {
   started: boolean;
   awaitingSync: boolean;
   localColor?: Color;
+  ranked?: boolean;
+  opponentDisconnected?: boolean;
+  hostEnded?: boolean;
   undoConsent: {
     host: boolean;
     peer: boolean;
@@ -42,6 +51,9 @@ const initialState: OnlineGameState = {
   connecting: false,
   started: false,
   awaitingSync: false,
+  ranked: false,
+  opponentDisconnected: false,
+  hostEnded: false,
   undoConsent: { host: false, peer: false },
   undoAvailable: false,
 };
@@ -57,10 +69,16 @@ export const onlineTurnInputDisabled = (
   state: OnlineGameState,
   activeColor: Color,
   hostColor?: Color,
-) => onlinePlayerColor(state, hostColor) !== activeColor || state.awaitingSync;
+) =>
+  onlinePlayerColor(state, hostColor) !== activeColor ||
+  state.awaitingSync === true ||
+  state.opponentDisconnected === true;
 
 export const onlineUndoEnabled = (state: OnlineGameState) =>
-  state.undoConsent.host && state.undoConsent.peer;
+  !state.ranked && state.undoConsent.host && state.undoConsent.peer;
+
+export const onlineMaintainsRankedHeartbeat = (state: OnlineGameState) =>
+  state.role !== "none" || state.hostEnded === true;
 
 export const useOnlineGame = (callbacks: OnlineCallbacks) => {
   const [state, setState] = useState(initialState);
@@ -83,6 +101,7 @@ export const useOnlineGame = (callbacks: OnlineCallbacks) => {
   const hostGame = useCallback(async (
     hostName: string,
     portraitId?: AccountPortraitId,
+    ranked?: ClassicRankedHostConfig,
   ) => {
     const generation = attemptGeneration.current + 1;
     attemptGeneration.current = generation;
@@ -92,7 +111,7 @@ export const useOnlineGame = (callbacks: OnlineCallbacks) => {
     peerRef.current = undefined;
     previousHost?.stop();
     previousPeer?.disconnect();
-    setState({ ...initialState, connecting: true });
+    setState({ ...initialState, connecting: true, ranked: Boolean(ranked) });
     let host: MultiplayerHost;
     const isCurrent = () =>
       attemptGeneration.current === generation &&
@@ -104,15 +123,23 @@ export const useOnlineGame = (callbacks: OnlineCallbacks) => {
       applyUndo: () => callbacksRef.current.applyUndo(),
       canUndo: () => callbacksRef.current.canUndo(),
       onGuestJoined: (guest) => {
-        if (isCurrent()) setState((current) => ({ ...current, guest }));
+        if (isCurrent()) {
+          setState((current) => ({
+            ...current,
+            guest,
+            opponentDisconnected: false,
+            error: undefined,
+          }));
+        }
       },
       onGuestLeft: () => {
         if (!isCurrent()) return;
         setState((current) => ({
           ...current,
-          guest: undefined,
-          started: false,
-          localColor: undefined,
+          guest: ranked ? current.guest : undefined,
+          started: ranked ? current.started : false,
+          localColor: ranked ? current.localColor : undefined,
+          opponentDisconnected: Boolean(ranked),
           undoConsent: { ...current.undoConsent, peer: false },
           undoAvailable: false,
           error: current.started ? "The other player disconnected." : undefined,
@@ -131,7 +158,7 @@ export const useOnlineGame = (callbacks: OnlineCallbacks) => {
           setState((current) => ({ ...current, error, connecting: false }));
         }
       },
-    }, undefined, normalizedPortraitId);
+    }, undefined, normalizedPortraitId, ranked);
     hostRef.current = host;
     try {
       const roomCode = await host.start();
@@ -145,6 +172,7 @@ export const useOnlineGame = (callbacks: OnlineCallbacks) => {
         roomCode,
         hostName,
         hostPortraitId: normalizedPortraitId,
+        ranked: Boolean(ranked),
       });
     } catch (error) {
       if (!isCurrent()) return;
@@ -162,6 +190,7 @@ export const useOnlineGame = (callbacks: OnlineCallbacks) => {
     roomCode: string,
     playerName: string,
     portraitId?: AccountPortraitId,
+    ranked?: ClassicRankedCredentials,
   ) => {
     const generation = attemptGeneration.current + 1;
     attemptGeneration.current = generation;
@@ -176,6 +205,7 @@ export const useOnlineGame = (callbacks: OnlineCallbacks) => {
       ...initialState,
       roomCode: normalizedCode,
       connecting: true,
+      ranked: Boolean(ranked),
     });
     let peer: MultiplayerPeer;
     const isCurrent = () =>
@@ -191,6 +221,9 @@ export const useOnlineGame = (callbacks: OnlineCallbacks) => {
           guest,
           connecting: false,
           awaitingSync: false,
+          opponentDisconnected: false,
+          hostEnded: false,
+          error: undefined,
         }));
       },
       onLobbyState: (hostName, hostPortraitId, guest) => {
@@ -212,6 +245,8 @@ export const useOnlineGame = (callbacks: OnlineCallbacks) => {
           connecting: false,
           awaitingSync: false,
           localColor: guestColor,
+          opponentDisconnected: false,
+          hostEnded: false,
         }));
       },
       onStateSync: (gameState) => {
@@ -242,8 +277,11 @@ export const useOnlineGame = (callbacks: OnlineCallbacks) => {
         peerRef.current = undefined;
         setState((current) => ({
           ...current,
-          started: false,
-          localColor: undefined,
+          role: ranked ? "none" : current.role,
+          started: ranked ? current.started : false,
+          localColor: ranked ? current.localColor : undefined,
+          opponentDisconnected: Boolean(ranked),
+          hostEnded: Boolean(ranked),
           error: "The host disconnected.",
         }));
       },
@@ -256,11 +294,12 @@ export const useOnlineGame = (callbacks: OnlineCallbacks) => {
     peerRef.current = peer;
     try {
       const normalizedName = playerName.trim().slice(0, 24) || "Guest";
-      if (portraitId) {
-        await peer.connect(normalizedCode, normalizedName, portraitId);
-      } else {
-        await peer.connect(normalizedCode, normalizedName);
-      }
+      await peer.connect(
+        normalizedCode,
+        normalizedName,
+        normalizeAccountPortraitId(portraitId),
+        ranked,
+      );
       if (!isCurrent()) peer.disconnect();
     } catch (error) {
       if (!isCurrent()) return;
@@ -293,6 +332,7 @@ export const useOnlineGame = (callbacks: OnlineCallbacks) => {
   }, []);
 
   const setUndoConsent = useCallback((enabled: boolean) => {
+    if (state.ranked) return;
     if (state.role === "host") {
       hostRef.current?.setUndoConsent(enabled);
       return;
@@ -305,10 +345,10 @@ export const useOnlineGame = (callbacks: OnlineCallbacks) => {
         undoAvailable: enabled && current.undoConsent.host && current.undoAvailable,
       }));
     }
-  }, [state.role]);
+  }, [state.ranked, state.role]);
 
   const requestUndo = useCallback(() => {
-    if (!onlineUndoEnabled(state) || !state.undoAvailable) return;
+    if (state.ranked || !onlineUndoEnabled(state) || !state.undoAvailable) return;
     if (state.role === "host") {
       hostRef.current?.requestUndo();
       return;

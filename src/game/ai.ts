@@ -1,4 +1,4 @@
-import { allSquares, coords, isInCheck, kingSquare, pieceValue, pseudoTargets } from "./chess";
+import { coords, isInCheck, kingSquare, pieceValue, pseudoTargets } from "./chess";
 import { enumerateCompleteTurnPlans } from "./completeTurnSearch";
 import {
   availableClassicActions,
@@ -308,8 +308,109 @@ const hasWinningAirStrikeTurn = (state: GameState, color: Color) => {
   });
 };
 
+const winningEscortTurn = (
+  state: GameState,
+  color: Color,
+): AiTurnPlan | undefined => {
+  if (
+    state.phase !== "play" ||
+    state.activeColor !== color ||
+    !hasEscortKingCaptureGeometry(state, color)
+  ) return undefined;
+  const godId = state.players[color].gods.find((candidate) =>
+    !state.rested.includes(candidate) &&
+    GOD_BY_ID[candidate].abilities.some((ability) => ability.id === "escort")
+  );
+  if (!godId) return undefined;
+
+  const prefix: GameAction[] = [
+    { type: "select-god", godId },
+    { type: "select-ability", abilityId: "escort" },
+  ];
+  const selected = prefix.reduce(simulateClassicAction, state);
+  if (selected.selectedAbility !== "escort") return undefined;
+  const requiresKingCapture = state.gameMode === "puzzle";
+  const plan = enumerateCompleteTurnPlans({
+    state: selected,
+    availableActions: availableClassicActions,
+    reduce: simulateClassicAction,
+    signature: classicPlanStateSignature,
+    isComplete: isCompleteClassicTurn,
+    acceptComplete: (_initial, next) =>
+      next.phase === "gameover" &&
+      next.winner === color &&
+      Boolean(kingSquare(next.board, color)) &&
+      !kingSquare(next.board, opposite(color)) &&
+      (!requiresKingCapture || next.result?.reason === "king-death"),
+    limits: {
+      maxDepth: 6,
+      maxStates: 20_000,
+      maxActionsPerState: 256,
+      maxPlans: 1,
+    },
+  })[0];
+  return plan
+    ? { state: plan.state, actions: [...prefix, ...plan.actions] }
+    : undefined;
+};
+
 const hasImmediateWinningTurn = (state: GameState, color: Color) =>
-  hasWinningAirStrikeTurn(state, color) || hasWinningTurn(state, color);
+  Boolean(winningEscortTurn(state, color)) ||
+  hasWinningAirStrikeTurn(state, color) ||
+  hasWinningTurn(state, color);
+
+const hasEscortKingCaptureGeometry = (
+  state: GameState,
+  color: Color,
+) => {
+  const escortLevel = state.players[color].upgrades.escort ?? 1;
+  const maxDistance = escortLevel >= 3 ? 2 : 1;
+  const friendlyKing = kingSquare(state.board, color);
+  const enemyKing = kingSquare(state.board, opposite(color));
+  if (!friendlyKing || !enemyKing) return false;
+  const [kingFile, kingRank] = coords(friendlyKing);
+  const [enemyFile, enemyRank] = coords(enemyKing);
+
+  return Object.entries(state.board).some(([square, piece]) => {
+    if (
+      piece.controller !== color ||
+      piece.type === "king" ||
+      piece.status.stunned
+    ) return false;
+    const [pieceFile, pieceRank] = coords(square);
+    if (
+      Math.max(
+        Math.abs(pieceFile - kingFile),
+        Math.abs(pieceRank - kingRank),
+      ) !== 1
+    ) return false;
+    const dx = enemyFile - pieceFile;
+    const dy = enemyRank - pieceRank;
+    const distance = Math.max(Math.abs(dx), Math.abs(dy));
+    if (
+      distance < 1 ||
+      distance > maxDistance ||
+      (dx !== 0 && dy !== 0 && Math.abs(dx) !== Math.abs(dy))
+    ) return false;
+    const destinationFile = kingFile + dx;
+    const destinationRank = kingRank + dy;
+    return destinationFile >= 0 &&
+      destinationFile < 8 &&
+      destinationRank >= 0 &&
+      destinationRank < 8;
+  });
+};
+
+const resolveMandatoryUpgrades = (state: GameState) => {
+  let next = state;
+  for (let count = 0; count < 4 && next.phase === "upgrade"; count += 1) {
+    const action = availableClassicActions(next)
+      .find((candidate) => candidate.type === "upgrade");
+    if (!action) break;
+    next = simulateClassicAction(next, action);
+  }
+  return next;
+};
 
 const defensiveCandidates = (
   state: GameState,
@@ -387,9 +488,12 @@ const bestImmediateMateAvoidance = (
   plans: AiTurnPlan[],
 ) => {
   const enemy = opposite(color);
-  const allowsImmediateMate = (candidate: GameState) =>
-    hasWinningAirStrikeTurn(candidate, enemy) ||
-    hasResolvedWinningTurn(candidate, enemy);
+  const allowsImmediateMate = (candidate: GameState) => {
+    const playable = resolveMandatoryUpgrades(candidate);
+    return Boolean(winningEscortTurn(playable, enemy)) ||
+      hasWinningAirStrikeTurn(playable, enemy) ||
+      hasResolvedWinningTurn(playable, enemy);
+  };
   if (!plans[0] || !allowsImmediateMate(plans[0].state)) return undefined;
 
   return defensiveCandidates(state, color, plans)
@@ -408,21 +512,28 @@ const bestSparseMateInTwo = (
   ) return undefined;
 
   const enemy = opposite(color);
-  const checkingPlans = plans
+  const tacticalPlans = plans
     .filter((plan) =>
       plan.state.phase !== "gameover" &&
-      isInCheck(plan.state.board, enemy, plan.state.bananas)
+      (
+        isInCheck(plan.state.board, enemy, plan.state.bananas) ||
+        hasEscortKingCaptureGeometry(plan.state, color)
+      )
     )
     .slice(0, 12);
 
-  for (const plan of checkingPlans) {
+  for (const plan of tacticalPlans) {
     const replies = enumerateTurnPlans(plan.state, enemy);
     if (!replies.length) continue;
     const reply = bestOptimalPlan(plan.state, enemy, replies, 2);
-    const continuations = enumerateTurnPlans(reply.state, color);
-    if (!continuations.length) continue;
+    const continuationState = resolveMandatoryUpgrades(reply.state);
+    if (winningEscortTurn(continuationState, color)) return plan;
+    const continuations = enumerateTurnPlans(continuationState, color);
     const winningContinuation = continuations.find((continuation) => {
-      const resolved = continuation.actions.reduce(gameReducer, reply.state);
+      const resolved = continuation.actions.reduce(
+        gameReducer,
+        continuationState,
+      );
       return resolved.phase === "gameover" && resolved.winner === color;
     });
     if (winningContinuation) return plan;
@@ -436,6 +547,10 @@ const bestOptimalPlan = (
   plans: AiTurnPlan[],
   mateSearchDepth = 0,
 ) => {
+  const escortWin = state.aiDifficulty >= 8
+    ? winningEscortTurn(state, color)
+    : undefined;
+  if (escortWin) return escortWin;
   const immediateWin = plans.find((plan) => {
     if (plan.state.phase === "gameover" && plan.state.winner === color) return true;
     if (!isInCheck(plan.state.board, opposite(color), plan.state.bananas)) {

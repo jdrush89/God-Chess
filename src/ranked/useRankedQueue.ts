@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AccountProfile } from "../account/useAccount";
 import { supabase } from "../account/supabase";
-import type { TeamId } from "../game/fourPlayerTypes";
+import type { Color } from "../game/types";
 import {
   normalizeRankedQueueState,
   type RankedQueueState,
@@ -125,10 +125,10 @@ export const useRankedQueue = (account?: AccountProfile) => {
 
   const reportResult = useCallback((
     matchId: string,
-    winnerTeam?: TeamId,
+    winnerColor?: Color,
   ) => apply("report_ranked_result", {
     target_match_id: matchId,
-    winning_team: winnerTeam ?? null,
+    winning_color: winnerColor ?? null,
   }), [apply]);
 
   const forfeit = useCallback((matchId: string) =>

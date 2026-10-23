@@ -164,6 +164,109 @@ describe("Divine AI", () => {
     });
   });
 
+  it("uses Escort to capture the exposed King in the October 23 Daily line", () => {
+    const state = createGame(1, {
+      mode: "puzzle",
+      aiDifficulty: 10,
+    });
+    state.puzzleId = "daily-2026-10-23";
+    state.phase = "play";
+    state.activeColor = "white";
+    state.board = {
+      f3: piece("king", "white", "white-king-4"),
+      e4: piece("knight", "white", "white-knight-6"),
+      d4: piece("king", "black", "black-king-4"),
+      c5: piece("pawn", "black", "black-pawn-3"),
+    };
+    state.players.white.gods = ["medusa", "midas", "leonidas"];
+    state.players.white.upgrades = {
+      captivate: 3,
+      slither: 3,
+      "stone-gaze": 3,
+      barter: 3,
+      "military-funding": 3,
+      leverage: 2,
+      "royal-step": 2,
+      "march-home": 2,
+      escort: 2,
+    };
+    state.players.white.orbs = { white: 1, black: 15 };
+    state.players.black.gods = ["chiron", "salem", "ares"];
+    state.rested = [];
+    state.board.e4.status.hexedBy = "black";
+
+    const plan = chooseAiPlan(state, () => 0);
+    const result = plan.reduce(gameReducer, state);
+
+    expect(plan).toEqual([
+      { type: "select-god", godId: "leonidas" },
+      { type: "select-ability", abilityId: "escort" },
+      { type: "square", square: "f3" },
+      { type: "square", square: "e4" },
+      { type: "pass" },
+      { type: "square", square: "e3" },
+    ]);
+    expect(result.phase).toBe("gameover");
+    expect(result.winner).toBe("white");
+    expect(kingSquare(result.board, "black")).toBeUndefined();
+  });
+
+  it("sets up the two-turn Escort capture from the October 23 Daily position", () => {
+    const state = createGame(1, {
+      mode: "puzzle",
+      aiDifficulty: 10,
+    });
+    state.puzzleId = "daily-2026-10-23";
+    state.phase = "play";
+    state.activeColor = "white";
+    state.board = {
+      g4: piece("king", "white", "white-king-4"),
+      e4: piece("knight", "white", "white-knight-6"),
+      d4: piece("king", "black", "black-king-4"),
+      c6: piece("pawn", "black", "black-pawn-3"),
+    };
+    state.board.e4.status.hexedBy = "black";
+    state.players.white.gods = ["medusa", "midas", "leonidas"];
+    state.players.white.upgrades = {
+      captivate: 3,
+      slither: 3,
+      "stone-gaze": 3,
+      barter: 3,
+      "military-funding": 2,
+      leverage: 2,
+      "royal-step": 2,
+      "march-home": 2,
+      escort: 2,
+    };
+    state.players.white.orbs = { white: 1, black: 15 };
+    state.players.black.gods = ["chiron", "salem", "ares"];
+    state.players.black.upgrades = {
+      gallop: 3,
+      mount: 3,
+      charge: 3,
+      hex: 3,
+      "poison-cloud": 2,
+      polymorph: 2,
+      threaten: 2,
+      "pick-a-fight": 2,
+      "cull-the-weak": 2,
+    };
+    state.players.black.orbs = { white: 14, black: 34 };
+    state.rested = ["midas", "ares", "medusa", "salem"];
+
+    const plan = chooseAiPlan(state, () => 0);
+    const result = plan.reduce(gameReducer, state);
+
+    expect(plan).toEqual([
+      { type: "select-god", godId: "leonidas" },
+      { type: "select-ability", abilityId: "royal-step" },
+      { type: "square", square: "g4" },
+      { type: "square", square: "f3" },
+    ]);
+    expect(result.board.f3?.type).toBe("king");
+    expect(result.board.e4?.type).toBe("knight");
+  });
+
   it("completes the CPU upgrade handoff in the October 19 Daily position", () => {
     let state = createDailyPuzzleGame("daily-2026-10-19");
     for (const action of [

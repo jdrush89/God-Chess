@@ -54,7 +54,7 @@ describe("RankedQueuePanel", () => {
     expect(actions.onLeave).toHaveBeenCalledOnce();
   });
 
-  it("shows player ratings, teams, and the reconnect window", () => {
+  it("shows player ratings, colors, and the reconnect window", () => {
     const state: RankedQueueState = {
       phase: "playing",
       loading: false,
@@ -63,17 +63,15 @@ describe("RankedQueuePanel", () => {
         id: "match-1",
         phase: "playing",
         roomCode: "ABCDE",
-        joinToken: "north-token",
-        seat: "north",
-        team: "team-a",
+        joinToken: "white-token",
+        color: "white",
         host: true,
         participants: [
           {
             publicId: "gc-athena",
             displayName: "Athena",
             portraitId: "artemis",
-            seat: "north",
-            team: "team-a",
+            color: "white",
             host: true,
             connected: true,
             rating: 1600,
@@ -82,8 +80,7 @@ describe("RankedQueuePanel", () => {
             publicId: "gc-ares",
             displayName: "Ares",
             portraitId: "ares",
-            seat: "east",
-            team: "team-b",
+            color: "black",
             host: false,
             connected: false,
             rating: 1575,
@@ -94,10 +91,10 @@ describe("RankedQueuePanel", () => {
     render(<RankedQueuePanel state={state} signedIn {...callbacks()} />);
 
     expect(screen.getByText("Athena").parentElement?.textContent).toContain(
-      "Team A · Rating 1600",
+      "White · Rating 1600",
     );
     expect(screen.getByText("Ares").parentElement?.textContent).toContain(
-      "Team B · Rating 1575",
+      "Black · Rating 1575",
     );
     expect(screen.getByText(/2 minutes to return/i)).toBeTruthy();
   });
@@ -113,12 +110,11 @@ describe("RankedQueuePanel", () => {
           match: {
             id: "match-2",
             phase: "completed",
-            joinToken: "west-token",
-            seat: "west",
-            team: "team-b",
+            joinToken: "black-token",
+            color: "black",
             host: false,
             participants: [],
-            winnerTeam: "team-b",
+            winnerColor: "black",
             resultReason: "forfeit",
             rating: { ...DEFAULT_RANKED_RATING, rating: 1538 },
             ratingChange: 38,

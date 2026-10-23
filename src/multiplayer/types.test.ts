@@ -187,6 +187,31 @@ describe("versioned multiplayer protocol", () => {
     expect(normalizeFourPlayerRoomSnapshot(snapshot)).toBeUndefined();
   });
 
+  it("validates classic ranked match credentials", () => {
+    const ranked = createProtocolMessage("classic", "peer", {
+      type: "join_request",
+      playerName: "Athena",
+      portraitId: "artemis",
+      ranked: {
+        matchId: "match-1",
+        color: "black",
+        joinToken: "black-token",
+      },
+    });
+    expect(normalizeProtocolMessage(ranked)).toEqual(ranked);
+    expect(normalizeProtocolMessage({
+      ...ranked,
+      payload: {
+        ...ranked.payload,
+        ranked: {
+          matchId: "match-1",
+          color: "north",
+          joinToken: "black-token",
+        },
+      },
+    })).toBeUndefined();
+  });
+
   it("normalizes known classic draft skins and rejects mismatched ones", () => {
     const unlocked = createProtocolMessage("classic", "peer", {
       type: "game_action",

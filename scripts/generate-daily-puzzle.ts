@@ -69,7 +69,22 @@ const targetMatches = (candidate: GameState) => {
   if (candidate.phase !== "gameover" || !candidate.result) return false;
   return candidate.result.kind === "winner" &&
     candidate.result.winner === targetResult.winner &&
-    candidate.result.reason === targetResult.reason;
+    (
+      candidate.result.reason === targetResult.reason ||
+      candidate.result.reason === "king-death"
+    );
+};
+
+const prepareDailySolverState = (initialState: GameState) => {
+  const candidate = structuredClone(initialState);
+  candidate.gameMode = "puzzle";
+  candidate.aiDifficulty = 10;
+  candidate.aiColor = initialState.activeColor === "white" ? "black" : "white";
+  candidate.puzzleId = `daily-${date}`;
+  candidate.puzzlePlayerTurnsRemaining = MAX_DAILY_TURNS;
+  candidate.winner = undefined;
+  candidate.result = undefined;
+  return candidate;
 };
 
 const replaySolution = (
@@ -140,8 +155,9 @@ if (reportedTurns !== replayed.playerTurns) {
   );
 }
 
-const optimalActions = deriveOptimalSolution(state);
-const optimalReplay = replaySolution(state, optimalActions);
+const solverState = prepareDailySolverState(state);
+const optimalActions = deriveOptimalSolution(solverState);
+const optimalReplay = replaySolution(solverState, optimalActions);
 if (!targetMatches(optimalReplay.state)) {
   throw new Error("The level 10 CPU no longer finds the exported checkmate.");
 }

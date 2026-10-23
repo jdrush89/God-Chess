@@ -25,16 +25,16 @@ export function RankedQueuePanel({
 }) {
   const match = state.match;
   const localWon = Boolean(
-    match?.winnerTeam && match.winnerTeam === match.team,
+    match?.winnerColor && match.winnerColor === match.color,
   );
   return (
     <div className="ranked-panel">
       <header>
         <span><Trophy size={24} /></span>
         <div>
-          <p className="eyebrow">RANKED · 2V2</p>
+          <p className="eyebrow">RANKED · 1V1</p>
           <h1>Divine rating</h1>
-          <p>Solo queue for fixed four-player teams. Undo is disabled.</p>
+          <p>Classic one-on-one God Chess. Undo is disabled.</p>
         </div>
         {state.rating && (
           <strong className="ranked-rating-card">
@@ -49,7 +49,7 @@ export function RankedQueuePanel({
           <Swords size={38} />
           <h2>Enter the ranked queue</h2>
           <p>
-            You will be matched automatically with three other players. No room
+            You will be matched automatically with one other player. No room
             code is needed.
           </p>
           <button
@@ -71,7 +71,7 @@ export function RankedQueuePanel({
         <section className="ranked-waiting" role="status">
           <LoaderCircle className="spin" size={34} />
           <h2>Waiting for other players.</h2>
-          <p>The match begins automatically when four players are ready.</p>
+          <p>The match begins automatically when another player is ready.</p>
           <button
             className="secondary-button"
             disabled={state.loading}
@@ -88,8 +88,8 @@ export function RankedQueuePanel({
           <h2>{state.phase === "matched" ? "Match found" : "Ranked match connected"}</h2>
           <p>
             {state.phase === "matched"
-              ? "Connecting the four queued players..."
-              : "Waiting for every player before the draft begins."}
+              ? "Connecting the two queued players..."
+              : "Preparing the classic board and divine draft."}
           </p>
           <div className="ranked-roster">
             {match.participants.map((participant) => (
@@ -101,7 +101,7 @@ export function RankedQueuePanel({
                 <div>
                   <strong>{participant.displayName}</strong>
                   <small>
-                    {participant.team === "team-a" ? "Team A" : "Team B"}
+                    {participant.color === "white" ? "White" : "Black"}
                     {" · Rating "}{Math.round(participant.rating)}
                   </small>
                 </div>
@@ -112,8 +112,8 @@ export function RankedQueuePanel({
             ))}
           </div>
           <small>
-            A disconnected player has 2 minutes to return before their team
-            forfeits.
+            A disconnected player has 2 minutes to return before they
+            forfeit.
           </small>
           <button
             className="secondary-button"

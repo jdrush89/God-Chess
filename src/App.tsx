@@ -204,6 +204,7 @@ import {
   type StatisticsBoard,
 } from "./playerStatistics";
 import {
+  onlineMaintainsRankedHeartbeat,
   onlinePlayerColor,
   onlineTurnInputDisabled,
   onlineUndoEnabled,
@@ -213,7 +214,6 @@ import {
 import { RoomCodeCopyButton } from "./multiplayer/RoomCodeCopyButton";
 import { FriendInviteControl } from "./multiplayer/FriendInviteControl";
 import {
-  fourPlayerOnlineMaintainsRankedHeartbeat,
   fourPlayerOnlineLocalSeat,
   useFourPlayerOnlineGame,
   type FourPlayerOnlineState,
@@ -733,6 +733,7 @@ function DraftScreen({
   inputDisabled = false,
   completedAchievements,
   playerPortraits,
+  playerRatings,
 }: {
   state: GameState;
   dispatch: GameDispatch;
@@ -740,6 +741,7 @@ function DraftScreen({
   inputDisabled?: boolean;
   completedAchievements: AchievementProgress["completed"];
   playerPortraits?: Partial<Record<Color, AccountPortraitId>>;
+  playerRatings?: Partial<Record<Color, number>>;
 }) {
   const [inspected, setInspected] = useState<GodId>(state.draft.available[0]);
   const [godPreviewLevel, setGodPreviewLevel] = useState<number>();
@@ -785,7 +787,12 @@ function DraftScreen({
               alt=""
             />
           )}
-          <span>{activePlayer.name} · {state.activeColor} picks</span>
+          <span>
+            {activePlayer.name}
+            {playerRatings?.[state.activeColor] !== undefined &&
+              ` · ${Math.round(playerRatings[state.activeColor]!)} rating`}
+            {" · "}{state.activeColor} picks
+          </span>
         </div>
         <div className="header-actions" aria-hidden="true" />
       </header>
@@ -945,6 +952,11 @@ function DraftScreen({
                 />
               )}
               <strong>{state.players[color].name}</strong>
+              {playerRatings?.[color] !== undefined && (
+                <span className="ranked-player-rating">
+                  {Math.round(playerRatings[color]!)}
+                </span>
+              )}
             </span>
             <small>{color}</small>
             <div>
@@ -1109,6 +1121,7 @@ function PlayerBar({
   displayedGraveyardCount,
   graveyardArriving,
   portraitId,
+  rating,
 }: {
   state: GameState;
   color: Color;
@@ -1119,6 +1132,7 @@ function PlayerBar({
   displayedGraveyardCount: number;
   graveyardArriving: boolean;
   portraitId?: AccountPortraitId;
+  rating?: number;
 }) {
   const player = state.players[color];
   const isActive = state.activeColor === color && state.phase !== "gameover";
@@ -1137,7 +1151,14 @@ function PlayerBar({
         )}
       </div>
       <div className="player-copy">
-        <strong>{player.name}</strong>
+        <strong>
+          {player.name}
+          {rating !== undefined && (
+            <span className="ranked-player-rating">
+              {Math.round(rating)}
+            </span>
+          )}
+        </strong>
         <span>{isActive ? "DIVINE TURN" : color.toUpperCase()}</span>
       </div>
       <div className="player-orbs">
@@ -2130,6 +2151,7 @@ function RulesModal({ onClose }: { onClose: () => void }) {
 function SettingsModal({
   undoPreferred,
   onlineSession,
+  ranked,
   localConsent,
   remoteConsent,
   onUndoPreferenceChange,
@@ -2137,6 +2159,7 @@ function SettingsModal({
 }: {
   undoPreferred: boolean;
   onlineSession: boolean;
+  ranked?: boolean;
   localConsent: boolean;
   remoteConsent: boolean;
   onUndoPreferenceChange: (enabled: boolean) => void;
@@ -2153,7 +2176,9 @@ function SettingsModal({
           <div>
             <strong>Allow undo</strong>
             <p>
-              {onlineSession
+              {ranked
+                ? "Completed turns cannot be undone in ranked games."
+                : onlineSession
                 ? "Both players must enable this setting. Either player can then rewind the latest completed turn or upgrade."
                 : "Adds an Undo button that rewinds the latest completed turn or upgrade."}
             </p>
@@ -2163,12 +2188,13 @@ function SettingsModal({
             role="switch"
             aria-checked={undoPreferred}
             aria-label="Allow undo"
+            disabled={ranked}
             onClick={() => onUndoPreferenceChange(!undoPreferred)}
           >
             <span />
           </button>
         </div>
-        {onlineSession && (
+        {onlineSession && !ranked && (
           <div className="undo-consent-status">
             <span className={localConsent ? "enabled" : ""}>
               <i>{localConsent ? "✓" : "—"}</i>
@@ -2187,7 +2213,7 @@ function SettingsModal({
             </p>
           </div>
         )}
-        {!onlineSession && (
+        {!onlineSession && !ranked && (
           <p className="settings-note">
             Against the Divine AI, undo rewinds the AI response and your preceding turn together.
           </p>
@@ -2781,7 +2807,7 @@ function StatisticsScreen({
                   <span><Trophy size={20} /></span>
                   <div>
                     <strong>{roundedRankedRating(rankedRating)}</strong>
-                    <p>Ranked 2v2 rating</p>
+                    <p>Ranked 1v1 rating</p>
                     <small>
                       {rankedRating.wins}W · {rankedRating.losses}L · {rankedRating.draws}D
                     </small>
@@ -3136,7 +3162,7 @@ export function FriendProfileScreen({
                         <strong>
                           {roundedRankedRating(friend.rankedRating)}
                         </strong>
-                        <p>Ranked 2v2 rating</p>
+                        <p>Ranked 1v1 rating</p>
                       </div>
                     </article>
                   </div>
@@ -3401,7 +3427,7 @@ function PlayerCountChooser({
         <p>
           {category === "local"
             ? "Share this device or challenge the Divine AI."
-            : "Queue for ranked 2v2 or host a casual room."}
+            : "Queue for ranked 1v1 or host a casual room."}
         </p>
       </div>
       <div className="player-count-grid" aria-label={`${category} player count`}>
@@ -3412,7 +3438,7 @@ function PlayerCountChooser({
             onClick={onRanked}
           >
             <Trophy size={34} />
-            <strong>Ranked 2v2</strong>
+            <strong>Ranked 1v1</strong>
             <small>{rankedAvailable ? "Automatic matchmaking" : "Sign in required"}</small>
           </button>
         )}
@@ -4361,6 +4387,7 @@ export function GameScreen({
   onQuitWithoutSaving,
   moveFirstDisabled = false,
   playerPortraits,
+  playerRatings,
 }: {
   state: GameState;
   dispatch: GameDispatch;
@@ -4386,6 +4413,7 @@ export function GameScreen({
   onQuitWithoutSaving?: () => void;
   moveFirstDisabled?: boolean;
   playerPortraits?: Partial<Record<Color, AccountPortraitId>>;
+  playerRatings?: Partial<Record<Color, number>>;
 }) {
   const [rulesOpen, setRulesOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -4997,6 +5025,7 @@ export function GameScreen({
             displayedGraveyardCount={displayedGraveyards.black}
             graveyardArriving={arrivingGraveyards.has("black")}
             portraitId={playerPortraits?.black}
+            rating={playerRatings?.black}
           />
           <ChessBoard
             state={state}
@@ -5018,6 +5047,7 @@ export function GameScreen({
             displayedGraveyardCount={displayedGraveyards.white}
             graveyardArriving={arrivingGraveyards.has("white")}
             portraitId={playerPortraits?.white}
+            rating={playerRatings?.white}
           />
           {puzzleResultReady && !puzzleResultOpen && (
             <aside
@@ -6804,11 +6834,11 @@ export default function App() {
     const roomPublished = Boolean(ranked.match?.roomCode);
     rankedActions.setMatchHeartbeat(
       !roomPublished ||
-      fourPlayerOnlineMaintainsRankedHeartbeat(fourOnline),
+      onlineMaintainsRankedHeartbeat(online),
     );
   }, [
-    fourOnline.hostEnded,
-    fourOnline.role,
+    online.hostEnded,
+    online.role,
     ranked.match?.roomCode,
     ranked.phase,
     rankedActions.setMatchHeartbeat,
@@ -6823,9 +6853,10 @@ export default function App() {
         ranked.phase !== "playing"
       ) ||
       (!match.host && !match.roomCode) ||
-      fourOnline.role !== "none" ||
-      fourOnline.connecting ||
-      !fourOnline.error
+      online.role !== "none" ||
+      online.connecting ||
+      online.hostEnded ||
+      !online.error
     ) return;
     const timer = window.setTimeout(() => {
       rankedConnectionAttempt.current = undefined;
@@ -6833,9 +6864,10 @@ export default function App() {
     }, 3000);
     return () => window.clearTimeout(timer);
   }, [
-    fourOnline.connecting,
-    fourOnline.error,
-    fourOnline.role,
+    online.connecting,
+    online.error,
+    online.hostEnded,
+    online.role,
     ranked.match?.host,
     ranked.match?.id,
     ranked.match?.roomCode,
@@ -6858,39 +6890,49 @@ export default function App() {
     }
     const connection = {
       matchId: match.id,
-      seat: match.seat,
-      rating: ranked.rating?.rating ?? 1500,
+      color: match.color,
       joinToken: match.joinToken,
-      ...(match.seatTokens ? { seatTokens: match.seatTokens } : {}),
     };
     if (match.host) {
+      if (match.roomCode && online.role === "none") {
+        return;
+      }
+      const guestColor = match.color === "white" ? "black" : "white";
+      const guestJoinToken = match.colorTokens?.[guestColor];
+      if (!guestJoinToken) return;
       if (
-        fourOnline.role === "none" &&
-        !fourOnline.connecting &&
+        online.role === "none" &&
+        !online.connecting &&
         rankedConnectionAttempt.current !== `host:${match.id}`
       ) {
         rankedConnectionAttempt.current = `host:${match.id}`;
-        void fourOnlineActions.hostGame(
+        void onlineActions.hostGame(
           account.displayName,
           account.portraitId,
-          connection,
+          {
+            matchId: match.id,
+            hostColor: match.color,
+            guestColor,
+            guestJoinToken,
+          },
         );
       } else if (
-        fourOnline.roomCode &&
-        match.roomCode !== fourOnline.roomCode
+        online.roomCode &&
+        match.roomCode !== online.roomCode
       ) {
-        void rankedActions.publishRoom(match.id, fourOnline.roomCode);
+        void rankedActions.publishRoom(match.id, online.roomCode);
       }
       return;
     }
     if (
       match.roomCode &&
-      fourOnline.role === "none" &&
-      !fourOnline.connecting &&
+      online.role === "none" &&
+      !online.connecting &&
+      !online.hostEnded &&
       rankedConnectionAttempt.current !== `peer:${match.id}`
     ) {
       rankedConnectionAttempt.current = `peer:${match.id}`;
-      void fourOnlineActions.joinGame(
+      void onlineActions.joinGame(
         match.roomCode,
         account.displayName,
         account.portraitId,
@@ -6899,29 +6941,62 @@ export default function App() {
     }
   }, [
     accountService.account,
-    fourOnline.connecting,
-    fourOnline.role,
-    fourOnline.roomCode,
+    online.connecting,
+    online.hostEnded,
+    online.role,
+    online.roomCode,
     ranked.match,
     ranked.phase,
-    ranked.rating?.rating,
     rankedReconnectVersion,
     rankedActions.publishRoom,
-    fourOnlineActions.hostGame,
-    fourOnlineActions.joinGame,
+    onlineActions.hostGame,
+    onlineActions.joinGame,
   ]);
 
   useEffect(() => {
     const match = ranked.match;
-    const canonical = fourOnline.snapshot?.canonical?.state;
-    if (!match || !canonical || canonical.phase !== "gameover") return;
-    const result = canonical.winner?.team ?? "draw";
+    if (
+      !match ||
+      !match.host ||
+      online.role !== "host" ||
+      !online.guest ||
+      online.started
+    ) return;
+    const next = createGame(match.color === "white" ? 1 : 2, {
+      mode: "online",
+      hostName: accountService.account?.displayName ?? online.hostName,
+      guestName: online.guest.name,
+    });
+    resetUndoTracking(next);
+    receiveState(next);
+    onlineActions.startGame(next);
+    setStartView("none");
+  }, [
+    accountService.account?.displayName,
+    online.guest,
+    online.hostName,
+    online.role,
+    online.started,
+    onlineActions.startGame,
+    ranked.match,
+  ]);
+
+  useEffect(() => {
+    const match = ranked.match;
+    if (
+      !match ||
+      !online.ranked ||
+      !online.started ||
+      state.gameMode !== "online" ||
+      state.phase !== "gameover"
+    ) return;
+    const result = state.winner ?? "draw";
     const reportKey = `${match.id}:${result}`;
     if (rankedResultReported.current === reportKey) return;
     rankedResultReported.current = reportKey;
     let retryTimer: number | undefined;
     let cancelled = false;
-    void rankedActions.reportResult(match.id, canonical.winner?.team)
+    void rankedActions.reportResult(match.id, state.winner)
       .then((next) => {
         if (next || cancelled) return;
         if (rankedResultReported.current === reportKey) {
@@ -6936,7 +7011,12 @@ export default function App() {
       if (retryTimer !== undefined) window.clearTimeout(retryTimer);
     };
   }, [
-    fourOnline.snapshot?.canonical?.revision,
+    online.ranked,
+    online.started,
+    state.gameMode,
+    state.phase,
+    state.turn,
+    state.winner,
     ranked.match?.id,
     rankedResultRetryVersion,
     rankedActions.reportResult,
@@ -6945,17 +7025,24 @@ export default function App() {
   useEffect(() => {
     if (
       (ranked.phase !== "completed" && ranked.phase !== "cancelled") ||
-      fourOnline.snapshot?.canonical?.state.phase === "gameover"
+      (
+        online.ranked &&
+        online.started &&
+        state.phase === "gameover"
+      )
     ) return;
-    fourOnlineActions.disconnect();
+    onlineActions.disconnect();
     setSetupCategory("online");
     setSetupPlayerCount(undefined);
     setSetupReturnView("play");
     setStartView("setup");
   }, [
-    fourOnline.snapshot?.canonical?.state.phase,
-    fourOnlineActions.disconnect,
+    onlineActions.disconnect,
+    online.ranked,
+    online.started,
+    ranked.match?.id,
     ranked.phase,
+    state.phase,
   ]);
 
   const acceptGameInvite = useCallback(async (selectedInvite: GameInvite) => {
@@ -7636,10 +7723,10 @@ export default function App() {
   useEffect(() => {
     if (!fourOnline.ended) return;
     setSetupCategory("online");
-    setSetupPlayerCount(ranked.match ? undefined : 4);
+    setSetupPlayerCount(4);
     setSetupReturnView("menu");
     setStartView("setup");
-  }, [fourOnline.ended, ranked.match]);
+  }, [fourOnline.ended]);
 
   useEffect(() => {
     if (threeOnline.snapshot?.canonical) {
@@ -8450,7 +8537,7 @@ export default function App() {
           threeOnlineActions.disconnect();
           if (
             ranked.match &&
-            fourOnline.snapshot?.canonical?.state.phase !== "gameover"
+            (ranked.phase === "matched" || ranked.phase === "playing")
           ) {
             void rankedActions.forfeit(ranked.match.id);
           } else if (!ranked.match) {
@@ -8458,7 +8545,7 @@ export default function App() {
           }
         }}
         onResetRanked={() => {
-          fourOnlineActions.disconnect();
+          onlineActions.disconnect();
           rankedActions.reset();
         }}
         onCancel={() => {
@@ -8565,7 +8652,6 @@ export default function App() {
       }
       return ratings;
     }, {});
-    const rankedMatch = ranked.match;
     return (
       <FourPlayerGame
         key={`online-${fourOnline.roomCode}`}
@@ -8599,34 +8685,11 @@ export default function App() {
         onPersist={async () => false}
         onQuit={() => {
           fourOnlineActions.disconnect();
-          if (
-            rankedMatch &&
-            fourOnlineCanonical.state.phase !== "gameover"
-          ) {
-            void rankedActions.forfeit(rankedMatch.id);
-          }
-          if (rankedMatch) {
-            setSetupCategory("online");
-            setSetupPlayerCount(undefined);
-            setSetupReturnView("play");
-            setStartView("setup");
-          } else {
-            setStartView("menu");
-          }
+          setStartView("menu");
         }}
         onNewGame={() => {
           fourOnlineActions.disconnect();
-          if (rankedMatch) {
-            if (fourOnlineCanonical.state.phase !== "gameover") {
-              void rankedActions.forfeit(rankedMatch.id);
-            }
-            setSetupCategory("online");
-            setSetupPlayerCount(undefined);
-            setSetupReturnView("play");
-            setStartView("setup");
-          } else {
-            openStartFlow("online", 4);
-          }
+          openStartFlow("online", 4);
         }}
         onlineSession={{
           roomCode: fourOnline.snapshot.roomCode,
@@ -8858,6 +8921,31 @@ export default function App() {
       }
     });
   }
+  const classicPlayerRatings: Partial<Record<Color, number>> = {};
+  if (
+    ranked.match &&
+    online.ranked &&
+    online.started &&
+    state.gameMode === "online"
+  ) {
+    ranked.match.participants.forEach((participant) => {
+      classicPlayerRatings[participant.color] = participant.rating;
+    });
+  }
+  const leaveClassicGame = () => {
+    if (
+      ranked.match &&
+      online.ranked &&
+      online.started &&
+      state.gameMode === "online" &&
+      state.phase !== "gameover"
+    ) {
+      void rankedActions.forfeit(ranked.match.id);
+      onlineActions.disconnect();
+      return;
+    }
+    openNewGame();
+  };
 
   return (
     <>
@@ -8881,6 +8969,7 @@ export default function App() {
             }
             inputDisabled={inputDisabled}
             playerPortraits={classicPlayerPortraits}
+            playerRatings={classicPlayerRatings}
           />
         )
         : (
@@ -8889,7 +8978,7 @@ export default function App() {
             dispatch={dispatch}
             inputDisabled={inputDisabled}
             opponentColor={opponentColor}
-            onlineRoomCode={online.roomCode}
+            onlineRoomCode={online.ranked ? undefined : online.roomCode}
             onlineError={online.error}
             undoEnabled={undoEnabled}
             canUndo={canUndo}
@@ -8900,7 +8989,9 @@ export default function App() {
                 ? quitWithoutSaving
                 : state.challengeId
                   ? () => setStartView("puzzles")
-                  : state.gameMode === "online" || state.gameMode === "puzzle"
+                  : state.gameMode === "online"
+                    ? leaveClassicGame
+                    : state.gameMode === "puzzle"
                     ? openNewGame
                     : () => void saveAndQuit()
             }
@@ -8908,7 +8999,9 @@ export default function App() {
               state.gameMode === "simulation"
                 ? "Quit simulation"
                 : state.gameMode === "online"
-                  ? "Leave room"
+                  ? online.ranked
+                    ? "Forfeit ranked match"
+                    : "Leave room"
                   : state.gameMode === "puzzle"
                     ? "Leave puzzle"
                     : state.challengeId
@@ -8920,7 +9013,11 @@ export default function App() {
                 ? quitWithoutSaving
                 : undefined
             }
-            onRestart={openNewGame}
+            onRestart={
+              state.gameMode === "online"
+                ? leaveClassicGame
+                : openNewGame
+            }
             onRestartPuzzle={restartPuzzle}
             onGiveUpDaily={
               state.puzzleId && isDailyPuzzleId(state.puzzleId)
@@ -8945,14 +9042,24 @@ export default function App() {
             }
             onNextPuzzle={nextPuzzle}
             playerPortraits={classicPlayerPortraits}
+            playerRatings={classicPlayerRatings}
           />
         )}
       {settingsOpen && (
         <SettingsModal
           undoPreferred={undoPreferred}
           onlineSession={onlineSession}
-          localConsent={onlineSession ? localUndoConsent : undoPreferred}
-          remoteConsent={onlineSession ? remoteUndoConsent : false}
+          ranked={online.ranked}
+          localConsent={
+            onlineSession && !online.ranked
+              ? localUndoConsent
+              : undoPreferred
+          }
+          remoteConsent={
+            onlineSession && !online.ranked
+              ? remoteUndoConsent
+              : false
+          }
           onUndoPreferenceChange={changeUndoPreference}
           onClose={() => setSettingsOpen(false)}
         />

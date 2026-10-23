@@ -3,7 +3,7 @@ import schema from "../../supabase/schema.sql?raw";
 
 const socialSchema = schema.slice(
   schema.indexOf("-- Social identity"),
-  schema.indexOf("-- Ranked four-player"),
+  schema.indexOf("-- Ranked classic"),
 );
 
 describe("social schema privacy contract", () => {

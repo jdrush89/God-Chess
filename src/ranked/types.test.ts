@@ -40,22 +40,20 @@ describe("ranked response normalization", () => {
       match: {
         id: "match-1",
         roomCode: "ABCDE",
-        joinToken: "south-token",
-        seatTokens: {
-          north: "north-token",
-          south: "south-token",
-          center: "invalid-token",
+        joinToken: "white-token",
+        colorTokens: {
+          white: "white-token",
+          black: "black-token",
+          red: "invalid-token",
         },
-        seat: "south",
-        team: "team-a",
+        color: "white",
         host: true,
         participants: [
           {
             publicId: "gc-player1",
             displayName: "  Athena  ",
             portraitId: "artemis",
-            seat: "south",
-            team: "team-a",
+            color: "white",
             host: false,
             connected: true,
             rating: 1604.4,
@@ -63,8 +61,7 @@ describe("ranked response normalization", () => {
           {
             publicId: "gc-invalid",
             displayName: "Invalid",
-            seat: "center",
-            team: "team-a",
+            color: "red",
           },
         ],
       },
@@ -75,12 +72,11 @@ describe("ranked response normalization", () => {
       match: {
         id: "match-1",
         roomCode: "ABCDE",
-        seat: "south",
-        team: "team-a",
-        joinToken: "south-token",
-        seatTokens: {
-          north: "north-token",
-          south: "south-token",
+        color: "white",
+        joinToken: "white-token",
+        colorTokens: {
+          white: "white-token",
+          black: "black-token",
         },
         participants: [
           {
@@ -100,19 +96,18 @@ describe("ranked response normalization", () => {
       rating: { ...DEFAULT_RANKED_RATING, rating: 1540 },
       match: {
         id: "match-2",
-        joinToken: "west-token",
-        seat: "west",
-        team: "team-b",
+        joinToken: "black-token",
+        color: "black",
         host: false,
         participants: [],
-        winnerTeam: "team-b",
+        winnerColor: "black",
         resultReason: "disconnect",
         ratingChange: 40,
       },
     })).toMatchObject({
       phase: "completed",
       match: {
-        winnerTeam: "team-b",
+        winnerColor: "black",
         resultReason: "disconnect",
         ratingChange: 40,
         rating: { rating: 1540 },
@@ -122,7 +117,7 @@ describe("ranked response normalization", () => {
     expect(normalizeRankedQueueState({
       phase: "matched",
       rating: DEFAULT_RANKED_RATING,
-      match: { id: "missing-seat" },
+      match: { id: "missing-color" },
     })).toEqual({
       phase: "idle",
       loading: false,

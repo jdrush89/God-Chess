@@ -7,6 +7,7 @@ import {
 } from "./network";
 import {
   createProtocolMessage,
+  type ClassicRankedCredentials,
   type HostMessage,
   type OnlinePlayer,
   type ProtocolMessage,
@@ -54,12 +55,14 @@ export class MultiplayerPeer {
     roomCode: string,
     playerName: string,
     portraitId: AccountPortraitId = DEFAULT_ACCOUNT_PORTRAIT_ID,
+    ranked?: ClassicRankedCredentials,
   ) {
     await this.network.joinRoom(roomCode);
     this.network.sendToHost(createProtocolMessage("classic", "peer", {
       type: "join_request",
       playerName,
       portraitId,
+      ranked,
     }));
   }
 
