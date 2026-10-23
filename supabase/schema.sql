@@ -837,7 +837,7 @@ begin
 end;
 $$;
 
--- Ranked four-player 2v2 matchmaking and Glicko-2 ratings.
+-- Ranked classic 1v1 matchmaking and Glicko-2 ratings.
 create table if not exists public.ranked_queue (
   user_id uuid primary key references auth.users(id) on delete cascade,
   joined_at timestamptz not null default now(),
@@ -850,6 +850,8 @@ create table if not exists public.ranked_matches (
     check (status in ('matched', 'playing', 'completed', 'cancelled')),
   room_code text
     check (room_code is null or room_code ~ '^[A-Z2-9]{5}$'),
+  winner_color text check (winner_color is null or winner_color in ('white', 'black')),
+  -- Legacy 2v2 column retained so reapplying this schema is non-destructive.
   winner_team text check (winner_team is null or winner_team in ('team-a', 'team-b')),
   result_reason text
     check (result_reason is null or result_reason in ('game', 'disconnect', 'forfeit', 'draw')),
@@ -861,8 +863,10 @@ create table if not exists public.ranked_matches (
 create table if not exists public.ranked_match_players (
   match_id uuid not null references public.ranked_matches(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
-  seat text not null check (seat in ('north', 'east', 'south', 'west')),
-  team text not null check (team in ('team-a', 'team-b')),
+  color text check (color is null or color in ('white', 'black')),
+  -- Legacy 2v2 columns remain nullable after the one-time migration.
+  seat text check (seat is null or seat in ('north', 'east', 'south', 'west')),
+  team text check (team is null or team in ('team-a', 'team-b')),
   is_host boolean not null default false,
   join_token uuid not null default gen_random_uuid(),
   heartbeat_at timestamptz not null default now(),
@@ -881,10 +885,59 @@ alter table public.ranked_match_players
 create table if not exists public.ranked_result_reports (
   match_id uuid not null references public.ranked_matches(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
+  winner_color text check (winner_color is null or winner_color in ('white', 'black')),
+  -- Legacy 2v2 column retained for idempotent migration.
   winner_team text check (winner_team is null or winner_team in ('team-a', 'team-b')),
   created_at timestamptz not null default now(),
   primary key (match_id, user_id)
 );
+
+do $$
+declare
+  legacy_ranked_2v2 boolean;
+begin
+  select not exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'ranked_match_players'
+      and column_name = 'color'
+  )
+  into legacy_ranked_2v2;
+
+  alter table public.ranked_matches
+    add column if not exists winner_color text
+      check (winner_color is null or winner_color in ('white', 'black'));
+  alter table public.ranked_match_players
+    add column if not exists color text
+      check (color is null or color in ('white', 'black'));
+  alter table public.ranked_result_reports
+    add column if not exists winner_color text
+      check (winner_color is null or winner_color in ('white', 'black'));
+  alter table public.ranked_match_players
+    alter column seat drop not null,
+    alter column team drop not null;
+
+  if legacy_ranked_2v2 then
+    update public.ranked_matches
+    set
+      status = 'cancelled',
+      completed_at = coalesce(completed_at, now())
+    where status in ('matched', 'playing');
+    delete from public.ranked_queue;
+    update public.ranked_ratings
+    set
+      rating = 1500,
+      deviation = 350,
+      volatility = 0.06,
+      games_played = 0,
+      wins = 0,
+      losses = 0,
+      draws = 0,
+      updated_at = now();
+  end if;
+end;
+$$;
 
 create index if not exists ranked_queue_order
   on public.ranked_queue(joined_at, heartbeat_at);
@@ -894,6 +947,9 @@ create index if not exists ranked_match_players_heartbeat
   on public.ranked_match_players(match_id, heartbeat_at);
 create unique index if not exists ranked_match_players_join_token
   on public.ranked_match_players(join_token);
+create unique index if not exists ranked_match_players_color
+  on public.ranked_match_players(match_id, color)
+  where color is not null;
 
 alter table public.ranked_queue enable row level security;
 alter table public.ranked_matches enable row level security;
@@ -1054,7 +1110,7 @@ $$;
 
 create or replace function public.finalize_ranked_match(
   target_match_id uuid,
-  winning_team text,
+  winning_color text,
   finish_reason text
 )
 returns void
@@ -1071,8 +1127,9 @@ declare
   updated_rating double precision;
   updated_deviation double precision;
   updated_volatility double precision;
+  winner_color_value text := winning_color;
 begin
-  if winning_team is not null and winning_team not in ('team-a', 'team-b') then
+  if winner_color_value is not null and winner_color_value not in ('white', 'black') then
     raise exception 'Invalid ranked winner';
   end if;
   if finish_reason not in ('game', 'disconnect', 'forfeit', 'draw') then
@@ -1091,20 +1148,19 @@ begin
     select player.*
     from public.ranked_match_players player
     where player.match_id = target_match_id
-    order by player.seat
+    order by player.color
   loop
     select
-      avg(opponent.rating_before),
-      sqrt(sum(opponent.deviation_before * opponent.deviation_before)) /
-        greatest(1, count(*))
+      opponent.rating_before,
+      opponent.deviation_before
     into opponent_rating, opponent_deviation
     from public.ranked_match_players opponent
     where opponent.match_id = target_match_id
-      and opponent.team <> player_row.team;
+      and opponent.color <> player_row.color;
 
     score_value := case
-      when winning_team is null then 0.5
-      when player_row.team = winning_team then 1
+      when winner_color_value is null then 0.5
+      when player_row.color = winner_color_value then 1
       else 0
     end;
     select
@@ -1147,7 +1203,7 @@ begin
   update public.ranked_matches match
   set
     status = 'completed',
-    winner_team = winning_team,
+    winner_color = winner_color_value,
     result_reason = finish_reason,
     completed_at = now()
   where match.id = target_match_id;
@@ -1164,12 +1220,11 @@ declare
   queued_users uuid[];
   new_match_id uuid;
   queued_user uuid;
-  seat_names constant text[] := array['north', 'east', 'south', 'west'];
-  team_names constant text[] := array['team-a', 'team-b', 'team-a', 'team-b'];
+  color_names text[];
   player_index integer;
   rating_row public.ranked_ratings%rowtype;
 begin
-  perform pg_advisory_xact_lock(hashtext('god-chess-ranked-2v2'));
+  perform pg_advisory_xact_lock(hashtext('god-chess-ranked-1v1'));
   delete from public.ranked_queue queue
   where queue.heartbeat_at < now() - interval '45 seconds';
 
@@ -1186,17 +1241,22 @@ begin
         and match.status in ('matched', 'playing')
     )
     order by queue.joined_at
-    limit 4
+    limit 2
   ) candidate;
 
-  if coalesce(array_length(queued_users, 1), 0) < 4 then
+  if coalesce(array_length(queued_users, 1), 0) < 2 then
     return null;
   end if;
 
   insert into public.ranked_matches default values
   returning id into new_match_id;
 
-  for player_index in 1..4 loop
+  color_names := case
+    when random() < 0.5 then array['white', 'black']
+    else array['black', 'white']
+  end;
+
+  for player_index in 1..2 loop
     queued_user := queued_users[player_index];
     insert into public.ranked_ratings (user_id)
     values (queued_user)
@@ -1209,8 +1269,7 @@ begin
     insert into public.ranked_match_players(
       match_id,
       user_id,
-      seat,
-      team,
+      color,
       is_host,
       rating_before,
       deviation_before,
@@ -1219,8 +1278,7 @@ begin
     values (
       new_match_id,
       queued_user,
-      seat_names[player_index],
-      team_names[player_index],
+      color_names[player_index],
       player_index = 1,
       rating_row.rating,
       rating_row.deviation,
@@ -1307,17 +1365,14 @@ begin
       'publicId', profile.public_id,
       'displayName', profile.display_name,
       'portraitId', profile.portrait_id,
-      'seat', player.seat,
-      'team', player.team,
+      'color', player.color,
       'host', player.is_host,
       'connected', player.heartbeat_at >= now() - interval '2 minutes',
       'rating', player.rating_before
     )
-    order by case player.seat
-      when 'north' then 1
-      when 'east' then 2
-      when 'south' then 3
-      else 4
+    order by case player.color
+      when 'white' then 1
+      else 2
     end
   ), '[]'::jsonb)
   into participants_value
@@ -1341,19 +1396,18 @@ begin
       'id', selected_match.id,
       'roomCode', selected_match.room_code,
       'joinToken', local_player.join_token,
-      'seatTokens', case
+      'colorTokens', case
         when local_player.is_host then (
-          select jsonb_object_agg(player.seat, player.join_token::text)
+          select jsonb_object_agg(player.color, player.join_token::text)
           from public.ranked_match_players player
           where player.match_id = selected_match.id
         )
         else null
       end,
-      'seat', local_player.seat,
-      'team', local_player.team,
+      'color', local_player.color,
       'host', local_player.is_host,
       'participants', participants_value,
-      'winnerTeam', selected_match.winner_team,
+      'winnerColor', selected_match.winner_color,
       'resultReason', selected_match.result_reason,
       'ratingChange', local_player.rating_change
     )
@@ -1373,8 +1427,8 @@ as $$
 declare
   current_user_id uuid := auth.uid();
   selected_match_id uuid := target_match_id;
-  stale_teams text[];
-  stale_team text;
+  stale_colors text[];
+  stale_color text;
 begin
   if current_user_id is null then
     raise exception 'Authentication required';
@@ -1434,19 +1488,19 @@ begin
     where match.id = selected_match_id
       and match.status in ('matched', 'playing')
   ) then
-    select array_agg(distinct player.team)
-    into stale_teams
+    select array_agg(distinct player.color)
+    into stale_colors
     from public.ranked_match_players player
     where player.match_id = selected_match_id
       and player.heartbeat_at < now() - interval '2 minutes';
-    if coalesce(array_length(stale_teams, 1), 0) = 1 then
-      stale_team := stale_teams[1];
+    if coalesce(array_length(stale_colors, 1), 0) = 1 then
+      stale_color := stale_colors[1];
       perform public.finalize_ranked_match(
         selected_match_id,
-        case when stale_team = 'team-a' then 'team-b' else 'team-a' end,
+        case when stale_color = 'white' then 'black' else 'white' end,
         'disconnect'
       );
-    elsif coalesce(array_length(stale_teams, 1), 0) > 1 then
+    elsif coalesce(array_length(stale_colors, 1), 0) > 1 then
       update public.ranked_matches match
       set
         status = 'cancelled',
@@ -1480,7 +1534,7 @@ begin
   if current_user_id is null then
     raise exception 'Authentication required';
   end if;
-  perform pg_advisory_xact_lock(hashtext('god-chess-ranked-2v2'));
+  perform pg_advisory_xact_lock(hashtext('god-chess-ranked-1v1'));
   select player.match_id
   into active_match_id
   from public.ranked_match_players player
@@ -1522,7 +1576,7 @@ begin
   if auth.uid() is null then
     raise exception 'Authentication required';
   end if;
-  perform pg_advisory_xact_lock(hashtext('god-chess-ranked-2v2'));
+  perform pg_advisory_xact_lock(hashtext('god-chess-ranked-1v1'));
   delete from public.ranked_queue queue
   where queue.user_id = auth.uid();
   return public.ranked_payload(auth.uid(), null);
@@ -1570,7 +1624,7 @@ $$;
 
 create or replace function public.report_ranked_result(
   target_match_id uuid,
-  winning_team text default null
+  winning_color text default null
 )
 returns jsonb
 language plpgsql
@@ -1581,7 +1635,7 @@ declare
   agreed_result text;
   match_status text;
 begin
-  if winning_team is not null and winning_team not in ('team-a', 'team-b') then
+  if winning_color is not null and winning_color not in ('white', 'black') then
     raise exception 'Invalid ranked winner';
   end if;
   select match.status
@@ -1597,20 +1651,20 @@ begin
   ) then
     return public.ranked_status(target_match_id, true);
   end if;
-  insert into public.ranked_result_reports(match_id, user_id, winner_team)
-  values (target_match_id, auth.uid(), winning_team)
+  insert into public.ranked_result_reports(match_id, user_id, winner_color)
+  values (target_match_id, auth.uid(), winning_color)
   on conflict (match_id, user_id) do update
-    set winner_team = excluded.winner_team, created_at = now();
+    set winner_color = excluded.winner_color, created_at = now();
 
-  select coalesce(report.winner_team, 'draw')
+  select coalesce(report.winner_color, 'draw')
   into agreed_result
   from public.ranked_result_reports report
   join public.ranked_match_players player
     on player.match_id = report.match_id
     and player.user_id = report.user_id
   where report.match_id = target_match_id
-  group by coalesce(report.winner_team, 'draw')
-  having count(*) >= 3 or count(distinct player.team) = 2
+  group by coalesce(report.winner_color, 'draw')
+  having count(*) = 2
   order by count(*) desc
   limit 1;
   if agreed_result is not null then
@@ -1633,7 +1687,7 @@ security definer
 set search_path = public
 as $$
 declare
-  forfeiting_team text;
+  forfeiting_color text;
   match_status text;
 begin
   select match.status
@@ -1644,8 +1698,8 @@ begin
   if match_status is null or match_status not in ('matched', 'playing') then
     return public.ranked_payload(auth.uid(), target_match_id);
   end if;
-  select player.team
-  into forfeiting_team
+  select player.color
+  into forfeiting_color
   from public.ranked_match_players player
   where player.match_id = target_match_id
     and player.user_id = auth.uid()
@@ -1655,10 +1709,10 @@ begin
       where report.match_id = target_match_id
         and report.user_id = auth.uid()
     );
-  if forfeiting_team is not null then
+  if forfeiting_color is not null then
     perform public.finalize_ranked_match(
       target_match_id,
-      case when forfeiting_team = 'team-a' then 'team-b' else 'team-a' end,
+      case when forfeiting_color = 'white' then 'black' else 'white' end,
       'forfeit'
     );
   end if;

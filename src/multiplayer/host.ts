@@ -8,6 +8,7 @@ import {
 } from "./network";
 import {
   createProtocolMessage,
+  type ClassicRankedCredentials,
   type OnlinePlayer,
   type PeerMessage,
   type ProtocolMessage,
@@ -31,6 +32,13 @@ interface HostCallbacks {
 const remoteActionIsAllowed = (action: GameAction) =>
   !["load-game", "new-game", "restart"].includes(action.type);
 
+export interface ClassicRankedHostConfig {
+  matchId: string;
+  hostColor: Color;
+  guestColor: Color;
+  guestJoinToken: string;
+}
+
 export class MultiplayerHost {
   private network: MultiplayerTransport;
   private callbacks: HostCallbacks;
@@ -48,6 +56,7 @@ export class MultiplayerHost {
       new NetworkManager(networkCallbacks),
     private hostPortraitId: AccountPortraitId =
       DEFAULT_ACCOUNT_PORTRAIT_ID,
+    private ranked?: ClassicRankedHostConfig,
   ) {
     this.callbacks = callbacks;
     this.network = transportFactory({
@@ -55,7 +64,11 @@ export class MultiplayerHost {
       onPeerConnected: () => {},
       onPeerDisconnected: (peerId) => {
         if (this.guest?.id !== peerId) return;
-        this.guest = null;
+        if (this.ranked) {
+          this.guest = { ...this.guest, id: "" };
+        } else {
+          this.guest = null;
+        }
         this.guestUndoEnabled = false;
         this.publishUndoSettings();
         this.callbacks.onGuestLeft();
@@ -80,32 +93,37 @@ export class MultiplayerHost {
   startGame(state: GameState) {
     if (!this.guest) throw new Error("A second player must join before the game can start.");
     if (!state.onlineHostColor) throw new Error("The online game has no host color.");
+    if (this.ranked && state.onlineHostColor !== this.ranked.hostColor) {
+      throw new Error("The ranked game has the wrong host color.");
+    }
     this.started = true;
     this.hostColor = state.onlineHostColor;
-    this.network.broadcast(createProtocolMessage("classic", "host", {
+    this.sendToGuest({
       type: "game_start",
       state,
       hostColor: this.hostColor,
       guestColor: this.hostColor === "white" ? "black" : "white",
-    }));
+    });
     this.publishUndoSettings();
   }
 
   syncState(state: GameState) {
     if (!this.started) return;
-    this.network.broadcast(createProtocolMessage("classic", "host", {
+    this.sendToGuest({
       type: "state_sync",
       state,
-    }));
+    });
     this.publishUndoSettings();
   }
 
   setUndoConsent(enabled: boolean) {
+    if (this.ranked) return;
     this.hostUndoEnabled = enabled;
     this.publishUndoSettings();
   }
 
   requestUndo() {
+    if (this.ranked) return;
     if (!this.started || !this.hostUndoEnabled || !this.guestUndoEnabled) return;
     const next = this.callbacks.applyUndo();
     if (next) this.syncState(next);
@@ -130,11 +148,16 @@ export class MultiplayerHost {
     }
     if (this.guest?.id !== peerId || !this.started) return;
     if (payload.type === "undo_consent") {
+      if (this.ranked) return;
       this.guestUndoEnabled = payload.enabled;
       this.publishUndoSettings();
       return;
     }
     if (payload.type === "undo_request") {
+      if (this.ranked) {
+        this.syncState(this.callbacks.getState());
+        return;
+      }
       if (this.hostUndoEnabled && this.guestUndoEnabled) {
         const next = this.callbacks.applyUndo();
         if (next) this.syncState(next);
@@ -161,14 +184,21 @@ export class MultiplayerHost {
   }
 
   private handleJoin(peerId: string, message: Extract<PeerMessage, { type: "join_request" }>) {
-    if (this.started) {
+    if (this.ranked && !this.validRankedCredentials(message.ranked)) {
+      this.network.send(peerId, createProtocolMessage("classic", "host", {
+        type: "join_rejected",
+        reason: "Those ranked match credentials are invalid.",
+      }));
+      return;
+    }
+    if (this.started && !this.ranked) {
       this.network.send(peerId, createProtocolMessage("classic", "host", {
         type: "join_rejected",
         reason: "That game has already started.",
       }));
       return;
     }
-    if (this.guest && this.guest.id !== peerId) {
+    if (!this.ranked && this.guest && this.guest.id !== peerId) {
       this.network.send(peerId, createProtocolMessage("classic", "host", {
         type: "join_rejected",
         reason: "That room already has two players.",
@@ -195,22 +225,55 @@ export class MultiplayerHost {
       roomCode: this.roomCode,
     }));
     this.callbacks.onGuestJoined(this.guest);
+    if (this.started && this.ranked) {
+      const state = this.callbacks.getState();
+      this.sendToGuest({
+        type: "game_start",
+        state,
+        hostColor: this.ranked.hostColor,
+        guestColor: this.ranked.guestColor,
+      });
+      this.publishUndoSettings();
+    }
   }
 
   private publishUndoSettings() {
     const canUndo =
+      !this.ranked &&
       this.started &&
       this.hostUndoEnabled &&
       this.guestUndoEnabled &&
       this.callbacks.canUndo();
     this.callbacks.onUndoSettings(this.hostUndoEnabled, this.guestUndoEnabled, canUndo);
     if (this.started) {
-      this.network.broadcast(createProtocolMessage("classic", "host", {
+      this.sendToGuest({
         type: "undo_settings",
-        hostEnabled: this.hostUndoEnabled,
-        guestEnabled: this.guestUndoEnabled,
+        hostEnabled: this.ranked ? false : this.hostUndoEnabled,
+        guestEnabled: this.ranked ? false : this.guestUndoEnabled,
         canUndo,
-      }));
+      });
     }
+  }
+
+  private validRankedCredentials(
+    credentials?: ClassicRankedCredentials,
+  ) {
+    return Boolean(
+      this.ranked &&
+      credentials?.matchId === this.ranked.matchId &&
+      credentials.color === this.ranked.guestColor &&
+      credentials.joinToken === this.ranked.guestJoinToken,
+    );
+  }
+
+  private sendToGuest(
+    payload: Parameters<typeof createProtocolMessage<"classic", "host">>[2],
+  ) {
+    const message = createProtocolMessage("classic", "host", payload);
+    if (this.ranked && this.guest?.id) {
+      this.network.send(this.guest.id, message);
+      return;
+    }
+    this.network.broadcast(message);
   }
 }

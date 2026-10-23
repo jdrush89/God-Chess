@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import schema from "../../supabase/schema.sql?raw";
 
-const rankedSchema = schema.slice(schema.indexOf("-- Ranked four-player"));
+const rankedSchema = schema.slice(schema.indexOf("-- Ranked classic"));
 
 describe("ranked schema integrity contract", () => {
-  it("issues private seat credentials and only returns the roster to the host", () => {
+  it("issues private color credentials and only returns them to the host", () => {
     expect(rankedSchema).toContain(
       "join_token uuid not null default gen_random_uuid()",
     );
@@ -12,7 +12,7 @@ describe("ranked schema integrity contract", () => {
       "when local_player.is_host then (",
     );
     expect(rankedSchema).toContain(
-      "jsonb_object_agg(player.seat, player.join_token::text)",
+      "jsonb_object_agg(player.color, player.join_token::text)",
     );
   });
 
@@ -43,10 +43,10 @@ describe("ranked schema integrity contract", () => {
       ),
     );
     expect(leaveQueue).toContain(
-      "pg_advisory_xact_lock(hashtext('god-chess-ranked-2v2'))",
+      "pg_advisory_xact_lock(hashtext('god-chess-ranked-1v1'))",
     );
     expect(joinQueue).toContain(
-      "pg_advisory_xact_lock(hashtext('god-chess-ranked-2v2'))",
+      "pg_advisory_xact_lock(hashtext('god-chess-ranked-1v1'))",
     );
   });
 
@@ -64,7 +64,7 @@ describe("ranked schema integrity contract", () => {
     );
   });
 
-  it("protects submitted results from forfeits and accepts cross-team consensus", () => {
+  it("protects submitted results from forfeits and requires both players to agree", () => {
     const reportResult = rankedSchema.slice(
       rankedSchema.indexOf(
         "create or replace function public.report_ranked_result",
@@ -80,7 +80,7 @@ describe("ranked schema integrity contract", () => {
       rankedSchema.indexOf("revoke all on function public.glicko2_volatility_value"),
     );
     expect(reportResult).toContain(
-      "having count(*) >= 3 or count(distinct player.team) = 2",
+      "having count(*) = 2",
     );
     expect(reportResult).toContain("for update");
     expect(forfeit).toContain(

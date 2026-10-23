@@ -36,9 +36,8 @@ const matchedPayload = {
   match: {
     id: "match-1",
     roomCode: "ABCDE",
-    joinToken: "south-token",
-    seat: "south",
-    team: "team-a",
+    joinToken: "black-token",
+    color: "black",
     host: false,
     participants: [],
   },
@@ -101,5 +100,22 @@ describe("useRankedQueue", () => {
     expect(result.current[0].phase).toBe("idle");
     expect(result.current[0].loading).toBe(false);
     consoleError.mockRestore();
+  });
+
+  it("reports classic winners by color", async () => {
+    const { result } = renderHook(() => useRankedQueue(account));
+    await waitFor(() => expect(result.current[0].phase).toBe("matched"));
+
+    await act(async () => {
+      await result.current[1].reportResult("match-1", "white");
+    });
+
+    expect(supabaseHarness.rpc).toHaveBeenLastCalledWith(
+      "report_ranked_result",
+      {
+        target_match_id: "match-1",
+        winning_color: "white",
+      },
+    );
   });
 });

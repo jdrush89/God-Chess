@@ -188,6 +188,106 @@ describe("classic online protocol compatibility", () => {
     expect(onStateSync).not.toHaveBeenCalled();
   });
 
+  it("authenticates ranked seats, restores the guest, and disables undo", async () => {
+    let transport!: ClassicTransport;
+    const applyUndo = vi.fn();
+    const onGuestJoined = vi.fn();
+    const onGuestLeft = vi.fn();
+    const state = createGame(1, {
+      mode: "online",
+      hostName: "Host",
+      guestName: "Guest",
+    });
+    const host = new MultiplayerHost("Host", {
+      getState: () => state,
+      applyRemoteAction: () => state,
+      applyUndo,
+      canUndo: () => true,
+      onGuestJoined,
+      onGuestLeft,
+      onUndoSettings: vi.fn(),
+      onError: vi.fn(),
+    }, (callbacks) => {
+      transport = new ClassicTransport(callbacks);
+      return transport;
+    }, "artemis", {
+      matchId: "match-1",
+      hostColor: "white",
+      guestColor: "black",
+      guestJoinToken: "black-token",
+    });
+    await host.start();
+
+    transport.callbacks.onMessage("forged-peer", createProtocolMessage(
+      "classic",
+      "peer",
+      {
+        type: "join_request",
+        playerName: "Impostor",
+        ranked: {
+          matchId: "match-1",
+          color: "black",
+          joinToken: "wrong-token",
+        },
+      },
+    ));
+    expect(transport.sent.at(-1)?.message).toMatchObject({
+      payload: {
+        type: "join_rejected",
+        reason: "Those ranked match credentials are invalid.",
+      },
+    });
+
+    transport.callbacks.onMessage("guest-peer", createProtocolMessage(
+      "classic",
+      "peer",
+      {
+        type: "join_request",
+        playerName: "Guest",
+        ranked: {
+          matchId: "match-1",
+          color: "black",
+          joinToken: "black-token",
+        },
+      },
+    ));
+    host.startGame(state);
+    host.setUndoConsent(true);
+    transport.callbacks.onMessage("guest-peer", createProtocolMessage(
+      "classic",
+      "peer",
+      { type: "undo_consent", enabled: true },
+    ));
+    transport.callbacks.onMessage("guest-peer", createProtocolMessage(
+      "classic",
+      "peer",
+      { type: "undo_request" },
+    ));
+    expect(applyUndo).not.toHaveBeenCalled();
+
+    transport.callbacks.onPeerDisconnected("guest-peer", "connection-lost");
+    expect(onGuestLeft).toHaveBeenCalledOnce();
+    transport.callbacks.onMessage("restored-peer", createProtocolMessage(
+      "classic",
+      "peer",
+      {
+        type: "join_request",
+        playerName: "Guest",
+        ranked: {
+          matchId: "match-1",
+          color: "black",
+          joinToken: "black-token",
+        },
+      },
+    ));
+
+    expect(onGuestJoined).toHaveBeenCalledTimes(2);
+    expect(transport.sent.some(({ peerId, message }) =>
+      peerId === "restored-peer" &&
+      message.payload.type === "game_start"
+    )).toBe(true);
+  });
+
   it("rejects forged move-first actor metadata and accepts the exact guest turn", async () => {
     let transport!: ClassicTransport;
     let state = createGame(2, {

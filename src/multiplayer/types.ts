@@ -54,11 +54,18 @@ export interface OnlinePlayer {
   portraitId?: AccountPortraitId;
 }
 
+export interface ClassicRankedCredentials {
+  matchId: string;
+  color: Color;
+  joinToken: string;
+}
+
 export type PeerMessage =
   | {
     type: "join_request";
     playerName: string;
     portraitId?: AccountPortraitId;
+    ranked?: ClassicRankedCredentials;
   }
   | { type: "game_action"; action: GameAction }
   | { type: "undo_consent"; enabled: boolean }
@@ -478,17 +485,44 @@ const normalizeClassicPeerMessage = (value: unknown): PeerMessage | undefined =>
   if (!isRecord(value) || typeof value.type !== "string") return undefined;
   switch (value.type) {
     case "join_request":
-      return hasExactKeys(value, ["type", "playerName"], ["portraitId"]) &&
-          typeof value.playerName === "string" &&
-          value.playerName.length <= 128
-        ? {
-          type: "join_request",
-          playerName: value.playerName,
-          ...(value.portraitId !== undefined
-            ? { portraitId: normalizeAccountPortraitId(value.portraitId) }
-            : {}),
-        }
-        : undefined;
+      if (
+        !hasExactKeys(
+          value,
+          ["type", "playerName"],
+          ["portraitId", "ranked"],
+        ) ||
+        typeof value.playerName !== "string" ||
+        value.playerName.length > 128
+      ) return undefined;
+      if (value.ranked !== undefined) {
+        if (
+          !isRecord(value.ranked) ||
+          !hasExactKeys(
+            value.ranked,
+            ["matchId", "color", "joinToken"],
+          ) ||
+          !isBoundedString(value.ranked.matchId, 128) ||
+          !isColor(value.ranked.color) ||
+          !isBoundedString(value.ranked.joinToken, 256)
+        ) return undefined;
+      }
+      const ranked = value.ranked as Record<string, unknown> | undefined;
+      return {
+        type: "join_request",
+        playerName: value.playerName,
+        ...(value.portraitId !== undefined
+          ? { portraitId: normalizeAccountPortraitId(value.portraitId) }
+          : {}),
+        ...(ranked !== undefined
+          ? {
+            ranked: {
+              matchId: ranked.matchId as string,
+              color: ranked.color as Color,
+              joinToken: ranked.joinToken as string,
+            },
+          }
+          : {}),
+      };
     case "game_action": {
       if (!hasExactKeys(value, ["type", "action"])) return undefined;
       const action = normalizeGameAction(value.action);

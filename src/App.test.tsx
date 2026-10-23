@@ -1174,7 +1174,7 @@ describe("game startup", () => {
     );
 
     expect(screen.getByText("Games played")).toBeTruthy();
-    expect(screen.getByText("Ranked 2v2 rating")).toBeTruthy();
+    expect(screen.getByText("Ranked 1v1 rating")).toBeTruthy();
     expect(screen.getByText("1642")).toBeTruthy();
     expect(screen.getByText("11W · 5L · 2D")).toBeTruthy();
     expect(screen.getByText("Boards played")).toBeTruthy();
