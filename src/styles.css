@@ -919,9 +919,15 @@ span.move-target-dot {
 .grave-picker { padding: 13px; border-top: 1px solid var(--line); }
 .grave-picker > span { color: #65676e; font-size: 8px; font-weight: 700; letter-spacing: .17em; }
 .grave-picker > div { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
-.grave-picker button { width: 50px; padding: 5px; color: #ddd; background: #0d0f14; border: 1px solid var(--line); cursor: pointer; }
+.grave-picker button {
+  width: auto; min-width: 58px; padding: 7px 9px; box-sizing: border-box;
+  color: #ddd; background: #0d0f14; border: 1px solid var(--line); cursor: pointer;
+}
 .grave-picker .chess-piece { font-size: 28px; }
-.grave-picker small { display: block; color: #666; font-size: 7px; text-transform: uppercase; }
+.grave-picker small {
+  display: block; max-width: 100%; color: #777982; font-size: 7px; line-height: 1.25;
+  text-transform: uppercase; white-space: nowrap;
+}
 
 /* Drawers and modals */
 .history-drawer {

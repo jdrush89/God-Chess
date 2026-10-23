@@ -1196,6 +1196,34 @@ const allowedEnchantTypes = (level: number): PieceType[] =>
       ? ["pawn", "knight", "bishop", "rook"]
       : ["pawn", "knight", "bishop", "rook", "queen"];
 
+const leverageHireCells = (
+  state: ThreePlayerState,
+  destination: ThreePlayerCell,
+  level: number,
+) => threePlayerAdjacentCells(state, destination).filter((cell) => {
+  const target = state.board[cell];
+  if (
+    !target ||
+    !hostilePiece(state, target) ||
+    target.type === "king" ||
+    !allowedEnchantTypes(level).includes(target.type)
+  ) return false;
+  const extraCost = target.type === "rook" ? 1 : target.type === "queen" ? 2 : 0;
+  if (activePlayer(state).orbs.dark < extraCost) return false;
+  const hiredState = {
+    ...state,
+    board: {
+      ...state.board,
+      [cell]: {
+        ...target,
+        controller: state.activeSeat,
+        status: { ...target.status, hired: true },
+      },
+    },
+  };
+  return !threePlayerIsInCheck(hiredState, state.activeSeat);
+});
+
 const queensControlledBy = (
   state: ThreePlayerState,
   seat: ThreePlayerSeat,
@@ -1630,12 +1658,16 @@ const sourceTargets = (state: ThreePlayerState, cell: string): string[] => {
         )
       );
   }
+  const ignoreCheck = abilityId === "leverage";
   const options = piece.type === "knight" && piece.status.chargeUntil
     ? [
-      ...threePlayerLegalTargets(state, cell),
-      ...threePlayerLegalTargets(state, cell, { forceType: "rook" }),
+      ...threePlayerLegalTargets(state, cell, { ignoreCheck }),
+      ...threePlayerLegalTargets(state, cell, {
+        forceType: "rook",
+        ignoreCheck,
+      }),
     ]
-    : threePlayerLegalTargets(state, cell);
+    : threePlayerLegalTargets(state, cell, { ignoreCheck });
   let targets = [...new Set(options)];
   if (abilityId === "siphon") {
     targets = targets.filter((target) =>
@@ -1645,18 +1677,16 @@ const sourceTargets = (state: ThreePlayerState, cell: string): string[] => {
     );
   }
   if (abilityId === "leverage") {
-    targets = targets.filter((target) =>
-      threePlayerAdjacentCells(state, target).some((adjacent) => {
-        const hire = state.board[adjacent];
-        const extra = hire?.type === "rook"
-          ? 1
-          : hire?.type === "queen" ? 2 : 0;
-        return hostilePiece(state, hire) &&
-          hire.type !== "king" &&
-          allowedEnchantTypes(level).includes(hire.type) &&
-          activePlayer(state).orbs.dark >= extra;
-      })
-    );
+    targets = targets.filter((target) => {
+      const applied = threePlayerApplyMove(state, { from: cell, to: target });
+      const simulated = {
+        ...state,
+        board: applied.board,
+        castlingRights: applied.castlingRights,
+        enPassant: applied.enPassant,
+      };
+      return leverageHireCells(simulated, target, level).length > 0;
+    });
   }
   if (abilityId === "cull-the-weak") {
     targets = targets.filter((target) => {
@@ -2297,16 +2327,7 @@ const resolveMoveEffect = (
       step: "hire",
       movedPieceId: moving.id,
     };
-    state.legalCells = threePlayerAdjacentCells(state, to).filter((cell) => {
-      const target = state.board[cell];
-      const extra = target?.type === "rook"
-        ? 1
-        : target?.type === "queen" ? 2 : 0;
-      return hostilePiece(state, target) &&
-        target.type !== "king" &&
-        allowedEnchantTypes(level).includes(target.type) &&
-        activePlayer(state).orbs.dark >= extra;
-    });
+    state.legalCells = leverageHireCells(state, to, level);
     if (state.legalCells.length) {
       state.notice = "Choose an adjacent hostile piece to hire.";
       return "pending";

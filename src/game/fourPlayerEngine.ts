@@ -790,6 +790,37 @@ const hostilePiece = (state: FourPlayerState, piece: FourPlayerPiece | undefined
     seatsAreHostile(state.config, state.activeSeat, piece.controller),
   );
 
+const leverageHireTargets = (
+  state: FourPlayerState,
+  board: FourPlayerState["board"],
+  destination: Square,
+  level: number,
+) => fourPlayerAdjacentSquares(destination).filter((square) => {
+  const target = board[square];
+  if (
+    !target ||
+    !hostilePiece(state, target) ||
+    target.type === "king" ||
+    !allowedEnchantTypes(level).includes(target.type)
+  ) return false;
+  const extraCost = target.type === "rook" ? 1 : target.type === "queen" ? 2 : 0;
+  if (activePlayer(state).orbs.dark < extraCost) return false;
+  const hiredBoard = {
+    ...board,
+    [square]: {
+      ...target,
+      controller: state.activeSeat,
+      status: { ...target.status, hired: true },
+    },
+  };
+  return !fourPlayerIsInCheck(
+    hiredBoard,
+    state.activeSeat,
+    state.config,
+    state.bananas,
+  );
+});
+
 const alliedPiece = (state: FourPlayerState, piece: FourPlayerPiece | undefined) =>
   Boolean(
     piece?.controller &&
@@ -1427,15 +1458,10 @@ const sourceTargets = (state: FourPlayerState, square: Square): Square[] => {
       fourPlayerLegalTargets(state.board, square, state.config, {
         enPassant: state.enPassant,
         bananas: state.bananas,
+        ignoreCheck: true,
       }).filter((target) => {
         const board = fourPlayerApplyMove(state.board, { from: square, to: target }, state.enPassant).board;
-        return fourPlayerAdjacentSquares(target).some((adjacent) => {
-          const hire = board[adjacent];
-          if (!hostilePiece(state, hire) || hire.type === "king") return false;
-          if (!allowedEnchantTypes(level).includes(hire.type)) return false;
-          const extra = hire.type === "rook" ? 1 : hire.type === "queen" ? 2 : 0;
-          return activePlayer(state).orbs.dark >= extra;
-        });
+        return leverageHireTargets(state, board, target, level).length > 0;
       }),
     );
   }
@@ -2026,12 +2052,7 @@ const resolveMoveEffect = (
       step: "hire",
       movedPieceId: moving.id,
     };
-    state.legalTargets = fourPlayerAdjacentSquares(to).filter((square) => {
-      const target = state.board[square];
-      return hostilePiece(state, target) &&
-        target.type !== "king" &&
-        allowedEnchantTypes(level).includes(target.type);
-    });
+    state.legalTargets = leverageHireTargets(state, state.board, to, level);
     if (state.legalTargets.length) {
       state.notice = "Choose an adjacent hostile piece to hire.";
       return "pending";

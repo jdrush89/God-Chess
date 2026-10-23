@@ -1262,6 +1262,7 @@ const rageBreak = (playerName?: string) => {
     ["h8", piece("black-king", "king", "black")],
   );
   state.players.white.upgrades = { rage: 1 };
+  state.players.white.orbs.black = 3;
   return state;
 };
 
@@ -1311,6 +1312,7 @@ const enchantedRetreat = (playerName?: string) => {
     ["h8", piece("black-king", "king", "black")],
   );
   state.players.white.upgrades = { enchant: 2 };
+  state.rested = ["midas"];
   return state;
 };
 

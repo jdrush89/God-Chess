@@ -468,6 +468,37 @@ describe("game flow", () => {
       .toBe(Object.keys(state.board).length);
   });
 
+  it("allows a Leverage King move that becomes safe after hiring the attacker", () => {
+    let state = createGame(1);
+    state.phase = "play";
+    state.players.white.gods = ["midas"];
+    state.players.white.orbs.black = 4;
+    state.board = {
+      a1: testPiece("king", "white", "white-king"),
+      a3: testPiece("rook", "black", "black-rook"),
+      c2: testPiece("bishop", "black", "black-bishop"),
+      h8: testPiece("king", "black", "black-king"),
+    };
+
+    state = gameReducer(state, { type: "select-god", godId: "midas" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "leverage" });
+    state = gameReducer(state, { type: "square", square: "a1" });
+
+    expect(state.legalTargets).toContain("b1");
+    state = gameReducer(state, { type: "square", square: "b1" });
+    expect(state.pending?.step).toBe("hire");
+    expect(state.legalTargets).toEqual(["c2"]);
+
+    state = gameReducer(state, { type: "square", square: "c2" });
+    expect(state.board.b1).toMatchObject({ id: "white-king" });
+    expect(state.board.c2).toMatchObject({
+      id: "black-bishop",
+      controller: "white",
+      status: expect.objectContaining({ hired: true }),
+    });
+    expect(state.activeColor).toBe("black");
+  });
+
   it("previews and records an opponent upgrade with its god and ability names", () => {
     let state = createGame(1);
     (["ares", "medusa", "midas", "death", "artemis", "chiron"] as const).forEach((godId) => {
