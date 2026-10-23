@@ -2622,7 +2622,6 @@ function PlayMenu({
   savedGames,
   savesLoading,
   saveError,
-  account,
   accountControl,
   onBack,
   onOpenLocal,
@@ -2637,7 +2636,6 @@ function PlayMenu({
   savedGames: SavedGame[];
   savesLoading: boolean;
   saveError?: string;
-  account?: AccountProfile;
   accountControl: ReactNode;
   onBack: () => void;
   onOpenLocal: () => void;
@@ -2653,7 +2651,7 @@ function PlayMenu({
     ? "Loading saved games."
     : savedGames.length === 0
       ? "No saved games available."
-      : `${savedGames.length} ${account ? "cloud " : ""}saved game${savedGames.length === 1 ? "" : "s"} available.`;
+      : "Saved games available.";
   return (
     <SetupNavigationShell
       backLabel="Back to title"
@@ -3197,18 +3195,33 @@ export function FriendProfileScreen({
 function SavedGameLibrary({
   savedGames,
   savesLoading,
+  account,
   onLoad,
   onDelete,
   onDeleteAll,
 }: {
   savedGames: SavedGame[];
   savesLoading: boolean;
+  account?: AccountProfile;
   onLoad: (game: SavedGame) => void;
   onDelete: (id: string) => void;
   onDeleteAll: () => Promise<boolean>;
 }) {
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
+  const playerMarker = (
+    name: string,
+    fallback: ReactNode,
+  ) => account && (account.displayName === name || name === "Player 1")
+    ? (
+      <span className="saved-player-portrait">
+        <AccountPortrait
+          portraitId={account.portraitId}
+          alt={`${name}'s portrait`}
+        />
+      </span>
+    )
+    : fallback;
 
   const deleteAll = async () => {
     setDeletingAll(true);
@@ -3262,12 +3275,15 @@ function SavedGameLibrary({
                   const player = game.state.players[seat];
                   return (
                     <div className="saved-pantheon four-saved-pantheon" key={seat}>
-                      <span
-                        className="four-player-crest"
-                        style={{ "--seat-color": player.displayColor } as React.CSSProperties}
-                      >
-                        {seat[0].toUpperCase()}
-                      </span>
+                      {playerMarker(
+                        player.name,
+                        <span
+                          className="four-player-crest"
+                          style={{ "--seat-color": player.displayColor } as React.CSSProperties}
+                        >
+                          {seat[0].toUpperCase()}
+                        </span>,
+                      )}
                       <div>
                         <strong>{player.name}</strong>
                         <small>
@@ -3303,12 +3319,15 @@ function SavedGameLibrary({
                     const player = game.state.players[seat];
                     return (
                       <div className="saved-pantheon four-saved-pantheon" key={seat}>
-                        <span
-                          className="four-player-crest"
-                          style={{ "--seat-color": player.displayColor } as React.CSSProperties}
-                        >
-                          {seat[0].toUpperCase()}
-                        </span>
+                        {playerMarker(
+                          player.name,
+                          <span
+                            className="four-player-crest"
+                            style={{ "--seat-color": player.displayColor } as React.CSSProperties}
+                          >
+                            {seat[0].toUpperCase()}
+                          </span>,
+                        )}
                         <div>
                           <strong>{player.name}</strong>
                           <small>{seat} · {player.control.kind === "ai" ? `AI ${player.control.difficulty ?? 5}` : "Human"}</small>
@@ -3331,7 +3350,12 @@ function SavedGameLibrary({
                   })
                   : (["white", "black"] as const).map((color) => (
                 <div className="saved-pantheon" key={color}>
-                  <span className={`player-crest ${color}`}>{color[0].toUpperCase()}</span>
+                    {playerMarker(
+                      game.state.players[color].name,
+                      <span className={`player-crest ${color}`}>
+                        {color[0].toUpperCase()}
+                      </span>,
+                    )}
                   <div>
                     <strong>{game.state.players[color].name}</strong>
                     <small>{color}</small>
@@ -8388,7 +8412,6 @@ export default function App() {
         savedGames={savedGames}
         savesLoading={savesLoading || savesHydrating}
         saveError={saveError}
-        account={accountService.account}
         accountControl={renderAccountControl()}
         onBack={() => setStartView("menu")}
         onOpenLocal={() => openStartFlow("local", undefined, "play")}
@@ -8420,6 +8443,7 @@ export default function App() {
         <SavedGameLibrary
           savedGames={savedGames}
           savesLoading={savesLoading || savesHydrating}
+          account={accountService.account}
           onLoad={loadGame}
           onDelete={(id) => void deleteSavedGame(id)}
           onDeleteAll={deleteAllSavedGames}
