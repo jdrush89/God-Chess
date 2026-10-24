@@ -2651,7 +2651,7 @@ function PlayMenu({
     ? "Loading saved games."
     : savedGames.length === 0
       ? "No saved games available."
-      : "Saved games available.";
+      : undefined;
   return (
     <SetupNavigationShell
       backLabel="Back to title"
@@ -2696,15 +2696,17 @@ function PlayMenu({
           onClick={onOpenLoad}
           disabled={savesLoading || savedGames.length === 0}
           aria-label="Load"
-          aria-describedby="play-load-status"
+          aria-describedby={loadDescription ? "play-load-status" : undefined}
         >
           {savesLoading ? <LoaderCircle className="spin" size={30} /> : <History size={30} />}
           <strong>Load</strong>
         </button>
       </div>
-      <p className="play-load-status" id="play-load-status" role="status">
-        {loadDescription}
-      </p>
+      {loadDescription && (
+        <p className="play-load-status" id="play-load-status" role="status">
+          {loadDescription}
+        </p>
+      )}
       {saveError && <p className="main-menu-error" role="alert">{saveError}</p>}
     </SetupNavigationShell>
   );

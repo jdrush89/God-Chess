@@ -798,8 +798,7 @@ describe("game startup", () => {
     });
 
     await waitFor(() => expect(load.disabled).toBe(false));
-    expect(screen.getByText("Saved games available.")).toBeTruthy();
-    expect(screen.queryByText(/cloud saved games?/i)).toBeNull();
+    expect(screen.queryByText(/saved games? available/i)).toBeNull();
     fireEvent.click(load);
     expect(screen.getByRole("img", { name: /player 1's portrait/i }))
       .toBeTruthy();
