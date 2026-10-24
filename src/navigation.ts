@@ -20,7 +20,9 @@ export type PuzzleCategory =
   | PuzzleDifficulty
   | "daily"
   | "three-player"
-  | "challenges";
+  | "challenges"
+  | "custom"
+  | "marketplace";
 
 export interface AppNavigationRoute {
   startView: StartView;
@@ -37,6 +39,8 @@ const puzzleCategories = new Set<PuzzleCategory>([
   "hard",
   "three-player",
   "challenges",
+  "custom",
+  "marketplace",
 ]);
 
 const playerCount = (value: string | undefined): PlayerCount | undefined => {

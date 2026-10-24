@@ -414,11 +414,11 @@ security definer
 set search_path = public
 as $$
 declare
-  current_user_id uuid := auth.uid();
+  requesting_user_id uuid := auth.uid();
   target_user uuid;
   existing_request public.friend_requests%rowtype;
 begin
-  if current_user_id is null then
+  if requesting_user_id is null then
     raise exception 'Authentication required';
   end if;
   select id into target_user
@@ -598,7 +598,7 @@ begin
     expires_at
   )
   values (
-    current_user_id,
+    requesting_user_id,
     target_user,
     invite_variant,
     invite_player_count,
@@ -834,6 +834,302 @@ begin
   ) then
     alter publication supabase_realtime add table public.game_invitations;
   end if;
+end;
+$$;
+
+-- Player-created classic puzzle marketplace.
+create table if not exists public.custom_puzzles (
+  id uuid primary key default gen_random_uuid(),
+  creator_id uuid not null references auth.users(id) on delete cascade,
+  puzzle jsonb not null check (jsonb_typeof(puzzle) = 'object'),
+  solution_turns integer not null check (solution_turns between 1 and 10),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.custom_puzzle_completions (
+  puzzle_id uuid not null references public.custom_puzzles(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  turns_used integer not null check (turns_used between 1 and 10),
+  completed_at timestamptz not null default now(),
+  primary key (puzzle_id, user_id)
+);
+
+create index if not exists custom_puzzles_created
+  on public.custom_puzzles(created_at desc, id);
+create index if not exists custom_puzzles_creator
+  on public.custom_puzzles(creator_id, updated_at desc);
+create index if not exists custom_puzzle_completions_user
+  on public.custom_puzzle_completions(user_id, completed_at desc);
+
+alter table public.custom_puzzles enable row level security;
+alter table public.custom_puzzle_completions enable row level security;
+
+create or replace function public.publish_custom_puzzle(
+  puzzle_payload jsonb,
+  verified_turns integer,
+  target_puzzle_id uuid default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  current_user_id uuid := auth.uid();
+  published_id uuid;
+  title_value text;
+  objective_value text;
+  player_color_value text;
+  turn_limit_value integer;
+  color_value text;
+  god_count integer;
+  unique_god_count integer;
+  king_count integer;
+  piece_count integer;
+  unique_piece_id_count integer;
+begin
+  if current_user_id is null then
+    raise exception 'Sign in before uploading a puzzle.';
+  end if;
+  if puzzle_payload is null or jsonb_typeof(puzzle_payload) <> 'object' then
+    raise exception 'Puzzle payload must be an object.';
+  end if;
+
+  title_value := btrim(coalesce(puzzle_payload->>'title', ''));
+  objective_value := puzzle_payload->>'objective';
+  player_color_value := puzzle_payload->>'playerColor';
+  begin
+    turn_limit_value := (puzzle_payload->>'turnLimit')::integer;
+  exception when others then
+    raise exception 'Puzzle turn limit is invalid.';
+  end;
+
+  if char_length(title_value) not between 1 and 60 then
+    raise exception 'Puzzle title must be between 1 and 60 characters.';
+  end if;
+  if objective_value is null or
+      objective_value not in ('capture-king', 'escape-check') then
+    raise exception 'Puzzle objective is invalid.';
+  end if;
+  if player_color_value is null or
+      player_color_value not in ('white', 'black') then
+    raise exception 'Puzzle solver color is invalid.';
+  end if;
+  if turn_limit_value is null or turn_limit_value not between 1 and 10 then
+    raise exception 'Puzzle turn limit must be between 1 and 10.';
+  end if;
+  if objective_value = 'escape-check' and turn_limit_value <> 1 then
+    raise exception 'Escape-check puzzles must use one player turn.';
+  end if;
+  if verified_turns is null or
+      verified_turns not between 1 and turn_limit_value then
+    raise exception 'Puzzle verification is outside the configured turn limit.';
+  end if;
+  if jsonb_typeof(puzzle_payload->'board') is distinct from 'object' or
+      jsonb_typeof(puzzle_payload->'players') is distinct from 'object' then
+    raise exception 'Puzzle board and players are required.';
+  end if;
+  if exists (
+    select 1
+    from jsonb_each(puzzle_payload->'board') square
+    where square.key !~ '^[a-h][1-8]$'
+      or jsonb_typeof(square.value) <> 'object'
+      or coalesce(square.value->>'type', '') not in (
+        'king', 'queen', 'rook', 'bishop', 'knight', 'pawn'
+      )
+      or coalesce(square.value->>'color', '') not in ('white', 'black')
+      or btrim(coalesce(square.value->>'id', '')) = ''
+  ) then
+    raise exception 'Puzzle board contains an invalid piece.';
+  end if;
+  select count(*), count(distinct square.value->>'id')
+  into piece_count, unique_piece_id_count
+  from jsonb_each(puzzle_payload->'board') square;
+  if piece_count <> unique_piece_id_count then
+    raise exception 'Every puzzle piece must have a unique ID.';
+  end if;
+
+  foreach color_value in array array['white', 'black']
+  loop
+    if jsonb_typeof(puzzle_payload->'players'->color_value->'gods') is distinct from 'array' or
+        jsonb_typeof(puzzle_payload->'players'->color_value->'orbs') is distinct from 'object' then
+      raise exception 'Each player needs gods and orb counts.';
+    end if;
+    select count(*), count(distinct god_id)
+    into god_count, unique_god_count
+    from jsonb_array_elements_text(
+      puzzle_payload->'players'->color_value->'gods'
+    ) god(god_id)
+    where god_id in (
+      'quetzacoatl', 'chiron', 'anubis', 'artemis', 'teles', 'death',
+      'medusa', 'ares', 'midas', 'leonidas', 'kangus', 'salem'
+    );
+    if god_count <> 3 or unique_god_count <> 3 then
+      raise exception 'Each player must have three unique gods.';
+    end if;
+    if not (
+      coalesce(puzzle_payload->'players'->color_value->'orbs'->>'white' ~ '^[0-9]+$', false) and
+      coalesce(puzzle_payload->'players'->color_value->'orbs'->>'black' ~ '^[0-9]+$', false) and
+      (puzzle_payload->'players'->color_value->'orbs'->>'white')::integer between 0 and 20 and
+      (puzzle_payload->'players'->color_value->'orbs'->>'black')::integer between 0 and 20
+    ) then
+      raise exception 'Orb counts must be between 0 and 20.';
+    end if;
+    select count(*)
+    into king_count
+    from jsonb_each(puzzle_payload->'board') square
+    where square.value->>'type' = 'king'
+      and square.value->>'color' = color_value;
+    if king_count <> 1 then
+      raise exception 'Place exactly one % King.', color_value;
+    end if;
+  end loop;
+
+  if target_puzzle_id is null then
+    insert into public.custom_puzzles(
+      creator_id,
+      puzzle,
+      solution_turns
+    )
+    values (
+      current_user_id,
+      puzzle_payload,
+      verified_turns
+    )
+    returning id into published_id;
+  else
+    update public.custom_puzzles
+    set puzzle = puzzle_payload,
+        solution_turns = verified_turns,
+        updated_at = now()
+    where id = target_puzzle_id
+      and creator_id = requesting_user_id
+    returning id into published_id;
+    if published_id is null then
+      raise exception 'The puzzle could not be updated.';
+    end if;
+    delete from public.custom_puzzle_completions
+    where puzzle_id = published_id;
+  end if;
+
+  return published_id;
+end;
+$$;
+
+create or replace function public.custom_puzzle_marketplace(
+  friends_only boolean default false
+)
+returns jsonb
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  with visible as (
+    select
+      puzzle.id,
+      puzzle.creator_id,
+      puzzle.puzzle,
+      puzzle.created_at,
+      profile.public_id,
+      profile.display_name,
+      profile.portrait_id
+    from public.custom_puzzles puzzle
+    join public.profiles profile on profile.id = puzzle.creator_id
+    where not friends_only
+      or public.are_friends(auth.uid(), puzzle.creator_id)
+    order by puzzle.created_at desc, puzzle.id
+    limit 100
+  ),
+  entries as (
+    select
+      visible.created_at,
+      visible.id,
+      jsonb_build_object(
+        'id', visible.id,
+        'creatorPublicId', visible.public_id,
+        'creatorDisplayName', visible.display_name,
+        'creatorPortraitId', visible.portrait_id,
+        'puzzle', visible.puzzle,
+        'createdAt', visible.created_at,
+        'completedByMe', exists (
+          select 1
+          from public.custom_puzzle_completions completion
+          where completion.puzzle_id = visible.id
+            and completion.user_id = auth.uid()
+        ),
+        'ownedByMe', visible.creator_id = auth.uid(),
+        'friendCompletions', case
+          when visible.creator_id = auth.uid() then coalesce((
+            select jsonb_agg(
+              jsonb_build_object(
+                'publicId', friend.public_id,
+                'displayName', friend.display_name,
+                'portraitId', friend.portrait_id,
+                'completedAt', completion.completed_at
+              )
+              order by completion.completed_at desc, friend.public_id
+            )
+            from public.custom_puzzle_completions completion
+            join public.profiles friend on friend.id = completion.user_id
+            where completion.puzzle_id = visible.id
+              and public.are_friends(auth.uid(), completion.user_id)
+          ), '[]'::jsonb)
+          else '[]'::jsonb
+        end
+      ) as entry
+    from visible
+  )
+  select coalesce(
+    jsonb_agg(entry order by created_at desc, id),
+    '[]'::jsonb
+  )
+  from entries;
+$$;
+
+create or replace function public.record_custom_puzzle_completion(
+  target_puzzle_id uuid,
+  turns_used integer
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  requesting_user_id uuid := auth.uid();
+  allowed_turns integer;
+begin
+  if requesting_user_id is null then
+    raise exception 'Sign in to record puzzle completions.';
+  end if;
+  select (puzzle->>'turnLimit')::integer
+  into allowed_turns
+  from public.custom_puzzles
+  where id = target_puzzle_id;
+  if allowed_turns is null then
+    raise exception 'Puzzle not found.';
+  end if;
+  if turns_used not between 1 and allowed_turns then
+    raise exception 'Completion is outside the puzzle turn limit.';
+  end if;
+  insert into public.custom_puzzle_completions(
+    puzzle_id,
+    user_id,
+    turns_used
+  )
+  values (
+    target_puzzle_id,
+    requesting_user_id,
+    turns_used
+  )
+  on conflict (puzzle_id, user_id) do update
+  set turns_used = least(
+        public.custom_puzzle_completions.turns_used,
+        excluded.turns_used
+      ),
+      completed_at = now();
 end;
 $$;
 
@@ -1807,6 +2103,9 @@ revoke all on function public.publish_ranked_room(uuid, text) from public;
 revoke all on function public.report_ranked_result(uuid, text) from public;
 revoke all on function public.forfeit_ranked_match(uuid) from public;
 revoke all on function public.ranked_leaderboard() from public;
+revoke all on function public.publish_custom_puzzle(jsonb, integer, uuid) from public;
+revoke all on function public.custom_puzzle_marketplace(boolean) from public;
+revoke all on function public.record_custom_puzzle_completion(uuid, integer) from public;
 
 grant execute on function public.ranked_status(uuid, boolean) to authenticated;
 grant execute on function public.join_ranked_queue() to authenticated;
@@ -1815,3 +2114,6 @@ grant execute on function public.publish_ranked_room(uuid, text) to authenticate
 grant execute on function public.report_ranked_result(uuid, text) to authenticated;
 grant execute on function public.forfeit_ranked_match(uuid) to authenticated;
 grant execute on function public.ranked_leaderboard() to anon, authenticated;
+grant execute on function public.publish_custom_puzzle(jsonb, integer, uuid) to authenticated;
+grant execute on function public.custom_puzzle_marketplace(boolean) to anon, authenticated;
+grant execute on function public.record_custom_puzzle_completion(uuid, integer) to authenticated;
