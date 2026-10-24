@@ -24,6 +24,12 @@ export interface RankedParticipant {
   rating: number;
 }
 
+export interface RankedLeaderboardEntry extends RankedRating {
+  publicId: string;
+  displayName: string;
+  portraitId: AccountPortraitId;
+}
+
 export type RankedMatchPhase =
   | "matched"
   | "playing"
@@ -92,6 +98,25 @@ export const normalizeRankedRating = (value: unknown): RankedRating => {
     losses: Math.max(0, Math.trunc(finite(value.losses, 0))),
     draws: Math.max(0, Math.trunc(finite(value.draws, 0))),
   };
+};
+
+export const normalizeRankedLeaderboard = (
+  value: unknown,
+): RankedLeaderboardEntry[] => {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 100).flatMap((entry) => {
+    if (
+      !isRecord(entry) ||
+      typeof entry.publicId !== "string" ||
+      typeof entry.displayName !== "string"
+    ) return [];
+    return [{
+      publicId: entry.publicId,
+      displayName: entry.displayName.trim().slice(0, 24) || "Player",
+      portraitId: normalizeAccountPortraitId(entry.portraitId),
+      ...normalizeRankedRating(entry),
+    }];
+  });
 };
 
 const normalizeParticipant = (

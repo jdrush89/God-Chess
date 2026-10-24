@@ -950,11 +950,70 @@ create unique index if not exists ranked_match_players_join_token
 create unique index if not exists ranked_match_players_color
   on public.ranked_match_players(match_id, color)
   where color is not null;
+create index if not exists ranked_ratings_leaderboard
+  on public.ranked_ratings(rating desc, deviation asc, games_played desc)
+  where games_played > 0;
 
 alter table public.ranked_queue enable row level security;
 alter table public.ranked_matches enable row level security;
 alter table public.ranked_match_players enable row level security;
 alter table public.ranked_result_reports enable row level security;
+
+create or replace function public.ranked_leaderboard()
+returns jsonb
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  with leaders as (
+    select
+      profile.public_id,
+      profile.display_name,
+      profile.portrait_id,
+      rating.rating,
+      rating.deviation,
+      rating.volatility,
+      rating.games_played,
+      rating.wins,
+      rating.losses,
+      rating.draws
+    from public.ranked_ratings rating
+    join public.profiles profile on profile.id = rating.user_id
+    where rating.games_played > 0
+    order by
+      rating.rating desc,
+      rating.deviation asc,
+      rating.games_played desc,
+      lower(profile.display_name),
+      profile.public_id
+    limit 100
+  )
+  select coalesce(
+    jsonb_agg(
+      jsonb_build_object(
+        'publicId', leader.public_id,
+        'displayName', leader.display_name,
+        'portraitId', leader.portrait_id,
+        'rating', leader.rating,
+        'deviation', leader.deviation,
+        'volatility', leader.volatility,
+        'gamesPlayed', leader.games_played,
+        'wins', leader.wins,
+        'losses', leader.losses,
+        'draws', leader.draws
+      )
+      order by
+        leader.rating desc,
+        leader.deviation asc,
+        leader.games_played desc,
+        lower(leader.display_name),
+        leader.public_id
+    ),
+    '[]'::jsonb
+  )
+  from leaders leader;
+$$;
 
 create or replace function public.glicko2_volatility_value(
   x double precision,
@@ -1747,6 +1806,7 @@ revoke all on function public.leave_ranked_queue() from public;
 revoke all on function public.publish_ranked_room(uuid, text) from public;
 revoke all on function public.report_ranked_result(uuid, text) from public;
 revoke all on function public.forfeit_ranked_match(uuid) from public;
+revoke all on function public.ranked_leaderboard() from public;
 
 grant execute on function public.ranked_status(uuid, boolean) to authenticated;
 grant execute on function public.join_ranked_queue() to authenticated;
@@ -1754,3 +1814,4 @@ grant execute on function public.leave_ranked_queue() to authenticated;
 grant execute on function public.publish_ranked_room(uuid, text) to authenticated;
 grant execute on function public.report_ranked_result(uuid, text) to authenticated;
 grant execute on function public.forfeit_ranked_match(uuid) to authenticated;
+grant execute on function public.ranked_leaderboard() to anon, authenticated;

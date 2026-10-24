@@ -64,6 +64,22 @@ const aiHarness = vi.hoisted(() => ({
   calls: 0,
 }));
 
+const rankedLeaderboardHarness = vi.hoisted(() => ({
+  refresh: vi.fn(),
+}));
+
+vi.mock("./ranked/useRankedLeaderboard", () => ({
+  useRankedLeaderboard: () => [
+    {
+      loading: false,
+      entries: [],
+    },
+    {
+      refresh: rankedLeaderboardHarness.refresh,
+    },
+  ],
+}));
+
 vi.mock("./multiplayer/useThreePlayerOnlineGame", async () => {
   const React = await import("react");
   return {
@@ -510,6 +526,7 @@ beforeEach(() => {
   threeOnlineHarness.disconnects = 0;
   aiHarness.plan = undefined;
   aiHarness.calls = 0;
+  rankedLeaderboardHarness.refresh.mockClear();
   FakeClassicAiWorker.instances = [];
 });
 
@@ -1359,6 +1376,11 @@ describe("game startup", () => {
   it("routes Online player counts to Host/Join and Puzzles directly", () => {
     render(<App />);
     openPlayOption("Online");
+    fireEvent.click(screen.getByRole("button", { name: /leaderboard/i }));
+    expect(screen.getByRole("heading", { name: /divine leaderboard/i }))
+      .toBeTruthy();
+    expect(screen.getByText(/no rated players yet/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /back to online/i }));
     for (const playerCount of [2, 3, 4]) {
       fireEvent.click(screen.getByRole("button", { name: new RegExp(`^${playerCount} player$`, "i") }));
       expect(screen.getByText(`ONLINE · ${playerCount} PLAYER`)).toBeTruthy();
