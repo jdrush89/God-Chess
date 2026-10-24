@@ -285,6 +285,7 @@ import { ThreePlayerSetup } from "./threePlayer/ThreePlayerSetup";
 import { SetupNavigationShell } from "./SetupNavigationShell";
 import { AbilityRules, LevelSelector } from "./UpgradePreview";
 import { RankedQueuePanel } from "./ranked/RankedQueuePanel";
+import { RankedLeaderboardPanel } from "./ranked/RankedLeaderboardPanel";
 import { useRankedQueue } from "./ranked/useRankedQueue";
 import {
   roundedRankedRating,
@@ -3443,11 +3444,13 @@ function PlayerCountChooser({
   category,
   onSelect,
   onRanked,
+  onLeaderboard,
   rankedAvailable,
 }: {
   category: StartCategory;
   onSelect: (playerCount: PlayerCount) => void;
   onRanked?: () => void;
+  onLeaderboard?: () => void;
   rankedAvailable?: boolean;
 }) {
   return (
@@ -3463,15 +3466,22 @@ function PlayerCountChooser({
       </div>
       <div className="player-count-grid" aria-label={`${category} player count`}>
         {category === "online" && (
-          <button
-            className="ranked-mode-button"
-            disabled={!rankedAvailable}
-            onClick={onRanked}
-          >
-            <Trophy size={34} />
-            <strong>Ranked 1v1</strong>
-            <small>{rankedAvailable ? "Automatic matchmaking" : "Sign in required"}</small>
-          </button>
+          <>
+            <button
+              className="ranked-mode-button"
+              disabled={!rankedAvailable}
+              onClick={onRanked}
+            >
+              <Trophy size={34} />
+              <strong>Ranked 1v1</strong>
+              <small>{rankedAvailable ? "Automatic matchmaking" : "Sign in required"}</small>
+            </button>
+            <button onClick={onLeaderboard}>
+              <Crown size={34} />
+              <strong>Leaderboard</strong>
+              <small>Top 100 Ranked players</small>
+            </button>
+          </>
         )}
         {([2, 3, 4] as const).map((playerCount) => (
           <button
@@ -3581,6 +3591,7 @@ function StartGamePrompt({
   const [onlineAction, setOnlineAction] = useState<"host" | "join">("host");
   const [playerName, setPlayerName] = useState(defaultPlayerName || "Player");
   const [roomCode, setRoomCode] = useState("");
+  const [leaderboardOpen, setLeaderboardOpen] = useState(false);
   const simulationKeyCount = useRef(0);
   const pendingInviteIds = (variant: GameInvite["variant"], code?: string) =>
     social?.sentInvites
@@ -3590,6 +3601,10 @@ function StartGamePrompt({
       .map((invite) => invite.recipientPublicId) ?? [];
 
   const back = () => {
+    if (leaderboardOpen) {
+      setLeaderboardOpen(false);
+      return;
+    }
     if (
       ranked.phase === "queued" ||
       ranked.phase === "matched" ||
@@ -3606,15 +3621,21 @@ function StartGamePrompt({
     onDisconnect();
     onCancel();
   };
+  const onlineStage = category === "online" &&
+    (Boolean(playerCount) || leaderboardOpen);
 
   return (
     <SetupNavigationShell
-      backLabel={playerCount ? `Back to ${category}` : "Back to Play"}
+      backLabel={leaderboardOpen
+        ? "Back to Online"
+        : playerCount
+          ? `Back to ${category}`
+          : "Back to Play"}
       onBack={back}
       headerAction={accountControl}
-      contentClassName={category === "online" && playerCount ? "online-stage" : ""}
+      contentClassName={onlineStage ? "online-stage" : ""}
     >
-      <section className={`start-game-content ${category === "online" && playerCount ? "online-stage" : ""}`}>
+      <section className={`start-game-content ${onlineStage ? "online-stage" : ""}`}>
         {category === "online" && ranked.phase !== "idle" ? (
           <RankedQueuePanel
             state={ranked}
@@ -3623,23 +3644,34 @@ function StartGamePrompt({
             onLeave={onLeaveRanked}
             onReset={onResetRanked}
           />
+        ) : category === "online" && leaderboardOpen ? (
+          <RankedLeaderboardPanel />
         ) : !playerCount ? (
           <PlayerCountChooser
             category={category}
             rankedAvailable={Boolean(defaultPlayerName)}
-            onRanked={onStartRanked}
+            onRanked={() => {
+              setLeaderboardOpen(false);
+              onStartRanked();
+            }}
+            onLeaderboard={() => {
+              onDisconnect();
+              setLeaderboardOpen(true);
+            }}
             onSelect={(count) => {
-            onDisconnect();
-            if (category === "local" && count === 3) {
-              onOpenThreePlayer();
-              return;
-            }
-            if (category === "local" && count === 4) {
-              onOpenFourPlayer();
-              return;
-            }
-            setPlayerCount(count);
-          }} />
+              onDisconnect();
+              setLeaderboardOpen(false);
+              if (category === "local" && count === 3) {
+                onOpenThreePlayer();
+                return;
+              }
+              if (category === "local" && count === 4) {
+                onOpenFourPlayer();
+                return;
+              }
+              setPlayerCount(count);
+            }}
+          />
         ) : category === "local" ? (
           playerCount === 2 ? (
             <>

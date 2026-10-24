@@ -125,4 +125,22 @@ describe("ranked schema integrity contract", () => {
       .toBeLessThan(status.indexOf("update public.ranked_match_players player"));
     expect(status).toContain("for update");
   });
+
+  it("exposes only the top 100 players with completed ranked games", () => {
+    const leaderboard = rankedSchema.slice(
+      rankedSchema.indexOf(
+        "create or replace function public.ranked_leaderboard",
+      ),
+      rankedSchema.indexOf(
+        "create or replace function public.glicko2_volatility_value",
+      ),
+    );
+    expect(leaderboard).toContain("security definer");
+    expect(leaderboard).toContain("where rating.games_played > 0");
+    expect(leaderboard).toContain("rating.rating desc");
+    expect(leaderboard).toContain("limit 100");
+    expect(rankedSchema).toContain(
+      "grant execute on function public.ranked_leaderboard() to anon, authenticated",
+    );
+  });
 });
