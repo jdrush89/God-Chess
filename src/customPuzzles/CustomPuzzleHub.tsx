@@ -97,6 +97,19 @@ const createPiece = (
 const cloneDraft = (draft: CustomPuzzleDraft): CustomPuzzleDraft =>
   structuredClone(draft);
 
+const setPieceDragImage = (
+  event: DragEvent<HTMLElement>,
+  type: PieceType,
+  color: Color,
+) => {
+  const preview = document.createElement("span");
+  preview.className = `custom-piece-symbol ${color} custom-piece-drag-image`;
+  preview.textContent = PIECE_SYMBOLS[color][type];
+  document.body.append(preview);
+  event.dataTransfer.setDragImage(preview, 28, 28);
+  window.requestAnimationFrame(() => preview.remove());
+};
+
 const puzzleObjectiveLabel = (puzzle: CustomPuzzleDraft | CustomPuzzleMarketplaceEntry["puzzle"]) =>
   puzzle.objective === "capture-king"
     ? `Capture the opposing King in ${puzzle.turnLimit} turn${puzzle.turnLimit === 1 ? "" : "s"}`
@@ -473,6 +486,7 @@ export function CustomPuzzleHub({
                       onDragStart={(event) => {
                         event.dataTransfer.setData("application/god-chess-piece", pieceType);
                         event.dataTransfer.setData("application/god-chess-color", pieceColor);
+                        setPieceDragImage(event, pieceType, pieceColor);
                       }}
                       onClick={() => {
                         setTool(pieceType);
@@ -523,6 +537,7 @@ export function CustomPuzzleHub({
                           draggable
                           onDragStart={(event) => {
                             event.dataTransfer.setData("application/god-chess-square", square);
+                            setPieceDragImage(event, piece.type, piece.color);
                           }}
                         >
                           {PIECE_SYMBOLS[piece.color][piece.type]}

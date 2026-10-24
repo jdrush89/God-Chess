@@ -3697,6 +3697,7 @@ span.move-target-dot {
   position: relative;
   width: min(1180px, 100%);
   margin: 0 auto;
+  padding-top: 64px;
 }
 
 .custom-puzzle-shell > h1 {
@@ -3969,15 +3970,35 @@ span.move-target-dot {
   font-size: 30px;
 }
 
+.custom-piece-drag-image {
+  position: fixed;
+  top: -100px;
+  left: -100px;
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  font-size: 50px;
+  pointer-events: none;
+  filter: drop-shadow(0 0.6rem 0.8rem rgb(0 0 0 / 45%));
+}
+
 .custom-editor-board {
   display: grid;
-  grid-template-columns: repeat(8, 1fr);
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-template-rows: repeat(8, minmax(0, 1fr));
   width: min(100%, 680px);
   aspect-ratio: 1;
+  box-sizing: border-box;
+  padding: 11px;
   overflow: hidden;
-  border: 6px solid #382d23;
-  border-radius: 6px;
-  box-shadow: 0 22px 52px rgba(0,0,0,.4);
+  background: linear-gradient(135deg, #463a2b, #191b20 42%, #59462c);
+  border: 1px solid #77603b;
+  border-radius: 2px;
+  box-shadow:
+    0 28px 70px rgba(0,0,0,.38),
+    inset 0 0 0 3px #111319;
 }
 
 .custom-editor-square {
@@ -3985,12 +4006,14 @@ span.move-target-dot {
   display: grid;
   place-items: center;
   min-width: 0;
+  min-height: 0;
+  padding: 0;
   border: 0;
   border-radius: 0;
 }
 
-.custom-editor-square.light { background: #d9c5a2; }
-.custom-editor-square.dark { background: #755c46; }
+.custom-editor-square.light { background: #c7b99e; }
+.custom-editor-square.dark { background: #504c49; }
 .custom-editor-square:hover { box-shadow: inset 0 0 0 3px rgba(78, 147, 238, .62); }
 .custom-editor-square.selected {
   box-shadow: inset 0 0 0 4px #4e93ee;
@@ -4106,6 +4129,13 @@ span.move-target-dot {
   gap: 8px;
 }
 
+.custom-editor-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
 .custom-marketplace-creator > span {
   flex-direction: column;
   align-items: flex-start;
@@ -4159,6 +4189,10 @@ span.move-target-dot {
     padding: 24px 12px 48px;
   }
 
+  .custom-puzzle-shell {
+    padding-top: 58px;
+  }
+
   .custom-puzzle-section-heading {
     align-items: flex-start;
     flex-direction: column;
@@ -4173,6 +4207,6 @@ span.move-target-dot {
   }
 
   .custom-editor-board {
-    border-width: 4px;
+    padding: 7px;
   }
 }
