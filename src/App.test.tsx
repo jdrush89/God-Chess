@@ -556,6 +556,23 @@ describe("game startup", () => {
     fireEvent.click(container.querySelector('[data-square="e5"]')!);
     expect(container.querySelector('[data-square="d4"]')?.textContent).not.toContain("♘");
     expect(container.querySelector('[data-square="e5"]')?.textContent).toContain("♘");
+    const setDragImage = vi.fn();
+    fireEvent.dragStart(
+      container.querySelector('[data-square="e5"] .custom-piece-symbol')!,
+      {
+        dataTransfer: {
+          setData: vi.fn(),
+          setDragImage,
+        },
+      },
+    );
+    expect(setDragImage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        className: expect.stringContaining("custom-piece-drag-image"),
+      }),
+      28,
+      28,
+    );
 
     fireEvent.click(screen.getByRole("button", { name: /save draft/i }));
     const stored = JSON.parse(
