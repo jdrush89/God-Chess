@@ -273,6 +273,7 @@ export interface GameState {
   puzzlePlayerTurnsRemaining?: number;
   puzzleFailed?: boolean;
   puzzleEscapeAbilityId?: string;
+  puzzleEscapeAny?: boolean;
   puzzleSolved?: boolean;
   challengeId?: ChallengeId;
   challengeGodUses?: Record<Color, Partial<Record<GodId, number>>>;

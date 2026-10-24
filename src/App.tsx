@@ -43,6 +43,7 @@ import {
   Skull,
   Snowflake,
   Sparkles,
+  Store,
   Swords,
   ThumbsDown,
   ThumbsUp,
@@ -156,6 +157,22 @@ import {
   upsertCloudCompletedChallenges,
 } from "./account/cloudChallengeProgress";
 import { useAccount, type AccountProfile } from "./account/useAccount";
+import { CustomPuzzleHub } from "./customPuzzles/CustomPuzzleHub";
+import {
+  createCustomPuzzleGame,
+  customPuzzleFingerprint,
+  customPuzzleObjectiveText,
+  customPuzzleSolved,
+  customPuzzleTurnsUsed,
+  type ActiveCustomPuzzle,
+  type CustomPuzzleContent,
+} from "./customPuzzles/model";
+import {
+  loadCustomPuzzleDrafts,
+  persistCustomPuzzleDrafts,
+  upsertCustomPuzzleDraft,
+} from "./customPuzzles/storage";
+import { recordCustomPuzzleCompletion } from "./customPuzzles/marketplace";
 import {
   loadLocalCompletedChallenges,
   persistLocalCompletedChallenges,
@@ -4044,6 +4061,18 @@ function PuzzleSelectScreen({
                   description: "Bend the normal rules against level 10 Divine AI.",
                   icon: Trophy,
                 },
+                {
+                  id: "custom",
+                  title: "Puzzle Editor",
+                  description: "Build, save, test, and upload your own classic-board puzzles.",
+                  icon: Pencil,
+                },
+                {
+                  id: "marketplace",
+                  title: "Marketplace",
+                  description: "Play community puzzles or filter to positions made by friends.",
+                  icon: Store,
+                },
               ] as const).map((option) => {
                 const puzzles = option.id === "challenges"
                   ? CHALLENGES
@@ -4053,6 +4082,8 @@ function PuzzleSelectScreen({
                     ? DAILY_PUZZLES
                   : option.id === "three-player"
                   ? THREE_PLAYER_PUZZLES
+                  : option.id === "custom" || option.id === "marketplace"
+                    ? []
                   : PUZZLES.filter((puzzle) => puzzle.difficulty === option.id);
                 const completed = option.id === "challenges"
                   ? CHALLENGES.filter((challenge) =>
@@ -4080,7 +4111,15 @@ function PuzzleSelectScreen({
                     <Icon size={28} />
                     <strong>{option.title}</strong>
                     <span>{option.description}</span>
-                    <small>{progressLoading ? "Loading progress" : `${completed} of ${puzzles.length} completed`}</small>
+                    <small>
+                      {option.id === "custom"
+                        ? "Create on this device"
+                        : option.id === "marketplace"
+                          ? "Browse published puzzles"
+                          : progressLoading
+                            ? "Loading progress"
+                            : `${completed} of ${puzzles.length} completed`}
+                    </small>
                   </button>
                 );
               })}
@@ -4428,6 +4467,7 @@ function DailyRatingControls({
 export function GameScreen({
   state,
   dispatch,
+  customPuzzle,
   onRestart,
   onRestartPuzzle,
   onGiveUpDaily,
@@ -4455,6 +4495,7 @@ export function GameScreen({
 }: {
   state: GameState;
   dispatch: GameDispatch;
+  customPuzzle?: CustomPuzzleContent;
   onRestart: () => void;
   onRestartPuzzle: () => void;
   onGiveUpDaily?: () => void;
@@ -4489,7 +4530,10 @@ export function GameScreen({
   const [moveFirstDraft, setMoveFirstDraft] = useState<MoveFirstDraft>();
   const [graveyardColor, setGraveyardColor] = useState<Color>();
   const [forfeitConfirmationOpen, setForfeitConfirmationOpen] = useState(false);
-  const gameFinished = !state.puzzleId && state.phase === "gameover";
+  const gameFinished =
+    !state.puzzleId &&
+    !customPuzzle &&
+    state.phase === "gameover";
   const canForfeitRankedMatch = rankedMatch && !gameFinished;
   const showGameResult =
     gameFinished && state.gameMode !== "simulation";
@@ -4507,6 +4551,7 @@ export function GameScreen({
     (state.puzzleId
       ? PUZZLE_BY_ID[state.puzzleId as keyof typeof PUZZLE_BY_ID]
       : undefined);
+  const puzzleMode = Boolean(puzzle || customPuzzle);
   const challenge = state.challengeId
     ? CHALLENGE_BY_ID[state.challengeId]
     : undefined;
@@ -4516,12 +4561,14 @@ export function GameScreen({
   const puzzleIndex = puzzle
     ? difficultyPuzzles.findIndex((candidate) => candidate.id === puzzle.id)
     : -1;
-  const puzzleSolved = dailyPuzzle
+  const puzzleSolved = customPuzzle
+    ? customPuzzleSolved(state, customPuzzle)
+    : dailyPuzzle
     ? dailyPuzzleResultMatches(dailyPuzzle, state)
     : state.puzzleEscapeAbilityId
       ? Boolean(state.puzzleSolved)
       : Boolean(
-        puzzle &&
+        puzzleMode &&
         state.phase === "gameover" &&
         state.winner &&
         state.winner !== state.aiColor,
@@ -4654,7 +4701,13 @@ export function GameScreen({
     }
     const timer = window.setTimeout(() => setPuzzleVictoryReady(true), 1050);
     return () => window.clearTimeout(timer);
-  }, [puzzleSolved, state.puzzleId, state.puzzleSolved, winningKingCaptureId]);
+  }, [
+    customPuzzle,
+    puzzleSolved,
+    state.puzzleId,
+    state.puzzleSolved,
+    winningKingCaptureId,
+  ]);
 
   const puzzleResultReady =
     Boolean(puzzleSolved && puzzleVictoryReady) || puzzleFailed;
@@ -4960,16 +5013,18 @@ export function GameScreen({
     onRestart();
   };
   return (
-    <main className={`game-page ${puzzle ? "puzzle-mode" : ""} ${challenge ? "challenge-mode" : ""} has-last-action ${gameFinished ? "finished-view" : ""} ${inputDisabled || opponentPresentation ? "input-locked" : ""}`}>
+    <main className={`game-page ${puzzleMode ? "puzzle-mode" : ""} ${challenge ? "challenge-mode" : ""} has-last-action ${gameFinished ? "finished-view" : ""} ${inputDisabled || opponentPresentation ? "input-locked" : ""}`}>
       <header className="topbar">
         <Brand />
         <div className="game-meta" data-tutorial="round-and-turn">
-          {dailyPuzzle
+          {dailyPuzzle || customPuzzle
             ? (
               <span>
                 PLAYER TURNS LEFT{" "}
                 <strong>
-                  {state.puzzlePlayerTurnsRemaining ?? dailyPuzzle.playerTurns}
+                  {state.puzzlePlayerTurnsRemaining ??
+                    dailyPuzzle?.playerTurns ??
+                    customPuzzle?.turnLimit}
                 </strong>
               </span>
             )
@@ -5006,7 +5061,7 @@ export function GameScreen({
             <span>
               {canForfeitRankedMatch
                 ? "Forfeit"
-                : puzzle
+                : puzzleMode
                   ? "Puzzles"
                   : challenge
                     ? "Restart"
@@ -5016,23 +5071,31 @@ export function GameScreen({
         </div>
       </header>
 
-      {puzzle && (
+      {puzzleMode && (
         <section className="puzzle-banner">
           <div className="puzzle-banner-title">
             <Crosshair size={18} />
             <span>
-              {dailyPuzzle
+              {customPuzzle
+                ? `CUSTOM · ${customPuzzle.playerColor.toUpperCase()} TO MOVE`
+                : dailyPuzzle
                 ? `DAILY · ${dailyPuzzle.playerTurns} PLAYER TURN${dailyPuzzle.playerTurns === 1 ? "" : "S"}`
                 : `PUZZLE ${puzzleIndex + 1} OF ${difficultyPuzzles.length}`}
             </span>
-            <strong>{puzzle.title}</strong>
+            <strong>{customPuzzle?.title ?? puzzle?.title}</strong>
           </div>
-          <p>{puzzle.objective}</p>
+          <p>
+            {customPuzzle
+              ? customPuzzleObjectiveText(customPuzzle)
+              : puzzle?.objective}
+          </p>
           <div className="puzzle-banner-actions">
-            <button onClick={() => setPuzzleHintOpen((open) => !open)}>
-              <Info size={15} />
-              {puzzleHintOpen ? "Hide hint" : "Show hint"}
-            </button>
+            {puzzle && (
+              <button onClick={() => setPuzzleHintOpen((open) => !open)}>
+                <Info size={15} />
+                {puzzleHintOpen ? "Hide hint" : "Show hint"}
+              </button>
+            )}
             {dailyPuzzle && (
               <button onClick={() => setPuzzleAbilityHintOpen((open) => !open)}>
                 <Sparkles size={15} />
@@ -5049,7 +5112,7 @@ export function GameScreen({
               </button>
             )}
           </div>
-          {puzzleHintOpen && <small>{puzzle.hint}</small>}
+          {puzzleHintOpen && puzzle && <small>{puzzle.hint}</small>}
           {dailyPuzzle && puzzleAbilityHintOpen && (
             <small>{dailyPuzzle.abilityHint}</small>
           )}
@@ -5298,16 +5361,20 @@ export function GameScreen({
           </section>
         </div>
       )}
-      {puzzleSolved && puzzleVictoryReady && puzzle && puzzleResultOpen && (
+      {puzzleSolved && puzzleVictoryReady && puzzleMode && puzzleResultOpen && (
         <div className="modal-backdrop">
           <section className="gameover-modal">
             <div className="victory-crown"><Crown size={38} /></div>
             <p className="eyebrow">
               {dailySolutionRevealed ? "SOLUTION SHOWN" : "PUZZLE SOLVED"}
             </p>
-            <h2>{puzzle.title}</h2>
+            <h2>{customPuzzle?.title ?? puzzle?.title}</h2>
             <p>
-              {dailyPuzzle
+              {customPuzzle
+                ? customPuzzle.objective === "escape-check"
+                  ? "You escaped checkmate with a legal divine turn. This exact draft is now verified for upload."
+                  : "You found a winning line and captured the opposing King. This exact draft is now verified for upload."
+                : dailyPuzzle
                 ? dailySolutionRevealed
                   ? "The CPU's original winning line has been replayed."
                   : dailyGolfScore
@@ -5335,7 +5402,9 @@ export function GameScreen({
             )}
             <div className="puzzle-result-actions">
               <button className="primary-button" onClick={onNextPuzzle}>
-                {dailyPuzzle || puzzleIndex === difficultyPuzzles.length - 1
+                {customPuzzle ||
+                  dailyPuzzle ||
+                  puzzleIndex === difficultyPuzzles.length - 1
                   ? "Choose another puzzle"
                   : "Next puzzle"}
               </button>
@@ -5353,14 +5422,16 @@ export function GameScreen({
           </section>
         </div>
       )}
-      {puzzleFailed && puzzle && puzzleResultOpen && (
+      {puzzleFailed && puzzleMode && puzzleResultOpen && (
         <div className="modal-backdrop">
           <section className="gameover-modal">
             <div className="victory-crown"><Crosshair size={38} /></div>
             <p className="eyebrow">WINNING LINE MISSED</p>
             <h2>Try the position again</h2>
             <p>
-              {dailyPuzzle
+              {customPuzzle
+                ? "The objective was not reached within the configured turn limit. Retry from the original custom position."
+                : dailyPuzzle
                 ? "The puzzle objective was not reached within the turn limit. Retry and look for a stronger continuation."
                 : "The level 10 Divine AI found its best response. Use the hint or restart from the original position."}
             </p>
@@ -5952,6 +6023,8 @@ export default function App() {
   const [puzzleCategory, setPuzzleCategory] = useState<PuzzleCategory | undefined>(
     initialNavigation.puzzleCategory,
   );
+  const [activeCustomPuzzle, setActiveCustomPuzzle] =
+    useState<ActiveCustomPuzzle>();
   const [friendPublicId, setFriendPublicId] = useState<string | undefined>(
     initialNavigation.friendPublicId,
   );
@@ -5992,6 +6065,7 @@ export default function App() {
   const dailyStartedAt = useRef<number | undefined>(
     initialDailyPuzzle ? Date.now() : undefined,
   );
+  const recordedCustomPuzzleCompletion = useRef<string | undefined>(undefined);
   const [dailyCompletionMs, setDailyCompletionMs] = useState<number>();
   const quickDraftPending = useRef(false);
   const undoStack = useRef<GameState[]>([]);
@@ -6665,6 +6739,66 @@ export default function App() {
     state.aiColor,
     state.challengeId,
     state.phase,
+    state.winner,
+  ]);
+
+  useEffect(() => {
+    if (
+      !activeCustomPuzzle ||
+      !customPuzzleSolved(state, activeCustomPuzzle.puzzle)
+    ) return;
+    const turnsUsed = customPuzzleTurnsUsed(state, activeCustomPuzzle.puzzle);
+    const completionKey = [
+      activeCustomPuzzle.localDraftId ?? "",
+      activeCustomPuzzle.marketplacePuzzleId ?? "",
+      customPuzzleFingerprint(activeCustomPuzzle.puzzle),
+    ].join(":");
+    if (recordedCustomPuzzleCompletion.current === completionKey) return;
+    recordedCustomPuzzleCompletion.current = completionKey;
+
+    if (activeCustomPuzzle.localDraftId) {
+      try {
+        const drafts = loadCustomPuzzleDrafts();
+        const draft = drafts.find(
+          (candidate) => candidate.id === activeCustomPuzzle.localDraftId,
+        );
+        if (draft) {
+          const verified = {
+            ...draft,
+            verifiedFingerprint: customPuzzleFingerprint(activeCustomPuzzle.puzzle),
+            verifiedTurnsUsed: turnsUsed,
+            updatedAt: new Date().toISOString(),
+          };
+          persistCustomPuzzleDrafts(upsertCustomPuzzleDraft(drafts, verified));
+        }
+      } catch (error) {
+        console.error("Unable to verify custom puzzle draft.", error);
+        setSaveError(
+          error instanceof Error
+            ? error.message
+            : "Unable to save custom puzzle verification.",
+        );
+      }
+    }
+
+    if (activeCustomPuzzle.marketplacePuzzleId && accountService.account) {
+      void recordCustomPuzzleCompletion(
+        activeCustomPuzzle.marketplacePuzzleId,
+        turnsUsed,
+      ).catch((error) => {
+        console.error("Unable to record custom puzzle completion.", error);
+        setSaveError(
+          error instanceof Error
+            ? error.message
+            : "Unable to record custom puzzle completion.",
+        );
+      });
+    }
+  }, [
+    accountService.account,
+    activeCustomPuzzle,
+    state.phase,
+    state.puzzleSolved,
     state.winner,
   ]);
 
@@ -8065,6 +8199,7 @@ export default function App() {
       ? Date.now()
       : undefined;
     setDailyCompletionMs(undefined);
+    setActiveCustomPuzzle(undefined);
     setFourPlayerSession(undefined);
     const id = saveId();
     activeSaveId.current = id;
@@ -8093,6 +8228,30 @@ export default function App() {
         puzzleId,
         accountService.account?.displayName,
       );
+    resetUndoTracking(next);
+    receiveState(next);
+    aiPlan.current = [];
+    setSettingsOpen(false);
+    setStartView("none");
+  };
+  const beginCustomPuzzle = (customPuzzle: ActiveCustomPuzzle) => {
+    onlineActions.disconnect();
+    fourOnlineActions.disconnect();
+    threeOnlineActions.disconnect();
+    simulationCompletedTurns.current = { white: 0, black: 0 };
+    setDailyReplayActions(undefined);
+    dailyGivenUpPuzzleId.current = undefined;
+    dailyStartedAt.current = undefined;
+    setDailyCompletionMs(undefined);
+    setFourPlayerSession(undefined);
+    setThreePlayerSession(undefined);
+    activeSaveId.current = undefined;
+    recordedCustomPuzzleCompletion.current = undefined;
+    setActiveCustomPuzzle(customPuzzle);
+    const next = createCustomPuzzleGame(
+      customPuzzle.puzzle,
+      accountService.account?.displayName,
+    );
     resetUndoTracking(next);
     receiveState(next);
     aiPlan.current = [];
@@ -8195,13 +8354,24 @@ export default function App() {
       return;
     }
     if (state.gameMode === "puzzle") {
-      if (state.puzzleId?.startsWith("daily-")) setPuzzleCategory(undefined);
+      if (activeCustomPuzzle) {
+        setPuzzleCategory(
+          activeCustomPuzzle.marketplacePuzzleId ? "marketplace" : "custom",
+        );
+        setActiveCustomPuzzle(undefined);
+      } else if (state.puzzleId?.startsWith("daily-")) {
+        setPuzzleCategory(undefined);
+      }
       setStartView("puzzles");
       return;
     }
     openStartFlow("local", undefined, "none");
   };
   const restartPuzzle = () => {
+    if (activeCustomPuzzle) {
+      beginCustomPuzzle(activeCustomPuzzle);
+      return;
+    }
     if (!state.puzzleId) return;
     beginPuzzle(state.puzzleId);
   };
@@ -8222,6 +8392,14 @@ export default function App() {
     setDailyReplayActions(structuredClone(puzzle.solutionActions));
   };
   const nextPuzzle = () => {
+    if (activeCustomPuzzle) {
+      setPuzzleCategory(
+        activeCustomPuzzle.marketplacePuzzleId ? "marketplace" : "custom",
+      );
+      setActiveCustomPuzzle(undefined);
+      setStartView("puzzles");
+      return;
+    }
     if (!state.puzzleId) return;
     if (isDailyPuzzleId(state.puzzleId)) {
       setPuzzleCategory(undefined);
@@ -8253,7 +8431,7 @@ export default function App() {
 
   const puzzleInputLocked =
     state.gameMode === "puzzle" &&
-    Boolean(state.puzzleFailed) &&
+    Boolean(state.puzzleFailed || state.puzzleSolved) &&
     state.activeColor !== state.aiColor;
   const inputDisabled =
     isAiTurn(state) ||
@@ -8487,6 +8665,20 @@ export default function App() {
   }
 
   if (startView === "puzzles") {
+    if (puzzleCategory === "custom" || puzzleCategory === "marketplace") {
+      return (
+        <CustomPuzzleHub
+          key={puzzleCategory}
+          initialTab={
+            puzzleCategory === "marketplace" ? "marketplace" : "editor"
+          }
+          account={accountService.account}
+          accountControl={renderAccountControl("puzzle-account-area")}
+          onBack={() => setPuzzleCategory(undefined)}
+          onPlay={beginCustomPuzzle}
+        />
+      );
+    }
     return (
       <PuzzleSelectScreen
         category={puzzleCategory}
@@ -9108,6 +9300,7 @@ export default function App() {
           <GameScreen
             state={state}
             dispatch={dispatch}
+            customPuzzle={activeCustomPuzzle?.puzzle}
             inputDisabled={inputDisabled}
             opponentColor={opponentColor}
             onlineRoomCode={online.ranked ? undefined : online.roomCode}

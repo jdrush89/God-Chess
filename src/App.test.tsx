@@ -5,6 +5,12 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import type { AccountPortraitId } from "./account/portraits";
 import type { GameAction } from "./game/engine";
 import type { ThreePlayerOnlineState } from "./multiplayer/useThreePlayerOnlineGame";
+import { createBlankCustomPuzzle } from "./customPuzzles/model";
+import {
+  CUSTOM_PUZZLES_KEY,
+  loadCustomPuzzleDrafts,
+  persistCustomPuzzleDrafts,
+} from "./customPuzzles/storage";
 
 const threeOnlineHarness = vi.hoisted(() => ({
   state: {
@@ -531,6 +537,65 @@ beforeEach(() => {
 });
 
 describe("game startup", () => {
+  it("opens the custom puzzle editor, edits the board, and saves a local draft", () => {
+    const { container } = render(<App />);
+    openPlayOption("Puzzles");
+    expect(screen.getByRole("button", { name: /puzzle editor/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /marketplace/i })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /puzzle editor/i }));
+    fireEvent.click(screen.getByRole("button", { name: /new puzzle/i }));
+    fireEvent.change(screen.getByLabelText(/puzzle title/i), {
+      target: { value: "Knight fork trial" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /place white knight/i }));
+    fireEvent.click(container.querySelector('[data-square="d4"]')!);
+    expect(container.querySelector('[data-square="d4"]')?.textContent).toContain("♘");
+    fireEvent.click(screen.getByRole("button", { name: /^move$/i }));
+    fireEvent.click(container.querySelector('[data-square="d4"]')!);
+    fireEvent.click(container.querySelector('[data-square="e5"]')!);
+    expect(container.querySelector('[data-square="d4"]')?.textContent).not.toContain("♘");
+    expect(container.querySelector('[data-square="e5"]')?.textContent).toContain("♘");
+
+    fireEvent.click(screen.getByRole("button", { name: /save draft/i }));
+    const stored = JSON.parse(
+      window.localStorage.getItem(CUSTOM_PUZZLES_KEY) ?? "[]",
+    );
+    expect(stored).toHaveLength(1);
+    expect(stored[0]).toMatchObject({ title: "Knight fork trial" });
+  });
+
+  it("verifies the exact local draft after the creator solves it", async () => {
+    const draft = createBlankCustomPuzzle();
+    draft.title = "One move capture";
+    draft.turnLimit = 1;
+    draft.board.e7 = {
+      id: "custom-white-queen-e7",
+      type: "queen",
+      color: "white",
+      controller: "white",
+      hasMoved: true,
+      status: {},
+    };
+    persistCustomPuzzleDrafts([draft]);
+
+    const { container } = render(<App />);
+    openPlayOption("Puzzles");
+    fireEvent.click(screen.getByRole("button", { name: /puzzle editor/i }));
+    const card = screen.getByText("One move capture").closest("article")!;
+    fireEvent.click(within(card).getByRole("button", { name: /^play$/i }));
+    fireEvent.click(screen.getByTitle("Use Chiron"));
+    fireEvent.click(screen.getByRole("button", { name: /Gallop/ }));
+    fireEvent.click(container.querySelector('[data-square="e7"]')!);
+    fireEvent.click(container.querySelector('[data-square="e8"]')!);
+
+    await waitFor(() => {
+      expect(loadCustomPuzzleDrafts()[0]?.verifiedFingerprint).toBeTruthy();
+    }, { timeout: 2500 });
+    const [verified] = loadCustomPuzzleDrafts();
+    expect(verified.verifiedTurnsUsed).toBe(1);
+  });
+
   it.each([
     [1, "birdie"],
     [2, "eagle"],

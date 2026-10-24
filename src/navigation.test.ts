@@ -47,5 +47,13 @@ describe("app navigation", () => {
       setupCategory: "local",
       friendPublicId: "gc-athena22",
     })).toBe("/friends/gc-athena22");
+    expect(appRouteFromPath("/puzzles/custom")).toMatchObject({
+      startView: "puzzles",
+      puzzleCategory: "custom",
+    });
+    expect(appRouteFromPath("/puzzles/marketplace")).toMatchObject({
+      startView: "puzzles",
+      puzzleCategory: "marketplace",
+    });
   });
 });

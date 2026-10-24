@@ -203,6 +203,17 @@ AI responses between player turns. Completion check marks are stored in local
 storage while signed out and in the player's account while signed in; puzzle
 positions themselves are not added to local or cloud saves.
 
+The Custom Puzzles area provides a classic-board editor with drag-and-drop and
+tap controls, configurable gods, orb pools, solver color, objective, and a
+one-to-ten-turn limit. Drafts are versioned in local storage and can be
+play-tested against the normal level 10 puzzle AI. Upload remains locked until
+the exact current draft is completed within its limit. Signed-in players can
+publish verified drafts to the Supabase-backed marketplace, browse all or
+friends-only puzzles, record completions, and see which accepted friends solved
+their own uploads. The database validates ownership and puzzle shape; creator
+verification is currently produced by the client game engine rather than
+replayed inside PostgreSQL.
+
 Daily puzzles are generated from the copyable checkpoint emitted by hidden
 simulation mode:
 

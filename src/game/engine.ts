@@ -753,7 +753,11 @@ const finishTurn = (state: GameState, description: string) => {
 
   const endingColor = state.activeColor;
   const keepsTurn = state.bonusTurn === endingColor;
-  if (state.phase === "gameover" && !state.puzzleEscapeAbilityId) return;
+  if (
+    state.phase === "gameover" &&
+    !state.puzzleEscapeAbilityId &&
+    !state.puzzleEscapeAny
+  ) return;
   if (
     state.gameMode === "puzzle" &&
     endingColor !== state.aiColor &&
@@ -765,13 +769,16 @@ const finishTurn = (state: GameState, description: string) => {
   }
   if (
     state.gameMode === "puzzle" &&
-    state.puzzleEscapeAbilityId &&
+    (state.puzzleEscapeAbilityId || state.puzzleEscapeAny) &&
     endingColor !== state.aiColor &&
     !keepsTurn
   ) {
     const escaped = Boolean(
       kingSquare(state.board, endingColor) &&
-      actingAbility === state.puzzleEscapeAbilityId &&
+      (
+        state.puzzleEscapeAny ||
+        actingAbility === state.puzzleEscapeAbilityId
+      ) &&
       !isInCheck(state.board, endingColor, state.bananas),
     );
     state.puzzleSolved = escaped;
@@ -3488,7 +3495,7 @@ export const isCompleteClassicTurn = (
   if (next.phase === "gameover") return true;
   if (
     initial.gameMode === "puzzle" &&
-    initial.puzzleEscapeAbilityId &&
+    (initial.puzzleEscapeAbilityId || initial.puzzleEscapeAny) &&
     !initial.puzzleSolved &&
     !initial.puzzleFailed &&
     Boolean(next.puzzleSolved || next.puzzleFailed)

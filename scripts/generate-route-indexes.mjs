@@ -17,6 +17,8 @@ const appRoutes = [
   "puzzles/hard",
   "puzzles/three-player",
   "puzzles/challenges",
+  "puzzles/custom",
+  "puzzles/marketplace",
   "roster",
   "achievements",
   "load",
