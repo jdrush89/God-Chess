@@ -1194,7 +1194,7 @@ describe("game startup", () => {
     fireEvent.click(chonk);
     expect(chonk.getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByText(
-      /complete any salem ability achievement to unlock this skin/i,
+      /complete an achievement for each of salem's three abilities to unlock this skin/i,
     )).toBeTruthy();
     expect(screen.queryByRole("button", {
       name: /chonk as favorite/i,
@@ -1203,13 +1203,15 @@ describe("game startup", () => {
     fireEvent.click(screen.getByRole("button", { name: /^ares/i }));
     fireEvent.click(screen.getByRole("button", { name: /^businessman locked$/i }));
     expect(screen.getByText(
-      /complete any ares ability achievement to unlock this skin/i,
+      /complete an achievement for each of ares's three abilities to unlock this skin/i,
     )).toBeTruthy();
   });
 
-  it("unlocks a custom skin after any achievement for that God and saves it as a favorite", () => {
+  it("unlocks a custom skin after all three ability achievements and saves it as a favorite", () => {
     const achievements = createAchievementProgress();
     achievements.completed["hex-mix"] = "2026-10-20T12:00:00.000Z";
+    achievements.completed["choking-hazard"] = "2026-10-20T12:00:00.000Z";
+    achievements.completed["all-sheep"] = "2026-10-20T12:00:00.000Z";
     persistLocalAchievementProgress(achievements);
     render(<App />);
     openPlayMenu();
@@ -1230,6 +1232,8 @@ describe("game startup", () => {
   it("defaults drafts to a favorite skin, permits overrides, and blocks locked skins", () => {
     const achievements = createAchievementProgress();
     achievements.completed["hex-mix"] = "2026-10-20T12:00:00.000Z";
+    achievements.completed["choking-hazard"] = "2026-10-20T12:00:00.000Z";
+    achievements.completed["all-sheep"] = "2026-10-20T12:00:00.000Z";
     persistLocalAchievementProgress(achievements);
     window.localStorage.setItem(
       "god-chess-favorite-skins-v1",

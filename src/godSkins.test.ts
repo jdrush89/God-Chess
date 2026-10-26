@@ -10,7 +10,7 @@ import {
   loadFavoriteGodSkins,
   persistFavoriteGodSkins,
 } from "./godSkins";
-import { GOD_ACHIEVEMENT_IDS } from "./achievements";
+import { GOD_ABILITY_ACHIEVEMENT_IDS } from "./achievements";
 
 describe("God skins", () => {
   beforeEach(() => {
@@ -36,7 +36,7 @@ describe("God skins", () => {
     });
   });
 
-  it("locks every custom skin by default and unlocks it with any matching God achievement", () => {
+  it("locks every custom skin until all three ability achievements are complete", () => {
     expect(isGodSkinUnlocked("salem", "base")).toBe(true);
     expect(isGodSkinUnlocked("salem", "chonk")).toBe(false);
     expect(isGodSkinUnlocked(
@@ -45,13 +45,25 @@ describe("God skins", () => {
       { "i-have-the-power": "2026-10-20T12:00:00.000Z" },
     )).toBe(false);
     for (const [godId, skins] of Object.entries(GOD_SKINS)) {
-      const achievementId = GOD_ACHIEVEMENT_IDS[
-        godId as keyof typeof GOD_ACHIEVEMENT_IDS
-      ][0];
+      const typedGodId = godId as keyof typeof GOD_SKINS;
+      const achievementIds = Object.values(
+        GOD_ABILITY_ACHIEVEMENT_IDS[typedGodId],
+      ).map(([achievementId]) => achievementId);
       expect(isGodSkinUnlocked(
-        godId as keyof typeof GOD_SKINS,
+        typedGodId,
         skins[1].id,
-        { [achievementId]: "2026-10-20T12:00:00.000Z" },
+        Object.fromEntries(achievementIds.slice(0, 2).map((achievementId) => [
+          achievementId,
+          "2026-10-20T12:00:00.000Z",
+        ])),
+      )).toBe(false);
+      expect(isGodSkinUnlocked(
+        typedGodId,
+        skins[1].id,
+        Object.fromEntries(achievementIds.map((achievementId) => [
+          achievementId,
+          "2026-10-20T12:00:00.000Z",
+        ])),
       )).toBe(true);
     }
     expect(isGodSkinUnlocked("salem", "tightrope")).toBe(false);
@@ -65,14 +77,18 @@ describe("God skins", () => {
     expect(isGodSkinSelections({ salem: "tightrope" })).toBe(false);
   });
 
-  it("persists favorites but only applies them after their God achievement unlocks", () => {
+  it("persists favorites but only applies them after all ability achievements unlock", () => {
     persistFavoriteGodSkins({ salem: "chonk" });
     expect(loadFavoriteGodSkins()).toEqual({ salem: "chonk" });
     expect(favoriteGodSkin(loadFavoriteGodSkins(), "salem")).toBe("base");
     expect(favoriteGodSkin(
       loadFavoriteGodSkins(),
       "salem",
-      { "hex-mix": "2026-10-20T12:00:00.000Z" },
+      {
+        "hex-mix": "2026-10-20T12:00:00.000Z",
+        "choking-hazard": "2026-10-20T12:00:00.000Z",
+        "all-sheep": "2026-10-20T12:00:00.000Z",
+      },
     )).toBe("chonk");
 
     window.localStorage.setItem(

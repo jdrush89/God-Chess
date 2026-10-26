@@ -78,7 +78,8 @@ export function GodSkinPicker({
       {!unlocked && (
         <p className="skin-locked-note">
           <Lock size={13} />
-          Complete any {GOD_BY_ID[godId].name} ability achievement to unlock this skin.
+          Complete an achievement for each of{" "}
+          {GOD_BY_ID[godId].name}'s three abilities to unlock this skin.
         </p>
       )}
     </section>

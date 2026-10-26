@@ -8,6 +8,7 @@ import {
   dailyPuzzleCompletionStats,
   GOD_ABILITY_ACHIEVEMENT_IDS,
   GOD_ACHIEVEMENT_IDS,
+  hasCompletedAllGodAbilityAchievements,
   hasCompletedGodAchievement,
   mergeAchievementProgress,
   type AchievementId,
@@ -48,6 +49,20 @@ describe("achievement progress", () => {
       expect(hasCompletedGodAchievement({
         [ids[0]]: "2026-10-20T12:00:00.000Z",
       }, god.id)).toBe(true);
+      expect(hasCompletedAllGodAbilityAchievements({
+        [ids[0]]: "2026-10-20T12:00:00.000Z",
+      }, god.id)).toBe(false);
+      expect(hasCompletedAllGodAbilityAchievements(
+        Object.fromEntries(
+          Object.values(GOD_ABILITY_ACHIEVEMENT_IDS[god.id]).map(
+            ([achievementId]) => [
+              achievementId,
+              "2026-10-20T12:00:00.000Z",
+            ],
+          ),
+        ),
+        god.id,
+      )).toBe(true);
     }
   });
 

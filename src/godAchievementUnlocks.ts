@@ -93,10 +93,22 @@ export const hasCompletedGodAchievement = (
   godId: GodId,
 ) => GOD_ACHIEVEMENT_IDS[godId].some((id) => Boolean(completed[id]));
 
+export const hasCompletedAllGodAbilityAchievements = (
+  completed: Partial<Record<string, string>>,
+  godId: GodId,
+) => {
+  const achievementGroups = Object.values(
+    GOD_ABILITY_ACHIEVEMENT_IDS[godId],
+  ) as readonly (readonly string[])[];
+  return achievementGroups.every((achievementIds) =>
+    achievementIds.some((id) => Boolean(completed[id]))
+  );
+};
+
 export const isAchievementUnlockedGodSkin = (
   completed: Partial<Record<string, string>>,
   godId: GodId,
   skinId: string,
 ) =>
   GOD_ACHIEVEMENT_SKIN_IDS[godId] === skinId &&
-  hasCompletedGodAchievement(completed, godId);
+  hasCompletedAllGodAbilityAchievements(completed, godId);
