@@ -9,7 +9,7 @@ import {
   type GameAction,
 } from "./engine";
 import { GOD_BY_ID } from "./gods";
-import type { Color, GameState, GodId, Piece } from "./types";
+import type { Color, GameState, GodId, Piece, Square } from "./types";
 import { opposite } from "./types";
 
 interface SearchNode {
@@ -242,6 +242,62 @@ const hypotheticalTurnFor = (state: GameState, color: Color) => {
   return next;
 };
 
+export const airStrikeCaptureThreatValue = (
+  state: GameState,
+  attacker: Color,
+) => {
+  if (state.phase !== "play") return 0;
+  const turn = hypotheticalTurnFor(state, attacker);
+  const godId = turn.players[attacker].gods.find((candidate) =>
+    !turn.rested.includes(candidate) &&
+    GOD_BY_ID[candidate].abilities.some((ability) => ability.id === "air-strike")
+  );
+  if (!godId) return 0;
+
+  let selected = simulateClassicAction(turn, { type: "select-god", godId });
+  selected = simulateClassicAction(selected, {
+    type: "select-ability",
+    abilityId: "air-strike",
+  });
+  if (selected.selectedAbility !== "air-strike") return 0;
+
+  let highestValue = 0;
+  let frontier = [selected];
+  const seen = new Set<string>();
+  for (let depth = 0; depth < 8 && frontier.length; depth += 1) {
+    const expanded: GameState[] = [];
+    for (const current of frontier) {
+      for (const action of availableClassicActions(current)) {
+        if (action.type !== "square") continue;
+        if (
+          current.pending?.abilityId === "air-strike" &&
+          current.pending.step === "air-strike-drop"
+        ) {
+          const target = current.board[action.square as Square];
+          if (target && target.controller !== attacker) {
+            highestValue = Math.max(
+              highestValue,
+              target.type === "king" ? 100 : pieceValue(target.type),
+            );
+            continue;
+          }
+        }
+        const next = simulateClassicAction(current, action);
+        if (
+          next.selectedAbility !== "air-strike" &&
+          next.pending?.abilityId !== "air-strike"
+        ) continue;
+        const signature = classicPlanStateSignature(next);
+        if (seen.has(signature)) continue;
+        seen.add(signature);
+        expanded.push(next);
+      }
+    }
+    frontier = expanded.slice(0, 20_000);
+  }
+  return highestValue;
+};
+
 const hasWinningTurn = (state: GameState, color: Color) => {
   const isWin = (candidate: GameState) =>
     candidate.phase === "gameover" &&
@@ -412,6 +468,30 @@ const resolveMandatoryUpgrades = (state: GameState) => {
   return next;
 };
 
+const bestAirStrikeSafetyPlan = (
+  color: Color,
+  plans: AiTurnPlan[],
+) => {
+  const candidates = plans.slice(0, 32);
+  let best = candidates[0];
+  let bestScore = Number.NEGATIVE_INFINITY;
+  for (const candidate of candidates) {
+    const resolved = resolveMandatoryUpgrades(candidate.state);
+    const exposure = airStrikeCaptureThreatValue(
+      resolved,
+      opposite(color),
+    );
+    const score =
+      evaluateGameState(candidate.state, color) -
+      exposure * 1.25;
+    if (score > bestScore) {
+      best = candidate;
+      bestScore = score;
+    }
+  }
+  return best;
+};
+
 const defensiveCandidates = (
   state: GameState,
   color: Color,
@@ -476,10 +556,11 @@ const bestTacticalDefense = (
   const enemy = opposite(color);
   if (!hasImmediateWinningTurn(state, enemy)) return undefined;
 
-  for (const plan of defensiveCandidates(state, color, plans)) {
-    if (!hasImmediateWinningTurn(plan.state, enemy)) return plan;
-  }
-  return undefined;
+  const defenses = defensiveCandidates(state, color, plans)
+    .filter((plan) => !hasImmediateWinningTurn(plan.state, enemy));
+  return defenses.length
+    ? bestAirStrikeSafetyPlan(color, defenses)
+    : undefined;
 };
 
 const bestImmediateMateAvoidance = (
@@ -576,6 +657,10 @@ const bestOptimalPlan = (
     ? bestImmediateMateAvoidance(state, color, plans)
     : undefined;
   if (saferPlan) return saferPlan;
+  if (state.aiDifficulty >= 8) {
+    const airStrikeSafePlan = bestAirStrikeSafetyPlan(color, plans);
+    if (airStrikeSafePlan !== plans[0]) return airStrikeSafePlan;
+  }
   if (mateSearchDepth <= 1) {
     const attack = bestSparseMateInTwo(
       state,
