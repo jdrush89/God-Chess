@@ -4552,6 +4552,12 @@ export function GameScreen({
       ? PUZZLE_BY_ID[state.puzzleId as keyof typeof PUZZLE_BY_ID]
       : undefined);
   const puzzleMode = Boolean(puzzle || customPuzzle);
+  const puzzleTurnsRemaining = puzzleMode
+    ? state.puzzlePlayerTurnsRemaining ??
+      puzzle?.playerTurns ??
+      customPuzzle?.turnLimit ??
+      0
+    : undefined;
   const challenge = state.challengeId
     ? CHALLENGE_BY_ID[state.challengeId]
     : undefined;
@@ -5017,15 +5023,11 @@ export function GameScreen({
       <header className="topbar">
         <Brand />
         <div className="game-meta" data-tutorial="round-and-turn">
-          {dailyPuzzle || customPuzzle
+          {puzzleMode
             ? (
               <span>
                 PLAYER TURNS LEFT{" "}
-                <strong>
-                  {state.puzzlePlayerTurnsRemaining ??
-                    dailyPuzzle?.playerTurns ??
-                    customPuzzle?.turnLimit}
-                </strong>
+                <strong>{puzzleTurnsRemaining}</strong>
               </span>
             )
             : (
@@ -5083,6 +5085,13 @@ export function GameScreen({
                 : `PUZZLE ${puzzleIndex + 1} OF ${difficultyPuzzles.length}`}
             </span>
             <strong>{customPuzzle?.title ?? puzzle?.title}</strong>
+          </div>
+          <div
+            className="mobile-puzzle-turns"
+            aria-label={`${puzzleTurnsRemaining} player turns left`}
+          >
+            <span>Player turns left</span>
+            <strong>{puzzleTurnsRemaining}</strong>
           </div>
           <p>
             {customPuzzle
