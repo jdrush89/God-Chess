@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type DragEvent,
   type ReactNode,
@@ -12,6 +13,7 @@ import {
   CloudUpload,
   Eraser,
   LoaderCircle,
+  Moon,
   MousePointer2,
   Pencil,
   Play,
@@ -45,9 +47,13 @@ import {
   loadCustomPuzzleMarketplace,
   publishCustomPuzzle,
 } from "./marketplace";
+import { useBoardDrag } from "../components/useBoardDrag";
 
 type HubTab = "library" | "editor" | "marketplace";
 type EditorTool = PieceType | "move" | "erase";
+type EditorDragSource =
+  | `board:${Square}`
+  | `palette:${Color}:${PieceType}`;
 
 const PIECE_SYMBOLS: Record<Color, Record<PieceType, string>> = {
   white: {
@@ -314,6 +320,55 @@ export function CustomPuzzleHub({
     });
   };
 
+  const pointerDragSource = useRef<EditorDragSource | undefined>(undefined);
+  const pointerDrag = useBoardDrag<EditorDragSource>({
+    attribute: "data-square",
+    canDrag: (source) => {
+      if (source.startsWith("palette:")) return true;
+      return Boolean(editing?.board[source.slice("board:".length) as Square]);
+    },
+    onDragStart: (source) => {
+      pointerDragSource.current = source;
+    },
+    onDrop: (destination) => {
+      if (!allSquares.includes(destination as Square)) return;
+      const source = pointerDragSource.current;
+      pointerDragSource.current = undefined;
+      if (!source) return;
+      if (source.startsWith("board:")) {
+        movePiece(source.slice("board:".length) as Square, destination as Square);
+        setSelectedBoardSquare(undefined);
+        return;
+      }
+      const [, color, pieceType] = source.split(":");
+      if (
+        (color === "white" || color === "black") &&
+        PIECE_TYPES.includes(pieceType as PieceType)
+      ) {
+        setPiece(
+          destination as Square,
+          createPiece(destination as Square, pieceType as PieceType, color),
+        );
+      }
+    },
+  });
+  const pointerDragPiece: Pick<Piece, "color" | "type"> | undefined =
+    pointerDrag.preview
+    ? pointerDrag.preview.source.startsWith("board:")
+      ? editing?.board[
+        pointerDrag.preview.source.slice("board:".length) as Square
+      ]
+      : (() => {
+        const [, color, type] = pointerDrag.preview.source.split(":");
+        return (
+          (color === "white" || color === "black") &&
+          PIECE_TYPES.includes(type as PieceType)
+        )
+          ? { color, type: type as PieceType }
+          : undefined;
+      })()
+    : undefined;
+
   const handleDrop = (
     event: DragEvent<HTMLButtonElement>,
     destination: Square,
@@ -483,12 +538,21 @@ export function CustomPuzzleHub({
                       className={tool === pieceType ? "active" : ""}
                       aria-label={`Place ${pieceColor} ${pieceType}`}
                       draggable
+                      onPointerDown={(event) => {
+                        if (event.pointerType === "mouse") return;
+                        pointerDrag.onPointerDown(
+                          `palette:${pieceColor}:${pieceType}`,
+                          event,
+                        );
+                      }}
+                      {...pointerDrag.pointerHandlers}
                       onDragStart={(event) => {
                         event.dataTransfer.setData("application/god-chess-piece", pieceType);
                         event.dataTransfer.setData("application/god-chess-color", pieceColor);
                         setPieceDragImage(event, pieceType, pieceColor);
                       }}
                       onClick={() => {
+                        if (pointerDrag.consumeClick()) return;
                         setTool(pieceType);
                         setSelectedBoardSquare(undefined);
                       }}
@@ -510,7 +574,7 @@ export function CustomPuzzleHub({
                     <small>erase</small>
                   </button>
                 </div>
-                <p>Drag a piece onto the board, or select a tool and click a square. Drag placed pieces to move them.</p>
+                <p>Drag a piece onto the board, or select a tool and tap a square. Drag placed pieces to move them.</p>
               </div>
               <div className="custom-editor-board" aria-label="Custom puzzle board">
                 {EDITOR_SQUARES.map((square) => {
@@ -523,7 +587,15 @@ export function CustomPuzzleHub({
                       type="button"
                       className={`custom-editor-square ${(file + rank) % 2 === 0 ? "light" : "dark"} ${selectedBoardSquare === square ? "selected" : ""}`}
                       data-square={square}
-                      onClick={() => placeCurrentTool(square)}
+                      onClick={() => {
+                        if (pointerDrag.consumeClick()) return;
+                        placeCurrentTool(square);
+                      }}
+                      onPointerDown={(event) => {
+                        if (event.pointerType === "mouse" || !piece) return;
+                        pointerDrag.onPointerDown(`board:${square}`, event);
+                      }}
+                      {...pointerDrag.pointerHandlers}
                       onContextMenu={(event) => {
                         event.preventDefault();
                         setPiece(square);
@@ -531,7 +603,7 @@ export function CustomPuzzleHub({
                       onDragOver={(event) => event.preventDefault()}
                       onDrop={(event) => handleDrop(event, square)}
                     >
-                      {piece && (
+                      {piece && pointerDrag.draggingSource !== `board:${square}` && (
                         <span
                           className={`custom-piece-symbol ${piece.color}`}
                           draggable
@@ -549,6 +621,20 @@ export function CustomPuzzleHub({
                   );
                 })}
               </div>
+              {pointerDrag.preview && pointerDragPiece && (
+                <div
+                  className="custom-piece-pointer-preview"
+                  style={{
+                    left: pointerDrag.preview.x,
+                    top: pointerDrag.preview.y,
+                  }}
+                  aria-hidden="true"
+                >
+                  <span className={`custom-piece-symbol ${pointerDragPiece.color}`}>
+                    {PIECE_SYMBOLS[pointerDragPiece.color][pointerDragPiece.type]}
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="custom-editor-config">
@@ -623,6 +709,14 @@ export function CustomPuzzleHub({
                               draft.players[color].gods = gods.filter(
                                 (godId) => godId !== god.id,
                               );
+                              const selectedElsewhere = draft.players[
+                                color === "white" ? "black" : "white"
+                              ].gods.includes(god.id);
+                              if (!selectedElsewhere) {
+                                draft.restingGods = draft.restingGods.filter(
+                                  (godId) => godId !== god.id,
+                                );
+                              }
                             } else if (gods.length < 3) {
                               draft.players[color].gods = [...gods, god.id];
                             }
@@ -634,6 +728,38 @@ export function CustomPuzzleHub({
                         </button>
                       );
                     })}
+                  </div>
+                  <div className="custom-resting-gods">
+                    <span>Starts resting</span>
+                    <div>
+                      {editing.players[color].gods.map((godId) => {
+                        const god = GODS.find((candidate) => candidate.id === godId)!;
+                        const resting = editing.restingGods.includes(godId);
+                        return (
+                          <button
+                            key={godId}
+                            type="button"
+                            className={resting ? "resting" : ""}
+                            aria-pressed={resting}
+                            aria-label={`${resting ? "Wake" : "Start"} ${god.name} ${resting ? "" : "resting"}`.trim()}
+                            onClick={() => updateEditing((draft) => {
+                              draft.restingGods = resting
+                                ? draft.restingGods.filter(
+                                  (candidate) => candidate !== godId,
+                                )
+                                : [...draft.restingGods, godId];
+                              return draft;
+                            })}
+                          >
+                            <Moon size={14} />
+                            {god.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <small>
+                      Resting gods are unavailable until the pantheon advances to the next round.
+                    </small>
                   </div>
                   <div className="custom-config-row">
                     {(["white", "black"] as const).map((orbColor) => (

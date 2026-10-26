@@ -545,9 +545,14 @@ describe("game startup", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /puzzle editor/i }));
     fireEvent.click(screen.getByRole("button", { name: /new puzzle/i }));
+    expect(container.querySelector('[data-square="d1"]')?.textContent).toContain("♔");
+    expect(container.querySelector('[data-square="e1"]')?.textContent).not.toContain("♔");
     fireEvent.change(screen.getByLabelText(/puzzle title/i), {
       target: { value: "Knight fork trial" },
     });
+    fireEvent.click(screen.getByRole("button", {
+      name: /start chiron resting/i,
+    }));
     fireEvent.click(screen.getByRole("button", { name: /place white knight/i }));
     fireEvent.click(container.querySelector('[data-square="d4"]')!);
     expect(container.querySelector('[data-square="d4"]')?.textContent).toContain("♘");
@@ -574,12 +579,63 @@ describe("game startup", () => {
       28,
     );
 
+    const bishopButton = screen.getByRole("button", {
+      name: /place white bishop/i,
+    });
+    const c3 = container.querySelector('[data-square="c3"]')!;
+    fireEvent.pointerDown(bishopButton, {
+      button: 0,
+      clientX: 10,
+      clientY: 10,
+      pointerId: 7,
+      pointerType: "touch",
+    });
+    fireEvent.pointerMove(bishopButton, {
+      clientX: 20,
+      clientY: 20,
+      pointerId: 7,
+      pointerType: "touch",
+    });
+    fireEvent.pointerUp(c3, {
+      clientX: 30,
+      clientY: 30,
+      pointerId: 7,
+      pointerType: "touch",
+    });
+    expect(c3.textContent).toContain("♗");
+
+    const c4 = container.querySelector('[data-square="c4"]')!;
+    fireEvent.pointerDown(c3, {
+      button: 0,
+      clientX: 30,
+      clientY: 30,
+      pointerId: 8,
+      pointerType: "touch",
+    });
+    fireEvent.pointerMove(c3, {
+      clientX: 40,
+      clientY: 40,
+      pointerId: 8,
+      pointerType: "touch",
+    });
+    fireEvent.pointerUp(c4, {
+      clientX: 50,
+      clientY: 50,
+      pointerId: 8,
+      pointerType: "touch",
+    });
+    expect(c3.textContent).not.toContain("♗");
+    expect(c4.textContent).toContain("♗");
+
     fireEvent.click(screen.getByRole("button", { name: /save draft/i }));
     const stored = JSON.parse(
       window.localStorage.getItem(CUSTOM_PUZZLES_KEY) ?? "[]",
     );
     expect(stored).toHaveLength(1);
-    expect(stored[0]).toMatchObject({ title: "Knight fork trial" });
+    expect(stored[0]).toMatchObject({
+      title: "Knight fork trial",
+      restingGods: ["chiron"],
+    });
   });
 
   it("verifies the exact local draft after the creator solves it", async () => {

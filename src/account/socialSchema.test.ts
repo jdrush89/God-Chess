@@ -53,10 +53,22 @@ describe("social schema privacy contract", () => {
     );
   });
 
-  it("does not shadow PostgreSQL's current_user identifier in UUID comparisons", () => {
+  it("uses unambiguous request-user identifiers in UUID comparisons", () => {
+    const sendFriendRequest = socialSchema.slice(
+      socialSchema.indexOf("create or replace function public.send_friend_request"),
+      socialSchema.indexOf("create or replace function public.accept_friend_request"),
+    );
+    const sendGameInvite = socialSchema.slice(
+      socialSchema.indexOf("create or replace function public.send_game_invite"),
+      socialSchema.indexOf("create or replace function public.prepare_game_invite"),
+    );
     expect(socialSchema).not.toContain("current_user uuid := auth.uid()");
-    expect(socialSchema.match(/current_user_id uuid := auth\.uid\(\)/g))
-      .toHaveLength(2);
+    for (const functionBody of [sendFriendRequest, sendGameInvite]) {
+      expect(functionBody).toContain(
+        "requesting_user_id uuid := auth.uid()",
+      );
+      expect(functionBody).not.toContain("current_user_id");
+    }
   });
 
   it("qualifies invitation expiry columns inside table-returning RPCs", () => {

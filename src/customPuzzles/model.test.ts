@@ -9,6 +9,7 @@ import {
   createCustomPuzzleGame,
   customPuzzleFingerprint,
   customPuzzleIsVerified,
+  normalizeCustomPuzzleContent,
   normalizeCustomPuzzleDraft,
   validateCustomPuzzle,
 } from "./model";
@@ -16,6 +17,7 @@ import {
 describe("custom puzzle model", () => {
   it("creates a valid capture draft and converts it to a level 10 puzzle game", () => {
     const draft = createBlankCustomPuzzle();
+    draft.restingGods = ["chiron"];
     expect(validateCustomPuzzle(draft)).toEqual([]);
 
     const state = createCustomPuzzleGame(draft, "Athena");
@@ -28,7 +30,8 @@ describe("custom puzzle model", () => {
       puzzlePlayerTurnsRemaining: 2,
     });
     expect(state.players.white.name).toBe("Athena");
-    expect(state.board.e1).toMatchObject({
+    expect(state.rested).toEqual(["chiron"]);
+    expect(state.board.d1).toMatchObject({
       type: "king",
       color: "white",
     });
@@ -42,13 +45,14 @@ describe("custom puzzle model", () => {
       "The solver's King must begin in check.",
     );
 
-    draft.board.e8 = {
+    draft.board.d8 = {
       ...draft.board.e8,
-      id: "black-rook-e8",
+      id: "black-rook-d8",
       type: "rook",
     };
+    delete draft.board.e8;
     draft.board.a8 = {
-      ...draft.board.e1,
+      ...draft.board.d1,
       id: "black-king-a8",
       color: "black",
       controller: "black",
@@ -89,14 +93,40 @@ describe("custom puzzle model", () => {
     valid.players.white.orbs.white += 1;
     expect(customPuzzleIsVerified(valid)).toBe(false);
 
+    const restVerification = createBlankCustomPuzzle();
+    restVerification.verifiedFingerprint =
+      customPuzzleFingerprint(restVerification);
+    restVerification.verifiedTurnsUsed = 1;
+    restVerification.restingGods = ["chiron"];
+    expect(customPuzzleIsVerified(restVerification)).toBe(false);
+
+    const allWhiteResting = createBlankCustomPuzzle();
+    allWhiteResting.restingGods = [...allWhiteResting.players.white.gods];
+    expect(validateCustomPuzzle(allWhiteResting)).toContain(
+      "Leave at least one white god ready to act.",
+    );
+
+    const unselectedResting = createBlankCustomPuzzle();
+    unselectedResting.restingGods = ["death"];
+    expect(validateCustomPuzzle(unselectedResting)).toContain(
+      "Only selected gods can start resting.",
+    );
+
     const duplicateIds = createBlankCustomPuzzle();
     duplicateIds.board.a1 = {
-      ...duplicateIds.board.e1,
+      ...duplicateIds.board.d1,
       color: "white",
       controller: "white",
     };
     expect(validateCustomPuzzle(duplicateIds)).toContain(
       "Every placed piece must have a unique ID.",
     );
+  });
+
+  it("loads older custom puzzles with every god ready", () => {
+    const legacy = structuredClone(createBlankCustomPuzzle()) as
+      Partial<ReturnType<typeof createBlankCustomPuzzle>>;
+    delete legacy.restingGods;
+    expect(normalizeCustomPuzzleContent(legacy)?.restingGods).toEqual([]);
   });
 });
