@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import { useTwoColumnGodInspector } from "./useTwoColumnGodInspector";
 import {
   ArrowLeft,
   Bell,
@@ -875,7 +876,7 @@ function DraftScreen({
   };
 
   return (
-    <main className="draft-page classic-draft-page">
+    <main className="draft-page pantheon-draft-page classic-draft-page">
       <header className="topbar draft-topbar">
         <Brand />
         <div className="draft-turn">

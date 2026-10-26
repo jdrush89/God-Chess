@@ -22,6 +22,20 @@ import {
 
 const SAVE_KEY = "god-chess-saves-v2";
 
+const matchMedia = (twoColumnLayout = false) => (query: string) => ({
+  matches:
+    query === "(prefers-reduced-motion: reduce)" ||
+    (twoColumnLayout &&
+      query === "(min-width: 641px) and (max-width: 960px)"),
+  media: query,
+  onchange: null,
+  addListener: () => undefined,
+  removeListener: () => undefined,
+  addEventListener: () => undefined,
+  removeEventListener: () => undefined,
+  dispatchEvent: () => false,
+});
+
 beforeAll(() => {
   if (!window.PointerEvent) {
     Object.defineProperty(window, "PointerEvent", {
@@ -31,16 +45,7 @@ beforeAll(() => {
   }
   Object.defineProperty(window, "matchMedia", {
     writable: true,
-    value: (query: string) => ({
-      matches: true,
-      media: query,
-      onchange: null,
-      addListener: () => undefined,
-      removeListener: () => undefined,
-      addEventListener: () => undefined,
-      removeEventListener: () => undefined,
-      dispatchEvent: () => false,
-    }),
+    value: matchMedia(),
   });
   Object.defineProperty(HTMLElement.prototype, "animate", {
     writable: true,
@@ -570,6 +575,35 @@ describe("four-player app integration", () => {
     expect(screen.getByRole("heading", { name: "Ares" })).toBeTruthy();
     expect(screen.getByText("Threaten")).toBeTruthy();
     expect((screen.getByRole("button", { name: /claim ares/i }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("uses a full-screen confirmation dialog in the two-column draft layout", () => {
+    vi.spyOn(window, "matchMedia").mockImplementation(matchMedia(true));
+    const { container } = render(
+      <FourPlayerGame
+        initialState={createFourPlayerGame()}
+        undoPreferred={false}
+        onUndoPreferenceChange={vi.fn()}
+        onPersist={vi.fn(async () => false)}
+        onQuit={vi.fn()}
+        onNewGame={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /ares conflict/i }));
+    expect(screen.getByRole("dialog", {
+      name: /ares draft selection/i,
+    })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Dismiss$/i }));
+    expect(container.querySelector("#four-draft-god-ares.claimed")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /ares conflict/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Confirm Ares$/i }));
+    expect(screen.queryByRole("dialog", {
+      name: /ares draft selection/i,
+    })).toBeNull();
+    expect(container.querySelector("#four-draft-god-ares.claimed")).toBeTruthy();
   });
 
   it("quick-drafts every remaining four-player pick through the reducer", async () => {
