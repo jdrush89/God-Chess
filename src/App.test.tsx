@@ -657,6 +657,8 @@ describe("game startup", () => {
     fireEvent.click(screen.getByRole("button", { name: /puzzle editor/i }));
     const card = screen.getByText("One move capture").closest("article")!;
     fireEvent.click(within(card).getByRole("button", { name: /^play$/i }));
+    expect(container.querySelector(".mobile-puzzle-turns")?.textContent)
+      .toMatch(/player turns left\s*1/i);
     fireEvent.click(screen.getByTitle("Use Chiron"));
     fireEvent.click(screen.getByRole("button", { name: /Gallop/ }));
     fireEvent.click(container.querySelector('[data-square="e7"]')!);
@@ -755,6 +757,8 @@ describe("game startup", () => {
       Object.keys(daily.createState().board).length,
     );
     expect(container.querySelector(".game-meta")?.textContent)
+      .toMatch(new RegExp(`player turns left\\s*${daily.playerTurns}`, "i"));
+    expect(container.querySelector(".mobile-puzzle-turns")?.textContent)
       .toMatch(new RegExp(`player turns left\\s*${daily.playerTurns}`, "i"));
     expect(container.querySelector(".game-meta")?.textContent)
       .not.toMatch(/round/i);
@@ -1820,6 +1824,12 @@ describe("game startup", () => {
     fireEvent.click(screen.getByRole("button", { name: /puzzle 1.*position one/i }));
 
     expect(screen.getByText("Position One")).toBeTruthy();
+    expect(container.querySelector(".mobile-puzzle-turns")?.textContent)
+      .toMatch(/player turns left\s*1/i);
+    expect(container.querySelector(".game-meta")?.textContent)
+      .toMatch(/player turns left\s*1/i);
+    expect(container.querySelector(".game-meta")?.textContent)
+      .not.toMatch(/round/i);
     expect(screen.getAllByText(/capture the black king in one divine turn/i)).toHaveLength(2);
     expect(screen.getByRole("gridcell", { name: "e2, white knight" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /save & quit/i })).toBeNull();
