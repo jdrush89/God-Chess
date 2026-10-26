@@ -752,6 +752,60 @@ function GodSigil({
   );
 }
 
+const TWO_COLUMN_GOD_PICKER_QUERY =
+  "(min-width: 641px) and (max-width: 960px)";
+
+function useTwoColumnGodInspector(focusElementId: string) {
+  const [twoColumnLayout, setTwoColumnLayout] = useState(() =>
+    window.matchMedia(TWO_COLUMN_GOD_PICKER_QUERY).matches
+  );
+  const [inspectorDialogOpen, setInspectorDialogOpen] = useState(false);
+
+  const dismissInspector = useCallback(() => {
+    setInspectorDialogOpen(false);
+    window.requestAnimationFrame(() => {
+      document.getElementById(focusElementId)?.focus();
+    });
+  }, [focusElementId]);
+
+  useEffect(() => {
+    const media = window.matchMedia(TWO_COLUMN_GOD_PICKER_QUERY);
+    const updateLayout = () => setTwoColumnLayout(media.matches);
+    updateLayout();
+    media.addEventListener("change", updateLayout);
+    return () => media.removeEventListener("change", updateLayout);
+  }, []);
+
+  useEffect(() => {
+    if (!twoColumnLayout) setInspectorDialogOpen(false);
+  }, [twoColumnLayout]);
+
+  useEffect(() => {
+    if (!twoColumnLayout || !inspectorDialogOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const dismissOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") dismissInspector();
+    };
+    window.addEventListener("keydown", dismissOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", dismissOnEscape);
+    };
+  }, [dismissInspector, inspectorDialogOpen, twoColumnLayout]);
+
+  const openInspector = useCallback(() => {
+    if (twoColumnLayout) setInspectorDialogOpen(true);
+  }, [twoColumnLayout]);
+
+  return {
+    dismissInspector,
+    inspectorDialogOpen,
+    openInspector,
+    twoColumnLayout,
+  };
+}
+
 function DraftScreen({
   state,
   dispatch,
@@ -779,6 +833,12 @@ function DraftScreen({
       completedAchievements,
     )
   );
+  const {
+    dismissInspector,
+    inspectorDialogOpen,
+    openInspector,
+    twoColumnLayout,
+  } = useTwoColumnGodInspector(`draft-god-${inspected}`);
   const activePlayer = state.players[state.activeColor];
   const currentGod = GOD_BY_ID[inspected];
   const selectedSkinUnlocked = isGodSkinUnlocked(
@@ -800,8 +860,22 @@ function DraftScreen({
     }
   }, [state.draft.pickIndex]);
 
+  const inspectGod = (godId: GodId) => {
+    setInspected(godId);
+    openInspector();
+  };
+
+  const confirmGodSelection = () => {
+    dispatch({
+      type: "draft",
+      godId: currentGod.id,
+      skinId: selectedSkinId,
+    });
+    if (twoColumnLayout) dismissInspector();
+  };
+
   return (
-    <main className="draft-page">
+    <main className="draft-page classic-draft-page">
       <header className="topbar draft-topbar">
         <Brand />
         <div className="draft-turn">
@@ -887,8 +961,9 @@ function DraftScreen({
             return (
               <button
                 className={`draft-card ${inspected === god.id ? "inspected" : ""} ${owner ? "claimed" : ""}`}
+                id={`draft-god-${god.id}`}
                 key={god.id}
-                onClick={() => setInspected(god.id)}
+                onClick={() => inspectGod(god.id)}
                 style={{ "--accent": god.accent } as React.CSSProperties}
               >
                 <GodPortrait godId={god.id} skinId={skinId} className="god-card-portrait" />
@@ -902,7 +977,22 @@ function DraftScreen({
           })}
         </div>
 
-        <aside className="god-inspector" style={{ "--accent": currentGod.accent } as React.CSSProperties}>
+        <aside
+          className={`god-inspector${inspectorDialogOpen ? " two-column-inspector-dialog-open" : ""}`}
+          style={{ "--accent": currentGod.accent } as React.CSSProperties}
+          role={twoColumnLayout && inspectorDialogOpen ? "dialog" : undefined}
+          aria-modal={twoColumnLayout && inspectorDialogOpen ? "true" : undefined}
+          aria-label={twoColumnLayout && inspectorDialogOpen
+            ? `${currentGod.name} draft selection`
+            : undefined}
+        >
+          <button
+            className="inspector-dialog-dismiss"
+            onClick={dismissInspector}
+          >
+            <X size={18} />
+            Dismiss
+          </button>
           <div className="inspector-heading">
             <GodPortrait
               godId={currentGod.id}
@@ -946,11 +1036,7 @@ function DraftScreen({
           </div>
           <button
             className="primary-button"
-            onClick={() => dispatch({
-              type: "draft",
-              godId: currentGod.id,
-              skinId: selectedSkinId,
-            })}
+            onClick={confirmGodSelection}
             disabled={
               inputDisabled ||
               !state.draft.available.includes(currentGod.id) ||
@@ -958,7 +1044,7 @@ function DraftScreen({
             }
           >
             {selectedSkinUnlocked
-              ? `Claim ${currentGod.name}`
+              ? `${twoColumnLayout && inspectorDialogOpen ? "Confirm" : "Claim"} ${currentGod.name}`
               : `${currentGod.name} skin locked`}
             {selectedSkinUnlocked && <ChevronRight size={17} />}
           </button>
@@ -1018,6 +1104,12 @@ function RosterScreen({
   const [selectedSkinId, setSelectedSkinId] = useState<GodSkinId>(() =>
     favoriteGodSkin(favorites, GODS[0].id, completedAchievements)
   );
+  const {
+    dismissInspector,
+    inspectorDialogOpen,
+    openInspector,
+    twoColumnLayout,
+  } = useTwoColumnGodInspector(`roster-god-${inspected}`);
   const currentGod = GOD_BY_ID[inspected];
 
   useEffect(() => {
@@ -1038,6 +1130,11 @@ function RosterScreen({
     else next[inspected] = skinId;
     persistFavoriteGodSkins(next);
     setFavorites(next);
+  };
+
+  const inspectGod = (godId: GodId) => {
+    setInspected(godId);
+    openInspector();
   };
 
   return (
@@ -1065,8 +1162,9 @@ function RosterScreen({
           {GODS.map((god) => (
             <button
               className={`draft-card ${inspected === god.id ? "inspected" : ""}`}
+              id={`roster-god-${god.id}`}
               key={god.id}
-              onClick={() => setInspected(god.id)}
+              onClick={() => inspectGod(god.id)}
               style={{ "--accent": god.accent } as React.CSSProperties}
               aria-pressed={inspected === god.id}
             >
@@ -1087,7 +1185,22 @@ function RosterScreen({
           ))}
         </div>
 
-        <aside className="god-inspector" style={{ "--accent": currentGod.accent } as React.CSSProperties}>
+        <aside
+          className={`god-inspector${inspectorDialogOpen ? " two-column-inspector-dialog-open" : ""}`}
+          style={{ "--accent": currentGod.accent } as React.CSSProperties}
+          role={twoColumnLayout && inspectorDialogOpen ? "dialog" : undefined}
+          aria-modal={twoColumnLayout && inspectorDialogOpen ? "true" : undefined}
+          aria-label={twoColumnLayout && inspectorDialogOpen
+            ? `${currentGod.name} details`
+            : undefined}
+        >
+          <button
+            className="inspector-dialog-dismiss"
+            onClick={dismissInspector}
+          >
+            <X size={18} />
+            Dismiss
+          </button>
           <div className="inspector-heading">
             <GodPortrait
               godId={currentGod.id}
