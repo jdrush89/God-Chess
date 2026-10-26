@@ -34,6 +34,10 @@ describe("custom puzzle marketplace schema contract", () => {
     expect(publish).toContain("creator_id = requesting_user_id");
     expect(publish).toContain("Place exactly one % King.");
     expect(publish).toContain("Each player must have three unique gods.");
+    expect(publish).toContain("Only selected gods can start resting.");
+    expect(publish).toContain(
+      "Each player needs at least one god ready to act.",
+    );
     expect(publish).toContain("Orb counts must be between 0 and 20.");
     expect(publish).toContain(
       "verified_turns not between 1 and turn_limit_value",

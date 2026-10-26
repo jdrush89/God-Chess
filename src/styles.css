@@ -3970,6 +3970,11 @@ span.move-target-dot {
   font-size: 30px;
 }
 
+.custom-piece-palette button,
+.custom-editor-square .custom-piece-symbol {
+  touch-action: none;
+}
+
 .custom-piece-drag-image {
   position: fixed;
   top: -100px;
@@ -3982,6 +3987,23 @@ span.move-target-dot {
   font-size: 50px;
   pointer-events: none;
   filter: drop-shadow(0 0.6rem 0.8rem rgb(0 0 0 / 45%));
+}
+
+.custom-piece-pointer-preview {
+  position: fixed;
+  z-index: 1000;
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(1.08);
+  filter: drop-shadow(0 0.6rem 0.8rem rgb(0 0 0 / 45%));
+}
+
+.custom-piece-pointer-preview .custom-piece-symbol {
+  font-size: 50px;
+  cursor: grabbing;
 }
 
 .custom-editor-board {
@@ -4108,6 +4130,50 @@ span.move-target-dot {
   color: var(--text);
   border-color: var(--gold);
   background: rgba(213, 171, 90, .1);
+}
+
+.custom-resting-gods {
+  display: grid;
+  gap: 7px;
+  margin: 10px 0 14px;
+}
+
+.custom-resting-gods > span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.custom-resting-gods > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.custom-resting-gods button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  background: rgba(255,255,255,.025);
+}
+
+.custom-resting-gods button.resting {
+  color: #c5d7ff;
+  border-color: rgba(112, 151, 222, .75);
+  background: rgba(67, 103, 169, .2);
+  box-shadow: inset 0 0 12px rgba(74, 111, 181, .16);
+}
+
+.custom-resting-gods small {
+  color: var(--muted);
+  line-height: 1.45;
 }
 
 .custom-editor-validation {

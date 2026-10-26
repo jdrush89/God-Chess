@@ -205,8 +205,10 @@ positions themselves are not added to local or cloud saves.
 
 The Custom Puzzles area provides a classic-board editor with drag-and-drop and
 tap controls, configurable gods, orb pools, solver color, objective, and a
-one-to-ten-turn limit. Drafts are versioned in local storage and can be
-play-tested against the normal level 10 puzzle AI. Upload remains locked until
+one-to-ten-turn limit. Each selected god can also be marked as initially
+resting, making it unavailable until the next round. Drafts are versioned in
+local storage and can be play-tested against the normal level 10 puzzle AI.
+Upload remains locked until
 the exact current draft is completed within its limit. Signed-in players can
 publish verified drafts to the Supabase-backed marketplace, browse all or
 friends-only puzzles, record completions, and see which accepted friends solved

@@ -427,14 +427,14 @@ begin
   if target_user is null then
     raise exception 'Player not found';
   end if;
-  if target_user = current_user_id then
+  if target_user = requesting_user_id then
     raise exception 'You cannot add yourself';
   end if;
 
   select * into existing_request
   from public.friend_requests
-  where (requester_id = current_user_id and recipient_id = target_user)
-     or (requester_id = target_user and recipient_id = current_user_id)
+  where (requester_id = requesting_user_id and recipient_id = target_user)
+     or (requester_id = target_user and recipient_id = requesting_user_id)
   for update;
 
   if found and existing_request.status = 'accepted' then
@@ -450,7 +450,7 @@ begin
   end if;
 
   insert into public.friend_requests(requester_id, recipient_id)
-  values (current_user_id, target_user);
+  values (requesting_user_id, target_user);
 end;
 $$;
 
@@ -538,7 +538,7 @@ security definer
 set search_path = public
 as $$
 declare
-  current_user_id uuid := auth.uid();
+  requesting_user_id uuid := auth.uid();
   target_user uuid;
   normalized_code text := upper(btrim(invite_room_code));
   normalized_expiry timestamptz := coalesce(
@@ -547,16 +547,16 @@ declare
   );
   invitation_id uuid;
 begin
-  if current_user_id is null then
+  if requesting_user_id is null then
     raise exception 'Authentication required';
   end if;
   select id into target_user
   from public.profiles
   where public_id = public.normalize_public_id(target_public_id);
-  if target_user is null or target_user = current_user_id then
+  if target_user is null or target_user = requesting_user_id then
     raise exception 'Invalid invitation recipient';
   end if;
-  if not public.are_friends(current_user_id, target_user) then
+  if not public.are_friends(requesting_user_id, target_user) then
     raise exception 'Only accepted friends can be invited';
   end if;
   if normalized_code !~ '^[A-Z2-9]{5}$' then
@@ -579,7 +579,7 @@ begin
 
   if exists (
     select 1 from public.game_invitations
-    where sender_id = current_user_id
+    where sender_id = requesting_user_id
       and recipient_id = target_user
       and variant = invite_variant
       and room_code = normalized_code
@@ -876,7 +876,7 @@ security definer
 set search_path = public
 as $$
 declare
-  current_user_id uuid := auth.uid();
+  requesting_user_id uuid := auth.uid();
   published_id uuid;
   title_value text;
   objective_value text;
@@ -888,8 +888,11 @@ declare
   king_count integer;
   piece_count integer;
   unique_piece_id_count integer;
+  resting_god_count integer;
+  unique_resting_god_count integer;
+  available_god_count integer;
 begin
-  if current_user_id is null then
+  if requesting_user_id is null then
     raise exception 'Sign in before uploading a puzzle.';
   end if;
   if puzzle_payload is null or jsonb_typeof(puzzle_payload) <> 'object' then
@@ -930,6 +933,10 @@ begin
       jsonb_typeof(puzzle_payload->'players') is distinct from 'object' then
     raise exception 'Puzzle board and players are required.';
   end if;
+  if puzzle_payload ? 'restingGods' and
+      jsonb_typeof(puzzle_payload->'restingGods') is distinct from 'array' then
+    raise exception 'Resting gods must be an array.';
+  end if;
   if exists (
     select 1
     from jsonb_each(puzzle_payload->'board') square
@@ -949,6 +956,38 @@ begin
   if piece_count <> unique_piece_id_count then
     raise exception 'Every puzzle piece must have a unique ID.';
   end if;
+  if exists (
+    select 1
+    from jsonb_array_elements_text(
+      coalesce(puzzle_payload->'restingGods', '[]'::jsonb)
+    ) resting(god_id)
+    where god_id not in (
+      'quetzacoatl', 'chiron', 'anubis', 'artemis', 'teles', 'death',
+      'medusa', 'ares', 'midas', 'leonidas', 'kangus', 'salem'
+    )
+  ) then
+    raise exception 'A resting god is invalid.';
+  end if;
+  select count(*), count(distinct god_id)
+  into resting_god_count, unique_resting_god_count
+  from jsonb_array_elements_text(
+    coalesce(puzzle_payload->'restingGods', '[]'::jsonb)
+  ) resting(god_id);
+  if resting_god_count <> unique_resting_god_count then
+    raise exception 'Resting gods must be unique.';
+  end if;
+  if exists (
+    select 1
+    from jsonb_array_elements_text(
+      coalesce(puzzle_payload->'restingGods', '[]'::jsonb)
+    ) resting(god_id)
+    where not (
+      puzzle_payload->'players'->'white'->'gods' ? god_id or
+      puzzle_payload->'players'->'black'->'gods' ? god_id
+    )
+  ) then
+    raise exception 'Only selected gods can start resting.';
+  end if;
 
   foreach color_value in array array['white', 'black']
   loop
@@ -967,6 +1006,17 @@ begin
     );
     if god_count <> 3 or unique_god_count <> 3 then
       raise exception 'Each player must have three unique gods.';
+    end if;
+    select count(*)
+    into available_god_count
+    from jsonb_array_elements_text(
+      puzzle_payload->'players'->color_value->'gods'
+    ) god(god_id)
+    where not (
+      coalesce(puzzle_payload->'restingGods', '[]'::jsonb) ? god_id
+    );
+    if available_god_count = 0 then
+      raise exception 'Each player needs at least one god ready to act.';
     end if;
     if not (
       coalesce(puzzle_payload->'players'->color_value->'orbs'->>'white' ~ '^[0-9]+$', false) and
@@ -993,7 +1043,7 @@ begin
       solution_turns
     )
     values (
-      current_user_id,
+      requesting_user_id,
       puzzle_payload,
       verified_turns
     )

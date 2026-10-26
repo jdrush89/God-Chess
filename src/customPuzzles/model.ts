@@ -27,6 +27,7 @@ export interface CustomPuzzleContent {
   objective: CustomPuzzleObjective;
   playerColor: Color;
   turnLimit: number;
+  restingGods: GodId[];
   board: Record<Square, Piece>;
   players: Record<Color, CustomPuzzlePlayer>;
 }
@@ -101,8 +102,9 @@ export const createBlankCustomPuzzle = (): CustomPuzzleDraft => {
     objective: "capture-king",
     playerColor: "white",
     turnLimit: 2,
+    restingGods: [],
     board: {
-      e1: createEditorPiece("e1", "king", "white"),
+      d1: createEditorPiece("d1", "king", "white"),
       e8: createEditorPiece("e8", "king", "black"),
     },
     players: {
@@ -126,6 +128,17 @@ const normalizeGods = (value: unknown): GodId[] | undefined => {
     value.length !== 3 ||
     !value.every((godId) => typeof godId === "string" && GOD_IDS.has(godId as GodId)) ||
     new Set(value).size !== 3
+  ) return undefined;
+  return value as GodId[];
+};
+
+const normalizeRestingGods = (value: unknown): GodId[] | undefined => {
+  if (
+    !Array.isArray(value) ||
+    !value.every((godId) =>
+      typeof godId === "string" && GOD_IDS.has(godId as GodId)
+    ) ||
+    new Set(value).size !== value.length
   ) return undefined;
   return value as GodId[];
 };
@@ -167,13 +180,17 @@ export const normalizeCustomPuzzleContent = (
   const objective = value.objective;
   const playerColor = value.playerColor;
   const turnLimit = value.turnLimit;
+  const restingGods = value.restingGods === undefined
+    ? []
+    : normalizeRestingGods(value.restingGods);
   if (
     (objective !== "capture-king" && objective !== "escape-check") ||
     !COLORS.has(playerColor as Color) ||
     typeof turnLimit !== "number" ||
     !Number.isInteger(turnLimit) ||
     turnLimit < 1 ||
-    turnLimit > 10
+    turnLimit > 10 ||
+    !restingGods
   ) return undefined;
   const players = {} as Record<Color, CustomPuzzlePlayer>;
   for (const color of ["white", "black"] as const) {
@@ -198,6 +215,7 @@ export const normalizeCustomPuzzleContent = (
     objective,
     playerColor: playerColor as Color,
     turnLimit,
+    restingGods,
     board,
     players,
   };
@@ -244,6 +262,7 @@ export const customPuzzleFingerprint = (
   objective: puzzle.objective,
   playerColor: puzzle.playerColor,
   turnLimit: puzzle.turnLimit,
+  restingGods: [...puzzle.restingGods].sort(),
   board: Object.entries(puzzle.board)
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([square, piece]) => [
@@ -274,6 +293,23 @@ export const validateCustomPuzzle = (
     if (new Set(puzzle.players[color].gods).size !== 3) {
       errors.push(`Choose three unique gods for ${color}.`);
     }
+    if (
+      puzzle.players[color].gods.every((godId) =>
+        puzzle.restingGods.includes(godId)
+      )
+    ) {
+      errors.push(`Leave at least one ${color} god ready to act.`);
+    }
+  }
+  const selectedGods = new Set(
+    Object.values(puzzle.players).flatMap((player) => player.gods),
+  );
+  if (
+    new Set(puzzle.restingGods).size !== puzzle.restingGods.length ||
+    puzzle.restingGods.some((godId) => !GOD_IDS.has(godId)) ||
+    puzzle.restingGods.some((godId) => !selectedGods.has(godId))
+  ) {
+    errors.push("Only selected gods can start resting.");
   }
   const pieceIds = Object.values(puzzle.board).map((piece) => piece.id);
   if (
@@ -322,7 +358,7 @@ export const createCustomPuzzleGame = (
   }
   state.draft.pickIndex = state.draft.order.length;
   state.draft.available = [];
-  state.rested = [];
+  state.rested = [...puzzle.restingGods];
   state.round = 1;
   state.turn = 1;
   state.upgradeQueue = [];
