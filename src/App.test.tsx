@@ -55,6 +55,8 @@ const cloudSaveHarness = vi.hoisted(() => ({
 const cloudProgressHarness = vi.hoisted(() => ({
   loadPuzzles: vi.fn(),
   upsertPuzzles: vi.fn(async () => undefined),
+  loadDailyGiveUps: vi.fn(),
+  upsertDailyGiveUps: vi.fn(async () => undefined),
   loadDailyRatings: vi.fn(),
   upsertDailyRatings: vi.fn(async () => undefined),
   loadChallenges: vi.fn(),
@@ -161,6 +163,11 @@ vi.mock("./account/cloudPuzzleProgress", () => ({
   upsertCloudCompletedPuzzles: cloudProgressHarness.upsertPuzzles,
 }));
 
+vi.mock("./account/cloudDailyPuzzleGiveUps", () => ({
+  loadCloudDailyPuzzleGiveUps: cloudProgressHarness.loadDailyGiveUps,
+  upsertCloudDailyPuzzleGiveUps: cloudProgressHarness.upsertDailyGiveUps,
+}));
+
 vi.mock("./account/cloudDailyPuzzleRatings", () => ({
   loadCloudDailyPuzzleRatings: cloudProgressHarness.loadDailyRatings,
   upsertCloudDailyPuzzleRatings: cloudProgressHarness.upsertDailyRatings,
@@ -240,6 +247,10 @@ import {
   loadLocalDailyPuzzleRatings,
   persistLocalDailyPuzzleRatings,
 } from "./dailyPuzzleRatings";
+import {
+  loadLocalDailyPuzzleGiveUps,
+  persistLocalDailyPuzzleGiveUps,
+} from "./dailyPuzzleGiveUps";
 
 const SAVE_KEY = "god-chess-saves-v2";
 const LEGACY_SAVE_KEY = "god-chess-save-v1";
@@ -508,6 +519,9 @@ beforeEach(() => {
   cloudProgressHarness.loadPuzzles.mockReset();
   cloudProgressHarness.loadPuzzles.mockResolvedValue([]);
   cloudProgressHarness.upsertPuzzles.mockClear();
+  cloudProgressHarness.loadDailyGiveUps.mockReset();
+  cloudProgressHarness.loadDailyGiveUps.mockResolvedValue([]);
+  cloudProgressHarness.upsertDailyGiveUps.mockClear();
   cloudProgressHarness.loadDailyRatings.mockReset();
   cloudProgressHarness.loadDailyRatings.mockResolvedValue({});
   cloudProgressHarness.upsertDailyRatings.mockClear();
@@ -867,6 +881,7 @@ describe("game startup", () => {
     expect(screen.queryByLabelText(/daily share card/i)).toBeNull();
     expect(screen.queryByLabelText(/rate this daily puzzle/i)).toBeNull();
     expect(loadLocalCompletedPuzzles()).not.toContain(daily.id);
+    expect(loadLocalDailyPuzzleGiveUps()).toContain(daily.id);
   });
 
   it("normalizes the legacy Daily play URL while starting the puzzle", async () => {
@@ -1374,6 +1389,7 @@ describe("game startup", () => {
     const localSave = createSavedGame("local-save", createGame(1), []);
     persistLocalSavedGames([localSave]);
     persistLocalCompletedPuzzles(["centaurs-lance"]);
+    persistLocalDailyPuzzleGiveUps([currentDailyPuzzle()!.id]);
     persistLocalDailyPuzzleRatings({ [currentDailyPuzzle()!.id]: "up" });
     persistLocalCompletedChallenges(["phalanx"]);
     const localAchievements = createAchievementProgress();
@@ -1416,6 +1432,8 @@ describe("game startup", () => {
     );
     expect(cloudProgressHarness.upsertPuzzles)
       .toHaveBeenCalledWith("new-account", ["centaurs-lance"]);
+    expect(cloudProgressHarness.upsertDailyGiveUps)
+      .toHaveBeenCalledWith("new-account", [currentDailyPuzzle()!.id]);
     expect(cloudProgressHarness.upsertDailyRatings).toHaveBeenCalledWith(
       "new-account",
       { [currentDailyPuzzle()!.id]: "up" },
@@ -1466,6 +1484,7 @@ describe("game startup", () => {
     });
     expect(cloudSaveHarness.upsert).not.toHaveBeenCalled();
     expect(cloudProgressHarness.upsertPuzzles).not.toHaveBeenCalled();
+    expect(cloudProgressHarness.upsertDailyGiveUps).not.toHaveBeenCalled();
     expect(cloudProgressHarness.upsertDailyRatings).not.toHaveBeenCalled();
     expect(cloudProgressHarness.upsertChallenges).not.toHaveBeenCalled();
     expect(cloudProgressHarness.upsertAchievements).not.toHaveBeenCalled();
@@ -1503,6 +1522,7 @@ describe("game startup", () => {
     expect(screen.queryByText(/import this device's progress/i)).toBeNull();
     expect(cloudSaveHarness.upsert).not.toHaveBeenCalled();
     expect(cloudProgressHarness.upsertPuzzles).not.toHaveBeenCalled();
+    expect(cloudProgressHarness.upsertDailyGiveUps).not.toHaveBeenCalled();
     expect(cloudProgressHarness.upsertChallenges).not.toHaveBeenCalled();
     expect(cloudProgressHarness.upsertAchievements).not.toHaveBeenCalled();
 
@@ -1853,6 +1873,25 @@ describe("game startup", () => {
       new RegExp(`daily · ${daily.playerTurns} player turns?`, "i"),
     )).toBeTruthy();
     expect(window.location.pathname).toBe("/daily");
+  });
+
+  it("shows a given-up Daily count and flag in the archive", () => {
+    const daily = currentDailyPuzzle()!;
+    persistLocalDailyPuzzleGiveUps([daily.id]);
+    render(<App />);
+    openPlayOption("Puzzles");
+
+    const dailyCard = screen.getByRole("button", {
+      name: /^daily play today's daily puzzle.*1 out of 1 given up/i,
+    });
+    expect(dailyCard).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /^daily archive/i }));
+    const archiveCard = screen.getByRole("button", {
+      name: new RegExp(`today's daily, ${daily.title}.*given up`, "i"),
+    });
+    expect(within(archiveCard).getByText(/^give up$/i)).toBeTruthy();
+    expect(archiveCard.querySelector(".puzzle-give-up-badge svg")).toBeTruthy();
   });
 
   it("browses the Daily archive newest-first and starts a selected Daily", async () => {

@@ -149,6 +149,10 @@ import {
   upsertCloudCompletedPuzzles,
 } from "./account/cloudPuzzleProgress";
 import {
+  loadCloudDailyPuzzleGiveUps,
+  upsertCloudDailyPuzzleGiveUps,
+} from "./account/cloudDailyPuzzleGiveUps";
+import {
   loadCloudDailyPuzzleRatings,
   upsertCloudDailyPuzzleRatings,
 } from "./account/cloudDailyPuzzleRatings";
@@ -286,6 +290,10 @@ import {
   loadLocalCompletedPuzzles,
   persistLocalCompletedPuzzles,
 } from "./puzzleProgress";
+import {
+  loadLocalDailyPuzzleGiveUps,
+  persistLocalDailyPuzzleGiveUps,
+} from "./dailyPuzzleGiveUps";
 import { FourPlayerGame } from "./fourPlayer/FourPlayerGame";
 import { FourPlayerOnlineLobby } from "./fourPlayer/FourPlayerOnlineLobby";
 import { FourPlayerSetup } from "./fourPlayer/FourPlayerSetup";
@@ -3955,6 +3963,7 @@ function StartGamePrompt({
 function PuzzleSelectScreen({
   category,
   completedPuzzles,
+  givenUpDailyPuzzles,
   dailyPuzzleRatings,
   completedChallenges,
   accountControl,
@@ -3968,6 +3977,7 @@ function PuzzleSelectScreen({
 }: {
   category?: PuzzleCategory;
   completedPuzzles: Set<PuzzleId>;
+  givenUpDailyPuzzles: Set<DailyPuzzleId>;
   dailyPuzzleRatings: DailyPuzzleRatings;
   completedChallenges: Set<ChallengeId>;
   accountControl: ReactNode;
@@ -4092,6 +4102,11 @@ function PuzzleSelectScreen({
                   : puzzles.filter((puzzle) =>
                     completedPuzzles.has(puzzle.id as PuzzleId)
                   ).length;
+                const givenUp = option.id === "daily-current"
+                  ? puzzles.filter((puzzle) =>
+                    givenUpDailyPuzzles.has(puzzle.id as DailyPuzzleId)
+                  ).length
+                  : 0;
                 const Icon = option.icon;
                 return (
                   <button
@@ -4118,7 +4133,9 @@ function PuzzleSelectScreen({
                           ? "Browse published puzzles"
                           : progressLoading
                             ? "Loading progress"
-                            : `${completed} of ${puzzles.length} completed`}
+                            : option.id === "daily-current" && givenUp
+                              ? `${givenUp} out of ${puzzles.length} given up`
+                              : `${completed} of ${puzzles.length} completed`}
                     </small>
                   </button>
                 );
@@ -4153,18 +4170,25 @@ function PuzzleSelectScreen({
               {difficulty === "daily"
                 ? dailyArchivePuzzles.map((puzzle) => {
                   const completed = completedPuzzles.has(puzzle.id);
+                  const givenUp = givenUpDailyPuzzles.has(puzzle.id);
                   const rating = dailyPuzzleRatings[puzzle.id];
                   const current = dailyPuzzle?.id === puzzle.id;
                   return (
                     <button
-                      className={`puzzle-select-card daily-archive-card${completed ? " completed" : ""}`}
+                      className={`puzzle-select-card daily-archive-card${completed ? " completed" : ""}${givenUp ? " given-up" : ""}`}
                       key={puzzle.id}
                       onClick={() => onStartPuzzle(puzzle.id)}
-                      aria-label={`${current ? "Today's Daily" : "Archived Daily"}, ${puzzle.title}${completed ? ", completed" : ""}${rating ? `, thumbed ${rating}` : ""}`}
+                      aria-label={`${current ? "Today's Daily" : "Archived Daily"}, ${puzzle.title}${completed ? ", completed" : ""}${givenUp ? ", given up" : ""}${rating ? `, thumbed ${rating}` : ""}`}
                     >
                       {completed && (
                         <span className="puzzle-complete-badge" aria-hidden="true">
                           <Check size={22} strokeWidth={3} />
+                        </span>
+                      )}
+                      {givenUp && (
+                        <span className="puzzle-give-up-badge">
+                          <Flag size={13} />
+                          Give up
                         </span>
                       )}
                       <span>{current ? "TODAY'S DAILY" : "DAILY ARCHIVE"}</span>
@@ -5907,6 +5931,15 @@ export default function App() {
     completed: PuzzleId[];
   }>({ completed: [] });
   const [puzzleProgressLoading, setPuzzleProgressLoading] = useState(false);
+  const [localDailyPuzzleGiveUps, setLocalDailyPuzzleGiveUps] = useState(
+    loadLocalDailyPuzzleGiveUps,
+  );
+  const [cloudDailyPuzzleGiveUps, setCloudDailyPuzzleGiveUps] = useState<{
+    userId?: string;
+    puzzleIds: DailyPuzzleId[];
+  }>({ puzzleIds: [] });
+  const [dailyPuzzleGiveUpsLoading, setDailyPuzzleGiveUpsLoading] =
+    useState(false);
   const [localDailyPuzzleRatings, setLocalDailyPuzzleRatings] = useState(
     loadLocalDailyPuzzleRatings,
   );
@@ -5960,6 +5993,12 @@ export default function App() {
       : []
     : localCompletedPuzzles;
   const completedPuzzles = new Set(completedPuzzleIds);
+  const givenUpDailyPuzzleIds = accountService.account
+    ? cloudDailyPuzzleGiveUps.userId === accountService.account.userId
+      ? cloudDailyPuzzleGiveUps.puzzleIds
+      : []
+    : localDailyPuzzleGiveUps;
+  const givenUpDailyPuzzles = new Set(givenUpDailyPuzzleIds);
   const dailyPuzzleRatings = accountService.account
     ? cloudDailyPuzzleRatings.userId === accountService.account.userId
       ? cloudDailyPuzzleRatings.ratings
@@ -5976,6 +6015,7 @@ export default function App() {
     (
       cloudSavesLoadedFor !== accountService.account.userId ||
       cloudPuzzleProgress.userId !== accountService.account.userId ||
+      cloudDailyPuzzleGiveUps.userId !== accountService.account.userId ||
       cloudDailyPuzzleRatings.userId !== accountService.account.userId ||
       cloudChallengeProgress.userId !== accountService.account.userId ||
       achievementProgressLoadedFor !== accountService.account.userId ||
@@ -6453,6 +6493,46 @@ export default function App() {
   useEffect(() => {
     const account = accountService.account;
     if (!account) {
+      setCloudDailyPuzzleGiveUps({ puzzleIds: [] });
+      setDailyPuzzleGiveUpsLoading(false);
+      return;
+    }
+    let active = true;
+    setDailyPuzzleGiveUpsLoading(true);
+    void loadCloudDailyPuzzleGiveUps(account.userId)
+      .then((puzzleIds) => {
+        if (active) {
+          setCloudDailyPuzzleGiveUps({
+            userId: account.userId,
+            puzzleIds,
+          });
+        }
+      })
+      .catch((error) => {
+        console.error("Unable to load cloud Daily puzzle give-ups.", error);
+        if (active) {
+          setSaveError(
+            error instanceof Error
+              ? error.message
+              : "Unable to load Daily puzzle give-ups.",
+          );
+          setCloudDailyPuzzleGiveUps({
+            userId: account.userId,
+            puzzleIds: [],
+          });
+        }
+      })
+      .finally(() => {
+        if (active) setDailyPuzzleGiveUpsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [accountService.account?.userId]);
+
+  useEffect(() => {
+    const account = accountService.account;
+    if (!account) {
       setCloudChallengeProgress({ completed: [] });
       setChallengeProgressLoading(false);
       return;
@@ -6518,6 +6598,10 @@ export default function App() {
           ...cloudPuzzleProgress.completed,
           ...loadLocalCompletedPuzzles(),
         ])];
+        const importedDailyGiveUps = [...new Set([
+          ...cloudDailyPuzzleGiveUps.puzzleIds,
+          ...loadLocalDailyPuzzleGiveUps(),
+        ])];
         const importedDailyRatings = {
           ...cloudDailyPuzzleRatings.ratings,
           ...loadLocalDailyPuzzleRatings(),
@@ -6540,6 +6624,10 @@ export default function App() {
             upsertCloudSavedGame(account.userId, game)
           ),
           upsertCloudCompletedPuzzles(account.userId, importedPuzzles),
+          upsertCloudDailyPuzzleGiveUps(
+            account.userId,
+            importedDailyGiveUps,
+          ),
           upsertCloudDailyPuzzleRatings(
             account.userId,
             importedDailyRatings,
@@ -6561,6 +6649,10 @@ export default function App() {
         setCloudPuzzleProgress({
           userId: account.userId,
           completed: importedPuzzles,
+        });
+        setCloudDailyPuzzleGiveUps({
+          userId: account.userId,
+          puzzleIds: importedDailyGiveUps,
         });
         setCloudDailyPuzzleRatings({
           userId: account.userId,
@@ -6592,6 +6684,7 @@ export default function App() {
     accountService,
     achievementProgress,
     cloudChallengeProgress.completed,
+    cloudDailyPuzzleGiveUps.puzzleIds,
     cloudDailyPuzzleRatings.ratings,
     cloudPuzzleProgress.completed,
     cloudSavedGames,
@@ -6679,6 +6772,58 @@ export default function App() {
     cloudPuzzleProgress,
     localCompletedPuzzles,
     puzzleProgressLoading,
+  ]);
+
+  const recordDailyPuzzleGiveUp = useCallback((
+    puzzleId: DailyPuzzleId,
+  ) => {
+    const account = accountService.account;
+    if (account) {
+      if (
+        cloudDailyPuzzleGiveUps.userId !== account.userId ||
+        dailyPuzzleGiveUpsLoading
+      ) return false;
+      if (cloudDailyPuzzleGiveUps.puzzleIds.includes(puzzleId)) return true;
+      const previous = cloudDailyPuzzleGiveUps.puzzleIds;
+      const puzzleIds = [...previous, puzzleId];
+      setCloudDailyPuzzleGiveUps({ userId: account.userId, puzzleIds });
+      void upsertCloudDailyPuzzleGiveUps(account.userId, puzzleIds).catch(
+        (error) => {
+          console.error("Unable to save cloud Daily puzzle give-up.", error);
+          setCloudDailyPuzzleGiveUps({
+            userId: account.userId,
+            puzzleIds: previous,
+          });
+          setSaveError(
+            error instanceof Error
+              ? error.message
+              : "Unable to save Daily puzzle give-up.",
+          );
+        },
+      );
+      return true;
+    }
+
+    if (localDailyPuzzleGiveUps.includes(puzzleId)) return true;
+    const puzzleIds = [...localDailyPuzzleGiveUps, puzzleId];
+    try {
+      persistLocalDailyPuzzleGiveUps(puzzleIds);
+      setLocalDailyPuzzleGiveUps(puzzleIds);
+    } catch (error) {
+      console.error("Unable to save local Daily puzzle give-up.", error);
+      setSaveError(
+        error instanceof Error
+          ? error.message
+          : "Unable to save Daily puzzle give-up.",
+      );
+      return false;
+    }
+    return true;
+  }, [
+    accountService.account,
+    cloudDailyPuzzleGiveUps,
+    dailyPuzzleGiveUpsLoading,
+    localDailyPuzzleGiveUps,
   ]);
 
   const recordDailyPuzzleRating = useCallback((
@@ -8388,6 +8533,7 @@ export default function App() {
     if (!state.puzzleId || !isDailyPuzzleId(state.puzzleId)) return;
     const puzzle = DAILY_PUZZLE_BY_ID[state.puzzleId];
     if (!puzzle?.solutionActions.length) return;
+    if (!recordDailyPuzzleGiveUp(state.puzzleId)) return;
     const next = createDailyPuzzleGame(
       state.puzzleId,
       accountService.account?.displayName,
@@ -8692,11 +8838,13 @@ export default function App() {
       <PuzzleSelectScreen
         category={puzzleCategory}
         completedPuzzles={completedPuzzles}
+        givenUpDailyPuzzles={givenUpDailyPuzzles}
         dailyPuzzleRatings={dailyPuzzleRatings}
         completedChallenges={completedChallenges}
         accountControl={renderAccountControl("puzzle-account-area")}
         progressLoading={
           puzzleProgressLoading ||
+          dailyPuzzleGiveUpsLoading ||
           dailyPuzzleRatingsLoading ||
           challengeProgressLoading
         }
