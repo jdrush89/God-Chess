@@ -43,6 +43,7 @@ export {
   GOD_ABILITY_ACHIEVEMENT_IDS,
   GOD_ACHIEVEMENT_IDS,
   GOD_ACHIEVEMENT_SKIN_IDS,
+  hasCompletedAllGodAbilityAchievements,
   hasCompletedGodAchievement,
   isAchievementUnlockedGodSkin,
 } from "./godAchievementUnlocks";
