@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  airStrikeCaptureThreatValue,
   chooseAiPlan,
   chooseFallbackAiPlan,
   chooseRandomAiPlan,
@@ -14,7 +15,10 @@ import {
   createGame,
   gameReducer,
 } from "./engine";
-import { createDailyPuzzleGame } from "./dailyPuzzles";
+import {
+  createDailyPuzzleGame,
+  DAILY_PUZZLE_BY_ID,
+} from "./dailyPuzzles";
 import { PUZZLE_BY_ID } from "./puzzles";
 import type { Piece, PieceType } from "./types";
 
@@ -552,6 +556,49 @@ describe("Divine AI", () => {
 
     expect(kingSquare(state.board, "black")).toBeTruthy();
     expect(kingSquare(state.board, "black")).not.toBe("f7");
+  });
+
+  it("only treats a piece as Air Strike exposed when the carrier can land beyond it", () => {
+    const corner = createGame(2, { mode: "ai", aiDifficulty: 10 });
+    corner.phase = "play";
+    corner.activeColor = "black";
+    corner.players.white.gods = ["quetzacoatl"];
+    corner.players.white.upgrades["air-strike"] = 2;
+    corner.players.white.orbs.black = 3;
+    corner.players.black.gods = ["anubis"];
+    corner.rested = [];
+    corner.board = {
+      a1: piece("king", "white", "white-king"),
+      h1: piece("rook", "white", "white-carrier"),
+      h2: piece("pawn", "white", "white-passenger"),
+      a8: piece("king", "black", "black-king"),
+      h8: piece("rook", "black", "black-rook"),
+    };
+
+    expect(airStrikeCaptureThreatValue(corner, "white")).toBe(0);
+
+    const exposed = structuredClone(corner);
+    exposed.board.h3 = exposed.board.h8;
+    delete exposed.board.h8;
+
+    expect(airStrikeCaptureThreatValue(exposed, "white")).toBe(5);
+  });
+
+  it("keeps the corner rook safe in the October 25 Daily response", () => {
+    const daily = DAILY_PUZZLE_BY_ID["daily-2026-10-25"]!;
+    let state = daily.createState();
+    for (const action of daily.solutionActions) {
+      if (state.activeColor !== daily.playerColor) break;
+      state = gameReducer(state, action);
+    }
+
+    const response = chooseAiPlan(state, () => 0);
+
+    expect(response).toContainEqual({ type: "square", square: "a5" });
+    expect(response).toContainEqual({ type: "square", square: "a4" });
+    expect(response).not.toContainEqual({ type: "square", square: "h3" });
+    state = response.reduce(gameReducer, state);
+    expect(airStrikeCaptureThreatValue(state, "white")).toBe(0);
   });
 
   it("captures the hanging Pick a Fight knight when the apparent defender is unpinned", () => {
