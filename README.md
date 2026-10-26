@@ -255,7 +255,7 @@ must update this documentation.
 | Position Six | Teles, Chiron, Medusa | Quetzacoatl, Artemis, Ares | Teles (lure); Chiron (charge) |
 | Position Seven | Midas, Death, Salem | Ares, Chiron, Anubis | Midas (leverage); Death (resurrect) |
 | Position Eight | Chiron, Kangus Kong, Midas | Ares, Anubis, Salem | Chiron (mount); Kangus Kong (rage) |
-| Position Nine | Anubis, Quetzacoatl, Teles | Ares, Chiron, Salem | Anubis (monument); Quetzacoatl (air-strike) |
+| Position Nine | Anubis, Quetzacoatl, Teles | Ares, Chiron, Medusa | Anubis (monument); Quetzacoatl (air-strike) |
 | Position Ten | Midas, Chiron, Salem | Ares, Anubis, Medusa | Midas (leverage); Chiron (charge) |
 | Position Eleven | Midas, Quetzacoatl, Anubis | Ares, Chiron, Salem | Midas (leverage); Quetzacoatl (air-strike) |
 | Position Twelve | Death, Chiron, Teles | Ares, Anubis, Salem | Death (marked); Chiron (charge) |
