@@ -20,6 +20,7 @@ import {
   Zap,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTwoColumnGodInspector } from "../useTwoColumnGodInspector";
 import type { AchievementId } from "../achievements";
 import { AccountPortrait } from "../account/AccountPortrait";
 import type { AccountPortraitId } from "../account/portraits";
@@ -315,6 +316,12 @@ function ThreePlayerDraft({
   const activePlayer = state.players[currentSeat];
   const currentGod = GOD_BY_ID[inspected];
   const currentOwner = claimed.get(inspected);
+  const {
+    dismissInspector,
+    inspectorDialogOpen,
+    openInspector,
+    twoColumnLayout,
+  } = useTwoColumnGodInspector(`three-draft-god-${inspected}`);
   const selectedSkinUnlocked = isGodSkinUnlocked(
     inspected,
     selectedSkinId,
@@ -358,8 +365,22 @@ function ThreePlayerDraft({
     };
   }, []);
 
+  const inspectGod = (godId: GodId) => {
+    setInspected(godId);
+    openInspector();
+  };
+
+  const confirmGodSelection = () => {
+    if (!draftAction) return;
+    onAction({
+      ...draftAction,
+      skinId: selectedSkinId,
+    });
+    if (twoColumnLayout) dismissInspector();
+  };
+
   return (
-    <main className={`draft-page three-draft-page ${inputDisabled ? "input-locked" : ""}`}>
+    <main className={`draft-page pantheon-draft-page three-draft-page ${inputDisabled ? "input-locked" : ""}`}>
       <header className="topbar draft-topbar three-game-topbar">
         <div className="brand">
           <div className="brand-mark"><Crown size={23} strokeWidth={1.5} /></div>
@@ -450,8 +471,9 @@ function ThreePlayerDraft({
               <button
                 type="button"
                 className={`draft-card ${inspected === god.id ? "inspected" : ""} ${owner ? "claimed" : ""}`}
+                id={`three-draft-god-${god.id}`}
                 key={god.id}
-                onClick={() => setInspected(god.id)}
+                onClick={() => inspectGod(god.id)}
                 style={{ "--accent": god.accent } as React.CSSProperties}
                 aria-label={`Inspect ${god.name}${owner ? `, claimed by ${THREE_PLAYER_SEAT_LABELS[owner]}` : ""}`}
               >
@@ -479,10 +501,23 @@ function ThreePlayerDraft({
         </div>
 
         <aside
-          className="god-inspector three-god-inspector"
+          className={`god-inspector three-god-inspector${inspectorDialogOpen ? " two-column-inspector-dialog-open" : ""}`}
           ref={inspectorRef}
           style={{ "--accent": currentGod.accent } as React.CSSProperties}
+          role={twoColumnLayout && inspectorDialogOpen ? "dialog" : undefined}
+          aria-modal={twoColumnLayout && inspectorDialogOpen ? "true" : undefined}
+          aria-label={twoColumnLayout && inspectorDialogOpen
+            ? `${currentGod.name} draft selection`
+            : undefined}
         >
+          <button
+            type="button"
+            className="inspector-dialog-dismiss"
+            onClick={dismissInspector}
+          >
+            <X size={18} />
+            Dismiss
+          </button>
           <div className="inspector-heading">
             <DraftGodPortrait
               godId={currentGod.id}
@@ -542,10 +577,7 @@ function ThreePlayerDraft({
           <button
             type="button"
             className="primary-button three-draft-claim"
-            onClick={() => draftAction && onAction({
-              ...draftAction,
-              skinId: selectedSkinId,
-            })}
+            onClick={confirmGodSelection}
             disabled={
               inputDisabled ||
               Boolean(currentOwner) ||
@@ -556,7 +588,7 @@ function ThreePlayerDraft({
             {currentOwner
               ? `Claimed by ${THREE_PLAYER_SEAT_LABELS[currentOwner]}`
               : selectedSkinUnlocked
-                ? `Claim ${currentGod.name}`
+                ? `${twoColumnLayout && inspectorDialogOpen ? "Confirm" : "Claim"} ${currentGod.name}`
                 : `${currentGod.name} skin locked`}
             {!currentOwner && selectedSkinUnlocked && <ChevronRight size={17} />}
           </button>

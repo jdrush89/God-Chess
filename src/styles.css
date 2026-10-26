@@ -1016,30 +1016,31 @@ span.move-target-dot {
   width: 100%; min-height: 42px; margin-top: 9px; display: flex;
   align-items: center; justify-content: center; gap: 8px;
 }
-.roster-page {
+.roster-page,
+.pantheon-draft-page {
   padding-bottom: 54px;
   background:
     radial-gradient(circle at 50% 4%, rgba(198,161,91,.18), transparent 34rem),
     linear-gradient(180deg, rgba(6,8,12,.52), rgba(6,8,12,.82) 48%, rgba(6,8,12,.94)),
     url("./assets/scenes/Pantheon.webp") center top / cover fixed no-repeat;
 }
-.roster-page .draft-hero h1,
-.roster-page .draft-hero > p { text-shadow: 0 2px 14px #000; }
-.roster-page .draft-card {
+:is(.roster-page, .pantheon-draft-page) .draft-hero h1,
+:is(.roster-page, .pantheon-draft-page) .draft-hero > p { text-shadow: 0 2px 14px #000; }
+:is(.roster-page, .pantheon-draft-page) .draft-card {
   border-color: rgba(224,189,118,.52);
   box-shadow:
     0 0 0 1px rgba(4,5,8,.9),
     0 10px 24px rgba(0,0,0,.42);
 }
-.roster-page .draft-card:hover:not(:disabled),
-.roster-page .draft-card.inspected {
+:is(.roster-page, .pantheon-draft-page) .draft-card:hover:not(:disabled),
+:is(.roster-page, .pantheon-draft-page) .draft-card.inspected {
   border-color: color-mix(in srgb, var(--accent) 72%, #f0d59a);
   box-shadow:
     0 0 0 1px rgba(4,5,8,.92),
     0 0 18px color-mix(in srgb, var(--accent) 28%, transparent),
     0 12px 26px rgba(0,0,0,.48);
 }
-.roster-page .god-inspector {
+:is(.roster-page, .pantheon-draft-page) .god-inspector {
   background:
     linear-gradient(145deg, color-mix(in srgb, var(--accent) 7%, rgba(17,20,27,.94)), rgba(10,12,17,.96) 52%);
   box-shadow: 0 18px 48px rgba(0,0,0,.4);
@@ -2435,8 +2436,8 @@ span.move-target-dot {
 
 @media (min-width: 641px) and (max-width: 960px) {
   .draft-card .god-card-portrait { object-position: center 42%; }
-  :is(.roster-page, .classic-draft-page) .draft-layout > .god-inspector { display: none; }
-  :is(.roster-page, .classic-draft-page) .draft-layout > .god-inspector.two-column-inspector-dialog-open {
+  :is(.roster-page, .pantheon-draft-page) .draft-layout > .god-inspector { display: none; }
+  :is(.roster-page, .pantheon-draft-page) .draft-layout > .god-inspector.two-column-inspector-dialog-open {
     --inspector-dialog-gutter: max(24px, calc((100vw - 720px) / 2));
     display: block; position: fixed; z-index: 80; inset: 0;
     max-height: none; padding: 0 var(--inspector-dialog-gutter) 42px;
@@ -2464,8 +2465,8 @@ span.move-target-dot {
   .two-column-inspector-dialog-open > .draft-abilities {
     width: min(720px, 100%); margin-inline: auto;
   }
-  .classic-draft-page .two-column-inspector-dialog-open { padding-bottom: 110px; }
-  .classic-draft-page .two-column-inspector-dialog-open > .primary-button {
+  .pantheon-draft-page .two-column-inspector-dialog-open { padding-bottom: 110px; }
+  .pantheon-draft-page .two-column-inspector-dialog-open > .primary-button {
     position: fixed; z-index: 82; right: 24px; bottom: 18px; left: 24px;
     width: auto; max-width: 720px; margin: 0 auto;
     box-shadow: 0 16px 40px rgba(0,0,0,.8);

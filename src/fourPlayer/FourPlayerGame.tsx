@@ -34,6 +34,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useTwoColumnGodInspector } from "../useTwoColumnGodInspector";
 import type { AchievementId } from "../achievements";
 import { AccountPortrait } from "../account/AccountPortrait";
 import type { AccountPortraitId } from "../account/portraits";
@@ -324,6 +325,12 @@ function FourPlayerDraft({
   );
   const activePlayer = state.players[state.activeSeat];
   const currentGod = GOD_BY_ID[inspected];
+  const {
+    dismissInspector,
+    inspectorDialogOpen,
+    openInspector,
+    twoColumnLayout,
+  } = useTwoColumnGodInspector(`four-draft-god-${inspected}`);
   const selectedSkinUnlocked = isGodSkinUnlocked(
     inspected,
     selectedSkinId,
@@ -337,8 +344,22 @@ function FourPlayerDraft({
     );
   }, [completedAchievements, favorites, inspected]);
 
+  const inspectGod = (godId: GodId) => {
+    setInspected(godId);
+    openInspector();
+  };
+
+  const confirmGodSelection = () => {
+    dispatch({
+      type: "draft",
+      godId: currentGod.id,
+      skinId: selectedSkinId,
+    });
+    if (twoColumnLayout) dismissInspector();
+  };
+
   return (
-    <main className={`draft-page four-draft-page ${inputDisabled ? "input-locked" : ""}`}>
+    <main className={`draft-page pantheon-draft-page four-draft-page ${inputDisabled ? "input-locked" : ""}`}>
       <header className="topbar draft-topbar">
         <Brand />
         <div className="draft-turn">
@@ -435,8 +456,9 @@ function FourPlayerDraft({
             return (
               <button
                 className={`draft-card ${inspected === god.id ? "inspected" : ""} ${owner ? "claimed" : ""}`}
+                id={`four-draft-god-${god.id}`}
                 key={god.id}
-                onClick={() => setInspected(god.id)}
+                onClick={() => inspectGod(god.id)}
                 style={{ "--accent": god.accent } as React.CSSProperties}
               >
                 <GodPortrait godId={god.id} skinId={skinId} className="god-card-portrait" />
@@ -457,7 +479,22 @@ function FourPlayerDraft({
           })}
         </div>
 
-        <aside className="god-inspector" style={{ "--accent": currentGod.accent } as React.CSSProperties}>
+        <aside
+          className={`god-inspector${inspectorDialogOpen ? " two-column-inspector-dialog-open" : ""}`}
+          style={{ "--accent": currentGod.accent } as React.CSSProperties}
+          role={twoColumnLayout && inspectorDialogOpen ? "dialog" : undefined}
+          aria-modal={twoColumnLayout && inspectorDialogOpen ? "true" : undefined}
+          aria-label={twoColumnLayout && inspectorDialogOpen
+            ? `${currentGod.name} draft selection`
+            : undefined}
+        >
+          <button
+            className="inspector-dialog-dismiss"
+            onClick={dismissInspector}
+          >
+            <X size={18} />
+            Dismiss
+          </button>
           <div className="inspector-heading">
             <GodPortrait
               godId={currentGod.id}
@@ -507,11 +544,7 @@ function FourPlayerDraft({
           </div>
           <button
             className="primary-button"
-            onClick={() => dispatch({
-              type: "draft",
-              godId: currentGod.id,
-              skinId: selectedSkinId,
-            })}
+            onClick={confirmGodSelection}
             disabled={
               inputDisabled ||
               activePlayer.control.kind === "ai" ||
@@ -520,7 +553,7 @@ function FourPlayerDraft({
             }
           >
             {selectedSkinUnlocked
-              ? `Claim ${currentGod.name}`
+              ? `${twoColumnLayout && inspectorDialogOpen ? "Confirm" : "Claim"} ${currentGod.name}`
               : `${currentGod.name} skin locked`}
           </button>
         </aside>

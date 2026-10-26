@@ -26,8 +26,14 @@ import {
   type ThreePlayerOnlineSession,
 } from "./ThreePlayerGame";
 
-const matchMedia = (reducedMotion = false) => (query: string) => ({
-  matches: reducedMotion && query === "(prefers-reduced-motion: reduce)",
+const matchMedia = (
+  reducedMotion = false,
+  twoColumnLayout = false,
+) => (query: string) => ({
+  matches:
+    (reducedMotion && query === "(prefers-reduced-motion: reduce)") ||
+    (twoColumnLayout &&
+      query === "(min-width: 641px) and (max-width: 960px)"),
   media: query,
   onchange: null,
   addListener: () => undefined,
@@ -768,8 +774,8 @@ describe("ThreePlayerGame", () => {
     const skinPicker = screen.getByLabelText(/quetzacoatl skins/i);
     expect(abilityRegion.classList.contains("three-draft-abilities")).toBe(true);
     expect(abilityRegion.getAttribute("tabindex")).toBe("0");
-    expect(inspector?.children[1]).toBe(skinPicker);
-    expect(inspector?.children[3]).toBe(abilityRegion);
+    expect(inspector?.children[2]).toBe(skinPicker);
+    expect(inspector?.children[4]).toBe(abilityRegion);
     expect(inspector?.lastElementChild).toBe(claim);
     expect(abilityRegion.contains(container.querySelector(".mini-cost"))).toBe(true);
     expect(container.querySelectorAll(".pantheon-grid > .draft-card")).toHaveLength(12);
@@ -784,6 +790,26 @@ describe("ThreePlayerGame", () => {
     expect(screen.queryByRole("button", { name: /^new setup$/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /^new online room$/i })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /^resume$/i }));
+  });
+
+  it("uses a full-screen confirmation dialog in the two-column draft layout", () => {
+    vi.spyOn(window, "matchMedia").mockImplementation(matchMedia(false, true));
+    const { container } = renderGame(createThreePlayerGame());
+
+    fireEvent.click(screen.getByRole("button", { name: /^Inspect Ares$/i }));
+    expect(screen.getByRole("dialog", {
+      name: /ares draft selection/i,
+    })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Dismiss$/i }));
+    expect(container.querySelector("#three-draft-god-ares.claimed")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Inspect Ares$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Confirm Ares$/i }));
+    expect(screen.queryByRole("dialog", {
+      name: /ares draft selection/i,
+    })).toBeNull();
+    expect(container.querySelector("#three-draft-god-ares.claimed")).toBeTruthy();
   });
 
   it("preserves the nine-pick order, three Gods per seat, and three unused Gods", () => {
