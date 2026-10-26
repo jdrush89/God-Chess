@@ -387,6 +387,19 @@ const openPlayOption = (
   }));
 };
 
+const useTwoColumnLayout = () => {
+  vi.stubGlobal("matchMedia", vi.fn((query: string) => ({
+    matches: query === "(min-width: 641px) and (max-width: 960px)",
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  })));
+};
+
 const selectMatchMenuAction = (name: RegExp) => {
   fireEvent.click(screen.getByRole("button", { name: /open match menu/i }));
   fireEvent.click(screen.getByRole("button", { name }));
@@ -1177,6 +1190,46 @@ describe("game startup", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /back to play/i }));
     expect(screen.getByRole("button", { name: /^local$/i })).toBeTruthy();
+  });
+
+  it("opens and dismisses roster details as a full-screen two-column dialog", async () => {
+    useTwoColumnLayout();
+    render(<App />);
+    openPlayMenu();
+    fireEvent.click(screen.getByRole("button", { name: /^roster$/i }));
+
+    const anubis = screen.getByRole("button", { name: /^anubis/i });
+    fireEvent.click(anubis);
+    expect(screen.getByRole("dialog", { name: /anubis details/i })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /^dismiss$/i }));
+    expect(screen.queryByRole("dialog", { name: /anubis details/i })).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(anubis));
+  });
+
+  it("confirms a God from the full-screen two-column draft dialog", () => {
+    useTwoColumnLayout();
+    render(<App />);
+    openPlayOption("Local");
+    fireEvent.click(screen.getByRole("button", { name: /^2 player$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /begin local duel/i }));
+
+    fireEvent.click(screen.getByRole("button", { name: /^anubis/i }));
+    expect(screen.getByRole("dialog", {
+      name: /anubis draft selection/i,
+    })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /^dismiss$/i }));
+    expect(document.getElementById("draft-god-anubis")?.classList.contains("claimed"))
+      .toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: /^anubis/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^confirm anubis$/i }));
+    expect(screen.queryByRole("dialog", {
+      name: /anubis draft selection/i,
+    })).toBeNull();
+    expect(document.getElementById("draft-god-anubis")?.classList.contains("claimed"))
+      .toBe(true);
   });
 
   it("opens the achievement gallery from the Play menu", () => {
