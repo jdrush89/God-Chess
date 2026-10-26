@@ -497,7 +497,8 @@ const risingMonument = (playerName?: string) => {
     harden: 2,
     lure: 2,
   };
-  enableBestDefense(state);
+  state.players.black.gods = ["ares", "chiron", "medusa"];
+  forceOpeningReply(state, "b7");
   return state;
 };
 
