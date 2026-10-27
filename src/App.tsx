@@ -3712,7 +3712,7 @@ function StartGamePrompt({
           ? `${category.toUpperCase()} · ${playerCount} PLAYER`
           : `${category.toUpperCase()} PLAY`}
       headerAction={accountControl}
-      className={category === "local" ? "local-menu-scene" : ""}
+      className={category === "local" ? "local-menu-scene" : "online-menu-scene"}
       contentClassName={onlineStage ? "online-stage" : ""}
     >
       <section className={`start-game-content ${onlineStage ? "online-stage" : ""}`}>
