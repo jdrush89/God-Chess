@@ -1091,17 +1091,12 @@ function RosterScreen({
           <ArrowLeft size={18} />
           <span>Back to play</span>
         </button>
-        <div className="draft-turn">
-          <BookOpen size={16} />
-          Divine roster
-        </div>
+        <div className="roster-topbar-title">THE DIVINE ROSTER</div>
         {accountControl}
       </header>
 
       <section className="draft-hero">
-        <p className="eyebrow">THE DIVINE ROSTER</p>
         <h1>Know your gods.</h1>
-        <p>Explore every god and preview how each ability changes at levels 1, 2, and 3.</p>
       </section>
 
       <section className="draft-layout">
@@ -2742,13 +2737,12 @@ function PlayMenu({
     <SetupNavigationShell
       backLabel="Back to title"
       onBack={onBack}
+      headerTitle="PLAY"
       headerAction={accountControl}
       className="play-menu-scene"
     >
       <div className="play-menu-heading">
-        <p className="eyebrow">PLAY</p>
         <h1>Choose your path.</h1>
-        <p>Learn the game, browse the divine roster, begin a match, solve a puzzle, or continue a saved game.</p>
       </div>
       <div className="play-menu-grid" role="group" aria-label="Play options">
         <button onClick={onOpenLocal}>
@@ -3542,13 +3536,7 @@ function PlayerCountChooser({
   return (
     <>
       <div className="start-game-heading">
-        <p className="eyebrow">{category === "local" ? "LOCAL PLAY" : "ONLINE PLAY"}</p>
         <h1>{category === "online" ? "Choose online mode" : "Choose player count"}</h1>
-        <p>
-          {category === "local"
-            ? "Share this device or challenge the Divine AI."
-            : "Queue for ranked 1v1 or host a casual room."}
-        </p>
       </div>
       <div className="player-count-grid" aria-label={`${category} player count`}>
         {category === "online" && (
@@ -3718,6 +3706,11 @@ function StartGamePrompt({
           ? `Back to ${category}`
           : "Back to Play"}
       onBack={back}
+      headerTitle={leaderboardOpen
+        ? "ONLINE LEADERBOARD"
+        : playerCount
+          ? `${category.toUpperCase()} · ${playerCount} PLAYER`
+          : `${category.toUpperCase()} PLAY`}
       headerAction={accountControl}
       className={category === "local" ? "local-menu-scene" : ""}
       contentClassName={onlineStage ? "online-stage" : ""}
@@ -3763,9 +3756,7 @@ function StartGamePrompt({
           playerCount === 2 ? (
             <>
               <div className="start-game-heading">
-                <p className="eyebrow">LOCAL · 2 PLAYER</p>
                 <h1>Choose opponent</h1>
-                <p>Play together on one device or face the Divine AI.</p>
               </div>
               <div className="two-player-mode-grid" aria-label="Two-player local mode">
                 <button
@@ -3948,9 +3939,7 @@ function StartGamePrompt({
             ) : (
               <>
                 <div className="start-game-heading compact">
-                  <p className="eyebrow">ONLINE · {playerCount} PLAYER</p>
                   <h1>Host or join</h1>
-                  <p>Use a five-character room code to meet at the same board.</p>
                 </div>
                 <div className="online-tabs">
                   <button className={onlineAction === "host" ? "active" : ""} onClick={() => setOnlineAction("host")}>
@@ -4073,8 +4062,7 @@ function PuzzleSelectScreen({
           <button onClick={onDismissError} aria-label="Dismiss save error"><X size={15} /></button>
         </div>
       )}
-      <section className="puzzle-select-screen">
-        {accountControl}
+      <header className="puzzle-select-topbar">
         <button
           className="puzzle-select-back"
           onClick={() => difficulty ? onCategoryChange(undefined) : onBack()}
@@ -4082,13 +4070,13 @@ function PuzzleSelectScreen({
           <ArrowLeft size={17} />
           {difficulty ? "Puzzle Types" : "Play menu"}
         </button>
-        <p className="eyebrow">DIVINE PUZZLES</p>
+        <p className="puzzle-select-topbar-label">DIVINE PUZZLES</p>
+        {accountControl}
+      </header>
+      <section className="puzzle-select-screen">
         {!difficulty ? (
           <>
             <h1>Choose Puzzle Type</h1>
-            <p className="puzzle-select-intro">
-              Play today's Daily, browse the archive, solve Divine tactics, or face rule-bending challenges.
-            </p>
             <div className="puzzle-difficulty-grid">
               {([
                 {
@@ -8924,6 +8912,7 @@ export default function App() {
     return (
       <SetupNavigationShell
         backLabel="Back to Local"
+        headerTitle="FOUR-PLAYER LOCAL"
         headerAction={renderAccountControl()}
         className="local-menu-scene"
         onBack={() => {
@@ -8950,6 +8939,7 @@ export default function App() {
     return (
       <SetupNavigationShell
         backLabel="Back to Local"
+        headerTitle="THREE-PLAYER LOCAL"
         headerAction={renderAccountControl()}
         className="local-menu-scene"
         onBack={() => {
