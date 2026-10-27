@@ -1252,7 +1252,7 @@ describe("game startup", () => {
     expect(screen.getByRole("button", { name: /^local$/i })).toBeTruthy();
   });
 
-  it("locks every custom skin including Salem's Chonk by default", () => {
+  it("shows original and all-ability skins with their lock requirements", () => {
     render(<App />);
     openPlayMenu();
     fireEvent.click(screen.getByRole("button", { name: /^roster$/i }));
@@ -1268,11 +1268,22 @@ describe("game startup", () => {
       name: /choose salem skin, chonk locked/i,
     })).toBeTruthy();
     expect(screen.getByText(
-      /complete an achievement for each of salem's three abilities to unlock this skin/i,
+      /complete one of salem's ability achievements to unlock this skin/i,
     )).toBeTruthy();
     expect(screen.queryByRole("button", {
       name: /chonk as favorite/i,
     })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", {
+      name: /choose salem skin, chonk locked/i,
+    }));
+    const gasMask = screen.getByRole("option", { name: /^gas mask locked$/i });
+    expect(gasMask.querySelector("img")?.getAttribute("src"))
+      .toMatch(/Salem-Gas-Mask-Skin/);
+    fireEvent.click(gasMask);
+    expect(screen.getByText(
+      /complete an achievement for each of salem's three abilities to unlock this skin/i,
+    )).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: /^ares/i }));
     fireEvent.click(screen.getByRole("button", {
@@ -1280,15 +1291,13 @@ describe("game startup", () => {
     }));
     fireEvent.click(screen.getByRole("option", { name: /^businessman locked$/i }));
     expect(screen.getByText(
-      /complete an achievement for each of ares's three abilities to unlock this skin/i,
+      /complete one of ares's ability achievements to unlock this skin/i,
     )).toBeTruthy();
   });
 
-  it("unlocks a custom skin after all three ability achievements and saves it as a favorite", () => {
+  it("unlocks original and new skins at their respective achievement tiers", () => {
     const achievements = createAchievementProgress();
     achievements.completed["hex-mix"] = "2026-10-20T12:00:00.000Z";
-    achievements.completed["choking-hazard"] = "2026-10-20T12:00:00.000Z";
-    achievements.completed["all-sheep"] = "2026-10-20T12:00:00.000Z";
     persistLocalAchievementProgress(achievements);
     render(<App />);
     openPlayMenu();
@@ -1299,6 +1308,7 @@ describe("game startup", () => {
       name: /choose salem skin, base unlocked/i,
     }));
     const chonk = screen.getByRole("option", { name: /^chonk unlocked$/i });
+    expect(screen.getByRole("option", { name: /^gas mask locked$/i })).toBeTruthy();
     fireEvent.click(chonk);
     fireEvent.click(screen.getByRole("button", {
       name: /choose salem skin, chonk unlocked/i,

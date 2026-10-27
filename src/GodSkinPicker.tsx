@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Check, ChevronDown, Lock, Star } from "lucide-react";
 import type { AchievementId } from "./achievements";
+import { godSkinAchievementRequirement } from "./godAchievementUnlocks";
 import { GOD_BY_ID } from "./game/gods";
 import type { GodId } from "./game/types";
 import {
@@ -34,6 +35,27 @@ export function GodSkinPicker({
     selected.id,
     completedAchievements,
   );
+  const unlockRequirement = godSkinAchievementRequirement(godId, selected.id);
+
+  useEffect(() => {
+    setOpen(false);
+  }, [godId]);
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      if (!pickerRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
 
   useEffect(() => {
     setOpen(false);
@@ -141,8 +163,9 @@ export function GodSkinPicker({
       {!unlocked && (
         <p className="skin-locked-note">
           <Lock size={13} />
-          Complete an achievement for each of{" "}
-          {GOD_BY_ID[godId].name}'s three abilities to unlock this skin.
+          {unlockRequirement === "all"
+            ? `Complete an achievement for each of ${GOD_BY_ID[godId].name}'s three abilities to unlock this skin.`
+            : `Complete one of ${GOD_BY_ID[godId].name}'s ability achievements to unlock this skin.`}
         </p>
       )}
     </section>
