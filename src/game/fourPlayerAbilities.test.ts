@@ -467,6 +467,22 @@ describe("four-player God abilities", () => {
       expect(delayed.board.g9).toBeUndefined();
       expect(delayed.players.north.orbs.dark).toBe(53);
 
+      let remarked = setMode(gameFor("death"), mode);
+      remarked.board.g8 = piece(
+        remarked,
+        "rook",
+        "north",
+        "remarked-piece",
+      );
+      remarked.board.g8.status.markedForDeath = {
+        owner: "north",
+        round: remarked.round,
+      };
+      remarked = move(remarked, "death", "marked", "g8", "g9");
+
+      expect(remarked.board.g9).toBeUndefined();
+      expect(remarked.players.north.orbs.dark).toBe(53);
+
       let immediate = setMode(gameFor("death", 3), mode);
       immediate.board.g8 = piece(immediate, "rook", "north", "immediate-marked");
       immediate = move(immediate, "death", "marked", "g8", "g9");

@@ -1914,7 +1914,10 @@ const resolveMoveEffect = (
       : "Place the banana peel on an orthogonally adjacent empty square.";
     return "pending";
   } else if (abilityId === "marked") {
-    state.board[to].status.markedForDeath = { owner: color, round: state.round + 1 };
+    state.board[to].status.markedForDeath ??= {
+      owner: color,
+      round: state.round + 1,
+    };
     if (level >= 3 && state.board[to].type !== "king") {
       state.pending = {
         godId: state.selectedGod!,

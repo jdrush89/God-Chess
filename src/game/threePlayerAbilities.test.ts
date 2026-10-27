@@ -3,6 +3,7 @@ import {
   availableThreePlayerActions,
   createThreePlayerGame,
   hasCompleteThreePlayerTurn,
+  threePlayerAbilityMoveSources,
   threePlayerReducer,
   unsupportedThreePlayerAbilities,
 } from "./threePlayerEngine";
@@ -369,6 +370,36 @@ describe("three-player God catalog", () => {
 
     expect(delayed.board[delayedCell]).toBeUndefined();
     expect(delayed.players.white.orbs.dark).toBe(53);
+
+    let remarked = abilityState("death", 1);
+    remarked = threePlayerReducer(remarked, {
+      type: "select-god",
+      godId: "death",
+    });
+    remarked = threePlayerReducer(remarked, {
+      type: "select-ability",
+      abilityId: "marked",
+    });
+    const remarkedSource = threePlayerAbilityMoveSources(remarked).find((cell) =>
+      remarked.board[cell]?.owner === "white" &&
+      remarked.board[cell]?.type !== "king"
+    )!;
+    remarked.board[remarkedSource].status.markedForDeath = {
+      owner: "white",
+      round: remarked.round,
+    };
+    remarked = threePlayerReducer(remarked, {
+      type: "cell",
+      cell: remarkedSource,
+    });
+    const remarkedDestination = remarked.legalCells[0];
+    remarked = threePlayerReducer(remarked, {
+      type: "cell",
+      cell: remarkedDestination,
+    });
+
+    expect(remarked.board[remarkedDestination]).toBeUndefined();
+    expect(remarked.players.white.orbs.dark).toBe(53);
 
     let markedKing = abilityState("death", 1);
     const markedKingCell = Object.entries(markedKing.board).find(([, candidate]) =>
