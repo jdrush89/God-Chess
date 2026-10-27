@@ -1960,7 +1960,7 @@ const resolveMoveEffect = (
     state.notice = "Place the banana on an adjacent empty square.";
     return "pending";
   } else if (abilityId === "marked") {
-    state.board[to].status.markedForDeath = {
+    state.board[to].status.markedForDeath ??= {
       owner: state.activeSeat,
       round: state.round + 1,
     };

@@ -2212,7 +2212,7 @@ const resolveMoveEffect = (
       return "pending";
     }
   } else if (abilityId === "marked") {
-    state.board[to].status.markedForDeath = {
+    state.board[to].status.markedForDeath ??= {
       owner: state.activeSeat,
       round: state.round + 1,
     };

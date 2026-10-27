@@ -798,6 +798,25 @@ describe("game flow", () => {
     expect(state.players.white.orbs.black).toBe(3);
   });
 
+  it("does not postpone death when Marked moves an already marked piece", () => {
+    let state = createGame(1);
+    (["death", "ares", "midas", "chiron", "artemis", "teles"] as const).forEach((godId) => {
+      state = gameReducer(state, { type: "draft", godId });
+    });
+    state.board.e2.status.markedForDeath = {
+      owner: "white",
+      round: state.round,
+    };
+
+    state = gameReducer(state, { type: "select-god", godId: "death" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "marked" });
+    state = gameReducer(state, { type: "square", square: "e2" });
+    state = gameReducer(state, { type: "square", square: "e3" });
+
+    expect(state.board.e3).toBeUndefined();
+    expect(state.players.white.orbs.black).toBe(3);
+  });
+
   it("does not grant a Mark reward when the marked piece is captured first", () => {
     let state = createGame(1);
     (["death", "ares", "midas", "chiron", "artemis", "teles"] as const).forEach((godId) => {
