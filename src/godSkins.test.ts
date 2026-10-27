@@ -24,9 +24,9 @@ describe("God skins", () => {
         skins.slice(1).map(({ name }) => name),
       ]),
     )).toEqual({
-      anubis: ["Tightrope"],
+      anubis: ["Tightrope", "Mummy"],
       ares: ["Businessman", "Limbo"],
-      artemis: ["Owl Rider"],
+      artemis: ["Owl Rider", "T-Rex"],
       chiron: ["Female", "Robot"],
       death: ["Disrobed", "Throne"],
       kangus: ["Genghis", "Heaven"],

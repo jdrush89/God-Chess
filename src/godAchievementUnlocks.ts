@@ -88,10 +88,10 @@ export const GOD_ACHIEVEMENT_SKIN_IDS = {
   teles: "performance",
 } as const satisfies Record<GodId, string>;
 
-export const GOD_ALL_ABILITY_ACHIEVEMENT_SKIN_IDS: Partial<
-  Record<GodId, string>
-> = {
+export const GOD_ALL_ABILITY_ACHIEVEMENT_SKIN_IDS: Record<GodId, string> = {
+  anubis: "mummy",
   ares: "limbo",
+  artemis: "t-rex",
   chiron: "robot",
   death: "throne",
   kangus: "heaven",
