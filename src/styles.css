@@ -1086,22 +1086,39 @@ span.move-target-dot {
 .inspector-dialog-dismiss { display: none; }
 .main-menu-error { margin: 10px 0 0; color: #e69a8e; font-size: 10px; line-height: 1.4; }
 .puzzle-select-view {
-  min-height: 100dvh; padding: clamp(18px, 4vw, 44px);
+  min-height: 100dvh;
   color: #e8e1d2;
   background:
-    linear-gradient(145deg, rgba(12,14,19,.8), rgba(5,6,9,.9) 58%, rgba(3,4,7,.96)),
+    linear-gradient(145deg, rgba(12,14,19,.6), rgba(5,6,9,.65) 58%, rgba(3,4,7,.68)),
     radial-gradient(circle at 50% -10%, rgba(198,161,91,.2), transparent 40%),
     url("./assets/scenes/Pieces-Falling.webp") center 32% / cover no-repeat;
 }
+.puzzle-select-topbar {
+  position: sticky; z-index: 45; top: 0; min-height: 64px;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 10px clamp(14px, 3vw, 36px); border-bottom: 1px solid var(--line);
+  background: rgba(8,10,15,.94); backdrop-filter: blur(12px);
+}
 .puzzle-select-screen {
-  position: relative; width: min(1040px, 100%); margin: 0 auto; padding-top: 64px; text-align: center;
+  position: relative; width: min(1120px, 100%); margin: 0 auto;
+  padding: clamp(28px, 4vw, 44px); text-align: center;
+}
+.puzzle-select-topbar-label {
+  position: absolute; left: 50%; margin: 0; transform: translateX(-50%);
+  color: #b7aa8b; font: 600 9px "Cinzel"; letter-spacing: .18em; white-space: nowrap;
 }
 .puzzle-select-back {
-  position: absolute; top: 0; left: 0; min-height: 40px; display: inline-flex; align-items: center; gap: 8px;
-  padding: 0 13px; color: #b8b2a7; background: rgba(8,10,15,.55); border: 1px solid #343740;
+  min-height: 40px; display: inline-flex; align-items: center; gap: 8px;
+  padding: 0 13px; color: #b8b2a7; background: #0c0e13; border: 1px solid #343740;
   font-size: 9px; letter-spacing: .08em; text-transform: uppercase; cursor: pointer;
 }
 .puzzle-select-back:hover { color: #f3dfaa; border-color: var(--gold); }
+.puzzle-select-topbar .puzzle-account-area {
+  position: relative; top: auto; right: auto;
+}
+.puzzle-select-topbar .main-account-menu {
+  position: absolute; top: 100%; right: 0;
+}
 .puzzle-select-screen > .eyebrow { margin: 0; color: #c9a85f; }
 .puzzle-select-screen > h1 { margin: 8px 0 10px; font: 600 clamp(25px, 4vw, 38px) "Cinzel"; }
 .puzzle-select-intro {
@@ -1112,11 +1129,11 @@ span.move-target-dot {
 }
 .puzzle-difficulty-card {
   min-height: 260px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
-  padding: 30px; color: #d8d2c6; background: rgba(8,10,15,.72); border: 1px solid #32353e;
+  padding: 30px; color: #d8d2c6; background: rgba(8,10,15,.96); border: 1px solid #32353e;
   cursor: pointer; transition: transform .2s, border-color .2s, background .2s;
 }
 .puzzle-difficulty-card:hover {
-  transform: translateY(-3px); color: #fff2cf; border-color: rgba(198,161,91,.7); background: rgba(198,161,91,.08);
+  transform: translateY(-3px); color: #fff2cf; border-color: rgba(198,161,91,.7); background: rgba(4,5,8,.99);
 }
 .puzzle-difficulty-card > svg { color: var(--gold-bright); }
 .puzzle-difficulty-card strong { font: 600 22px "Cinzel"; }
@@ -1136,11 +1153,11 @@ span.move-target-dot {
 }
 .puzzle-select-card {
   position: relative; min-height: 170px; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 10px; padding: 20px 14px; overflow: hidden; color: #b5b0a7; background: rgba(8,10,15,.72);
+  gap: 10px; padding: 20px 14px; overflow: hidden; color: #b5b0a7; background: rgba(8,10,15,.96);
   border: 1px solid #30333b; cursor: pointer; transition: transform .2s, border-color .2s, background .2s;
 }
 .puzzle-select-card:hover {
-  transform: translateY(-2px); color: #f0e4c8; border-color: rgba(198,161,91,.68); background: rgba(198,161,91,.07);
+  transform: translateY(-2px); color: #f0e4c8; border-color: rgba(198,161,91,.68); background: rgba(4,5,8,.99);
 }
 .puzzle-select-card.completed { border-color: rgba(105,153,124,.55); }
 .puzzle-select-card > svg { color: #c9a85f; }
@@ -1286,6 +1303,11 @@ span.move-target-dot {
 .draft-page > .roster-topbar {
   padding-right: 38px;
 }
+.roster-topbar-title {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  color: #b7aa8b; font: 600 9px "Cinzel"; letter-spacing: .18em;
+  white-space: nowrap; pointer-events: none;
+}
 .escape-menu-backdrop {
   position: fixed; z-index: 70; inset: 0; display: grid; place-items: center; padding: 24px;
   background: rgba(5,6,9,.88); backdrop-filter: blur(8px);
@@ -1329,13 +1351,13 @@ span.move-target-dot {
 }
 .setup-navigation-shell.play-menu-scene {
   background:
-    linear-gradient(145deg, rgba(12,14,19,.72), rgba(7,8,12,.86) 58%, rgba(4,5,8,.94)),
+    linear-gradient(145deg, rgba(12,14,19,.56), rgba(7,8,12,.63) 58%, rgba(4,5,8,.67)),
     radial-gradient(circle at 50% -12%, rgba(198,161,91,.18), transparent 38rem),
     url("./assets/scenes/Pawn.webp") center 35% / cover no-repeat;
 }
 .setup-navigation-shell.local-menu-scene {
   background:
-    linear-gradient(145deg, rgba(12,14,19,.76), rgba(7,8,12,.88) 58%, rgba(4,5,8,.95)),
+    linear-gradient(145deg, rgba(12,14,19,.58), rgba(7,8,12,.64) 58%, rgba(4,5,8,.675)),
     radial-gradient(circle at 50% -12%, rgba(198,161,91,.2), transparent 38rem),
     url("./assets/scenes/Duel.webp") center 30% / cover no-repeat;
 }
@@ -1351,6 +1373,10 @@ span.move-target-dot {
 }
 .setup-navigation-header > span {
   color: #837b69; font: 600 9px "Cinzel"; letter-spacing: .18em;
+}
+.setup-navigation-title {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  color: #b7aa8b !important; white-space: nowrap; pointer-events: none;
 }
 .setup-navigation-back {
   min-height: 40px; display: inline-flex; align-items: center; gap: 8px; padding: 0 13px;
@@ -1375,11 +1401,11 @@ span.move-target-dot {
 .play-menu-grid > button {
   min-width: 0; min-height: clamp(170px, 28vh, 250px); display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 16px; padding: 24px 16px;
-  color: #d2ccbf; background: rgba(13,15,20,.8); border: 1px solid #343740; cursor: pointer;
+  color: #d2ccbf; background: rgba(13,15,20,.96); border: 1px solid #343740; cursor: pointer;
   box-shadow: 0 18px 50px rgba(0,0,0,.2);
 }
 .play-menu-grid > button:hover:not(:disabled) {
-  color: #fff0c8; border-color: rgba(198,161,91,.72); background: rgba(198,161,91,.08);
+  color: #fff0c8; border-color: rgba(198,161,91,.72); background: rgba(4,5,8,.99);
 }
 .play-menu-grid > button:disabled { color: #66676d; cursor: not-allowed; opacity: .62; }
 .play-menu-grid svg { color: var(--gold-bright); }
@@ -1791,11 +1817,11 @@ span.move-target-dot {
 .player-count-grid > button {
   min-width: 0; min-height: clamp(190px, 30vh, 270px); display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 18px; padding: 28px 18px;
-  color: #d2ccbf; background: rgba(13,15,20,.8); border: 1px solid #343740; cursor: pointer;
+  color: #d2ccbf; background: rgba(13,15,20,.96); border: 1px solid #343740; cursor: pointer;
   box-shadow: 0 18px 50px rgba(0,0,0,.2);
 }
 .player-count-grid > button:hover {
-  color: #fff0c8; border-color: rgba(198,161,91,.72); background: rgba(198,161,91,.08);
+  color: #fff0c8; border-color: rgba(198,161,91,.72); background: rgba(4,5,8,.99);
 }
 .player-count-grid > button:disabled { cursor: not-allowed; opacity: .48; }
 .player-count-grid svg { color: var(--gold-bright); }
@@ -1879,7 +1905,7 @@ span.move-target-dot {
   gap: 10px; padding: 24px; color: #aaa9a5; background: #101219; border: 1px solid #2d3038; cursor: pointer;
 }
 .two-player-mode-grid > button:hover, .two-player-mode-grid > button.active {
-  color: #f0e4c8; border-color: rgba(198,161,91,.65); background: rgba(198,161,91,.08);
+  color: #f0e4c8; border-color: rgba(198,161,91,.65); background: rgba(4,5,8,.97);
 }
 .two-player-mode-grid strong { font: 600 16px "Cinzel"; }
 .two-player-mode-grid span { color: #74767d; font-size: 9px; line-height: 1.45; }
@@ -2605,8 +2631,9 @@ span.move-target-dot {
   .ranked-roster { grid-template-columns: 1fr; }
   .two-player-mode-grid > button { min-height: 132px; }
   .start-game-content .online-setup { padding: 14px 12px; }
-  .puzzle-select-view { padding: 16px 12px 28px; }
-  .puzzle-select-screen { padding-top: 58px; }
+  .puzzle-select-view { padding: 0; }
+  .puzzle-select-topbar { min-height: 58px; padding: 8px 12px; }
+  .puzzle-select-screen { padding: 28px 12px; }
   .puzzle-difficulty-grid { grid-template-columns: 1fr; }
   .puzzle-difficulty-card { min-height: 210px; }
   .puzzle-select-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -2648,7 +2675,7 @@ span.move-target-dot {
   text-align: left; cursor: pointer;
 }
 .three-variant-card:hover, .three-variant-card.active {
-  border-color: rgba(198,161,91,.7); background: rgba(198,161,91,.06);
+  border-color: rgba(198,161,91,.7); background: rgba(4,5,8,.97);
   box-shadow: inset 0 0 0 1px rgba(198,161,91,.12);
 }
 .three-variant-preview {
@@ -3739,10 +3766,9 @@ span.move-target-dot {
 
 @media (max-width: 640px) {
   .setup-navigation-header { min-height: 58px; padding: 8px 12px; }
-  .setup-navigation-header > span { display: none; }
+  .setup-navigation-brand { display: none; }
   .setup-navigation-back { min-height: 38px; }
   .draft-page > .roster-topbar { padding: 8px 12px; }
-  .roster-topbar .draft-turn { display: none; }
   .play-menu-heading { margin: 34px auto 24px; }
   .play-menu-grid { grid-template-columns: 1fr; width: calc(100% - 24px); gap: 10px; }
   .play-menu-grid > button { min-height: 112px; flex-direction: row; gap: 12px; }

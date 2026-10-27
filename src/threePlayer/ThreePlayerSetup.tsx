@@ -67,12 +67,7 @@ export function ThreePlayerSetup({
     <main className={`three-setup-page${embedded ? " embedded" : ""}`}>
       <header className="three-setup-header">
         <div>
-          <p className="eyebrow">THREE-PLAYER LOCAL</p>
           <h1>Choose the battlefield.</h1>
-          <p>
-            Nine Gods will be drafted. Three remain unused while White, Red, and
-            Black contest one topology-driven board.
-          </p>
         </div>
         {!embedded && (
           <button className="close-button" onClick={onBack} aria-label="Close three-player setup">

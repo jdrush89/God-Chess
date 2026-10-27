@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 export function SetupNavigationShell({
   backLabel,
   onBack,
+  headerTitle,
   headerAction,
   children,
   className = "",
@@ -11,6 +12,7 @@ export function SetupNavigationShell({
 }: {
   backLabel: string;
   onBack: () => void;
+  headerTitle?: React.ReactNode;
   headerAction?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
@@ -37,7 +39,12 @@ export function SetupNavigationShell({
           <ArrowLeft size={18} />
           <span>{backLabel}</span>
         </button>
-        {headerAction ?? <span aria-hidden="true">GOD CHESS</span>}
+        {headerTitle && (
+          <span className="setup-navigation-title">{headerTitle}</span>
+        )}
+        {headerAction ?? (
+          <span className="setup-navigation-brand" aria-hidden="true">GOD CHESS</span>
+        )}
       </header>
       <section className={`setup-navigation-content ${contentClassName}`.trim()}>
         {children}

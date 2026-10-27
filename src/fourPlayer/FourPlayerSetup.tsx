@@ -79,12 +79,7 @@ export function FourPlayerSetup({
     <main className={`four-setup-page${embedded ? " embedded" : ""}`}>
       <header className="four-setup-header">
         <div>
-          <p className="eyebrow">FOUR-PLAYER LOCAL</p>
           <h1>Gather four pantheons.</h1>
-          <p>
-            Share one device. North stays at the top, then play continues clockwise
-            through east, south, and west.
-          </p>
         </div>
         {!embedded && (
           <button className="close-button" onClick={onBack} aria-label="Close four-player setup">
