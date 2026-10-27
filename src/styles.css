@@ -2628,8 +2628,8 @@ span.move-target-dot {
     radial-gradient(circle at 50% 0, rgba(198,161,91,.08), transparent 36rem),
     #0b0d12;
 }
-.three-setup-page { padding: 52px max(18px, calc((100vw - 1240px) / 2)) 42px; }
-.three-setup-page.embedded { min-height: auto; padding-top: 38px; background: transparent; }
+.three-setup-page { padding: 8px max(18px, calc((100vw - 1240px) / 2)) 42px; }
+.three-setup-page.embedded { min-height: auto; padding-top: 8px; background: transparent; }
 .three-setup-header {
   position: relative; display: flex; justify-content: space-between; gap: 24px;
   padding: 0 52px 25px 0; border-bottom: 1px solid var(--line);
@@ -3086,7 +3086,7 @@ span.move-target-dot {
   .escape-menu-backdrop { padding: 10px; }
   .escape-menu-dialog { max-height: calc(100vh - 20px); padding: 30px 16px 18px; }
   .escape-menu-actions { grid-template-columns: 1fr; }
-  .three-setup-page { padding: 28px 12px; }
+  .three-setup-page { padding: 8px 12px 28px; }
   .three-setup-header { padding-right: 42px; }
   .three-variant-grid { grid-template-columns: 1fr 1fr; }
   .three-variant-card { min-height: 186px; grid-template-rows: 110px auto 1fr; }
