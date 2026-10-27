@@ -381,8 +381,11 @@ const sendToGraveyard = (
   source: Square,
   captor = state.activeSeat,
 ) => {
+  const gravePiece = structuredClone(piece);
+  delete gravePiece.status.hexedBy;
+  delete gravePiece.status.markedForDeath;
   state.players[piece.owner].graveyard.push({
-    piece: structuredClone(piece),
+    piece: gravePiece,
     capturedOnTurn: state.turn,
   });
   if (
@@ -2622,6 +2625,7 @@ const completeSpecialTarget = (state: FourPlayerState, square: Square) => {
 
 const handleSquare = (state: FourPlayerState, square: Square) => {
   if (["confirm-stone-gaze", "confirm-march-home"].includes(state.pending?.step ?? "")) return;
+  if (["grave", "resurrect-more"].includes(state.pending?.step ?? "")) return;
   if (state.pending?.abilityId === "harden-choice") {
     if (state.pending.step === "harden-choice" && state.legalTargets.includes(square)) {
       state.pending = { ...state.pending, step: "harden-decision", source: square };

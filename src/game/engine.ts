@@ -342,15 +342,18 @@ const safeBananaPlacementsAfterMove = (state: GameState, from: Square, requested
 };
 
 const sendCapturedPieceToGraveyard = (state: GameState, piece: Piece, source: Square) => {
+  const gravePiece = structuredClone(piece);
+  delete gravePiece.status.hexedBy;
+  delete gravePiece.status.markedForDeath;
   state.players[piece.color].graveyard.push({
-    piece,
+    piece: gravePiece,
     capturedOnTurn: state.turn,
     capturedFrom: source,
   });
   state.captureAnimations.push({
     id: state.nextCaptureAnimationId,
     player: piece.color,
-    piece: structuredClone(piece),
+    piece: gravePiece,
     source,
     total: state.players[piece.color].graveyard.length,
   });
@@ -2949,6 +2952,7 @@ const handleSquare = (state: GameState, square: Square) => {
     return;
   }
   if (!state.selectedAbility || !state.pending) return;
+  if (["grave", "resurrect-more"].includes(state.pending.step)) return;
   if (state.pending.step === "hex-target") {
     if (!state.legalTargets.includes(square) || !state.board[square]) return;
     state.board[square].status.hexedBy = state.activeColor;

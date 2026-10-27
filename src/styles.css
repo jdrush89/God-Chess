@@ -945,6 +945,10 @@ span.move-target-dot {
 }
 .danger-button:hover { background: rgba(151,55,40,.22); border-color: #b95c4c; }
 .text-button { border-color: transparent; color: #74767d; }
+.secondary-button:disabled {
+  color: #5f6168; background: rgba(255,255,255,.012); border-color: #292b31;
+  cursor: not-allowed; opacity: .58;
+}
 .cancel-ability-button {
   min-height: 36px; margin-block: 2px; color: #d8d2c6;
   background: rgba(255,255,255,.035); border-color: #454850;
@@ -954,7 +958,7 @@ span.move-target-dot {
 }
 .ability-pending-actions,
 .four-ability-pending .four-action-buttons { padding-top: 4px; padding-bottom: 8px; }
-.secondary-button:hover { border-color: var(--gold); }
+.secondary-button:hover:not(:disabled) { border-color: var(--gold); }
 .grave-picker { padding: 13px; border-top: 1px solid var(--line); }
 .grave-picker > span { color: #65676e; font-size: 8px; font-weight: 700; letter-spacing: .17em; }
 .grave-picker > div { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }

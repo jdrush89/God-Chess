@@ -2377,6 +2377,34 @@ describe("game startup", () => {
       .classList.contains("cancel-ability-button")).toBe(true);
   });
 
+  it("disables an unaffordable second resurrection while keeping Finish enabled", () => {
+    let state = PUZZLES.find((puzzle) => puzzle.id === "hidden-reserve")!.createState();
+    state = gameReducer(state, { type: "select-god", godId: "death" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "resurrect" });
+    state.players[state.activeColor].orbs.white = 1;
+    state.pending = {
+      godId: "death",
+      abilityId: "resurrect",
+      step: "resurrect-more",
+      selected: ["revived-piece"],
+    };
+
+    render(
+      <ActionPanel
+        state={state}
+        dispatch={vi.fn()}
+        onInspectGod={vi.fn()}
+        onCloseInspection={vi.fn()}
+      />,
+    );
+
+    const reviveSecond = screen.getByRole("button", { name: /revive second.*2 white/i });
+    const finish = screen.getByRole("button", { name: /^finish$/i });
+    expect((reviveSecond as HTMLButtonElement).disabled).toBe(true);
+    expect((finish as HTMLButtonElement).disabled).toBe(false);
+    expect(finish.classList.contains("secondary-button")).toBe(true);
+  });
+
   it("highlights Position Six Enchant sources and attaches both stage prompts to Enchant", () => {
     let state = PUZZLES.find((puzzle) => puzzle.id === "opened-file")!.createState();
     state = gameReducer(state, { type: "select-god", godId: "teles" });

@@ -404,8 +404,11 @@ const sendToGraveyard = (
   state: ThreePlayerState,
   piece: ThreePlayerPiece,
 ) => {
+  const gravePiece = clone(piece);
+  delete gravePiece.status.hexedBy;
+  delete gravePiece.status.markedForDeath;
   state.players[piece.owner].graveyard.push({
-    piece: clone(piece),
+    piece: gravePiece,
     capturedOnTurn: state.turn,
   });
 };
@@ -3252,6 +3255,7 @@ const completeQueuedHexMove = (state: ThreePlayerState) => {
 };
 
 const handleCell = (state: ThreePlayerState, cell: string) => {
+  if (["grave", "resurrect-more"].includes(state.pending?.step ?? "")) return;
   if (state.pending?.abilityId === "harden-choice") {
     if (
       state.pending.step === "harden-choice" &&

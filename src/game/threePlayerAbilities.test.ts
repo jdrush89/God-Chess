@@ -332,6 +332,7 @@ describe("three-player God catalog", () => {
     captured.board[capturedCell] = {
       ...piece("captured-marked-pawn", "pawn", "red"),
       status: {
+        hexedBy: "white",
         markedForDeath: { owner: "white", round: captured.round },
       },
     };
@@ -349,6 +350,7 @@ describe("three-player God catalog", () => {
     expect(captured.players.red.graveyard.at(-1)?.piece.id).toBe(
       "captured-marked-pawn",
     );
+    expect(captured.players.red.graveyard.at(-1)?.piece.status).toEqual({});
 
     let delayed = abilityState("death", 1);
     const delayedCell = Object.entries(delayed.board).find(([, candidate]) =>
@@ -1117,6 +1119,52 @@ describe("three-player God catalog", () => {
 
     expect(state.pending).toBeUndefined();
     expect(state.completedTurns.white).toBe(1);
+  });
+
+  it("ignores board movement while multi-Resurrection choices are pending", () => {
+    let state = abilityState("death", 2);
+    const topology = getThreePlayerTopology(state.config.boardVariant);
+    const bishopCell = Object.entries(state.board).find(([, candidate]) =>
+      candidate.owner === "white" && candidate.type === "bishop"
+    )![0];
+    const openings = topology.kingNeighbors(bishopCell)
+      .filter((cell) => state.board[cell]?.type !== "king")
+      .slice(0, 2);
+    for (const cell of openings) delete state.board[cell];
+    state.players.white.graveyard.push({
+      piece: piece("second-grave", "rook", "white"),
+      capturedOnTurn: 0,
+    });
+    state = threePlayerReducer(state, {
+      type: "select-god",
+      godId: "death",
+    });
+    state = threePlayerReducer(state, {
+      type: "select-ability",
+      abilityId: "resurrect",
+    });
+    const grave = availableThreePlayerActions(state).find(
+      (action) => action.type === "grave",
+    )!;
+    state = threePlayerReducer(state, grave);
+    state = threePlayerReducer(state, {
+      type: "cell",
+      cell: state.legalCells[0],
+    });
+
+    expect(state.pending?.step).toBe("resurrect-more");
+    const occupiedCell = Object.keys(state.board)[0];
+    expect(threePlayerReducer(state, {
+      type: "cell",
+      cell: occupiedCell,
+    })).toEqual(state);
+
+    state = threePlayerReducer(state, { type: "choice", value: true });
+    expect(state.pending?.step).toBe("grave");
+    expect(threePlayerReducer(state, {
+      type: "cell",
+      cell: occupiedCell,
+    })).toEqual(state);
   });
 
   it("keeps God-call expiry and counters reversible until ability activation", () => {
