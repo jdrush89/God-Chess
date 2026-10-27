@@ -14,7 +14,17 @@ export type GodSkinId =
   | "beach"
   | "pilot"
   | "chonk"
-  | "performance";
+  | "performance"
+  | "limbo"
+  | "robot"
+  | "throne"
+  | "heaven"
+  | "pride"
+  | "ring"
+  | "painter"
+  | "child"
+  | "gas-mask"
+  | "narwhal";
 
 export interface GodSkin {
   id: GodSkinId;
@@ -41,67 +51,137 @@ const basePortraits: Record<GodId, string> = {
   ares: new URL("./assets/gods/ares.jpg", import.meta.url).href,
 };
 
-const customSkins: Record<GodId, GodSkin> = {
-  anubis: {
+const customSkins: Record<GodId, GodSkin[]> = {
+  anubis: [{
     id: "tightrope",
     name: "Tightrope",
     src: new URL("./assets/skins/Anubis-Tightrope-Skin.webp", import.meta.url).href,
-  },
-  ares: {
-    id: "businessman",
-    name: "Businessman",
-    src: new URL("./assets/skins/Ares-Businessman-Skin.webp", import.meta.url).href,
-  },
-  artemis: {
+  }],
+  ares: [
+    {
+      id: "businessman",
+      name: "Businessman",
+      src: new URL("./assets/skins/Ares-Businessman-Skin.webp", import.meta.url).href,
+    },
+    {
+      id: "limbo",
+      name: "Limbo",
+      src: new URL("./assets/skins/Ares-Limbo-Skin.webp", import.meta.url).href,
+    },
+  ],
+  artemis: [{
     id: "owl-rider",
     name: "Owl Rider",
     src: new URL("./assets/skins/Artemis-Owl-Rider-Skin.webp", import.meta.url).href,
-  },
-  chiron: {
-    id: "female",
-    name: "Female",
-    src: new URL("./assets/skins/Chiron-Female-Skin.webp", import.meta.url).href,
-  },
-  death: {
-    id: "disrobed",
-    name: "Disrobed",
-    src: new URL("./assets/skins/Death-Disrobed-Skin.webp", import.meta.url).href,
-  },
-  kangus: {
-    id: "genghis",
-    name: "Genghis",
-    src: new URL("./assets/skins/Kangus-Kong-Genghis-Skin.webp", import.meta.url).href,
-  },
-  leonidas: {
-    id: "playful",
-    name: "Playful",
-    src: new URL("./assets/skins/Leonidas-Playful-Skin.webp", import.meta.url).href,
-  },
-  medusa: {
-    id: "stone-mason",
-    name: "Stone Mason",
-    src: new URL("./assets/skins/Medusa-Stone-Mason-Skin.webp", import.meta.url).href,
-  },
-  midas: {
-    id: "beach",
-    name: "Beach",
-    src: new URL("./assets/skins/Midas-Beach-Skin.webp", import.meta.url).href,
-  },
-  quetzacoatl: {
-    id: "pilot",
-    name: "Pilot",
-    src: new URL("./assets/skins/Quetzacoatl-Pilot-Skin.webp", import.meta.url).href,
-  },
-  salem: {
-    id: "chonk",
-    name: "Chonk",
-    src: new URL("./assets/skins/Salem-Chonk-Skin.webp", import.meta.url).href,
-  },
-  teles: {
-    id: "performance",
-    name: "Performance",
-    src: new URL("./assets/skins/Teles-Performance-Skin.webp", import.meta.url).href,
-  },
+  }],
+  chiron: [
+    {
+      id: "female",
+      name: "Female",
+      src: new URL("./assets/skins/Chiron-Female-Skin.webp", import.meta.url).href,
+    },
+    {
+      id: "robot",
+      name: "Robot",
+      src: new URL("./assets/skins/Chiron-Robot-Skin.webp", import.meta.url).href,
+    },
+  ],
+  death: [
+    {
+      id: "disrobed",
+      name: "Disrobed",
+      src: new URL("./assets/skins/Death-Disrobed-Skin.webp", import.meta.url).href,
+    },
+    {
+      id: "throne",
+      name: "Throne",
+      src: new URL("./assets/skins/Death-Throne-Skin.webp", import.meta.url).href,
+    },
+  ],
+  kangus: [
+    {
+      id: "genghis",
+      name: "Genghis",
+      src: new URL("./assets/skins/Kangus-Kong-Genghis-Skin.webp", import.meta.url).href,
+    },
+    {
+      id: "heaven",
+      name: "Heaven",
+      src: new URL("./assets/skins/Kangus-Kong-Heaven-Skin.webp", import.meta.url).href,
+    },
+  ],
+  leonidas: [
+    {
+      id: "playful",
+      name: "Playful",
+      src: new URL("./assets/skins/Leonidas-Playful-Skin.webp", import.meta.url).href,
+    },
+    {
+      id: "pride",
+      name: "Pride",
+      src: new URL("./assets/skins/Leonidas-Pride-Skin.webp", import.meta.url).href,
+    },
+  ],
+  medusa: [
+    {
+      id: "stone-mason",
+      name: "Stone Mason",
+      src: new URL("./assets/skins/Medusa-Stone-Mason-Skin.webp", import.meta.url).href,
+    },
+    {
+      id: "ring",
+      name: "Ring",
+      src: new URL("./assets/skins/Medusa-Ring-Skin.webp", import.meta.url).href,
+    },
+  ],
+  midas: [
+    {
+      id: "beach",
+      name: "Beach",
+      src: new URL("./assets/skins/Midas-Beach-Skin.webp", import.meta.url).href,
+    },
+    {
+      id: "painter",
+      name: "Painter",
+      src: new URL("./assets/skins/Midas-Painter-Skin.webp", import.meta.url).href,
+    },
+  ],
+  quetzacoatl: [
+    {
+      id: "pilot",
+      name: "Pilot",
+      src: new URL("./assets/skins/Quetzacoatl-Pilot-Skin.webp", import.meta.url).href,
+    },
+    {
+      id: "child",
+      name: "Child",
+      src: new URL("./assets/skins/Quetzacoatl-Child-Skin.webp", import.meta.url).href,
+    },
+  ],
+  salem: [
+    {
+      id: "chonk",
+      name: "Chonk",
+      src: new URL("./assets/skins/Salem-Chonk-Skin.webp", import.meta.url).href,
+    },
+    {
+      id: "gas-mask",
+      name: "Gas Mask",
+      src: new URL("./assets/skins/Salem-Gas-Mask-Skin.webp", import.meta.url).href,
+    },
+  ],
+  teles: [
+    {
+      id: "performance",
+      name: "Performance",
+      src: new URL("./assets/skins/Teles-Performance-Skin.webp", import.meta.url).href,
+    },
+    {
+      id: "narwhal",
+      name: "Narwhal",
+      src: new URL("./assets/skins/Teles-Narwhal-Skin.webp", import.meta.url).href,
+    },
+  ],
 };
 
 export const GOD_SKINS = Object.fromEntries(
@@ -109,7 +189,7 @@ export const GOD_SKINS = Object.fromEntries(
     godId,
     [
       { id: "base", name: "Base", src: basePortraits[godId] },
-      customSkins[godId],
+      ...customSkins[godId],
     ],
   ]),
 ) as Record<GodId, GodSkin[]>;

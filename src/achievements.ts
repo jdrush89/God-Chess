@@ -41,8 +41,10 @@ import type { GameAction } from "./game/engine";
 import { qualifyingSnake } from "./game/slither";
 export {
   GOD_ABILITY_ACHIEVEMENT_IDS,
+  GOD_ALL_ABILITY_ACHIEVEMENT_SKIN_IDS,
   GOD_ACHIEVEMENT_IDS,
   GOD_ACHIEVEMENT_SKIN_IDS,
+  godSkinAchievementRequirement,
   hasCompletedAllGodAbilityAchievements,
   hasCompletedGodAchievement,
   isAchievementUnlockedGodSkin,

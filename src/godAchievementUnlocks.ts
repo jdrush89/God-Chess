@@ -88,6 +88,21 @@ export const GOD_ACHIEVEMENT_SKIN_IDS = {
   teles: "performance",
 } as const satisfies Record<GodId, string>;
 
+export const GOD_ALL_ABILITY_ACHIEVEMENT_SKIN_IDS: Partial<
+  Record<GodId, string>
+> = {
+  ares: "limbo",
+  chiron: "robot",
+  death: "throne",
+  kangus: "heaven",
+  leonidas: "pride",
+  medusa: "ring",
+  midas: "painter",
+  quetzacoatl: "child",
+  salem: "gas-mask",
+  teles: "narwhal",
+};
+
 export const hasCompletedGodAchievement = (
   completed: Partial<Record<string, string>>,
   godId: GodId,
@@ -105,10 +120,26 @@ export const hasCompletedAllGodAbilityAchievements = (
   );
 };
 
+export const godSkinAchievementRequirement = (
+  godId: GodId,
+  skinId: string,
+): "any" | "all" | undefined => {
+  if (GOD_ACHIEVEMENT_SKIN_IDS[godId] === skinId) return "any";
+  if (GOD_ALL_ABILITY_ACHIEVEMENT_SKIN_IDS[godId] === skinId) return "all";
+  return undefined;
+};
+
 export const isAchievementUnlockedGodSkin = (
   completed: Partial<Record<string, string>>,
   godId: GodId,
   skinId: string,
-) =>
-  GOD_ACHIEVEMENT_SKIN_IDS[godId] === skinId &&
-  hasCompletedAllGodAbilityAchievements(completed, godId);
+) => {
+  const requirement = godSkinAchievementRequirement(godId, skinId);
+  if (requirement === "any") {
+    return hasCompletedGodAchievement(completed, godId);
+  }
+  if (requirement === "all") {
+    return hasCompletedAllGodAbilityAchievements(completed, godId);
+  }
+  return false;
+};
