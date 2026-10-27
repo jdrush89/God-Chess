@@ -24,7 +24,9 @@ export type GodSkinId =
   | "painter"
   | "child"
   | "gas-mask"
-  | "narwhal";
+  | "narwhal"
+  | "mummy"
+  | "t-rex";
 
 export interface GodSkin {
   id: GodSkinId;
@@ -52,11 +54,18 @@ const basePortraits: Record<GodId, string> = {
 };
 
 const customSkins: Record<GodId, GodSkin[]> = {
-  anubis: [{
-    id: "tightrope",
-    name: "Tightrope",
-    src: new URL("./assets/skins/Anubis-Tightrope-Skin.webp", import.meta.url).href,
-  }],
+  anubis: [
+    {
+      id: "tightrope",
+      name: "Tightrope",
+      src: new URL("./assets/skins/Anubis-Tightrope-Skin.webp", import.meta.url).href,
+    },
+    {
+      id: "mummy",
+      name: "Mummy",
+      src: new URL("./assets/skins/Anubis-Mummy-Skin.webp", import.meta.url).href,
+    },
+  ],
   ares: [
     {
       id: "businessman",
@@ -69,11 +78,18 @@ const customSkins: Record<GodId, GodSkin[]> = {
       src: new URL("./assets/skins/Ares-Limbo-Skin.webp", import.meta.url).href,
     },
   ],
-  artemis: [{
-    id: "owl-rider",
-    name: "Owl Rider",
-    src: new URL("./assets/skins/Artemis-Owl-Rider-Skin.webp", import.meta.url).href,
-  }],
+  artemis: [
+    {
+      id: "owl-rider",
+      name: "Owl Rider",
+      src: new URL("./assets/skins/Artemis-Owl-Rider-Skin.webp", import.meta.url).href,
+    },
+    {
+      id: "t-rex",
+      name: "T-Rex",
+      src: new URL("./assets/skins/Artemis-T-rex-Skin.webp", import.meta.url).href,
+    },
+  ],
   chiron: [
     {
       id: "female",
