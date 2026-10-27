@@ -2743,6 +2743,7 @@ function PlayMenu({
       backLabel="Back to title"
       onBack={onBack}
       headerAction={accountControl}
+      className="play-menu-scene"
     >
       <div className="play-menu-heading">
         <p className="eyebrow">PLAY</p>
@@ -3718,6 +3719,7 @@ function StartGamePrompt({
           : "Back to Play"}
       onBack={back}
       headerAction={accountControl}
+      className={category === "local" ? "local-menu-scene" : ""}
       contentClassName={onlineStage ? "online-stage" : ""}
     >
       <section className={`start-game-content ${onlineStage ? "online-stage" : ""}`}>
@@ -8923,6 +8925,7 @@ export default function App() {
       <SetupNavigationShell
         backLabel="Back to Local"
         headerAction={renderAccountControl()}
+        className="local-menu-scene"
         onBack={() => {
           setSetupCategory("local");
           setSetupPlayerCount(undefined);
@@ -8948,6 +8951,7 @@ export default function App() {
       <SetupNavigationShell
         backLabel="Back to Local"
         headerAction={renderAccountControl()}
+        className="local-menu-scene"
         onBack={() => {
           setSetupCategory("local");
           setSetupPlayerCount(undefined);
