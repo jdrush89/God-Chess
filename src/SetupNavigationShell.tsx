@@ -6,12 +6,14 @@ export function SetupNavigationShell({
   onBack,
   headerAction,
   children,
+  className = "",
   contentClassName = "",
 }: {
   backLabel: string;
   onBack: () => void;
   headerAction?: React.ReactNode;
   children: React.ReactNode;
+  className?: string;
   contentClassName?: string;
 }) {
   useEffect(() => {
@@ -25,7 +27,7 @@ export function SetupNavigationShell({
   }, [onBack]);
 
   return (
-    <main className="setup-navigation-shell">
+    <main className={`setup-navigation-shell ${className}`.trim()}>
       <header className="setup-navigation-header">
         <button
           className="setup-navigation-back"

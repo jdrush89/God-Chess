@@ -1168,7 +1168,7 @@ describe("game startup", () => {
 
     expect(screen.getByRole("heading", { name: /know your gods/i })).toBeTruthy();
     for (const god of GODS) {
-      expect(screen.getByRole("button", { name: new RegExp(god.name, "i") })).toBeTruthy();
+      expect(document.getElementById(`roster-god-${god.id}`)).toBeTruthy();
     }
     expect(screen.queryByRole("button", { name: /claim/i })).toBeNull();
     expect(screen.getByText(GODS[0].abilities[0].name)).toBeTruthy();
@@ -1258,9 +1258,15 @@ describe("game startup", () => {
     fireEvent.click(screen.getByRole("button", { name: /^roster$/i }));
     fireEvent.click(screen.getByRole("button", { name: /salem/i }));
 
-    const chonk = screen.getByRole("button", { name: /^chonk locked$/i });
+    fireEvent.click(screen.getByRole("button", {
+      name: /choose salem skin, base unlocked/i,
+    }));
+    const chonk = screen.getByRole("option", { name: /^chonk locked$/i });
+    expect(chonk.querySelector("img")?.getAttribute("src")).toMatch(/Salem-Chonk-Skin/);
     fireEvent.click(chonk);
-    expect(chonk.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", {
+      name: /choose salem skin, chonk locked/i,
+    })).toBeTruthy();
     expect(screen.getByText(
       /complete an achievement for each of salem's three abilities to unlock this skin/i,
     )).toBeTruthy();
@@ -1269,7 +1275,10 @@ describe("game startup", () => {
     })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: /^ares/i }));
-    fireEvent.click(screen.getByRole("button", { name: /^businessman locked$/i }));
+    fireEvent.click(screen.getByRole("button", {
+      name: /choose ares skin, base unlocked/i,
+    }));
+    fireEvent.click(screen.getByRole("option", { name: /^businessman locked$/i }));
     expect(screen.getByText(
       /complete an achievement for each of ares's three abilities to unlock this skin/i,
     )).toBeTruthy();
@@ -1286,8 +1295,14 @@ describe("game startup", () => {
     fireEvent.click(screen.getByRole("button", { name: /^roster$/i }));
     fireEvent.click(screen.getByRole("button", { name: /salem/i }));
 
-    const chonk = screen.getByRole("button", { name: /^chonk unlocked$/i });
+    fireEvent.click(screen.getByRole("button", {
+      name: /choose salem skin, base unlocked/i,
+    }));
+    const chonk = screen.getByRole("option", { name: /^chonk unlocked$/i });
     fireEvent.click(chonk);
+    fireEvent.click(screen.getByRole("button", {
+      name: /choose salem skin, chonk unlocked/i,
+    }));
     fireEvent.click(screen.getByRole("button", {
       name: /set chonk as favorite/i,
     }));
@@ -1314,17 +1329,25 @@ describe("game startup", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /salem/i }));
     expect(
-      screen.getByRole("button", { name: /^chonk unlocked$/i }).getAttribute("aria-pressed"),
-    ).toBe("true");
+      screen.getByRole("button", {
+        name: /choose salem skin, chonk unlocked/i,
+      }),
+    ).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: /^base unlocked$/i }));
+    fireEvent.click(screen.getByRole("button", {
+      name: /choose salem skin, chonk unlocked/i,
+    }));
+    fireEvent.click(screen.getByRole("option", { name: /^base unlocked$/i }));
     fireEvent.click(screen.getByRole("button", { name: /^claim salem$/i }));
     expect(
       container.querySelector<HTMLImageElement>(".draft-roster .god-portrait")?.src,
     ).toMatch(/\/salem(?:-[A-Za-z0-9_-]+)?\.jpg$/);
 
     fireEvent.click(screen.getByRole("button", { name: /^ares/i }));
-    fireEvent.click(screen.getByRole("button", { name: /^businessman locked$/i }));
+    fireEvent.click(screen.getByRole("button", {
+      name: /choose ares skin, base unlocked/i,
+    }));
+    fireEvent.click(screen.getByRole("option", { name: /^businessman locked$/i }));
     const lockedClaim = screen.getByRole("button", { name: /^ares skin locked$/i });
     expect((lockedClaim as HTMLButtonElement).disabled).toBe(true);
   });
