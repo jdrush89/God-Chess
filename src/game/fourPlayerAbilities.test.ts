@@ -444,6 +444,7 @@ describe("four-player God abilities", () => {
       captured.board.g9 = {
         ...piece(captured, "pawn", "south", "captured-marked-pawn"),
         status: {
+          hexedBy: "north",
           markedForDeath: { owner: "north", round: captured.round },
         },
       };
@@ -453,6 +454,7 @@ describe("four-player God abilities", () => {
       expect(captured.players.south.graveyard.at(-1)?.piece.id).toBe(
         "captured-marked-pawn",
       );
+      expect(captured.players.south.graveyard.at(-1)?.piece.status).toEqual({});
 
       let delayed = setMode(gameFor("death"), mode);
       delayed.board.g9 = {
@@ -836,9 +838,17 @@ describe("four-player ability safety regressions", () => {
     state = fourPlayerReducer(state, { type: "square", square: "g9" });
     expect(state.pending?.step).toBe("resurrect-more");
     expectCommittedActionLocked(state);
+    expect(fourPlayerReducer(state, {
+      type: "square",
+      square: "g8",
+    })).toEqual(state);
     state = fourPlayerReducer(state, { type: "choice", value: true });
     expect(state.pending?.step).toBe("grave");
     expectCommittedActionLocked(state);
+    expect(fourPlayerReducer(state, {
+      type: "square",
+      square: "g8",
+    })).toEqual(state);
 
     state = gameFor("salem", 2);
     state.board.g8 = piece(state, "rook", "north", "hex-mover");

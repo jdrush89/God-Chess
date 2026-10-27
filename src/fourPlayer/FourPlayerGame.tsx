@@ -1205,10 +1205,14 @@ function PendingChoices({
     if (pending.step === "resurrect-more") {
       return (
         <div className="four-choice-buttons">
-          <button className="secondary-button" onClick={() => dispatch({ type: "choice", value: true })}>
-            Revive a second
+          <button
+            className="secondary-button"
+            disabled={state.players[state.activeSeat].orbs.light < 2}
+            onClick={() => dispatch({ type: "choice", value: true })}
+          >
+            Revive a second · 2 light
           </button>
-          <button className="text-button" onClick={() => dispatch({ type: "choice", value: false })}>
+          <button className="secondary-button" onClick={() => dispatch({ type: "choice", value: false })}>
             Finish
           </button>
         </div>

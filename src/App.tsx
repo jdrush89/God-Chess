@@ -1714,7 +1714,7 @@ function PendingAbilityChoices({
             >
               Revive second · 2 white
             </button>
-            <button className="text-button" onClick={() => dispatch({ type: "resurrect-more", revive: false })}>
+            <button className="secondary-button" onClick={() => dispatch({ type: "resurrect-more", revive: false })}>
               Finish
             </button>
           </>

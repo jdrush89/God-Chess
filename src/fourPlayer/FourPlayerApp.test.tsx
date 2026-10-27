@@ -93,6 +93,41 @@ const completeFourPlayerDraft = (
 };
 
 describe("four-player app integration", () => {
+  it("disables an unaffordable second resurrection while keeping Finish enabled", () => {
+    const state = completeFourPlayerDraft();
+    const deathSeat = FOUR_PLAYER_SEATS.find(
+      (seat) => state.players[seat].gods.includes("death"),
+    )!;
+    state.activeSeat = deathSeat;
+    state.players[deathSeat].orbs.light = 1;
+    state.selectedGod = "death";
+    state.selectedAbility = "resurrect";
+    state.pending = {
+      godId: "death",
+      abilityId: "resurrect",
+      step: "resurrect-more",
+      selected: ["revived-piece"],
+    };
+    state.notice = "Spend 2 additional light orbs to revive a second piece, or finish.";
+
+    render(
+      <FourPlayerGame
+        initialState={state}
+        undoPreferred={false}
+        onUndoPreferenceChange={vi.fn()}
+        onPersist={vi.fn(async () => false)}
+        onQuit={vi.fn()}
+        onNewGame={vi.fn()}
+      />,
+    );
+
+    const reviveSecond = screen.getByRole("button", { name: /revive a second.*2 light/i });
+    const finish = screen.getByRole("button", { name: /^finish$/i });
+    expect((reviveSecond as HTMLButtonElement).disabled).toBe(true);
+    expect((finish as HTMLButtonElement).disabled).toBe(false);
+    expect(finish.classList.contains("secondary-button")).toBe(true);
+  });
+
   it("shows player portraits beside names throughout the draft", () => {
     const { container } = render(
       <FourPlayerGame

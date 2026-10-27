@@ -257,7 +257,7 @@ describe("game flow", () => {
     expect(result.board.e1).toBeUndefined();
     expect(result.players.white.graveyard.at(-1)?.piece).toMatchObject({
       id: "white-king",
-      status: { hexedBy: "black" },
+      status: {},
     });
     expect(result.history[0]).toBe("White was checkmated by Black.");
   });
@@ -837,6 +837,65 @@ describe("game flow", () => {
     expect(state.board.d3?.id).toBe("white-pawn-4");
     expect(state.players.black.graveyard.at(-1)?.piece.id).toBe("captured-marked-pawn");
     expect(state.players.white.orbs.black).toBe(0);
+  });
+
+  it("ends level 3 Resurrect with the revival and clears captured graveyard statuses", () => {
+    let state = createGame(1);
+    state.phase = "play";
+    state.activeColor = "white";
+    state.players.white.gods = ["death"];
+    state.players.black.gods = ["ares"];
+    state.players.white.upgrades.resurrect = 3;
+    state.players.white.orbs.white = 10;
+    state.board = {
+      a1: testPiece("king", "white", "white-king"),
+      h8: testPiece("king", "black", "black-king"),
+      c3: testPiece("bishop", "white", "white-bishop"),
+      a2: testPiece("rook", "white", "white-rook"),
+      d4: {
+        ...testPiece("pawn", "black", "black-target"),
+        status: {
+          hexedBy: "white",
+          markedForDeath: { owner: "white", round: state.round },
+        },
+      },
+    };
+    state.players.white.graveyard = [
+      {
+        piece: testPiece("queen", "white", "revived-queen"),
+        capturedOnTurn: 0,
+        capturedFrom: "d1",
+      },
+      {
+        piece: testPiece("knight", "white", "reserve-knight"),
+        capturedOnTurn: 0,
+        capturedFrom: "b1",
+      },
+    ];
+
+    state = gameReducer(state, { type: "select-god", godId: "death" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "resurrect" });
+    state = gameReducer(state, { type: "grave", pieceId: "revived-queen" });
+    expect(state.legalTargets).toContain("d4");
+
+    state = gameReducer(state, { type: "square", square: "d4" });
+
+    expect(state.board.d4?.id).toBe("revived-queen");
+    expect(state.pending?.step).toBe("resurrect-more");
+    expect(state.players.black.graveyard.at(-1)?.piece).toMatchObject({
+      id: "black-target",
+      status: {},
+    });
+
+    state = gameReducer(state, { type: "square", square: "a2" });
+    state = gameReducer(state, { type: "square", square: "a3" });
+
+    expect(state.board.a2?.id).toBe("white-rook");
+    expect(state.board.a3).toBeUndefined();
+    expect(state.pending?.step).toBe("resurrect-more");
+
+    state = gameReducer(state, { type: "resurrect-more", revive: false });
+    expect(state.activeColor).toBe("black");
   });
 
   it("grants exactly 5 black orbs for immediate level-3 Marked execution", () => {
