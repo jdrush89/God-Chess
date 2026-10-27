@@ -3159,9 +3159,9 @@ span.move-target-dot {
 .four-saved-pantheon { grid-template-columns: 28px minmax(110px, 145px) 1fr; }
 
 .four-setup-page {
-  min-height: 100vh; padding: 58px max(24px, calc((100vw - 1240px) / 2)) 48px;
+  min-height: 100vh; padding: 8px max(24px, calc((100vw - 1240px) / 2)) 48px;
 }
-.four-setup-page.embedded { min-height: auto; padding-top: 38px; background: transparent; }
+.four-setup-page.embedded { min-height: auto; padding-top: 8px; background: transparent; }
 .four-setup-header {
   position: relative; display: flex; align-items: flex-start; justify-content: space-between; gap: 30px;
   padding: 0 54px 28px 0; border-bottom: 1px solid var(--line);
@@ -3789,7 +3789,7 @@ span.move-target-dot {
   .game-page > .topbar .brand,
   .four-game-page > .topbar .brand,
   .draft-page > .draft-topbar .brand { display: none; }
-  .four-setup-page, .four-setup-page.embedded { padding: 28px 12px 24px; }
+  .four-setup-page, .four-setup-page.embedded { padding: 8px 12px 24px; }
   .four-setup-header { padding-right: 42px; }
   .four-setup-options, .four-seat-setup-grid { grid-template-columns: 1fr; }
   .four-online-options, .four-online-seats { grid-template-columns: 1fr; }
