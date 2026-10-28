@@ -2622,6 +2622,13 @@ span.move-target-dot {
 
 @media (min-width: 641px) and (max-width: 960px) {
   .draft-card .god-card-portrait { object-position: center 42%; }
+  .draft-card:is(
+    [id$="-medusa"],
+    [id$="-midas"],
+    [id$="-ares"],
+    [id$="-teles"],
+    [id$="-chiron"]
+  ) .god-card-portrait { object-position: center top; }
   :is(.roster-page, .pantheon-draft-page) .draft-layout > .god-inspector { display: none; }
   :is(.roster-page, .pantheon-draft-page) .draft-layout > .god-inspector.two-column-inspector-dialog-open {
     --inspector-dialog-gutter: max(24px, calc((100vw - 720px) / 2));
