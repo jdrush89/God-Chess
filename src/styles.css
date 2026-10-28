@@ -1142,7 +1142,13 @@ span.move-target-dot {
   position: absolute; top: 100%; right: 0;
 }
 .puzzle-select-screen > .eyebrow { margin: 0; color: #c9a85f; }
-.puzzle-select-screen > h1 { margin: 8px 0 10px; font: 600 clamp(25px, 4vw, 38px) "Cinzel"; }
+.puzzle-select-screen > h1 {
+  margin: 8px 0 10px; color: #16181d; font: 600 clamp(25px, 4vw, 38px) "Cinzel";
+  text-shadow:
+    -1px -1px 0 rgba(245,231,199,.72), 1px -1px 0 rgba(245,231,199,.72),
+    -1px 1px 0 rgba(245,231,199,.72), 1px 1px 0 rgba(245,231,199,.72),
+    0 2px 14px rgba(245,231,199,.72);
+}
 .puzzle-select-intro {
   max-width: 620px; margin: 0 auto clamp(24px, 5vw, 44px); color: #85868d; font-size: 11px; line-height: 1.6;
 }
@@ -1420,7 +1426,11 @@ span.move-target-dot {
 }
 .play-menu-heading .eyebrow { margin: 0; }
 .play-menu-heading h1 {
-  margin: 9px 0 11px; color: #f1ece2; font: 600 clamp(32px, 5vw, 54px)/1.08 "Cinzel";
+  margin: 9px 0 11px; color: #16181d; font: 600 clamp(32px, 5vw, 54px)/1.08 "Cinzel";
+  text-shadow:
+    -1px -1px 0 rgba(245,231,199,.72), 1px -1px 0 rgba(245,231,199,.72),
+    -1px 1px 0 rgba(245,231,199,.72), 1px 1px 0 rgba(245,231,199,.72),
+    0 2px 14px rgba(245,231,199,.72);
 }
 .play-menu-heading > p:last-child { margin: 0; color: #85868d; font-size: 11px; line-height: 1.65; }
 .play-menu-grid {
@@ -1840,7 +1850,11 @@ span.move-target-dot {
 .start-game-heading.compact { margin-bottom: 22px; }
 .start-game-heading .eyebrow { margin: 0; color: #c9a85f; }
 .start-game-heading h1 {
-  margin: 9px 0 11px; color: #f1ece2; font: 600 clamp(30px, 5vw, 52px)/1.08 "Cinzel";
+  margin: 9px 0 11px; color: #16181d; font: 600 clamp(30px, 5vw, 52px)/1.08 "Cinzel";
+  text-shadow:
+    -1px -1px 0 rgba(245,231,199,.72), 1px -1px 0 rgba(245,231,199,.72),
+    -1px 1px 0 rgba(245,231,199,.72), 1px 1px 0 rgba(245,231,199,.72),
+    0 2px 14px rgba(245,231,199,.72);
 }
 .start-game-heading.compact h1 { font-size: clamp(28px, 4vw, 42px); }
 .start-game-heading > p:last-child { margin: 0; color: #85868d; font-size: 11px; line-height: 1.65; }
@@ -2709,7 +2723,11 @@ span.move-target-dot {
   padding: 0 52px 25px 0; border-bottom: 1px solid var(--line);
 }
 .three-setup-header h1 {
-  margin: 8px 0 10px; color: #f1ece2; font: 600 clamp(30px, 4vw, 50px)/1.08 "Cinzel";
+  margin: 8px 0 10px; color: #16181d; font: 600 clamp(30px, 4vw, 50px)/1.08 "Cinzel";
+  text-shadow:
+    -1px -1px 0 rgba(245,231,199,.72), 1px -1px 0 rgba(245,231,199,.72),
+    -1px 1px 0 rgba(245,231,199,.72), 1px 1px 0 rgba(245,231,199,.72),
+    0 2px 14px rgba(245,231,199,.72);
 }
 .three-setup-header p:last-child { max-width: 720px; margin: 0; color: #85868d; font-size: 12px; line-height: 1.6; }
 .three-setup-header .close-button { top: 0; right: 0; border: 1px solid var(--line); }
@@ -3246,7 +3264,11 @@ span.move-target-dot {
   padding: 0 54px 28px 0; border-bottom: 1px solid var(--line);
 }
 .four-setup-header h1 {
-  margin: 9px 0 10px; color: #f1ece2; font: 600 clamp(32px, 4vw, 50px)/1.08 "Cinzel";
+  margin: 9px 0 10px; color: #16181d; font: 600 clamp(32px, 4vw, 50px)/1.08 "Cinzel";
+  text-shadow:
+    -1px -1px 0 rgba(245,231,199,.72), 1px -1px 0 rgba(245,231,199,.72),
+    -1px 1px 0 rgba(245,231,199,.72), 1px 1px 0 rgba(245,231,199,.72),
+    0 2px 14px rgba(245,231,199,.72);
 }
 .four-setup-header > div > p:last-child {
   max-width: 720px; margin: 0; color: #85868d; font-size: 12px; line-height: 1.6;
