@@ -4287,33 +4287,31 @@ function PuzzleSelectScreen({
                       </button>
                     );
                 })
-                : visiblePuzzles.map((puzzle) => {
-                const index = difficulty === "three-player"
-                  ? visiblePuzzles.findIndex((candidate) => candidate.id === puzzle.id)
-                  : PUZZLES.findIndex((candidate) => candidate.id === puzzle.id);
-                const completed = completedPuzzles.has(puzzle.id);
-                return (
-                  <button
-                    className={`puzzle-select-card${completed ? " completed" : ""}`}
-                    key={puzzle.id}
-                    onClick={() => onStartPuzzle(puzzle.id)}
-                    aria-label={`Puzzle ${index + 1}, ${puzzle.title}${completed ? ", completed" : ""}`}
-                  >
-                    {completed && (
-                      <span className="puzzle-complete-badge" aria-hidden="true">
-                        <Check size={22} strokeWidth={3} />
-                      </span>
-                    )}
-                    <span>PUZZLE {index + 1}</span>
-                    <strong>{puzzle.title}</strong>
-                    <small>
-                      {difficulty === "three-player"
-                        ? "Checkmate both rivals in two divine turns"
-                        : `Win in ${puzzle.playerTurns === 1 ? "one" : puzzle.playerTurns === 2 ? "two" : "three"} divine turn${puzzle.playerTurns === 1 ? "" : "s"}`}
-                    </small>
-                  </button>
-                );
-              })}
+                : visiblePuzzles.map((puzzle, index) => {
+                  const puzzleNumber = index + 1;
+                  const completed = completedPuzzles.has(puzzle.id);
+                  return (
+                    <button
+                      className={`puzzle-select-card${completed ? " completed" : ""}`}
+                      key={puzzle.id}
+                      onClick={() => onStartPuzzle(puzzle.id)}
+                      aria-label={`Puzzle ${puzzleNumber}, ${puzzle.title}${completed ? ", completed" : ""}`}
+                    >
+                      {completed && (
+                        <span className="puzzle-complete-badge" aria-hidden="true">
+                          <Check size={22} strokeWidth={3} />
+                        </span>
+                      )}
+                      <span>PUZZLE {puzzleNumber}</span>
+                      <strong>{puzzle.title}</strong>
+                      <small>
+                        {difficulty === "three-player"
+                          ? "Checkmate both rivals in two divine turns"
+                          : `Win in ${puzzle.playerTurns === 1 ? "one" : puzzle.playerTurns === 2 ? "two" : "three"} divine turn${puzzle.playerTurns === 1 ? "" : "s"}`}
+                      </small>
+                    </button>
+                  );
+                })}
             </div>
           </>
         )}
@@ -4646,9 +4644,6 @@ export function GameScreen({
     : [];
   const puzzleIndex = puzzle
     ? difficultyPuzzles.findIndex((candidate) => candidate.id === puzzle.id)
-    : -1;
-  const puzzleNumber = puzzle
-    ? PUZZLES.findIndex((candidate) => candidate.id === puzzle.id) + 1
     : -1;
   const puzzleSolved = customPuzzle
     ? customPuzzleSolved(state, customPuzzle)
@@ -5202,7 +5197,7 @@ export function GameScreen({
                 ? `CUSTOM · ${customPuzzle.playerColor.toUpperCase()} TO MOVE`
                 : dailyPuzzle
                 ? `DAILY · ${dailyPuzzle.playerTurns} PLAYER TURN${dailyPuzzle.playerTurns === 1 ? "" : "S"}`
-                : `PUZZLE ${puzzleNumber} OF ${PUZZLES.length}`}
+                : `PUZZLE ${puzzleIndex + 1} OF ${difficultyPuzzles.length}`}
             </span>
             <strong>{customPuzzle?.title ?? puzzle?.title}</strong>
           </div>

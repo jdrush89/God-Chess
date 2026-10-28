@@ -242,6 +242,7 @@ describe("ThreePlayerGame", () => {
     );
 
     expect(screen.getByText("Frontier Fork")).toBeTruthy();
+    expect(screen.getByText(/three-player puzzle 1 of 10/i)).toBeTruthy();
     expect(screen.getByText(/checkmate both rival kings within two divine turns/i))
       .toBeTruthy();
     expect(screen.getByText("Both rivals checkmated")).toBeTruthy();
