@@ -141,7 +141,7 @@ describe("three-player AI", () => {
       expect(isCompleteThreePlayerPlan(before, state)).toBe(true);
     }
 
-    expect(Date.now() - startedAt).toBeLessThan(20_000);
+    expect(Date.now() - startedAt).toBeLessThan(8_000);
     expect(state.activeSeat).toBe("white");
     expect(state.turn).toBe(4);
   }, 25_000);

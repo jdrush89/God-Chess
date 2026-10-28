@@ -1131,6 +1131,8 @@ export function ThreePlayerGame({
   const onlineControl = onlineSession?.participantSeat
     ? state.players[onlineSession.participantSeat].control
     : undefined;
+  const aiTurn = !onlineSession &&
+    isThreePlayerAiTurn(state as ThreePlayerState);
   const inputDisabled = puzzleFailed || autoDraftPending || (onlineSession
     ? (
       state.phase === "gameover" ||
@@ -1145,7 +1147,7 @@ export function ThreePlayerGame({
       settingsOpen
     )
     : state.phase === "gameover" ||
-      isThreePlayerAiTurn(state as ThreePlayerState));
+      aiTurn);
   useEffect(() => {
     const challengeId = state.challengeId;
     const winningControl = state.result?.kind === "winner"
@@ -1890,14 +1892,31 @@ export function ThreePlayerGame({
         </div>
 
         <section className="three-board-column">
-          <div className="three-turn-status" aria-live="polite">
-            <span
-              style={{
-                "--seat-color": state.players[state.activeSeat].displayColor,
-              } as React.CSSProperties}
-            />
+          <div
+            className={`three-turn-status ${aiTurn ? "ai-thinking" : ""}`}
+            aria-live="polite"
+          >
+            {aiTurn
+              ? (
+                <LoaderCircle
+                  className="spin three-ai-thinking-icon"
+                  size={17}
+                  aria-hidden="true"
+                />
+              )
+              : (
+                <span
+                  style={{
+                    "--seat-color": state.players[state.activeSeat].displayColor,
+                  } as React.CSSProperties}
+                />
+              )}
             <div>
-              <strong>{state.notice}</strong>
+              <strong>
+                {aiTurn
+                  ? `${state.players[state.activeSeat].name} is thinking…`
+                  : state.notice}
+              </strong>
               <small>
                 {onlineSession?.status === "paused"
                   ? "The room is paused for reconnection."
@@ -1905,10 +1924,12 @@ export function ThreePlayerGame({
                     ? "Canonical play is locked during the undo vote."
                     : onlineSession?.awaitingSync
                       ? "Waiting for the host to acknowledge the action."
-                      : inputDisabled
-                        ? onlineSession
-                          ? "Waiting for the assigned active participant."
-                          : "AI is choosing a divine action."
+                      : aiTurn
+                        ? "The CPU is evaluating legal moves and divine abilities."
+                        : inputDisabled
+                          ? onlineSession
+                            ? "Waiting for the assigned active participant."
+                            : "Input is temporarily unavailable."
                         : "Select a God, ability, piece, or highlighted target."}
               </small>
             </div>

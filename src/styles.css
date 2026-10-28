@@ -2979,6 +2979,11 @@ span.move-target-dot {
 .three-turn-status strong, .three-turn-status small { display: block; }
 .three-turn-status strong { color: #ddd7cc; font-size: 10px; }
 .three-turn-status small { margin-top: 3px; color: #777981; font-size: 8px; }
+.three-turn-status.ai-thinking {
+  border-color: rgba(198,161,91,.38);
+  background: linear-gradient(90deg, rgba(198,161,91,.08), #11141a 42%);
+}
+.three-ai-thinking-icon { color: var(--gold-bright); }
 .three-neutral-affinity {
   min-height: 34px; display: flex; align-items: center; justify-content: center; gap: 8px;
   padding: 7px 12px; color: #aaaeb5; background: #151820; border: 1px solid var(--line);

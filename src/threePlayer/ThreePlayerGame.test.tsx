@@ -873,6 +873,35 @@ describe("ThreePlayerGame", () => {
     expect(terminateWorker).toHaveBeenCalledTimes(1);
   });
 
+  it("shows a prominent thinking status while the local CPU plans", () => {
+    const terminate = vi.fn();
+    class PendingAiWorker {
+      onmessage = null;
+      onerror = null;
+      postMessage() {}
+      terminate() {
+        terminate();
+      }
+    }
+    vi.stubGlobal("Worker", PendingAiWorker);
+    const config = createDefaultThreePlayerConfig();
+    config.seats.white.name = "Divine AI";
+    config.seats.white.control = { kind: "ai", difficulty: 5 };
+    const state = completeDraft(createThreePlayerGame(config));
+    state.activeSeat = "white";
+    const { container, unmount } = renderGame(state);
+
+    expect(screen.getByText("Divine AI is thinking…")).toBeTruthy();
+    expect(screen.getByText(
+      "The CPU is evaluating legal moves and divine abilities.",
+    )).toBeTruthy();
+    expect(container.querySelector(".three-turn-status.ai-thinking .spin"))
+      .toBeTruthy();
+
+    unmount();
+    expect(terminate).toHaveBeenCalledTimes(1);
+  });
+
   it("falls back to main-thread drafting when the AI worker fails", async () => {
     class FailingAiWorker {
       onmessage = null;
@@ -1067,7 +1096,8 @@ describe("ThreePlayerGame", () => {
     renderGame(state);
 
     expect(screen.getByText(/Red · dark affinity/i)).toBeTruthy();
-    expect(screen.getByText(/AI is choosing a divine action/i)).toBeTruthy();
+    expect(screen.getByText(/is thinking…/i)).toBeTruthy();
+    expect(screen.getByText(/CPU is evaluating legal moves/i)).toBeTruthy();
     expect(document.querySelector(".three-game-page")?.classList.contains("input-gated")).toBe(true);
     expect(screen.getAllByRole("button", { name: /open match menu/i })).toHaveLength(1);
     expect(screen.queryByRole("button", { name: /game menu/i })).toBeNull();
