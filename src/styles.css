@@ -1373,19 +1373,19 @@ span.move-target-dot {
 }
 .setup-navigation-shell.play-menu-scene {
   background:
-    linear-gradient(145deg, rgba(12,14,19,.35), rgba(7,8,12,.42) 58%, rgba(4,5,8,.46)),
+    linear-gradient(145deg, rgba(12,14,19,.2), rgba(7,8,12,.27) 58%, rgba(4,5,8,.31)),
     radial-gradient(circle at 50% -12%, rgba(198,161,91,.18), transparent 38rem),
     url("./assets/scenes/Pawn.webp") center 35% / cover no-repeat;
 }
 .setup-navigation-shell.local-menu-scene {
   background:
-    linear-gradient(145deg, rgba(12,14,19,.37), rgba(7,8,12,.44) 58%, rgba(4,5,8,.47)),
+    linear-gradient(145deg, rgba(12,14,19,.22), rgba(7,8,12,.29) 58%, rgba(4,5,8,.32)),
     radial-gradient(circle at 50% -12%, rgba(198,161,91,.2), transparent 38rem),
     url("./assets/scenes/Duel.webp") center 30% / cover no-repeat;
 }
 .setup-navigation-shell.online-menu-scene {
   background:
-    linear-gradient(145deg, rgba(12,14,19,.37), rgba(7,8,12,.44) 58%, rgba(4,5,8,.47)),
+    linear-gradient(145deg, rgba(12,14,19,.22), rgba(7,8,12,.29) 58%, rgba(4,5,8,.32)),
     radial-gradient(circle at 50% -12%, rgba(198,161,91,.2), transparent 38rem),
     url("./assets/scenes/Salem-Space.webp") center 32% / cover no-repeat;
 }
