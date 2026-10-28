@@ -174,11 +174,17 @@ const enumerateAiCandidates = (
   const maxStates = difficulty >= 8 ? 60 : difficulty >= 4 ? 35 : 24;
   const maxActionsPerState = difficulty >= 8 ? 12 : difficulty >= 4 ? 8 : 6;
   const maxMilliseconds = difficulty >= 8
-    ? 8_000
+    ? 6_000
     : difficulty >= 4
-      ? 5_000
-      : 3_000;
+      ? 3_500
+      : 2_000;
+  const refinementMilliseconds = difficulty >= 8
+    ? 900
+    : difficulty >= 4
+      ? 450
+      : 200;
   const deadline = Date.now() + maxMilliseconds;
+  let refinementDeadline: number | undefined;
   const stack: ThreePlayerPlan[] = [{ state, actions: [] }];
   const completed: ThreePlayerPlan[] = [];
   const seen = new Set([threePlayerPlanStateSignature(state)]);
@@ -188,7 +194,10 @@ const enumerateAiCandidates = (
     stack.length &&
     visited < maxStates &&
     completed.length < maxPlans &&
-    (!completed.length || Date.now() < deadline)
+    (
+      !completed.length ||
+      Date.now() < Math.min(deadline, refinementDeadline ?? deadline)
+    )
   ) {
     const node = stack.pop()!;
     if (node.actions.length >= 12) continue;
@@ -209,13 +218,17 @@ const enumerateAiCandidates = (
       };
       if (isCompleteThreePlayerPlan(state, next)) {
         completed.push(candidate);
+        refinementDeadline ??= Date.now() + refinementMilliseconds;
       } else {
         stack.push(candidate);
       }
       if (
         visited >= maxStates ||
         completed.length >= maxPlans ||
-        (completed.length > 0 && Date.now() >= deadline)
+        (
+          completed.length > 0 &&
+          Date.now() >= Math.min(deadline, refinementDeadline ?? deadline)
+        )
       ) break;
     }
   }

@@ -81,6 +81,22 @@ describe("four-player layer-three session seams", () => {
       type: "draft",
       godId: "salem",
       skinId: "chonk",
+      selectionMethod: "random",
+    })).toEqual({
+      type: "draft",
+      godId: "salem",
+      skinId: "chonk",
+      selectionMethod: "random",
+    });
+    expect(normalizeFourPlayerAction({
+      type: "draft",
+      godId: "salem",
+      selectionMethod: "manual",
+    })).toBeUndefined();
+    expect(normalizeFourPlayerAction({
+      type: "draft",
+      godId: "salem",
+      skinId: "chonk",
     })).toEqual({ type: "draft", godId: "salem", skinId: "chonk" });
     expect(normalizeFourPlayerAction({
       type: "draft",

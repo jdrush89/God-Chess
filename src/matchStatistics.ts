@@ -1,6 +1,10 @@
 import type { FourPlayerState } from "./game/fourPlayerTypes";
+import { GODS } from "./game/gods";
 import type { ThreePlayerState } from "./game/threePlayerTypes";
 import type { GameState } from "./game/types";
+
+export type MatchActorType = "player" | "cpu";
+export type MatchGodPickMethod = "manual" | "random" | "cpu";
 
 export interface MatchSeatStatistics {
   lightOrbsGained: number;
@@ -15,16 +19,56 @@ export interface MatchWinEvent {
   winners: string[];
 }
 
+export interface MatchGodPickStatistics {
+  godId: string;
+  actorType: MatchActorType;
+  method: MatchGodPickMethod;
+}
+
+export interface MatchAbilityUseStatistics {
+  player: number;
+  cpu: number;
+}
+
+export interface MatchAbilityUpgradeStatistics {
+  godId: string;
+  abilityId: string;
+  actorType: MatchActorType;
+  level: 2 | 3;
+  turn: number;
+}
+
+export interface MatchGameSeatStatistics {
+  godPicks: MatchGodPickStatistics[];
+  abilityUses: Record<string, MatchAbilityUseStatistics>;
+  abilityUpgrades: MatchAbilityUpgradeStatistics[];
+}
+
+export interface MatchCurrentGameStatistics {
+  seats: Record<string, MatchGameSeatStatistics>;
+}
+
 export interface MatchStatisticsState {
   version: 1;
   gamesPlayed: number;
   stalemates: number;
   wins: MatchWinEvent[];
   seats: Record<string, MatchSeatStatistics>;
+  currentGame: MatchCurrentGameStatistics;
 }
 
 type MatchState = GameState | ThreePlayerState | FourPlayerState;
-type MatchAction = { type?: string; abilityId?: string } | undefined;
+type MatchAction = {
+  type?: string;
+  abilityId?: string;
+  selectionMethod?: "random";
+} | undefined;
+
+const ABILITY_GODS = new Map(
+  GODS.flatMap((god) =>
+    god.abilities.map((ability) => [ability.id, god.id] as const)
+  ),
+);
 
 const nonNegativeInteger = (value: unknown) =>
   typeof value === "number" && Number.isFinite(value)
@@ -39,6 +83,84 @@ const numberRecord = (value: unknown) => {
       return count > 0 ? [[key, count]] : [];
     }),
   );
+};
+
+const isActorType = (value: unknown): value is MatchActorType =>
+  value === "player" || value === "cpu";
+
+const isPickMethod = (value: unknown): value is MatchGodPickMethod =>
+  value === "manual" || value === "random" || value === "cpu";
+
+const normalizeCurrentGame = (value: unknown): MatchCurrentGameStatistics => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { seats: {} };
+  }
+  const source = value as Partial<MatchCurrentGameStatistics>;
+  if (!source.seats || typeof source.seats !== "object" || Array.isArray(source.seats)) {
+    return { seats: {} };
+  }
+  return {
+    seats: Object.fromEntries(
+      Object.entries(source.seats).map(([seat, statistics]) => {
+        const entry = statistics &&
+            typeof statistics === "object" &&
+            !Array.isArray(statistics)
+          ? statistics as Partial<MatchGameSeatStatistics>
+          : {};
+        const godPicks = Array.isArray(entry.godPicks)
+          ? entry.godPicks.flatMap((pick) =>
+            pick &&
+              typeof pick === "object" &&
+              !Array.isArray(pick) &&
+              typeof pick.godId === "string" &&
+              isActorType(pick.actorType) &&
+              isPickMethod(pick.method)
+              ? [{
+                godId: pick.godId,
+                actorType: pick.actorType,
+                method: pick.method,
+              }]
+              : []
+          )
+          : [];
+        const abilityUses = entry.abilityUses &&
+            typeof entry.abilityUses === "object" &&
+            !Array.isArray(entry.abilityUses)
+          ? Object.fromEntries(
+            Object.entries(entry.abilityUses).flatMap(([abilityId, counts]) => {
+              if (!counts || typeof counts !== "object" || Array.isArray(counts)) {
+                return [];
+              }
+              const sourceCounts = counts as Partial<MatchAbilityUseStatistics>;
+              const player = nonNegativeInteger(sourceCounts.player);
+              const cpu = nonNegativeInteger(sourceCounts.cpu);
+              return player || cpu ? [[abilityId, { player, cpu }]] : [];
+            }),
+          )
+          : {};
+        const abilityUpgrades = Array.isArray(entry.abilityUpgrades)
+          ? entry.abilityUpgrades.flatMap((upgrade) =>
+            upgrade &&
+              typeof upgrade === "object" &&
+              !Array.isArray(upgrade) &&
+              typeof upgrade.godId === "string" &&
+              typeof upgrade.abilityId === "string" &&
+              isActorType(upgrade.actorType) &&
+              (upgrade.level === 2 || upgrade.level === 3)
+              ? [{
+                godId: upgrade.godId,
+                abilityId: upgrade.abilityId,
+                actorType: upgrade.actorType,
+                level: upgrade.level,
+                turn: nonNegativeInteger(upgrade.turn),
+              }]
+              : []
+          )
+          : [];
+        return [seat, { godPicks, abilityUses, abilityUpgrades }];
+      }),
+    ),
+  };
 };
 
 export const createMatchSeatStatistics = (): MatchSeatStatistics => ({
@@ -56,6 +178,7 @@ export const createMatchStatisticsState = (): MatchStatisticsState => ({
   stalemates: 0,
   wins: [],
   seats: {},
+  currentGame: { seats: {} },
 });
 
 export const normalizeMatchStatisticsState = (
@@ -107,6 +230,7 @@ export const normalizeMatchStatisticsState = (
     stalemates: nonNegativeInteger(source.stalemates),
     wins,
     seats,
+    currentGame: normalizeCurrentGame(source.currentGame),
   };
 };
 
@@ -118,7 +242,9 @@ const players = (state: MatchState) =>
     gods: string[];
     orbs: Record<string, number>;
     graveyard: unknown[];
+    upgrades: Record<string, 1 | 2 | 3>;
     team?: string;
+    control?: { kind?: string };
   }>;
 
 const seatStatistics = (
@@ -127,6 +253,42 @@ const seatStatistics = (
 ) => {
   statistics.seats[seat] ??= createMatchSeatStatistics();
   return statistics.seats[seat];
+};
+
+const currentGameSeatStatistics = (
+  statistics: MatchStatisticsState,
+  seat: string,
+) => {
+  statistics.currentGame.seats[seat] ??= {
+    godPicks: [],
+    abilityUses: {},
+    abilityUpgrades: [],
+  };
+  return statistics.currentGame.seats[seat];
+};
+
+const actorType = (
+  state: MatchState,
+  seat: string,
+): MatchActorType => {
+  if ("activeColor" in state) {
+    if (state.gameMode === "simulation") return "cpu";
+    return state.gameMode === "ai" && state.aiColor === seat
+      ? "cpu"
+      : "player";
+  }
+  return players(state)[seat]?.control?.kind === "ai" ? "cpu" : "player";
+};
+
+const pickMethod = (
+  state: MatchState,
+  seat: string,
+  action: MatchAction,
+): MatchGodPickMethod => {
+  if (actorType(state, seat) === "cpu") return "cpu";
+  return action?.type === "auto-draft" || action?.selectionMethod === "random"
+    ? "random"
+    : "manual";
 };
 
 const lightOrbs = (state: MatchState, seat: string) => {
@@ -195,6 +357,7 @@ export const applyMatchStatisticsTransition = <T extends MatchState>(
   const statistics = normalizeMatchStatisticsState(before.matchStats);
   if (action?.type === "restart") {
     statistics.gamesPlayed += 1;
+    statistics.currentGame = { seats: {} };
     return { ...after, matchStats: statistics };
   }
 
@@ -222,12 +385,42 @@ export const applyMatchStatisticsTransition = <T extends MatchState>(
     for (const godId of afterPlayers[seat].gods) {
       if (!beforePlayers[seat]?.gods.includes(godId)) {
         seatStats.godsUsed[godId] = (seatStats.godsUsed[godId] ?? 0) + 1;
+        currentGameSeatStatistics(statistics, seat).godPicks.push({
+          godId,
+          actorType: actorType(before, seat),
+          method: pickMethod(before, seat, action),
+        });
       }
     }
   }
 
   if (abilityCompleted(before, after, action)) {
-    seatStatistics(statistics, actor(before)).abilitiesUsed += 1;
+    const activeActor = actor(before);
+    const completedAbility = abilityId(before, action)!;
+    const type = actorType(before, activeActor);
+    seatStatistics(statistics, activeActor).abilitiesUsed += 1;
+    const uses = currentGameSeatStatistics(statistics, activeActor).abilityUses;
+    uses[completedAbility] ??= { player: 0, cpu: 0 };
+    uses[completedAbility][type] += 1;
+  }
+  if (action?.type === "upgrade" && action.abilityId) {
+    const activeActor = actor(before);
+    const beforeLevel = beforePlayers[activeActor]?.upgrades[action.abilityId] ?? 1;
+    const afterLevel = afterPlayers[activeActor]?.upgrades[action.abilityId] ?? 1;
+    const godId = ABILITY_GODS.get(action.abilityId);
+    if (
+      godId &&
+      afterLevel > beforeLevel &&
+      (afterLevel === 2 || afterLevel === 3)
+    ) {
+      currentGameSeatStatistics(statistics, activeActor).abilityUpgrades.push({
+        godId,
+        abilityId: action.abilityId,
+        actorType: actorType(before, activeActor),
+        level: afterLevel,
+        turn: nonNegativeInteger(before.turn),
+      });
+    }
   }
   if (before.phase !== "gameover" && after.phase === "gameover") {
     const winningSeats = winners(after);

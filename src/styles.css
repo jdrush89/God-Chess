@@ -284,6 +284,13 @@ body::before {
   color: #0c0c0d; font-weight: 700; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; cursor: pointer;
 }
 .primary-button:disabled { opacity: .35; cursor: not-allowed; }
+.primary-button.skin-locked-button:disabled {
+  color: #858790;
+  background: linear-gradient(135deg, #20232a, #12141a);
+  border-color: #41444d;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.025);
+  opacity: 1;
+}
 .draft-rosters {
   position: fixed; bottom: 0; left: 0; right: 0; z-index: 4;
   display: flex; justify-content: center; gap: 100px; padding: 15px 30px;
@@ -330,9 +337,30 @@ body::before {
 .header-actions button:hover { color: #eee9df; background: rgba(255,255,255,.04); }
 .header-actions .forfeit-button { color: #d89082; }
 .header-actions .forfeit-button:hover { color: #f0b0a4; background: rgba(151,55,40,.12); }
-.header-actions button:disabled { opacity: .3; cursor: not-allowed; }
+.header-actions button:disabled { cursor: not-allowed; }
+.header-actions button:disabled > svg,
+.header-actions button:disabled > span { opacity: .3; }
 .header-actions button:disabled:hover { color: #8f9097; background: transparent; }
 .header-actions span { font-size: 10px; text-transform: uppercase; letter-spacing: .09em; }
+@media (max-width: 1000px) {
+  .game-page.puzzle-mode .header-actions span { display: none; }
+  .game-page.puzzle-mode .header-actions button {
+    position: relative; justify-content: center;
+    width: 34px; height: 34px; padding: 8px;
+  }
+  .game-page.puzzle-mode .header-actions button[data-tooltip]::after {
+    position: absolute; z-index: 20; top: calc(100% + 9px); left: 50%;
+    padding: 6px 8px; color: #eee9df; background: #11141a;
+    border: 1px solid rgba(198,161,91,.38); box-shadow: 0 6px 18px rgba(0,0,0,.42);
+    content: attr(data-tooltip); font-size: 9px; font-weight: 600; letter-spacing: .04em;
+    line-height: 1.25; text-transform: none; white-space: nowrap; pointer-events: none;
+    opacity: 0; transform: translate(-50%, -3px); transition: opacity .12s ease, transform .12s ease;
+  }
+  .game-page.puzzle-mode .header-actions button[data-tooltip]:hover::after,
+  .game-page.puzzle-mode .header-actions button[data-tooltip]:focus-visible::after {
+    opacity: 1; transform: translate(-50%, 0);
+  }
+}
 .turn-notice {
   min-height: 47px; display: flex; align-items: center; justify-content: center; gap: 9px;
   border-bottom: 1px solid var(--line); color: #a9a7a1; background: rgba(255,255,255,.012); font-size: small;
@@ -1120,7 +1148,7 @@ span.move-target-dot {
 }
 .puzzle-select-topbar-label {
   position: absolute; left: 50%; margin: 0; transform: translateX(-50%);
-  color: #b7aa8b; font: 600 9px "Cinzel"; letter-spacing: .18em; white-space: nowrap;
+  color: #b7aa8b; font: 600 medium "Cinzel"; letter-spacing: .18em; white-space: nowrap;
 }
 .puzzle-select-back {
   min-height: 40px; display: inline-flex; align-items: center; gap: 8px;
@@ -1156,6 +1184,9 @@ span.move-target-dot {
 .puzzle-difficulty-progress {
   width: min(210px, 100%); display: grid; gap: 7px; margin-top: 7px;
   color: #9a9ba1; font-size: 9px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+}
+@media (min-width: 641px) and (max-width: 900px) {
+  .puzzle-difficulty-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 .puzzle-difficulty-progress i {
   height: 4px; display: block; overflow: hidden; background: #292c34;
@@ -1395,9 +1426,9 @@ span.move-target-dot {
 .setup-navigation-header > span {
   color: #837b69; font: 600 9px "Cinzel"; letter-spacing: .18em;
 }
-.setup-navigation-title {
+.setup-navigation-header > .setup-navigation-title {
   position: absolute; left: 50%; transform: translateX(-50%);
-  color: #b7aa8b !important; white-space: nowrap; pointer-events: none;
+  color: #b7aa8b !important; font-size: medium; white-space: nowrap; pointer-events: none;
 }
 .setup-navigation-back {
   min-height: 40px; display: inline-flex; align-items: center; gap: 8px; padding: 0 13px;
@@ -1406,6 +1437,7 @@ span.move-target-dot {
 }
 .setup-navigation-back:hover { color: #f3dfaa; border-color: var(--gold); }
 .setup-navigation-content { width: 100%; min-width: 0; }
+.play-menu-scene .setup-navigation-content { display: flow-root; }
 .play-menu-heading {
   max-width: 680px; margin: clamp(48px, 10vh, 100px) auto clamp(24px, 5vh, 46px);
   padding: 0 20px; text-align: center;
@@ -1422,14 +1454,14 @@ span.move-target-dot {
 .play-menu-grid > button {
   min-width: 0; min-height: clamp(170px, 28vh, 250px); display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 16px; padding: 24px 16px;
-  color: #d2ccbf; background: rgba(13,15,20,.96); border: 1px solid #343740; cursor: pointer;
+  color: #d2ccbf; background: #0d0f14; border: 1px solid #343740; cursor: pointer;
   box-shadow: 0 18px 50px rgba(0,0,0,.2);
 }
 .play-menu-grid > button:hover:not(:disabled) {
-  color: #fff0c8; border-color: rgba(198,161,91,.72); background: rgba(4,5,8,.99);
+  color: #fff0c8; border-color: rgba(198,161,91,.72); background: #040508;
 }
 .play-menu-grid > button:disabled {
-  color: #777981; background: rgba(7,8,12,.96); border-color: #292c33;
+  color: #777981; background: #07080c; border-color: #292c33;
   cursor: not-allowed; opacity: 1;
 }
 .play-menu-grid > button:disabled svg { color: #65676d; }
@@ -1813,7 +1845,7 @@ span.move-target-dot {
   background: rgba(8,10,15,.82); backdrop-filter: blur(10px);
 }
 .start-game-header > span {
-  color: #837b69; font: 600 9px "Cinzel"; letter-spacing: .18em;
+  color: #837b69; font: 600 medium "Cinzel"; letter-spacing: .18em;
 }
 .start-game-back {
   min-height: 40px; display: inline-flex; align-items: center; gap: 8px; padding: 0 13px;
@@ -1842,14 +1874,14 @@ span.move-target-dot {
 .player-count-grid > button {
   min-width: 0; min-height: clamp(190px, 30vh, 270px); display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 18px; padding: 28px 18px;
-  color: #d2ccbf; background: rgba(13,15,20,.96); border: 1px solid #343740; cursor: pointer;
+  color: #d2ccbf; background: #0d0f14; border: 1px solid #343740; cursor: pointer;
   box-shadow: 0 18px 50px rgba(0,0,0,.2);
 }
 .player-count-grid > button:hover:not(:disabled) {
-  color: #fff0c8; border-color: rgba(198,161,91,.72); background: rgba(4,5,8,.99);
+  color: #fff0c8; border-color: rgba(198,161,91,.72); background: #040508;
 }
 .player-count-grid > button:disabled {
-  color: #777981; background: rgba(7,8,12,.96); border-color: #292c33;
+  color: #777981; background: #07080c; border-color: #292c33;
   cursor: not-allowed; opacity: 1;
 }
 .player-count-grid > button:disabled svg { color: #65676d; }
@@ -1861,7 +1893,7 @@ span.move-target-dot {
   border-color: rgba(198,161,91,.62);
   background:
     radial-gradient(circle at 50% 20%, rgba(198,161,91,.15), transparent 62%),
-    rgba(13,15,20,.96);
+    #0d0f14;
 }
 .ranked-leaderboard-panel {
   width: min(880px, 100%); display: grid; gap: 20px; margin: 0 auto;
@@ -2068,11 +2100,13 @@ span.move-target-dot {
 .four-online-participants article div { min-width: 0; }
 .four-online-participants strong, .four-online-participants small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .four-online-participants strong { color: #e8e0cf; font: 600 10px "Cinzel"; }
-.four-online-participants small { margin-top: 3px; color: #6f7178; font-size: 7px; }
+.four-online-participants small { margin-top: 3px; color: #6f7178; font-size: small; }
 .four-online-participants article > span {
-  display: flex; align-items: center; gap: 3px; color: #8cae95; font-size: 7px; font-weight: 800; text-transform: uppercase;
+  display: flex; align-items: center; gap: 3px; color: #8cae95; font-size: small; font-weight: 800; text-transform: uppercase;
 }
-.four-online-options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.four-online-options {
+  display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 1fr; gap: 8px;
+}
 .four-online-seats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .four-online-seat {
   min-width: 0; padding: 11px; border: 1px solid color-mix(in srgb, var(--seat-color) 34%, var(--line));
@@ -2099,7 +2133,7 @@ span.move-target-dot {
   display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px;
   padding-top: 12px; border-top: 1px solid var(--line);
 }
-.four-online-footer p { margin: 2px 0; color: #e39a8e; font-size: 8px; }
+.four-online-footer p { margin: 2px 0; color: #e39a8e; font-size: small; }
 .four-online-footer p.valid { color: #95c3a4; }
 .four-online-footer > div:last-child { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .four-online-footer .leave-room-button { margin: 0; }
@@ -2134,10 +2168,10 @@ span.move-target-dot {
   display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .three-online-participants strong { color: #e8e0cf; font: 600 10px "Cinzel"; }
-.three-online-participants small { margin-top: 3px; color: #6f7178; font-size: 7px; }
+.three-online-participants small { margin-top: 3px; color: #6f7178; font-size: small; }
 .three-online-participants article > span {
   display: flex; align-items: center; gap: 3px; color: #8cae95;
-  font-size: 7px; font-weight: 800; text-transform: uppercase;
+  font-size: small; font-weight: 800; text-transform: uppercase;
 }
 .three-online-participants .account-portrait,
 .four-online-participants .account-portrait {
@@ -2161,7 +2195,9 @@ span.move-target-dot {
 .classic-online-participants span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .classic-online-participants strong { color: #e8e0cf; font: 600 10px "Cinzel"; }
 .classic-online-participants span { margin-top: 3px; color: #72747c; font-size: 7px; text-transform: uppercase; }
-.three-online-options { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 8px; }
+.three-online-options {
+  display: grid; grid-template-columns: 1.4fr 1fr 1fr; grid-auto-rows: 1fr; gap: 8px;
+}
 .three-online-variants {
   min-width: 0; display: grid; gap: 8px; padding: 12px;
   background: #101219; border: 1px solid var(--line);
@@ -2205,7 +2241,7 @@ span.move-target-dot {
   display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px;
   padding-top: 12px; border-top: 1px solid var(--line);
 }
-.three-online-footer p { margin: 2px 0; color: #e39a8e; font-size: 8px; }
+.three-online-footer p { margin: 2px 0; color: #e39a8e; font-size: small; }
 .three-online-footer p.valid { color: #95c3a4; }
 .three-online-footer > div:last-child { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .three-online-footer .leave-room-button { margin: 0; }
@@ -2339,6 +2375,18 @@ span.move-target-dot {
 .puzzle-banner > small {
   grid-column: 1 / -1; padding-top: 8px; color: #d3bd89; border-top: 1px solid rgba(198,161,91,.15);
   font-size: 9px; line-height: 1.5; text-align: center;
+}
+@media (min-width: 821px) {
+  .game-page.puzzle-mode .game-meta {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    font-size: small;
+  }
+  .game-page.puzzle-mode .puzzle-banner { position: relative; }
+  .game-page.puzzle-mode .puzzle-banner > p {
+    position: absolute; left: 50%; width: min(48vw, 620px); transform: translateX(-50%);
+    display: flex; align-items: center; justify-content: center;
+    font-size: small; text-align: center; pointer-events: none;
+  }
 }
 .settings-modal { position: relative; width: min(520px, 100%); }
 .setting-row {
@@ -2595,23 +2643,34 @@ span.move-target-dot {
   .puzzle-banner-title { justify-self: center; }
   .puzzle-banner-actions { justify-content: center; }
   .mobile-puzzle-turns {
-    display: inline-flex;
+    width: 100%;
+    display: flex;
     align-items: baseline;
-    justify-self: center;
+    justify-content: center;
+    justify-self: stretch;
     gap: 7px;
     padding: 5px 10px;
     color: #9c804b;
     background: rgba(198,161,91,.08);
     border: 1px solid rgba(198,161,91,.22);
-    font-size: 7px;
+    font-size: small;
     font-weight: 800;
     letter-spacing: .14em;
+    text-align: center;
     text-transform: uppercase;
   }
   .mobile-puzzle-turns strong {
     color: #f2deb0;
-    font: 700 14px "Cinzel";
+    font: 700 small "Cinzel";
     letter-spacing: 0;
+  }
+  .puzzle-banner > p {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: small;
+    text-align: center;
   }
 }
 
@@ -2968,6 +3027,11 @@ span.move-target-dot {
 .three-turn-status strong, .three-turn-status small { display: block; }
 .three-turn-status strong { color: #ddd7cc; font-size: 10px; }
 .three-turn-status small { margin-top: 3px; color: #777981; font-size: 8px; }
+.three-turn-status.ai-thinking {
+  border-color: rgba(198,161,91,.38);
+  background: linear-gradient(90deg, rgba(198,161,91,.08), #11141a 42%);
+}
+.three-ai-thinking-icon { color: var(--gold-bright); }
 .three-neutral-affinity {
   min-height: 34px; display: flex; align-items: center; justify-content: center; gap: 8px;
   padding: 7px 12px; color: #aaaeb5; background: #151820; border: 1px solid var(--line);
@@ -3821,8 +3885,6 @@ span.move-target-dot {
   .friend-remove-button { width: 100%; }
   .account-portrait-picker > div { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .classic-online-participants { grid-template-columns: 1fr; }
-  .friend-invite-control { grid-template-columns: 1fr; }
-  .friend-invite-button { width: 100%; }
   .statistics-record { justify-items: start; }
   .stat-summary-grid { grid-template-columns: 1fr; }
   .statistics-panel { padding: 18px 14px; }

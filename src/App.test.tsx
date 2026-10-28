@@ -409,7 +409,7 @@ const commitMissedPuzzleMove = () => {
   const { container } = render(<App />);
   openPlayOption("Puzzles");
   fireEvent.click(screen.getByRole("button", { name: /^easy/i }));
-  fireEvent.click(screen.getByRole("button", { name: /puzzle 1/i }));
+  fireEvent.click(screen.getByRole("button", { name: /^puzzle 1,/i }));
   fireEvent.click(screen.getByTitle("Use Chiron"));
   fireEvent.click(screen.getByRole("button", { name: /Charge/ }));
   fireEvent.click(container.querySelector('[data-square="e2"]')!);
@@ -1360,6 +1360,7 @@ describe("game startup", () => {
     fireEvent.click(screen.getByRole("option", { name: /^businessman locked$/i }));
     const lockedClaim = screen.getByRole("button", { name: /^ares skin locked$/i });
     expect((lockedClaim as HTMLButtonElement).disabled).toBe(true);
+    expect(lockedClaim.classList.contains("skin-locked-button")).toBe(true);
   });
 
   it("closes sign-in for an existing profile and opens name editing from the account menu", async () => {
@@ -1932,9 +1933,11 @@ describe("game startup", () => {
     expect(screen.getByRole("heading", { name: /choose puzzle type/i })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /^easy/i }));
     expect(screen.getAllByRole("button", { name: /puzzle \d/i })).toHaveLength(10);
+    expect(screen.getByRole("button", { name: /puzzle 6.*the corner cage/i })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /puzzle types/i }));
     fireEvent.click(screen.getByRole("button", { name: /^medium/i }));
     expect(screen.getAllByRole("button", { name: /puzzle \d/i })).toHaveLength(10);
+    expect(screen.getByRole("button", { name: /puzzle 1.*the watchful bishop/i })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /puzzle types/i }));
     fireEvent.click(screen.getByRole("button", { name: /^easy/i }));
 
@@ -1942,9 +1945,10 @@ describe("game startup", () => {
     expect(puzzleLibrary).toBeTruthy();
     expect(puzzleLibrary?.querySelector(".god-sigil")).toBeNull();
     expect(within(puzzleLibrary as HTMLElement).queryByText(/chiron|charge/i)).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /puzzle 1.*position one/i }));
+    fireEvent.click(screen.getByRole("button", { name: /puzzle 1.*the distant king/i }));
 
-    expect(screen.getByText("Position One")).toBeTruthy();
+    expect(screen.getByText("The Distant King")).toBeTruthy();
+    expect(screen.getByText(/puzzle 1 of 10/i)).toBeTruthy();
     expect(container.querySelector(".mobile-puzzle-turns")?.textContent)
       .toMatch(/player turns left\s*1/i);
     expect(container.querySelector(".game-meta")?.textContent)
@@ -2192,8 +2196,8 @@ describe("game startup", () => {
     fireEvent.click(screen.getByRole("button", { name: /^hard/i }));
 
     expect(screen.getByRole("heading", { name: /hard puzzles/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /puzzle 16.*position sixteen/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /puzzle 25.*position twenty-five/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /puzzle 1.*the long way home/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /puzzle 10.*three on the back rank/i })).toBeTruthy();
     expect(screen.getAllByText(/win in three divine turns/i)).toHaveLength(10);
   });
 
@@ -2239,6 +2243,9 @@ describe("game startup", () => {
       .toBeTruthy();
     expect(screen.getAllByText(/checkmate both rivals in two divine turns/i))
       .toHaveLength(10);
+    expect(screen.getByRole("button", {
+      name: /puzzle 10.*the final file/i,
+    })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", {
       name: /puzzle 1.*frontier fork/i,
     }));
@@ -2450,7 +2457,7 @@ describe("game startup", () => {
     expect(finish.classList.contains("secondary-button")).toBe(true);
   });
 
-  it("highlights Position Six Enchant sources and attaches both stage prompts to Enchant", () => {
+  it("highlights The Watchful Bishop's Enchant sources and attaches both stage prompts to Enchant", () => {
     let state = PUZZLES.find((puzzle) => puzzle.id === "opened-file")!.createState();
     state = gameReducer(state, { type: "select-god", godId: "teles" });
     state = gameReducer(state, { type: "select-ability", abilityId: "enchant" });
@@ -2660,7 +2667,7 @@ describe("game startup", () => {
     expect(screen.getByText(/black to act/i)).toBeTruthy();
   });
 
-  it("renders Position Thirteen's occupied Escort destination as a legal target", () => {
+  it("renders No Room to Retreat's occupied Escort destination as a legal target", () => {
     const puzzle = PUZZLES.find((candidate) => candidate.id === "royal-landing")!;
     let state = puzzle.createState();
     for (const action of puzzle.solutionTurns[0]) state = gameReducer(state, action);

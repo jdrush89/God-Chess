@@ -197,6 +197,10 @@ import {
   upsertCloudPlayerStatistics,
 } from "./account/cloudPlayerStatistics";
 import {
+  reportBalanceMatch,
+  type BalanceGameMode,
+} from "./account/balanceAnalytics";
+import {
   completedAchievementIds,
   loadLocalAchievementProgress,
   mergeNormalizedAchievementProgress,
@@ -982,7 +986,7 @@ function DraftScreen({
             ))}
           </div>
           <button
-            className="primary-button"
+            className={`primary-button${selectedSkinUnlocked ? "" : " skin-locked-button"}`}
             onClick={confirmGodSelection}
             disabled={
               inputDisabled ||
@@ -4283,33 +4287,31 @@ function PuzzleSelectScreen({
                       </button>
                     );
                 })
-                : visiblePuzzles.map((puzzle) => {
-                const index = difficulty === "three-player"
-                  ? visiblePuzzles.findIndex((candidate) => candidate.id === puzzle.id)
-                  : PUZZLES.findIndex((candidate) => candidate.id === puzzle.id);
-                const completed = completedPuzzles.has(puzzle.id);
-                return (
-                  <button
-                    className={`puzzle-select-card${completed ? " completed" : ""}`}
-                    key={puzzle.id}
-                    onClick={() => onStartPuzzle(puzzle.id)}
-                    aria-label={`Puzzle ${index + 1}, ${puzzle.title}${completed ? ", completed" : ""}`}
-                  >
-                    {completed && (
-                      <span className="puzzle-complete-badge" aria-hidden="true">
-                        <Check size={22} strokeWidth={3} />
-                      </span>
-                    )}
-                    <span>PUZZLE {index + 1}</span>
-                    <strong>{puzzle.title}</strong>
-                    <small>
-                      {difficulty === "three-player"
-                        ? "Checkmate both rivals in two divine turns"
-                        : `Win in ${puzzle.playerTurns === 1 ? "one" : puzzle.playerTurns === 2 ? "two" : "three"} divine turn${puzzle.playerTurns === 1 ? "" : "s"}`}
-                    </small>
-                  </button>
-                );
-              })}
+                : visiblePuzzles.map((puzzle, index) => {
+                  const puzzleNumber = index + 1;
+                  const completed = completedPuzzles.has(puzzle.id);
+                  return (
+                    <button
+                      className={`puzzle-select-card${completed ? " completed" : ""}`}
+                      key={puzzle.id}
+                      onClick={() => onStartPuzzle(puzzle.id)}
+                      aria-label={`Puzzle ${puzzleNumber}, ${puzzle.title}${completed ? ", completed" : ""}`}
+                    >
+                      {completed && (
+                        <span className="puzzle-complete-badge" aria-hidden="true">
+                          <Check size={22} strokeWidth={3} />
+                        </span>
+                      )}
+                      <span>PUZZLE {puzzleNumber}</span>
+                      <strong>{puzzle.title}</strong>
+                      <small>
+                        {difficulty === "three-player"
+                          ? "Checkmate both rivals in two divine turns"
+                          : `Win in ${puzzle.playerTurns === 1 ? "one" : puzzle.playerTurns === 2 ? "two" : "three"} divine turn${puzzle.playerTurns === 1 ? "" : "s"}`}
+                      </small>
+                    </button>
+                  );
+                })}
             </div>
           </>
         )}
@@ -5103,6 +5105,25 @@ export function GameScreen({
     setForfeitConfirmationOpen(false);
     onRestart();
   };
+  const undoControlLabel = undoReturnsToGodSelection
+    ? "Return to God selection"
+    : undoEnabled
+      ? "Undo the latest completed turn or upgrade"
+      : "Enable undo in Settings";
+  const restartControlLabel = canForfeitRankedMatch
+    ? "Forfeit match"
+    : puzzleMode
+      ? "Back to puzzles"
+      : challenge
+        ? "Restart challenge"
+        : "Start a new game";
+  const restartControlName = canForfeitRankedMatch
+    ? "Forfeit"
+    : puzzleMode
+      ? "Back to puzzles"
+      : challenge
+        ? "Restart"
+        : "New game";
   return (
     <main className={`game-page ${puzzleMode ? "puzzle-mode" : ""} ${challenge ? "challenge-mode" : ""} has-last-action ${gameFinished ? "finished-view" : ""} ${inputDisabled || opponentPresentation ? "input-locked" : ""}`}>
       <header className="topbar">
@@ -5128,23 +5149,32 @@ export function GameScreen({
           <button
             onClick={onUndo}
             disabled={!canUndo}
-            title={undoReturnsToGodSelection
-              ? "Return to God selection"
-              : undoEnabled
-                ? "Undo the latest completed turn or upgrade"
-                : "Enable undo in Settings"}
+            aria-label="Undo"
+            data-tooltip={undoControlLabel}
+            title={undoControlLabel}
           >
             <Undo2 size={18} />
             <span>Undo</span>
           </button>
-          <button onClick={() => setHistoryOpen(!historyOpen)}><History size={18} /><span>History</span></button>
+          <button
+            onClick={() => setHistoryOpen(!historyOpen)}
+            aria-label="History"
+            data-tooltip="History"
+          >
+            <History size={18} />
+            <span>History</span>
+          </button>
           <button
             className={canForfeitRankedMatch ? "forfeit-button" : undefined}
             onClick={requestRestart}
+            aria-label={restartControlName}
+            data-tooltip={restartControlLabel}
           >
             {canForfeitRankedMatch
               ? <Flag size={18} />
-              : <RotateCcw size={18} />}
+              : puzzleMode
+                ? <ArrowLeft size={18} />
+                : <RotateCcw size={18} />}
             <span>
               {canForfeitRankedMatch
                 ? "Forfeit"
@@ -7125,6 +7155,14 @@ export default function App() {
     );
   };
 
+  const recordBalanceMatchState = (
+    matchId: string,
+    mode: BalanceGameMode,
+    current: GameState | ThreePlayerState | FourPlayerState,
+  ) => {
+    reportBalanceMatch(matchId, mode, current);
+  };
+
   const receiveState = (next: GameState) => {
     stateRef.current = next;
     baseDispatch({ type: "load-game", state: next });
@@ -7613,7 +7651,17 @@ export default function App() {
         : undefined);
     if (!matchId) return;
     recordPlayerMatchState(matchId, state, classicLocalActors(state));
+    recordBalanceMatchState(
+      matchId,
+      state.gameMode === "online"
+        ? online.ranked ? "classic-ranked" : "classic-online"
+        : state.gameMode === "ai"
+          ? "classic-ai"
+          : "classic-local",
+      state,
+    );
   }, [
+    online.ranked,
     online.roomCode,
     savePlayerStatistics,
     startView,
@@ -7755,7 +7803,7 @@ export default function App() {
         const godId = randomItem(stateRef.current.draft.available);
         if (!godId) break;
         dispatch({
-          type: "draft",
+          type: "auto-draft",
           godId,
           skinId: favoriteGodSkin(
             favorites,
@@ -9145,6 +9193,11 @@ export default function App() {
               [localSeat],
             );
           }
+          recordBalanceMatchState(
+            `online-three:${threeOnline.roomCode}`,
+            "three-online",
+            current,
+          );
         }}
         onQuit={() => {
           threeOnlineActions.disconnect();
@@ -9225,6 +9278,15 @@ export default function App() {
               [localSeat],
             );
           }
+          recordBalanceMatchState(
+            `online-four:${fourOnline.roomCode}`,
+            fourOnline.snapshot?.ranked
+              ? "four-ranked"
+              : current.config.mode === "teams"
+                ? "four-teams-online"
+                : "four-ffa-online",
+            current,
+          );
         }}
         undoPreferred={fourOnline.snapshot.localUndoConsent}
         onUndoPreferenceChange={fourOnlineActions.setUndoConsent}
@@ -9326,6 +9388,13 @@ export default function App() {
                 current,
                 localActors,
               );
+              recordBalanceMatchState(
+                fourPlayerSession.key,
+                current.config.mode === "teams"
+                  ? "four-teams-local"
+                  : "four-ffa-local",
+                current,
+              );
             }}
           initialUndoHistory={fourPlayerSession.undoHistory}
           initialTurnStart={fourPlayerSession.turnStart}
@@ -9410,6 +9479,11 @@ export default function App() {
                 threePlayerSession.key,
                 current,
                 localActors,
+              );
+              recordBalanceMatchState(
+                threePlayerSession.key,
+                "three-local",
+                current,
               );
             }
         }

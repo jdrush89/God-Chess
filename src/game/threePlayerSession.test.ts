@@ -33,6 +33,22 @@ describe("three-player session boundaries", () => {
       type: "draft",
       godId: "salem",
       skinId: "chonk",
+      selectionMethod: "random",
+    })).toEqual({
+      type: "draft",
+      godId: "salem",
+      skinId: "chonk",
+      selectionMethod: "random",
+    });
+    expect(normalizeThreePlayerAction({
+      type: "draft",
+      godId: "salem",
+      selectionMethod: "manual",
+    })).toBeUndefined();
+    expect(normalizeThreePlayerAction({
+      type: "draft",
+      godId: "salem",
+      skinId: "chonk",
     })).toEqual({ type: "draft", godId: "salem", skinId: "chonk" });
     expect(normalizeThreePlayerAction({
       type: "draft",
