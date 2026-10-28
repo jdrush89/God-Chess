@@ -2285,6 +2285,40 @@ describe("game startup", () => {
     expect(screen.getByText("DIVINE PUZZLES")).toBeTruthy();
   });
 
+  it("waits one second before showing a classic puzzle failure", async () => {
+    vi.useFakeTimers();
+    const puzzle = PUZZLES[0];
+    const activeState = puzzle.createState("Solver");
+    const gameProps = {
+      dispatch: vi.fn(),
+      onSaveAndQuit: vi.fn(),
+      onRestart: vi.fn(),
+      onRestartPuzzle: vi.fn(),
+      onNextPuzzle: vi.fn(),
+      undoEnabled: false,
+      canUndo: false,
+      onUndo: vi.fn(),
+      onOpenSettings: vi.fn(),
+    };
+    const { rerender } = render(
+      <GameScreen state={activeState} {...gameProps} />,
+    );
+    const failedState = structuredClone(activeState);
+    failedState.puzzleFailed = true;
+
+    rerender(<GameScreen state={failedState} {...gameProps} />);
+
+    expect(screen.queryByText("WINNING LINE MISSED")).toBeNull();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(999);
+    });
+    expect(screen.queryByText("WINNING LINE MISSED")).toBeNull();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(screen.getByText("WINNING LINE MISSED")).toBeTruthy();
+  });
+
   it("completes a defensive puzzle immediately without starting an AI reply", async () => {
     const puzzle = PUZZLES.find((candidate) =>
       candidate.id === "last-second-flight"
