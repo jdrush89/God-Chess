@@ -83,11 +83,19 @@ body::before {
 }
 .auto-draft-button {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  margin: 0; padding: 9px 13px; color: #d8c38f; background: rgba(198,161,91,.07);
+  margin: 0; padding: 9px 13px; color: #d8c38f;
+  background:
+    linear-gradient(rgba(198,161,91,.07), rgba(198,161,91,.07)),
+    rgba(13,15,20,.96);
   border: 1px solid rgba(198,161,91,.35); cursor: pointer;
   font-size: 8px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
 }
-.auto-draft-button:hover:not(:disabled) { color: #fff0c7; border-color: var(--gold-bright); background: rgba(198,161,91,.13); }
+.auto-draft-button:hover:not(:disabled) {
+  color: #fff0c7; border-color: var(--gold-bright);
+  background:
+    linear-gradient(rgba(198,161,91,.13), rgba(198,161,91,.13)),
+    rgba(4,5,8,.99);
+}
 .auto-draft-button:disabled { opacity: .35; cursor: not-allowed; }
 .draft-progress { display: flex; justify-content: center; gap: 28px; margin-top: 32px; position: relative; }
 .draft-progress::before { content: ""; position: absolute; top: 15px; width: 280px; height: 1px; background: var(--line); }
