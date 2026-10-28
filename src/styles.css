@@ -225,10 +225,11 @@ body::before {
 }
 .skin-select-copy { min-width: 0; display: grid; gap: 4px; }
 .skin-select-copy strong {
-  overflow: hidden; font: 600 11px "Cinzel"; text-overflow: ellipsis; white-space: nowrap;
+  overflow: hidden; font-family: "Cinzel"; font-size: medium; font-weight: 600;
+  text-overflow: ellipsis; white-space: nowrap;
 }
 .skin-select-copy small {
-  color: #80828a; font-size: 7px; letter-spacing: .09em; text-transform: uppercase;
+  color: #80828a; font-size: x-small; letter-spacing: .09em; text-transform: uppercase;
 }
 .skin-select-status-icon { color: #6f727b; }
 .skin-select-chevron {
@@ -259,9 +260,10 @@ body::before {
 }
 .skin-option span { min-width: 0; display: grid; gap: 3px; }
 .skin-option strong {
-  overflow: hidden; font: 600 10px "Cinzel"; text-overflow: ellipsis; white-space: nowrap;
+  overflow: hidden; font-family: "Cinzel"; font-size: medium; font-weight: 600;
+  text-overflow: ellipsis; white-space: nowrap;
 }
-.skin-option small { color: #73757c; font-size: 7px; letter-spacing: .08em; text-transform: uppercase; }
+.skin-option small { color: #73757c; font-size: x-small; letter-spacing: .08em; text-transform: uppercase; }
 .skin-option.locked > svg { color: #666971; }
 .skin-favorite {
   position: absolute; z-index: 2; top: 4px; right: 4px; width: 25px; height: 25px;
