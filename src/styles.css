@@ -1051,7 +1051,7 @@ span.move-target-dot {
 .main-account-button {
   min-height: 36px; display: inline-flex; align-items: center; gap: 8px; padding: 0 13px;
   color: #ddd6c7; background: rgba(7,9,13,.86); border: 1px solid rgba(218,181,105,.34);
-  font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; cursor: pointer;
+  font-size: x-small; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; cursor: pointer;
   backdrop-filter: blur(8px);
 }
 .main-account-button:hover { color: #fff2cf; border-color: var(--gold); }
@@ -1171,7 +1171,7 @@ span.move-target-dot {
 .puzzle-select-back {
   min-height: 40px; display: inline-flex; align-items: center; gap: 8px;
   padding: 0 13px; color: #b8b2a7; background: #0c0e13; border: 1px solid #343740;
-  font-size: 9px; letter-spacing: .08em; text-transform: uppercase; cursor: pointer;
+  font-size: x-small; letter-spacing: .08em; text-transform: uppercase; cursor: pointer;
 }
 .puzzle-select-back:hover { color: #f3dfaa; border-color: var(--gold); }
 .puzzle-select-topbar .puzzle-account-area {
@@ -1451,7 +1451,7 @@ span.move-target-dot {
 .setup-navigation-back {
   min-height: 40px; display: inline-flex; align-items: center; gap: 8px; padding: 0 13px;
   color: #bbb4a7; background: #0c0e13; border: 1px solid #343740;
-  font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; cursor: pointer;
+  font-size: x-small; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; cursor: pointer;
 }
 .setup-navigation-back:hover { color: #f3dfaa; border-color: var(--gold); }
 .setup-navigation-content { width: 100%; min-width: 0; }
@@ -1828,7 +1828,7 @@ span.move-target-dot {
 .tutorial-back {
   min-width: 92px; display: inline-flex; align-items: center; justify-content: center; gap: 7px;
   color: #b8b3a9; background: #111319; border: 1px solid #343740; cursor: pointer;
-  font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  font-size: x-small; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
 }
 .tutorial-back:disabled {
   color: #676a72; background: #101218; border-color: #2d3038;
@@ -1871,7 +1871,7 @@ span.move-target-dot {
 .start-game-back {
   min-height: 40px; display: inline-flex; align-items: center; gap: 8px; padding: 0 13px;
   color: #bbb4a7; background: #0c0e13; border: 1px solid #343740;
-  font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; cursor: pointer;
+  font-size: x-small; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; cursor: pointer;
 }
 .start-game-back:hover { color: #f3dfaa; border-color: var(--gold); }
 .start-game-content {
