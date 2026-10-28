@@ -235,11 +235,12 @@ const createYaltaRenderCoordinates = () => {
   return coordinates;
 };
 
-const inwardRookTarget = (
+const inwardTarget = (
   half: ThreePlayerSeat,
   file: number,
 ): YaltaCell => ({
-  half: nextSeat(half, file < 4 ? -1 : 1),
+  // The left half meets the next seat; the right half meets the previous seat.
+  half: nextSeat(half, file < 4 ? 1 : -1),
   file: 7 - file,
   rank: 0,
 });
@@ -362,7 +363,7 @@ export const createYaltaTopology = (): ThreePlayerTopology => {
     for (let rank = origin.rank - 1; rank >= 0; rank -= 1) {
       inward.push({ ...origin, rank });
     }
-    const across = inwardRookTarget(origin.half, origin.file);
+    const across = inwardTarget(origin.half, origin.file);
     inward.push(across);
     for (let rank = 1; rank < 4; rank += 1) {
       inward.push({ ...across, rank });
@@ -382,7 +383,7 @@ export const createYaltaTopology = (): ThreePlayerTopology => {
     boundary: YaltaCell,
     fileStep: -1 | 1,
   ) => {
-    const across = inwardRookTarget(boundary.half, boundary.file);
+    const across = inwardTarget(boundary.half, boundary.file);
     const normal: YaltaCell = {
       ...across,
       file: across.file - fileStep,
@@ -395,7 +396,7 @@ export const createYaltaTopology = (): ThreePlayerTopology => {
       boundary.file === 4 && fileStep === -1
     ) {
       targets.push(
-        inwardRookTarget(
+        inwardTarget(
           boundary.half,
           boundary.file === 3 ? 4 : 3,
         ),

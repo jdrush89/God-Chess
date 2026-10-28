@@ -421,23 +421,23 @@ describe("branched and wrapped topologies", () => {
       topology.rookTraces(topology.cellFromSourceIndex(9)!)
         .find((trace) => trace.direction === "rank:-1")
         ?.cells.map((cell) => topology.sourceIndex(cell)),
-    ).toEqual([1, 70, 78, 86, 94]);
+    ).toEqual([1, 38, 46, 54, 62]);
     expect(
       topology.rookTraces(topology.cellFromSourceIndex(11)!)
         .find((trace) => trace.direction === "rank:-1")
         ?.cells.map((cell) => topology.sourceIndex(cell)),
-    ).toEqual([3, 68, 76, 84, 92]);
+    ).toEqual([3, 36, 44, 52, 60]);
 
     expect(rayIndexes(1, "bishop")).toEqual([
       "10,19,28",
-      "69,76,83,90",
-      "71",
+      "37,44,51,58",
+      "39",
       "8",
     ].sort());
     expect(rayIndexes(2, "bishop")).toEqual([
       "11,20,29",
-      "68,75,82,89",
-      "70,79",
+      "36,43,50,57",
+      "38,47",
       "9,16",
     ].sort());
     expect(rayIndexes(17, "bishop")).toEqual([
@@ -448,6 +448,10 @@ describe("branched and wrapped topologies", () => {
       "8",
     ].sort());
     expect(rayIndexes(27, "bishop")).toContain("18,9,0");
+    expect(rayIndexes(29, "bishop")).toContain("20,11,2,38,47");
+    expect(rayIndexes(29, "bishop")).not.toContain("20,11,2,70,79");
+    expect(rayIndexes(58, "bishop")).toContain("51,44,37,1,8");
+    expect(rayIndexes(58, "bishop")).not.toContain("51,44,37,65,72");
     for (const source of [1, 2, 17]) {
       const origin = topology.cellFromSourceIndex(source)!;
       const color = topology.cellById.get(origin)!.geometricClass;
@@ -461,26 +465,46 @@ describe("branched and wrapped topologies", () => {
     }
   });
 
+  it("routes Yalta diagonals into the physically joined sector", () => {
+    const topology = getThreePlayerTopology("three-player");
+    const bishopDestinations = (sourceIndex: number) =>
+      topology.bishopTraces(topology.cellFromSourceIndex(sourceIndex)!)
+        .flatMap((trace) => trace.cells)
+        .map((cell) => threePlayerCellNotation("three-player", cell));
+
+    const fromWhiteF1 = bishopDestinations(29);
+    expect(fromWhiteF1).toEqual(expect.arrayContaining(["Red g4", "Red h3"]));
+    expect(fromWhiteF1).not.toContain("Black g4");
+
+    const fromRedC1 = bishopDestinations(58);
+    expect(fromRedC1).toEqual(expect.arrayContaining(["White b4", "White a3"]));
+    expect(fromRedC1).not.toContain("Black b4");
+
+    const fromBlackF1 = bishopDestinations(93);
+    expect(fromBlackF1).toEqual(expect.arrayContaining(["White g4", "White h3"]));
+    expect(fromBlackF1).not.toContain("Red g4");
+  });
+
   it("matches exact Yalta king, knight, and pawn center destinations", () => {
     const topology = getThreePlayerTopology("three-player");
     const sourceIndexes = (cells: readonly string[]) =>
       cells.map((cell) => topology.sourceIndex(cell)).sort((a, b) => a! - b!);
     const exactTargets = [
-      [10, [0, 4, 16, 20, 25, 27, 68, 70]],
-      [2, [8, 12, 17, 19, 35, 67, 71, 76, 78]],
-      [3, [9, 13, 18, 20, 34, 43, 66, 70, 75, 77]],
+      [10, [0, 4, 16, 20, 25, 27, 36, 38]],
+      [2, [8, 12, 17, 19, 35, 39, 44, 46, 67]],
+      [3, [9, 13, 18, 20, 34, 38, 43, 45, 66, 75]],
     ] as const;
     expect(
       sourceIndexes(topology.kingTargets(topology.cellFromSourceIndex(3)!)),
-    ).toEqual([2, 4, 10, 11, 12, 35, 67, 68, 69]);
+    ).toEqual([2, 4, 10, 11, 12, 35, 36, 37, 67]);
     expect(sourceIndexes([
       ...topology.rookTraces(topology.cellFromSourceIndex(3)!)
         .flatMap((trace) => trace.cells),
       ...topology.bishopTraces(topology.cellFromSourceIndex(3)!)
         .flatMap((trace) => trace.cells),
     ])).toEqual([
-      0, 1, 2, 4, 5, 6, 7, 10, 11, 12, 17, 19, 21, 24, 27, 30, 35, 42,
-      49, 56, 67, 68, 69, 74, 76, 78, 81, 84, 87, 88, 92,
+      0, 1, 2, 4, 5, 6, 7, 10, 11, 12, 17, 19, 21, 24, 27, 30, 35, 36,
+      37, 42, 44, 46, 49, 52, 55, 56, 60, 67, 74, 81, 88,
     ]);
     for (const [source, expectedTargets] of exactTargets) {
       expect(
@@ -503,9 +527,9 @@ describe("branched and wrapped topologies", () => {
       topology.cellFromSourceIndex(4)!,
     );
     expect(sourceIndexes(centerPawn.advances.map((move) => move.to)))
-      .toEqual([35]);
+      .toEqual([67]);
     expect(sourceIndexes(centerPawn.captures.map((move) => move.to)))
-      .toEqual([34, 36, 68]);
+      .toEqual([36, 66, 68]);
     const enemyThirdPawn = topology.pawnRules(
       "white",
       topology.cellFromSourceIndex(33)!,
