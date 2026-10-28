@@ -3550,11 +3550,6 @@ function PlayerCountChooser({
               <strong>Ranked 1v1</strong>
               <small>{rankedAvailable ? "Automatic matchmaking" : "Sign in required"}</small>
             </button>
-            <button onClick={onLeaderboard}>
-              <Crown size={34} />
-              <strong>Leaderboard</strong>
-              <small>Top 100 Ranked players</small>
-            </button>
           </>
         )}
         {([2, 3, 4] as const).map((playerCount) => (
@@ -3568,6 +3563,13 @@ function PlayerCountChooser({
             {category === "online" && <small>Casual room</small>}
           </button>
         ))}
+        {category === "online" && (
+          <button onClick={onLeaderboard}>
+            <Crown size={34} />
+            <strong>Leaderboard</strong>
+            <small>Top 100 Ranked players</small>
+          </button>
+        )}
       </div>
     </>
   );
@@ -4684,6 +4686,7 @@ export function GameScreen({
     : undefined;
   const winningKingCaptureId = winningKingCapture?.id;
   const [puzzleVictoryReady, setPuzzleVictoryReady] = useState(false);
+  const [puzzleFailureReady, setPuzzleFailureReady] = useState(false);
   const [displayedOrbs, setDisplayedOrbs] = useState<OrbTotals>(() => orbTotals(state));
   const [orbFlights, setOrbFlights] = useState<OrbFlight[]>([]);
   const [arrivingOrbs, setArrivingOrbs] = useState<Set<string>>(() => new Set());
@@ -4789,8 +4792,16 @@ export function GameScreen({
     winningKingCaptureId,
   ]);
 
+  useEffect(() => {
+    setPuzzleFailureReady(false);
+    if (!puzzleFailed) return;
+    const timer = window.setTimeout(() => setPuzzleFailureReady(true), 1000);
+    return () => window.clearTimeout(timer);
+  }, [puzzleFailed, state.puzzleId]);
+
   const puzzleResultReady =
-    Boolean(puzzleSolved && puzzleVictoryReady) || puzzleFailed;
+    Boolean(puzzleSolved && puzzleVictoryReady) ||
+    Boolean(puzzleFailed && puzzleFailureReady);
   const defeatedPuzzleKing =
     puzzleResultReady &&
       !puzzleResultOpen &&
@@ -5505,7 +5516,7 @@ export function GameScreen({
           </section>
         </div>
       )}
-      {puzzleFailed && puzzleMode && puzzleResultOpen && (
+      {puzzleFailed && puzzleFailureReady && puzzleMode && puzzleResultOpen && (
         <div className="modal-backdrop">
           <section className="gameover-modal">
             <div className="victory-crown"><Crosshair size={38} /></div>

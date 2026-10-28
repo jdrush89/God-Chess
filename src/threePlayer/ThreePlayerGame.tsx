@@ -1115,6 +1115,10 @@ export function ThreePlayerGame({
       state.completedTurns.white >= puzzle.playerTurns
     ),
   );
+  const [puzzleFailureReady, setPuzzleFailureReady] = useState(false);
+  const resultReady = puzzle
+    ? puzzleSolved || (puzzleFailed && puzzleFailureReady)
+    : state.phase === "gameover";
   const puzzleIndex = puzzle
     ? THREE_PLAYER_PUZZLES.findIndex((candidate) => candidate.id === puzzle.id)
     : -1;
@@ -1402,8 +1406,15 @@ export function ThreePlayerGame({
   ]);
 
   useEffect(() => {
-    setResultOpen(state.phase === "gameover" || puzzleFailed);
-  }, [puzzleFailed, state.phase]);
+    setPuzzleFailureReady(false);
+    if (!puzzleFailed) return;
+    const timer = window.setTimeout(() => setPuzzleFailureReady(true), 1000);
+    return () => window.clearTimeout(timer);
+  }, [puzzle?.id, puzzleFailed]);
+
+  useEffect(() => {
+    setResultOpen(resultReady);
+  }, [resultReady]);
 
   useEffect(() => {
     if (!puzzleSolved || !puzzle || completionReported.current) return;
@@ -2216,7 +2227,7 @@ export function ThreePlayerGame({
         </aside>
       )}
 
-      {(state.phase === "gameover" || puzzleFailed) && (
+      {resultReady && (
         <GameResultPresentation
           open={resultOpen}
           eyebrow={puzzle ? puzzleSolved ? "PUZZLE COMPLETE" : "PUZZLE FAILED" : "MATCH COMPLETE"}

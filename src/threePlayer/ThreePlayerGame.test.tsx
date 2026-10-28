@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   availableThreePlayerActions,
@@ -53,6 +53,7 @@ beforeAll(() => {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -279,7 +280,8 @@ describe("ThreePlayerGame", () => {
       .toBe(true);
   });
 
-  it("locks a three-player puzzle after the second unsuccessful turn", () => {
+  it("locks a three-player puzzle immediately but waits one second to show failure", async () => {
+    vi.useFakeTimers();
     const puzzle = THREE_PLAYER_PUZZLES[0];
     const failed = puzzle.createState();
     failed.completedTurns.white = 2;
@@ -293,9 +295,17 @@ describe("ThreePlayerGame", () => {
       />,
     );
 
-    expect(screen.getByText("Two turns exhausted")).toBeTruthy();
     expect(container.querySelector(".three-game-page")?.classList.contains("input-gated"))
       .toBe(true);
+    expect(screen.queryByText("Two turns exhausted")).toBeNull();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(999);
+    });
+    expect(screen.queryByText("Two turns exhausted")).toBeNull();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(screen.getByText("Two turns exhausted")).toBeTruthy();
     expect(screen.getByRole("button", { name: /retry puzzle/i })).toBeTruthy();
   });
 
