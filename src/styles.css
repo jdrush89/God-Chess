@@ -180,6 +180,7 @@ body::before {
 .ability-rules .level-rule b { color: var(--gold-bright); font-weight: 700; }
 .level-selector { display: flex; align-items: center; gap: 6px; margin: 11px 0 5px; }
 .level-selector > span { margin-right: 2px; color: #5f6169; font-size: 7px; font-weight: 700; letter-spacing: .13em; text-transform: uppercase; }
+.ability-level-selector > span { font-size: x-small; }
 .level-selector button {
   display: inline-flex; align-items: center; gap: 5px; min-height: 24px; padding: 0 7px;
   color: #74767d; background: #0e1015; border: 1px solid #30323a; cursor: pointer;
@@ -3804,7 +3805,7 @@ span.move-target-dot {
 }
 .ability-card .ability-level-selector > span,
 .four-ability-card .ability-level-selector > span {
-  font-size: 8px;
+  font-size: x-small;
   line-height: 1.25;
 }
 .ability-card .ability-level-selector button,
