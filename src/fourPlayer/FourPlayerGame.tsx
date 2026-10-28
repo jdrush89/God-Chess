@@ -331,6 +331,9 @@ function FourPlayerDraft({
     openInspector,
     twoColumnLayout,
   } = useTwoColumnGodInspector(`four-draft-god-${inspected}`);
+  const currentOwner = FOUR_PLAYER_SEATS.find((seat) =>
+    state.players[seat].gods.includes(inspected)
+  );
   const selectedSkinUnlocked = isGodSkinUnlocked(
     inspected,
     selectedSkinId,
@@ -549,13 +552,16 @@ function FourPlayerDraft({
             disabled={
               inputDisabled ||
               activePlayer.control.kind === "ai" ||
+              Boolean(currentOwner) ||
               !state.draft.available.includes(currentGod.id) ||
               !selectedSkinUnlocked
             }
           >
-            {selectedSkinUnlocked
-              ? `${twoColumnLayout && inspectorDialogOpen ? "Confirm" : "Claim"} ${currentGod.name}`
-              : `${currentGod.name} skin locked`}
+            {currentOwner
+              ? `${currentGod.name} was already picked by ${seatName(currentOwner)}`
+              : selectedSkinUnlocked
+                ? `${twoColumnLayout && inspectorDialogOpen ? "Confirm" : "Claim"} ${currentGod.name}`
+                : `${currentGod.name} skin locked`}
           </button>
         </aside>
       </section>

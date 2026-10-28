@@ -609,7 +609,9 @@ describe("four-player app integration", () => {
 
     expect(screen.getByRole("heading", { name: "Ares" })).toBeTruthy();
     expect(screen.getByText("Threaten")).toBeTruthy();
-    expect((screen.getByRole("button", { name: /claim ares/i }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", {
+      name: /ares was already picked by north/i,
+    }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("uses a full-screen confirmation dialog in the two-column draft layout", () => {

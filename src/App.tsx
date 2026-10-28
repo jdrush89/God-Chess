@@ -792,6 +792,11 @@ function DraftScreen({
   } = useTwoColumnGodInspector(`draft-god-${inspected}`);
   const activePlayer = state.players[state.activeColor];
   const currentGod = GOD_BY_ID[inspected];
+  const currentOwner = state.players.white.gods.includes(inspected)
+    ? "white"
+    : state.players.black.gods.includes(inspected)
+      ? "black"
+      : undefined;
   const selectedSkinUnlocked = isGodSkinUnlocked(
     currentGod.id,
     selectedSkinId,
@@ -994,10 +999,12 @@ function DraftScreen({
               !selectedSkinUnlocked
             }
           >
-            {selectedSkinUnlocked
-              ? `${twoColumnLayout && inspectorDialogOpen ? "Confirm" : "Claim"} ${currentGod.name}`
-              : `${currentGod.name} skin locked`}
-            {selectedSkinUnlocked && <ChevronRight size={17} />}
+            {currentOwner
+              ? `${currentGod.name} was already picked by ${currentOwner === "white" ? "White" : "Black"}`
+              : selectedSkinUnlocked
+                ? `${twoColumnLayout && inspectorDialogOpen ? "Confirm" : "Claim"} ${currentGod.name}`
+                : `${currentGod.name} skin locked`}
+            {!currentOwner && selectedSkinUnlocked && <ChevronRight size={17} />}
           </button>
         </aside>
       </section>

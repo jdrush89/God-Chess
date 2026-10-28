@@ -586,7 +586,7 @@ function ThreePlayerDraft({
             }
           >
             {currentOwner
-              ? `Claimed by ${THREE_PLAYER_SEAT_LABELS[currentOwner]}`
+              ? `${currentGod.name} was already picked by ${THREE_PLAYER_SEAT_LABELS[currentOwner]}`
               : selectedSkinUnlocked
                 ? `${twoColumnLayout && inspectorDialogOpen ? "Confirm" : "Claim"} ${currentGod.name}`
                 : `${currentGod.name} skin locked`}

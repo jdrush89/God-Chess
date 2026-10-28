@@ -735,7 +735,9 @@ describe("ThreePlayerGame", () => {
     expect(container.querySelectorAll(".three-draft-progress .draft-pip.done")).toHaveLength(1);
     expect(container.querySelector(".three-draft-progress .draft-pip.current")?.textContent)
       .toContain("2R");
-    expect((screen.getByRole("button", { name: /^Claimed by White$/i }) as HTMLButtonElement).disabled)
+    expect((screen.getByRole("button", {
+      name: /^Ares was already picked by White$/i,
+    }) as HTMLButtonElement).disabled)
       .toBe(true);
   });
 
@@ -750,14 +752,18 @@ describe("ThreePlayerGame", () => {
     fireEvent.click(screen.getByRole("button", {
       name: /Inspect Quetzacoatl, claimed by White/i,
     }));
-    expect((screen.getByRole("button", { name: /^Claimed by White$/i }) as HTMLButtonElement).disabled)
+    expect((screen.getByRole("button", {
+      name: /^Quetzacoatl was already picked by White$/i,
+    }) as HTMLButtonElement).disabled)
       .toBe(true);
     expect(screen.getByRole("button", { name: /^Inspect Ares$/i })).toBeTruthy();
     expect(container.querySelectorAll(".three-draft-progress .draft-pip")).toHaveLength(9);
     fireEvent.keyDown(window, { key: "Escape" });
     expect(screen.getByRole("dialog", { name: /game paused locally/i })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /^resume$/i }));
-    expect((screen.getByRole("button", { name: /^Claimed by White$/i }) as HTMLButtonElement).disabled)
+    expect((screen.getByRole("button", {
+      name: /^Quetzacoatl was already picked by White$/i,
+    }) as HTMLButtonElement).disabled)
       .toBe(true);
   });
 

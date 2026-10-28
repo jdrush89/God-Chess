@@ -2621,6 +2621,7 @@ span.move-target-dot {
 }
 
 @media (min-width: 641px) and (max-width: 960px) {
+  .chosen-god .god-hero-portrait { object-position: center 10%; }
   .draft-card .god-card-portrait { object-position: center 42%; }
   .draft-card:is(
     [id$="-medusa"],
@@ -2716,6 +2717,9 @@ span.move-target-dot {
 }
 
 @media (max-width: 640px) {
+  .chosen-god .god-hero-portrait {
+    object-position: center clamp(10%, calc(106.6% - 15.1vw), 50%);
+  }
   .main-menu-art { object-position: center top; }
   .main-menu-actions { margin-bottom: 18px; padding: 16px; }
   .main-menu-actions > div { grid-template-columns: 1fr; }
