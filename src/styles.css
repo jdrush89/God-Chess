@@ -125,13 +125,15 @@ body::before {
 }
 .draft-card:hover:not(:disabled), .draft-card.inspected { background: #181b22; border-color: color-mix(in srgb, var(--accent) 45%, transparent); transform: translateY(-2px); }
 .draft-card.inspected::before { opacity: 1; }
-.draft-card.claimed { opacity: .48; cursor: pointer; filter: grayscale(.45); }
-.draft-card.claimed:hover, .draft-card.claimed.inspected { opacity: .72; }
+.draft-card.claimed { cursor: pointer; }
 .god-card-portrait, .god-row-portrait, .god-hero-portrait {
   position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
 }
 .draft-card .god-card-portrait { transition: transform .35s ease, filter .35s ease; }
 .draft-card:hover:not(:disabled) .god-card-portrait, .draft-card.inspected .god-card-portrait { transform: scale(1.045); filter: saturate(1.08); }
+.draft-card.claimed .god-card-portrait,
+.draft-card.claimed:hover .god-card-portrait,
+.draft-card.claimed.inspected .god-card-portrait { filter: grayscale(1); }
 .draft-card-copy { position: relative; z-index: 2; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .draft-card-copy strong { color: #fff; font: 600 16px "Cinzel"; white-space: nowrap; text-shadow: 0 2px 9px #000; }
 .draft-card-copy small { color: #e8dfcb; font-size: 9px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; text-shadow: 0 1px 6px #000; }
