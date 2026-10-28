@@ -1059,12 +1059,13 @@ span.move-target-dot {
 }
 .roster-page,
 .pantheon-draft-page {
-  padding-bottom: 54px;
   background:
     radial-gradient(circle at 50% 4%, rgba(198,161,91,.18), transparent 34rem),
     linear-gradient(180deg, rgba(6,8,12,.52), rgba(6,8,12,.82) 48%, rgba(6,8,12,.94)),
     url("./assets/scenes/Pantheon.webp") center top / cover fixed no-repeat;
 }
+.roster-page { padding-bottom: 54px; }
+.pantheon-draft-page { padding-bottom: 108px; }
 :is(.roster-page, .pantheon-draft-page) .draft-hero h1,
 :is(.roster-page, .pantheon-draft-page) .draft-hero > p { text-shadow: 0 2px 14px #000; }
 :is(.roster-page, .pantheon-draft-page) .draft-card {
