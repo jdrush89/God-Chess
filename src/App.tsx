@@ -2739,11 +2739,9 @@ function PlayMenu({
   onOpenStats: () => void;
   onOpenLoad: () => void;
 }) {
-  const loadDescription = savesLoading
-    ? "Loading saved games."
-    : savedGames.length === 0
-      ? "No saved games available."
-      : undefined;
+  const loadDescription = !savesLoading && savedGames.length === 0
+    ? "No saved games available."
+    : undefined;
   return (
     <SetupNavigationShell
       backLabel="Back to title"
