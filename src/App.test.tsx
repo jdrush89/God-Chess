@@ -1277,6 +1277,9 @@ describe("game startup", () => {
     fireEvent.click(screen.getByRole("button", {
       name: /choose salem skin, chonk locked/i,
     }));
+    const selectedChonk = screen.getByRole("option", { name: /^chonk locked$/i });
+    expect(selectedChonk.querySelector(".lucide-lock")).toBeTruthy();
+    expect(selectedChonk.querySelector(".lucide-check")).toBeNull();
     const gasMask = screen.getByRole("option", { name: /^gas mask locked$/i });
     expect(gasMask.querySelector("img")?.getAttribute("src"))
       .toMatch(/Salem-Gas-Mask-Skin/);
@@ -1313,6 +1316,9 @@ describe("game startup", () => {
     fireEvent.click(screen.getByRole("button", {
       name: /choose salem skin, chonk unlocked/i,
     }));
+    const selectedChonk = screen.getByRole("option", { name: /^chonk unlocked$/i });
+    expect(selectedChonk.querySelector(".lucide-check")).toBeTruthy();
+    expect(selectedChonk.querySelector(".lucide-lock")).toBeNull();
     fireEvent.click(screen.getByRole("button", {
       name: /set chonk as favorite/i,
     }));
