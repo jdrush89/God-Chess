@@ -2607,23 +2607,34 @@ span.move-target-dot {
   .puzzle-banner-title { justify-self: center; }
   .puzzle-banner-actions { justify-content: center; }
   .mobile-puzzle-turns {
-    display: inline-flex;
+    width: 100%;
+    display: flex;
     align-items: baseline;
-    justify-self: center;
+    justify-content: center;
+    justify-self: stretch;
     gap: 7px;
     padding: 5px 10px;
     color: #9c804b;
     background: rgba(198,161,91,.08);
     border: 1px solid rgba(198,161,91,.22);
-    font-size: 7px;
+    font-size: small;
     font-weight: 800;
     letter-spacing: .14em;
+    text-align: center;
     text-transform: uppercase;
   }
   .mobile-puzzle-turns strong {
     color: #f2deb0;
-    font: 700 14px "Cinzel";
+    font: 700 small "Cinzel";
     letter-spacing: 0;
+  }
+  .puzzle-banner > p {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: small;
+    text-align: center;
   }
 }
 
