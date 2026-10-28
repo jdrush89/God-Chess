@@ -1127,7 +1127,7 @@ span.move-target-dot {
 }
 .puzzle-select-topbar-label {
   position: absolute; left: 50%; margin: 0; transform: translateX(-50%);
-  color: #b7aa8b; font: 600 9px "Cinzel"; letter-spacing: .18em; white-space: nowrap;
+  color: #b7aa8b; font: 600 medium "Cinzel"; letter-spacing: .18em; white-space: nowrap;
 }
 .puzzle-select-back {
   min-height: 40px; display: inline-flex; align-items: center; gap: 8px;
@@ -1402,9 +1402,9 @@ span.move-target-dot {
 .setup-navigation-header > span {
   color: #837b69; font: 600 9px "Cinzel"; letter-spacing: .18em;
 }
-.setup-navigation-title {
+.setup-navigation-header > .setup-navigation-title {
   position: absolute; left: 50%; transform: translateX(-50%);
-  color: #b7aa8b !important; white-space: nowrap; pointer-events: none;
+  color: #b7aa8b !important; font-size: medium; white-space: nowrap; pointer-events: none;
 }
 .setup-navigation-back {
   min-height: 40px; display: inline-flex; align-items: center; gap: 8px; padding: 0 13px;
@@ -1821,7 +1821,7 @@ span.move-target-dot {
   background: rgba(8,10,15,.82); backdrop-filter: blur(10px);
 }
 .start-game-header > span {
-  color: #837b69; font: 600 9px "Cinzel"; letter-spacing: .18em;
+  color: #837b69; font: 600 medium "Cinzel"; letter-spacing: .18em;
 }
 .start-game-back {
   min-height: 40px; display: inline-flex; align-items: center; gap: 8px; padding: 0 13px;
