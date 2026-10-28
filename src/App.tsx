@@ -5107,6 +5107,18 @@ export function GameScreen({
     setForfeitConfirmationOpen(false);
     onRestart();
   };
+  const undoControlLabel = undoReturnsToGodSelection
+    ? "Return to God selection"
+    : undoEnabled
+      ? "Undo the latest completed turn or upgrade"
+      : "Enable undo in Settings";
+  const restartControlLabel = canForfeitRankedMatch
+    ? "Forfeit match"
+    : puzzleMode
+      ? "Back to puzzles"
+      : challenge
+        ? "Restart challenge"
+        : "Start a new game";
   return (
     <main className={`game-page ${puzzleMode ? "puzzle-mode" : ""} ${challenge ? "challenge-mode" : ""} has-last-action ${gameFinished ? "finished-view" : ""} ${inputDisabled || opponentPresentation ? "input-locked" : ""}`}>
       <header className="topbar">
@@ -5132,23 +5144,31 @@ export function GameScreen({
           <button
             onClick={onUndo}
             disabled={!canUndo}
-            title={undoReturnsToGodSelection
-              ? "Return to God selection"
-              : undoEnabled
-                ? "Undo the latest completed turn or upgrade"
-                : "Enable undo in Settings"}
+            aria-label={undoControlLabel}
+            data-tooltip={undoControlLabel}
           >
             <Undo2 size={18} />
             <span>Undo</span>
           </button>
-          <button onClick={() => setHistoryOpen(!historyOpen)}><History size={18} /><span>History</span></button>
+          <button
+            onClick={() => setHistoryOpen(!historyOpen)}
+            aria-label="View move history"
+            data-tooltip="History"
+          >
+            <History size={18} />
+            <span>History</span>
+          </button>
           <button
             className={canForfeitRankedMatch ? "forfeit-button" : undefined}
             onClick={requestRestart}
+            aria-label={restartControlLabel}
+            data-tooltip={restartControlLabel}
           >
             {canForfeitRankedMatch
               ? <Flag size={18} />
-              : <RotateCcw size={18} />}
+              : puzzleMode
+                ? <ArrowLeft size={18} />
+                : <RotateCcw size={18} />}
             <span>
               {canForfeitRankedMatch
                 ? "Forfeit"

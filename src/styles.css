@@ -337,9 +337,30 @@ body::before {
 .header-actions button:hover { color: #eee9df; background: rgba(255,255,255,.04); }
 .header-actions .forfeit-button { color: #d89082; }
 .header-actions .forfeit-button:hover { color: #f0b0a4; background: rgba(151,55,40,.12); }
-.header-actions button:disabled { opacity: .3; cursor: not-allowed; }
+.header-actions button:disabled { cursor: not-allowed; }
+.header-actions button:disabled > svg,
+.header-actions button:disabled > span { opacity: .3; }
 .header-actions button:disabled:hover { color: #8f9097; background: transparent; }
 .header-actions span { font-size: 10px; text-transform: uppercase; letter-spacing: .09em; }
+@media (max-width: 1000px) {
+  .game-page.puzzle-mode .header-actions span { display: none; }
+  .game-page.puzzle-mode .header-actions button {
+    position: relative; justify-content: center;
+    width: 34px; height: 34px; padding: 8px;
+  }
+  .game-page.puzzle-mode .header-actions button[data-tooltip]::after {
+    position: absolute; z-index: 20; top: calc(100% + 9px); left: 50%;
+    padding: 6px 8px; color: #eee9df; background: #11141a;
+    border: 1px solid rgba(198,161,91,.38); box-shadow: 0 6px 18px rgba(0,0,0,.42);
+    content: attr(data-tooltip); font-size: 9px; font-weight: 600; letter-spacing: .04em;
+    line-height: 1.25; text-transform: none; white-space: nowrap; pointer-events: none;
+    opacity: 0; transform: translate(-50%, -3px); transition: opacity .12s ease, transform .12s ease;
+  }
+  .game-page.puzzle-mode .header-actions button[data-tooltip]:hover::after,
+  .game-page.puzzle-mode .header-actions button[data-tooltip]:focus-visible::after {
+    opacity: 1; transform: translate(-50%, 0);
+  }
+}
 .turn-notice {
   min-height: 47px; display: flex; align-items: center; justify-content: center; gap: 9px;
   border-bottom: 1px solid var(--line); color: #a9a7a1; background: rgba(255,255,255,.012); font-size: small;
