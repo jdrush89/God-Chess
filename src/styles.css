@@ -1937,6 +1937,7 @@ span.move-target-dot {
 .start-game-content.online-stage .online-setup {
   width: 100%; margin-top: 0; background: rgba(5,6,9,.96);
 }
+.local-menu-scene .difficulty-control { background: rgba(5,6,9,.96); }
 .difficulty-control > div { display: flex; justify-content: space-between; align-items: baseline; }
 .difficulty-control span, .online-setup label {
   color: #9c9b98; font-size: 9px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
