@@ -2848,7 +2848,7 @@ span.move-target-dot {
   text-transform: uppercase;
 }
 
-.three-draft-page { min-height: 100vh; padding-bottom: 122px; overflow-x: hidden; background: #0b0d12; }
+.three-draft-page { min-height: 100vh; padding-bottom: 122px; overflow-x: hidden; }
 .three-game-topbar {
   min-height: 66px; display: flex; align-items: center; justify-content: space-between; gap: 16px;
   padding: 11px max(18px, calc((100vw - 1420px) / 2)); border-bottom: 1px solid var(--line); background: #101219;
