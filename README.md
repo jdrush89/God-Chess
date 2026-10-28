@@ -247,36 +247,36 @@ must update this documentation.
 
 | Puzzle | Player gods | Opponent gods | Required by tested solution |
 |---|---|---|---|
-| Position One | Chiron, Teles, Midas | Ares, Chiron, Anubis | Chiron (charge) |
-| Position Two | Kangus Kong, Teles, Death | Ares, Chiron, Anubis | Kangus Kong (rage) |
-| Position Three | Death, Midas, Salem | Ares, Chiron, Anubis | Death (resurrect) |
-| Position Four | Leonidas, Teles, Midas | Ares, Chiron, Anubis | Leonidas (escort) |
-| Position Five | Quetzacoatl, Teles, Salem | Ares, Chiron, Anubis | Quetzacoatl (air-strike) |
-| Position Six | Teles, Chiron, Medusa | Quetzacoatl, Artemis, Ares | Teles (lure); Chiron (charge) |
-| Position Seven | Midas, Death, Salem | Ares, Chiron, Anubis | Midas (leverage); Death (resurrect) |
-| Position Eight | Chiron, Kangus Kong, Midas | Ares, Anubis, Salem | Chiron (mount); Kangus Kong (rage) |
-| Position Nine | Anubis, Quetzacoatl, Teles | Ares, Chiron, Medusa | Anubis (monument); Quetzacoatl (air-strike) |
-| Position Ten | Midas, Chiron, Salem | Ares, Anubis, Medusa | Midas (leverage); Chiron (charge) |
-| Position Eleven | Midas, Quetzacoatl, Anubis | Ares, Chiron, Salem | Midas (leverage); Quetzacoatl (air-strike) |
-| Position Twelve | Death, Chiron, Teles | Ares, Anubis, Salem | Death (marked); Chiron (charge) |
-| Position Thirteen | Quetzacoatl, Leonidas, Midas | Ares, Chiron, Anubis | Quetzacoatl (air-lift); Leonidas (escort) |
-| Position Fourteen | Quetzacoatl, Kangus Kong, Medusa | Ares, Chiron, Anubis | Quetzacoatl (flight); Kangus Kong (rage) |
-| Position Fifteen | Ares, Chiron, Salem | Artemis, Anubis, Medusa | Ares (pick-a-fight); Chiron (charge) |
-| Position Sixteen | Medusa, Teles, Chiron | Quetzacoatl, Anubis, Ares | Medusa (captivate); Teles (enchant); Chiron (charge) |
-| Position Seventeen | Salem, Midas, Death | Quetzacoatl, Anubis, Medusa | Salem (hex); Midas (leverage); Death (resurrect) |
-| Position Eighteen | Midas, Chiron, Kangus Kong | Ares, Anubis, Salem | Midas (barter); Chiron (mount); Kangus Kong (rage) |
-| Position Nineteen | Teles, Anubis, Quetzacoatl | Ares, Chiron, Salem | Teles (resonance); Anubis (construction); Quetzacoatl (air-strike) |
-| Position Twenty | Ares, Midas, Chiron | Artemis, Anubis, Salem | Ares (threaten); Midas (leverage); Chiron (charge) |
-| Position Twenty-One | Anubis, Midas, Quetzacoatl | Ares, Chiron, Salem | Anubis (construction); Midas (leverage); Quetzacoatl (air-strike) |
-| Position Twenty-Two | Teles, Death, Chiron | Ares, Anubis, Salem | Teles (resonance); Death (marked); Chiron (charge) |
-| Position Twenty-Three | Anubis, Quetzacoatl, Leonidas | Ares, Chiron, Salem | Anubis (construction); Quetzacoatl (air-lift); Leonidas (escort) |
-| Position Twenty-Four | Medusa, Quetzacoatl, Kangus Kong | Ares, Chiron, Anubis | Medusa (captivate); Quetzacoatl (flight); Kangus Kong (rage) |
-| Position Twenty-Five | Salem, Ares, Chiron | Artemis, Anubis, Medusa | Salem (hex); Ares (pick-a-fight); Chiron (charge) |
-| Position Twenty-Six | Quetzacoatl, Teles, Midas | Ares, Chiron, Anubis | Quetzacoatl (air-lift) |
-| Position Twenty-Seven | Chiron, Teles, Midas | Ares, Chiron, Anubis | Chiron (charge) |
-| Position Twenty-Eight | Kangus Kong, Midas, Death | Ares, Chiron, Anubis | Kangus Kong (rage) |
-| Position Twenty-Nine | Death, Teles, Midas | Ares, Chiron, Anubis | Death (resurrect) |
-| Position Thirty | Teles, Midas, Death | Ares, Chiron, Anubis | Teles (enchant) |
+| The Distant King | Chiron, Teles, Midas | Ares, Chiron, Anubis | Chiron (charge) |
+| The Crowded Crown | Kangus Kong, Teles, Death | Ares, Chiron, Anubis | Kangus Kong (rage) |
+| A Queen in Waiting | Death, Midas, Salem | Ares, Chiron, Anubis | Death (resurrect) |
+| The Bishop's Path | Leonidas, Teles, Midas | Ares, Chiron, Anubis | Leonidas (escort) |
+| Across the Barricade | Quetzacoatl, Teles, Salem | Ares, Chiron, Anubis | Quetzacoatl (air-strike) |
+| The Watchful Bishop | Teles, Chiron, Medusa | Quetzacoatl, Artemis, Ares | Teles (lure); Chiron (charge) |
+| Enemy at the Gate | Midas, Death, Salem | Ares, Chiron, Anubis | Midas (leverage); Death (resurrect) |
+| The Crowded Corner | Chiron, Kangus Kong, Midas | Ares, Anubis, Salem | Chiron (mount); Kangus Kong (rage) |
+| A Route from Below | Anubis, Quetzacoatl, Teles | Ares, Chiron, Medusa | Anubis (monument); Quetzacoatl (air-strike) |
+| The Enemy Knight | Midas, Chiron, Salem | Ares, Anubis, Medusa | Midas (leverage); Chiron (charge) |
+| The Reluctant Passenger | Midas, Quetzacoatl, Anubis | Ares, Chiron, Salem | Midas (leverage); Quetzacoatl (air-strike) |
+| The E-File Sentinel | Death, Chiron, Teles | Ares, Anubis, Salem | Death (marked); Chiron (charge) |
+| No Room to Retreat | Quetzacoatl, Leonidas, Midas | Ares, Chiron, Anubis | Quetzacoatl (air-lift); Leonidas (escort) |
+| The Seventh-Rank Trap | Quetzacoatl, Kangus Kong, Medusa | Ares, Chiron, Anubis | Quetzacoatl (flight); Kangus Kong (rage) |
+| The Pinned Defender | Ares, Chiron, Salem | Artemis, Anubis, Medusa | Ares (pick-a-fight); Chiron (charge) |
+| The Long Way Home | Medusa, Teles, Chiron | Quetzacoatl, Anubis, Ares | Medusa (captivate); Teles (enchant); Chiron (charge) |
+| Three Points of Pressure | Salem, Midas, Death | Quetzacoatl, Anubis, Medusa | Salem (hex); Midas (leverage); Death (resurrect) |
+| The Price of Position | Midas, Chiron, Kangus Kong | Ares, Anubis, Salem | Midas (barter); Chiron (mount); Kangus Kong (rage) |
+| The Crowded Back Rank | Teles, Anubis, Quetzacoatl | Ares, Chiron, Salem | Teles (resonance); Anubis (construction); Quetzacoatl (air-strike) |
+| One Orb Short | Ares, Midas, Chiron | Artemis, Anubis, Salem | Ares (threaten); Midas (leverage); Chiron (charge) |
+| A Square to Spare | Anubis, Midas, Quetzacoatl | Ares, Chiron, Salem | Anubis (construction); Midas (leverage); Quetzacoatl (air-strike) |
+| The Central Cluster | Teles, Death, Chiron | Ares, Anubis, Salem | Teles (resonance); Death (marked); Chiron (charge) |
+| The Queen Must Yield | Anubis, Quetzacoatl, Leonidas | Ares, Chiron, Salem | Anubis (construction); Quetzacoatl (air-lift); Leonidas (escort) |
+| The Exposed Rook | Medusa, Quetzacoatl, Kangus Kong | Ares, Chiron, Anubis | Medusa (captivate); Quetzacoatl (flight); Kangus Kong (rage) |
+| Three on the Back Rank | Salem, Ares, Chiron | Artemis, Anubis, Medusa | Salem (hex); Ares (pick-a-fight); Chiron (charge) |
+| The Corner Cage | Quetzacoatl, Teles, Midas | Ares, Chiron, Anubis | Quetzacoatl (air-lift) |
+| The Open File | Chiron, Teles, Midas | Ares, Chiron, Anubis | Chiron (charge) |
+| Surrounded in Check | Kangus Kong, Midas, Death | Ares, Chiron, Anubis | Kangus Kong (rage) |
+| The Missing Blocker | Death, Teles, Midas | Ares, Chiron, Anubis | Death (resurrect) |
+| The Rook Must Move | Teles, Midas, Death | Ares, Chiron, Anubis | Teles (enchant) |
 
 ## Accounts and cloud saves
 

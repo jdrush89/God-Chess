@@ -5119,6 +5119,13 @@ export function GameScreen({
       : challenge
         ? "Restart challenge"
         : "Start a new game";
+  const restartControlName = canForfeitRankedMatch
+    ? "Forfeit"
+    : puzzleMode
+      ? "Back to puzzles"
+      : challenge
+        ? "Restart"
+        : "New game";
   return (
     <main className={`game-page ${puzzleMode ? "puzzle-mode" : ""} ${challenge ? "challenge-mode" : ""} has-last-action ${gameFinished ? "finished-view" : ""} ${inputDisabled || opponentPresentation ? "input-locked" : ""}`}>
       <header className="topbar">
@@ -5144,15 +5151,16 @@ export function GameScreen({
           <button
             onClick={onUndo}
             disabled={!canUndo}
-            aria-label={undoControlLabel}
+            aria-label="Undo"
             data-tooltip={undoControlLabel}
+            title={undoControlLabel}
           >
             <Undo2 size={18} />
             <span>Undo</span>
           </button>
           <button
             onClick={() => setHistoryOpen(!historyOpen)}
-            aria-label="View move history"
+            aria-label="History"
             data-tooltip="History"
           >
             <History size={18} />
@@ -5161,7 +5169,7 @@ export function GameScreen({
           <button
             className={canForfeitRankedMatch ? "forfeit-button" : undefined}
             onClick={requestRestart}
-            aria-label={restartControlLabel}
+            aria-label={restartControlName}
             data-tooltip={restartControlLabel}
           >
             {canForfeitRankedMatch

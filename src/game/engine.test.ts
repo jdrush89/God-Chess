@@ -342,7 +342,7 @@ describe("game flow", () => {
     });
   });
 
-  it("allows Position Thirteen's King to Escort onto the carried rook's occupied square", () => {
+  it("allows No Room to Retreat's King to Escort onto the carried rook's occupied square", () => {
     let state = createGame(1);
     state.phase = "play";
     state.gameMode = "puzzle";

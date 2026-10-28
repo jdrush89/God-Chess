@@ -184,18 +184,38 @@ describe("puzzle mode", () => {
     expect(DEFENSIVE_PUZZLES).toHaveLength(5);
     expect(HARD_PUZZLES.every((puzzle) => puzzle.playerTurns === 3)).toBe(true);
     expect(PUZZLES.map((puzzle) => puzzle.title)).toEqual(
-      Array.from({ length: 30 }, (_, index) => {
-        const number = [
-          "One", "Two", "Three", "Four", "Five",
-          "Six", "Seven", "Eight", "Nine", "Ten",
-          "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen",
-          "Sixteen", "Seventeen", "Eighteen", "Nineteen", "Twenty",
-          "Twenty-One", "Twenty-Two", "Twenty-Three", "Twenty-Four",
-          "Twenty-Five", "Twenty-Six", "Twenty-Seven", "Twenty-Eight",
-          "Twenty-Nine", "Thirty",
-        ][index];
-        return `Position ${number}`;
-      }),
+      [
+        "The Distant King",
+        "The Crowded Crown",
+        "A Queen in Waiting",
+        "The Bishop's Path",
+        "Across the Barricade",
+        "The Watchful Bishop",
+        "Enemy at the Gate",
+        "The Crowded Corner",
+        "A Route from Below",
+        "The Enemy Knight",
+        "The Reluctant Passenger",
+        "The E-File Sentinel",
+        "No Room to Retreat",
+        "The Seventh-Rank Trap",
+        "The Pinned Defender",
+        "The Long Way Home",
+        "Three Points of Pressure",
+        "The Price of Position",
+        "The Crowded Back Rank",
+        "One Orb Short",
+        "A Square to Spare",
+        "The Central Cluster",
+        "The Queen Must Yield",
+        "The Exposed Rook",
+        "Three on the Back Rank",
+        "The Corner Cage",
+        "The Open File",
+        "Surrounded in Check",
+        "The Missing Blocker",
+        "The Rook Must Move",
+      ],
     );
   });
 
@@ -314,7 +334,7 @@ describe("puzzle mode", () => {
     60_000,
   );
 
-  it("ends Position Nine immediately when Monument completes a mating construction", () => {
+  it("ends A Route from Below immediately when Monument completes a mating construction", () => {
     const puzzle = PUZZLES.find((candidate) => candidate.id === "rising-monument")!;
     let state = puzzle.createState();
     for (const square of ["f5", "c8"] as const) {
@@ -539,7 +559,7 @@ describe("puzzle mode", () => {
     },
   );
 
-  it("removes the friendly-knight Charge alternative from Position Ten", () => {
+  it("removes the friendly-knight Charge alternative from The Enemy Knight", () => {
     const state = PUZZLES.find((puzzle) => puzzle.id === "turncoat-charge")!.createState();
     const whiteKnights = Object.entries(state.board)
       .filter(([, piece]) => piece.controller === "white" && piece.type === "knight");
@@ -549,7 +569,7 @@ describe("puzzle mode", () => {
     )).toBe(true);
   });
 
-  it("enumerates Position Six's exact movable level-1 Enchant sources", () => {
+  it("enumerates The Watchful Bishop's exact movable level-1 Enchant sources", () => {
     let state = PUZZLES.find((puzzle) => puzzle.id === "opened-file")!.createState();
     state = gameReducer(state, { type: "select-god", godId: "teles" });
     state = gameReducer(state, { type: "select-ability", abilityId: "enchant" });
@@ -569,7 +589,7 @@ describe("puzzle mode", () => {
     expect(state.board.e8?.type).toBe("king");
   });
 
-  it("funds Position Twelve's Charge only by executing Marked", () => {
+  it("funds The E-File Sentinel's Charge only by executing Marked", () => {
     const puzzle = PUZZLES.find((candidate) => candidate.id === "cleared-lane")!;
     let state = puzzle.createState();
     expect(state.players.white.orbs.black).toBe(0);
@@ -577,7 +597,7 @@ describe("puzzle mode", () => {
     expect(state.players.white.orbs.black).toBeGreaterThanOrEqual(4);
   });
 
-  it("blocks Position Thirteen's retreat before and after the best defensive reply", () => {
+  it("blocks No Room to Retreat's escape before and after the best defensive reply", () => {
     const puzzle = PUZZLES.find((candidate) => candidate.id === "royal-landing")!;
     let state = puzzle.createState();
     expect(state.board.g8).toMatchObject({ type: "rook", controller: "black" });
@@ -615,7 +635,7 @@ describe("puzzle mode", () => {
     expect(legalTargets(state.board, "g7")).toEqual([]);
   });
 
-  it("keeps Position Thirteen solvable through occupied-square Escort after every optimal response", () => {
+  it("keeps No Room to Retreat solvable through occupied-square Escort after every optimal response", () => {
     const puzzle = PUZZLES.find((candidate) => candidate.id === "royal-landing")!;
     let staged = puzzle.createState();
     for (const action of puzzle.solutionTurns[0]) staged = gameReducer(staged, action);
@@ -653,7 +673,7 @@ describe("puzzle mode", () => {
     }
   });
 
-  it("keeps Position Eleven's King boxed in and solvable after every optimal response", () => {
+  it("keeps The Reluctant Passenger's King boxed in and solvable after every optimal response", () => {
     const puzzle = PUZZLES.find((candidate) => candidate.id === "funded-flight")!;
     let staged = puzzle.createState();
     for (const action of puzzle.solutionTurns[0]) staged = gameReducer(staged, action);
@@ -682,7 +702,7 @@ describe("puzzle mode", () => {
     }
   });
 
-  it("uses a new Slither setup concept in Position Fourteen", () => {
+  it("uses a new Slither setup concept in The Seventh-Rank Trap", () => {
     const usage = PUZZLE_GOD_USAGE_BY_ID["skyward-charge"];
     expect(usage.solutionAbilities.quetzacoatl).toEqual(["flight"]);
     expect(PUZZLE_GOD_INDEX.quetzacoatl.solutionAbilitiesByPuzzle["skyward-charge"])
@@ -692,7 +712,7 @@ describe("puzzle mode", () => {
     expect(earlierAbilities).not.toContain("flight");
   });
 
-  it("requires Position Fourteen's intended Slither to fund Rage", () => {
+  it("requires The Seventh-Rank Trap's intended Slither to fund Rage", () => {
     const puzzle = PUZZLES.find((candidate) => candidate.id === "skyward-charge")!;
     const initial = puzzle.createState();
     expect(initial.players.white.orbs.black).toBe(1);
@@ -743,7 +763,7 @@ describe("puzzle mode", () => {
     }
   });
 
-  it("keeps Position Fifteen within standard knight counts and makes the provoker pinned", () => {
+  it("keeps The Pinned Defender within standard knight counts and makes the provoker pinned", () => {
     const state = PUZZLES.find((puzzle) => puzzle.id === "provoked-fury")!.createState();
     expect(Object.values(state.board).filter(
       (piece) => piece.color === "white" && piece.type === "knight",
@@ -788,7 +808,7 @@ describe("puzzle mode", () => {
     expect(state.activeColor).toBe("white");
   });
 
-  it("does not stall after the Position Eight rook moves from f7 to h7", () => {
+  it("does not stall after The Crowded Corner's rook moves from f7 to h7", () => {
     const puzzle = PUZZLES.find((candidate) => candidate.id === "mounted-fury")!;
     let state = puzzle.createState("Solver");
     state = gameReducer(state, { type: "select-god", godId: "chiron" });

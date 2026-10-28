@@ -1943,9 +1943,9 @@ describe("game startup", () => {
     expect(puzzleLibrary).toBeTruthy();
     expect(puzzleLibrary?.querySelector(".god-sigil")).toBeNull();
     expect(within(puzzleLibrary as HTMLElement).queryByText(/chiron|charge/i)).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /puzzle 1.*position one/i }));
+    fireEvent.click(screen.getByRole("button", { name: /puzzle 1.*the distant king/i }));
 
-    expect(screen.getByText("Position One")).toBeTruthy();
+    expect(screen.getByText("The Distant King")).toBeTruthy();
     expect(container.querySelector(".mobile-puzzle-turns")?.textContent)
       .toMatch(/player turns left\s*1/i);
     expect(container.querySelector(".game-meta")?.textContent)
@@ -2193,8 +2193,8 @@ describe("game startup", () => {
     fireEvent.click(screen.getByRole("button", { name: /^hard/i }));
 
     expect(screen.getByRole("heading", { name: /hard puzzles/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /puzzle 16.*position sixteen/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /puzzle 25.*position twenty-five/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /puzzle 16.*the long way home/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /puzzle 25.*three on the back rank/i })).toBeTruthy();
     expect(screen.getAllByText(/win in three divine turns/i)).toHaveLength(10);
   });
 
@@ -2451,7 +2451,7 @@ describe("game startup", () => {
     expect(finish.classList.contains("secondary-button")).toBe(true);
   });
 
-  it("highlights Position Six Enchant sources and attaches both stage prompts to Enchant", () => {
+  it("highlights The Watchful Bishop's Enchant sources and attaches both stage prompts to Enchant", () => {
     let state = PUZZLES.find((puzzle) => puzzle.id === "opened-file")!.createState();
     state = gameReducer(state, { type: "select-god", godId: "teles" });
     state = gameReducer(state, { type: "select-ability", abilityId: "enchant" });
@@ -2661,7 +2661,7 @@ describe("game startup", () => {
     expect(screen.getByText(/black to act/i)).toBeTruthy();
   });
 
-  it("renders Position Thirteen's occupied Escort destination as a legal target", () => {
+  it("renders No Room to Retreat's occupied Escort destination as a legal target", () => {
     const puzzle = PUZZLES.find((candidate) => candidate.id === "royal-landing")!;
     let state = puzzle.createState();
     for (const action of puzzle.solutionTurns[0]) state = gameReducer(state, action);

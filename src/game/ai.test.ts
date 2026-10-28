@@ -525,7 +525,7 @@ describe("Divine AI", () => {
     },
   );
 
-  it("takes the available backward King escape in the Position Thirteen pattern", () => {
+  it("takes the available backward King escape in the No Room to Retreat pattern", () => {
     const puzzle = PUZZLE_BY_ID["royal-landing"];
     let state = puzzle.createState();
     for (const action of puzzle.solutionTurns[0]) state = gameReducer(state, action);

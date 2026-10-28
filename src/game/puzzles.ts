@@ -41,6 +41,39 @@ export interface GodPuzzleIndexEntry {
   solutionAbilitiesByPuzzle: Partial<Record<ClassicPuzzleId, string[]>>;
 }
 
+const PUZZLE_TITLES = {
+  "centaurs-lance": "The Distant King",
+  "circle-of-rage": "The Crowded Crown",
+  "hidden-reserve": "A Queen in Waiting",
+  "royal-escort": "The Bishop's Path",
+  "serpents-delivery": "Across the Barricade",
+  "opened-file": "The Watchful Bishop",
+  "borrowed-bishop": "Enemy at the Gate",
+  "mounted-fury": "The Crowded Corner",
+  "rising-monument": "A Route from Below",
+  "turncoat-charge": "The Enemy Knight",
+  "funded-flight": "The Reluctant Passenger",
+  "cleared-lane": "The E-File Sentinel",
+  "royal-landing": "No Room to Retreat",
+  "skyward-charge": "The Seventh-Rank Trap",
+  "provoked-fury": "The Pinned Defender",
+  "queens-compass": "The Long Way Home",
+  "hexed-reserve": "Three Points of Pressure",
+  "golden-fuse": "The Price of Position",
+  "resonant-foundation": "The Crowded Back Rank",
+  "threatened-turncoat": "One Orb Short",
+  "architects-bargain": "A Square to Spare",
+  "sung-execution": "The Central Cluster",
+  "opened-throne": "The Queen Must Yield",
+  "pinned-serpent": "The Exposed Rook",
+  "hexed-provocation": "Three on the Back Rank",
+  "last-second-flight": "The Corner Cage",
+  "centaur-blockade": "The Open File",
+  "rage-break": "Surrounded in Check",
+  "grave-intercession": "The Missing Blocker",
+  "enchanted-retreat": "The Rook Must Move",
+} satisfies Record<ClassicPuzzleId, string>;
+
 const piece = (
   id: string,
   type: PieceType,
@@ -212,7 +245,7 @@ const reserveOpeningSource = (state: GameState, sourceSquare: Square) => {
 const centaursLance = (playerName?: string) => {
   const state = preparePuzzle(
     "centaurs-lance",
-    "The Centaur's Lance",
+    PUZZLE_TITLES["centaurs-lance"],
     "Capture the black King in one divine turn.",
     ["chiron", "teles", "midas"],
     playerName,
@@ -243,7 +276,7 @@ const centaursLance = (playerName?: string) => {
 const circleOfRage = (playerName?: string) => {
   const state = preparePuzzle(
     "circle-of-rage",
-    "Circle of Rage",
+    PUZZLE_TITLES["circle-of-rage"],
     "Capture the black King in one divine turn.",
     ["kangus", "teles", "death"],
     playerName,
@@ -276,7 +309,7 @@ const circleOfRage = (playerName?: string) => {
 const hiddenReserve = (playerName?: string) => {
   const state = preparePuzzle(
     "hidden-reserve",
-    "Position Three",
+    PUZZLE_TITLES["hidden-reserve"],
     "Capture the black King in one divine turn.",
     ["death", "midas", "salem"],
     playerName,
@@ -317,7 +350,7 @@ const hiddenReserve = (playerName?: string) => {
 const royalEscort = (playerName?: string) => {
   const state = preparePuzzle(
     "royal-escort",
-    "The Royal Escort",
+    PUZZLE_TITLES["royal-escort"],
     "Capture the black King in one divine turn.",
     ["leonidas", "teles", "midas"],
     playerName,
@@ -350,7 +383,7 @@ const royalEscort = (playerName?: string) => {
 const serpentsDelivery = (playerName?: string) => {
   const state = preparePuzzle(
     "serpents-delivery",
-    "The Serpent's Delivery",
+    PUZZLE_TITLES["serpents-delivery"],
     "Capture the black King in one divine turn.",
     ["quetzacoatl", "teles", "salem"],
     playerName,
@@ -388,7 +421,7 @@ const serpentsDelivery = (playerName?: string) => {
 const openedFile = (playerName?: string) => {
   const state = preparePuzzle(
     "opened-file",
-    "Position Six",
+    PUZZLE_TITLES["opened-file"],
     "Capture the black King in two divine turns.",
     ["teles", "chiron", "medusa"],
     playerName,
@@ -409,7 +442,7 @@ const openedFile = (playerName?: string) => {
 const borrowedBishop = (playerName?: string) => {
   const state = preparePuzzle(
     "borrowed-bishop",
-    "Position Seven",
+    PUZZLE_TITLES["borrowed-bishop"],
     "Capture the black King in two divine turns.",
     ["midas", "death", "salem"],
     playerName,
@@ -436,7 +469,7 @@ const borrowedBishop = (playerName?: string) => {
 const mountedFury = (playerName?: string) => {
   const state = preparePuzzle(
     "mounted-fury",
-    "Position Eight",
+    PUZZLE_TITLES["mounted-fury"],
     "Capture the black King in two divine turns.",
     ["chiron", "kangus", "midas"],
     playerName,
@@ -454,7 +487,7 @@ const mountedFury = (playerName?: string) => {
 const risingMonument = (playerName?: string) => {
   const state = preparePuzzle(
     "rising-monument",
-    "Position Nine",
+    PUZZLE_TITLES["rising-monument"],
     "Capture the black King in two divine turns.",
     ["anubis", "quetzacoatl", "teles"],
     playerName,
@@ -505,7 +538,7 @@ const risingMonument = (playerName?: string) => {
 const turncoatCharge = (playerName?: string) => {
   const state = preparePuzzle(
     "turncoat-charge",
-    "Position Ten",
+    PUZZLE_TITLES["turncoat-charge"],
     "Capture the black King in two divine turns.",
     ["midas", "chiron", "salem"],
     playerName,
@@ -552,7 +585,7 @@ const turncoatCharge = (playerName?: string) => {
 const fundedFlight = (playerName?: string) => {
   const state = preparePuzzle(
     "funded-flight",
-    "Position Eleven",
+    PUZZLE_TITLES["funded-flight"],
     "Capture the black King in two divine turns.",
     ["midas", "quetzacoatl", "anubis"],
     playerName,
@@ -599,7 +632,7 @@ const fundedFlight = (playerName?: string) => {
 const clearedLane = (playerName?: string) => {
   const state = preparePuzzle(
     "cleared-lane",
-    "Position Twelve",
+    PUZZLE_TITLES["cleared-lane"],
     "Capture the black King in two divine turns.",
     ["death", "chiron", "teles"],
     playerName,
@@ -648,7 +681,7 @@ const clearedLane = (playerName?: string) => {
 const royalLanding = (playerName?: string) => {
   const state = preparePuzzle(
     "royal-landing",
-    "Position Thirteen",
+    PUZZLE_TITLES["royal-landing"],
     "Capture the black King in two divine turns.",
     ["quetzacoatl", "leonidas", "midas"],
     playerName,
@@ -699,7 +732,7 @@ const royalLanding = (playerName?: string) => {
 const skywardCharge = (playerName?: string) => {
   const state = preparePuzzle(
     "skyward-charge",
-    "Position Fourteen",
+    PUZZLE_TITLES["skyward-charge"],
     "Capture the black King in two divine turns.",
     ["quetzacoatl", "kangus", "medusa"],
     playerName,
@@ -739,7 +772,7 @@ const skywardCharge = (playerName?: string) => {
 const provokedFury = (playerName?: string) => {
   const state = preparePuzzle(
     "provoked-fury",
-    "Position Fifteen",
+    PUZZLE_TITLES["provoked-fury"],
     "Capture the black King in two divine turns.",
     ["ares", "chiron", "salem"],
     playerName,
@@ -788,7 +821,7 @@ const provokedFury = (playerName?: string) => {
 const queensCompass = (playerName?: string) => {
   const state = preparePuzzle(
     "queens-compass",
-    "Position Sixteen",
+    PUZZLE_TITLES["queens-compass"],
     "Capture the black King in three divine turns.",
     ["medusa", "teles", "chiron"],
     playerName,
@@ -830,7 +863,7 @@ const hexedReserve = (playerName?: string) => {
   const state = deriveHardPuzzle(
     borrowedBishop,
     "hexed-reserve",
-    "Position Seventeen",
+    PUZZLE_TITLES["hexed-reserve"],
     ["salem", "midas", "death"],
     playerName,
   );
@@ -872,7 +905,7 @@ const goldenFuse = (playerName?: string) => {
   const state = deriveHardPuzzle(
     mountedFury,
     "golden-fuse",
-    "Position Eighteen",
+    PUZZLE_TITLES["golden-fuse"],
     ["midas", "chiron", "kangus"],
     playerName,
   );
@@ -911,7 +944,7 @@ const resonantFoundation = (playerName?: string) => {
   const state = deriveHardPuzzle(
     risingMonument,
     "resonant-foundation",
-    "Position Nineteen",
+    PUZZLE_TITLES["resonant-foundation"],
     ["teles", "anubis", "quetzacoatl"],
     playerName,
   );
@@ -957,7 +990,7 @@ const threatenedTurncoat = (playerName?: string) => {
   const state = deriveHardPuzzle(
     turncoatCharge,
     "threatened-turncoat",
-    "Position Twenty",
+    PUZZLE_TITLES["threatened-turncoat"],
     ["ares", "midas", "chiron"],
     playerName,
   );
@@ -996,7 +1029,7 @@ const architectsBargain = (playerName?: string) => {
   const state = deriveHardPuzzle(
     fundedFlight,
     "architects-bargain",
-    "Position Twenty-One",
+    PUZZLE_TITLES["architects-bargain"],
     ["anubis", "midas", "quetzacoatl"],
     playerName,
   );
@@ -1036,7 +1069,7 @@ const sungExecution = (playerName?: string) => {
   const state = deriveHardPuzzle(
     clearedLane,
     "sung-execution",
-    "Position Twenty-Two",
+    PUZZLE_TITLES["sung-execution"],
     ["teles", "death", "chiron"],
     playerName,
   );
@@ -1081,7 +1114,7 @@ const openedThrone = (playerName?: string) => {
   const state = deriveHardPuzzle(
     royalLanding,
     "opened-throne",
-    "Position Twenty-Three",
+    PUZZLE_TITLES["opened-throne"],
     ["anubis", "quetzacoatl", "leonidas"],
     playerName,
   );
@@ -1121,7 +1154,7 @@ const pinnedSerpent = (playerName?: string) => {
   const state = deriveHardPuzzle(
     skywardCharge,
     "pinned-serpent",
-    "Position Twenty-Four",
+    PUZZLE_TITLES["pinned-serpent"],
     ["medusa", "quetzacoatl", "kangus"],
     playerName,
   );
@@ -1164,7 +1197,7 @@ const hexedProvocation = (playerName?: string) => {
   const state = deriveHardPuzzle(
     provokedFury,
     "hexed-provocation",
-    "Position Twenty-Five",
+    PUZZLE_TITLES["hexed-provocation"],
     ["salem", "ares", "chiron"],
     playerName,
   );
@@ -1203,7 +1236,7 @@ const hexedProvocation = (playerName?: string) => {
 const lastSecondFlight = (playerName?: string) => {
   const state = preparePuzzle(
     "last-second-flight",
-    "Position Twenty-Six",
+    PUZZLE_TITLES["last-second-flight"],
     "Avoid checkmate by using the required ability.",
     ["quetzacoatl", "teles", "midas"],
     playerName,
@@ -1225,7 +1258,7 @@ const lastSecondFlight = (playerName?: string) => {
 const centaurBlockade = (playerName?: string) => {
   const state = preparePuzzle(
     "centaur-blockade",
-    "Position Twenty-Seven",
+    PUZZLE_TITLES["centaur-blockade"],
     "Avoid checkmate by using the required ability.",
     ["chiron", "teles", "midas"],
     playerName,
@@ -1247,7 +1280,7 @@ const centaurBlockade = (playerName?: string) => {
 const rageBreak = (playerName?: string) => {
   const state = preparePuzzle(
     "rage-break",
-    "Position Twenty-Eight",
+    PUZZLE_TITLES["rage-break"],
     "Avoid checkmate by using the required ability.",
     ["kangus", "midas", "death"],
     playerName,
@@ -1270,7 +1303,7 @@ const rageBreak = (playerName?: string) => {
 const graveIntercession = (playerName?: string) => {
   const state = preparePuzzle(
     "grave-intercession",
-    "Position Twenty-Nine",
+    PUZZLE_TITLES["grave-intercession"],
     "Avoid checkmate by using the required ability.",
     ["death", "teles", "midas"],
     playerName,
@@ -1296,7 +1329,7 @@ const graveIntercession = (playerName?: string) => {
 const enchantedRetreat = (playerName?: string) => {
   const state = preparePuzzle(
     "enchanted-retreat",
-    "Position Thirty",
+    PUZZLE_TITLES["enchanted-retreat"],
     "Avoid checkmate by using the required ability.",
     ["teles", "midas", "death"],
     playerName,
@@ -1320,7 +1353,7 @@ const enchantedRetreat = (playerName?: string) => {
 export const PUZZLES: PuzzleDefinition[] = [
   {
     id: "centaurs-lance",
-    title: "Position One",
+    title: PUZZLE_TITLES["centaurs-lance"],
     difficulty: "easy",
     objective: "Capture the black King in one divine turn.",
     hint: "A knight does not always have to move like a knight.",
@@ -1336,7 +1369,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   },
   {
     id: "circle-of-rage",
-    title: "Position Two",
+    title: PUZZLE_TITLES["circle-of-rage"],
     difficulty: "easy",
     objective: "Capture the black King in one divine turn.",
     hint: "The knight does not need to move to destroy everything surrounding it.",
@@ -1351,7 +1384,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   },
   {
     id: "hidden-reserve",
-    title: "Position Three",
+    title: PUZZLE_TITLES["hidden-reserve"],
     difficulty: "easy",
     objective: "Capture the black King in one divine turn.",
     hint: "One of your strongest pieces is not currently on the board. A fully upgraded ability can return it to an occupied square.",
@@ -1367,7 +1400,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   },
   {
     id: "royal-escort",
-    title: "Position Four",
+    title: PUZZLE_TITLES["royal-escort"],
     difficulty: "easy",
     objective: "Capture the black King in one divine turn.",
     hint: "Move the King so that his companion, not the King, lands on e2.",
@@ -1384,7 +1417,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   },
   {
     id: "serpents-delivery",
-    title: "Position Five",
+    title: PUZZLE_TITLES["serpents-delivery"],
     difficulty: "easy",
     objective: "Capture the black King in one divine turn.",
     hint: "The rook can carry the pawn over the blocked a-file. At level 2, the passenger may land on the first enemy flown over.",
@@ -1402,7 +1435,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   },
   {
     id: "opened-file",
-    title: "Position Six",
+    title: PUZZLE_TITLES["opened-file"],
     difficulty: "medium",
     objective: "Capture the black King in two divine turns.",
     hint: "The piece blocking the e-file can be compelled to move before the knight charges.",
@@ -1425,7 +1458,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   },
   {
     id: "borrowed-bishop",
-    title: "Position Seven",
+    title: PUZZLE_TITLES["borrowed-bishop"],
     difficulty: "medium",
     objective: "Capture the black King in two divine turns.",
     hint: "A Bishop does not have to begin the puzzle under your control to anchor a resurrection.",
@@ -1450,7 +1483,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   },
   {
     id: "mounted-fury",
-    title: "Position Eight",
+    title: PUZZLE_TITLES["mounted-fury"],
     difficulty: "medium",
     objective: "Capture the black King in two divine turns.",
     hint: "The knight can carry another piece into a square where destruction reaches the King.",
@@ -1475,7 +1508,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   },
   {
     id: "rising-monument",
-    title: "Position Nine",
+    title: PUZZLE_TITLES["rising-monument"],
     difficulty: "medium",
     objective: "Capture the black King in two divine turns.",
     hint: "A new carrier can open a vertical delivery route through the defended King.",
@@ -1503,7 +1536,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   },
   {
     id: "turncoat-charge",
-    title: "Position Ten",
+    title: PUZZLE_TITLES["turncoat-charge"],
     difficulty: "medium",
     objective: "Capture the black King in two divine turns.",
     hint: "The needed attacker begins on the other side, but its allegiance is negotiable.",
@@ -1528,7 +1561,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   },
   {
     id: "funded-flight",
-    title: "Position Eleven",
+    title: PUZZLE_TITLES["funded-flight"],
     difficulty: "medium",
     objective: "Capture the black King in two divine turns.",
     hint: "The carrier needs a passenger that does not begin under your control.",
@@ -1559,7 +1592,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   },
   {
     id: "cleared-lane",
-    title: "Position Twelve",
+    title: PUZZLE_TITLES["cleared-lane"],
     difficulty: "medium",
     objective: "Capture the black King in two divine turns.",
     hint: "Clearing the file can also fund the attack that follows.",
@@ -1584,7 +1617,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   },
   {
     id: "royal-landing",
-    title: "Position Thirteen",
+    title: PUZZLE_TITLES["royal-landing"],
     difficulty: "medium",
     objective: "Capture the black King in two divine turns.",
     hint: "Bring your King beside the formation; the crowded back rank and pawn wall leave the opposing King nowhere to go.",
@@ -1609,7 +1642,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   },
   {
     id: "skyward-charge",
-    title: "Position Fourteen",
+    title: PUZZLE_TITLES["skyward-charge"],
     difficulty: "medium",
     objective: "Capture the black King in two divine turns.",
     hint: "Complete a mixed-color snake beside the boxed-in King, then turn the landing square into the center of destruction.",
@@ -1634,7 +1667,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   },
   {
     id: "provoked-fury",
-    title: "Position Fifteen",
+    title: PUZZLE_TITLES["provoked-fury"],
     difficulty: "medium",
     objective: "Capture the black King in two divine turns.",
     hint: "A pinned defender still attacks a square, even when it cannot safely capture there.",
@@ -1658,7 +1691,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   },
   {
     id: "queens-compass",
-    title: "Position Sixteen",
+    title: PUZZLE_TITLES["queens-compass"],
     difficulty: "hard",
     objective: "Capture the black King in three divine turns.",
     hint: "The opening pawn step commits Medusa before Enchant places a target on the charging knight's square.",
@@ -1690,7 +1723,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   },
   {
     id: "hexed-reserve",
-    title: "Position Seventeen",
+    title: PUZZLE_TITLES["hexed-reserve"],
     difficulty: "hard",
     objective: "Capture the black King in three divine turns.",
     hint: "Three aligned curses can finance the hire that gives your reserve Queen a landing anchor.",
@@ -1724,7 +1757,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   },
   {
     id: "golden-fuse",
-    title: "Position Eighteen",
+    title: PUZZLE_TITLES["golden-fuse"],
     difficulty: "hard",
     objective: "Capture the black King in three divine turns.",
     hint: "A trade beside the advanced pawn can fund the final explosion before the knight carries its rider to the only useful dismount square.",
@@ -1756,7 +1789,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   },
   {
     id: "resonant-foundation",
-    title: "Position Nineteen",
+    title: PUZZLE_TITLES["resonant-foundation"],
     difficulty: "hard",
     objective: "Capture the black King in three divine turns.",
     hint: "A Queen can resonate beside the clustered dark pieces before Construction clears the nearby carrier's landing square.",
@@ -1792,7 +1825,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   },
   {
     id: "threatened-turncoat",
-    title: "Position Twenty",
+    title: PUZZLE_TITLES["threatened-turncoat"],
     difficulty: "hard",
     objective: "Capture the black King in three divine turns.",
     hint: "A modest pawn threat supplies the final orb needed to buy and launch the enemy knight.",
@@ -1823,7 +1856,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   },
   {
     id: "architects-bargain",
-    title: "Position Twenty-One",
+    title: PUZZLE_TITLES["architects-bargain"],
     difficulty: "hard",
     objective: "Capture the black King in three divine turns.",
     hint: "One careful bishop step clears the landing square and completes the treasury needed to hire a nearby passenger.",
@@ -1860,7 +1893,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   },
   {
     id: "sung-execution",
-    title: "Position Twenty-Two",
+    title: PUZZLE_TITLES["sung-execution"],
     difficulty: "hard",
     objective: "Capture the black King in three divine turns.",
     hint: "First sing inside the pawn cluster; then the marked bishop only needs to vacate the file.",
@@ -1890,7 +1923,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   },
   {
     id: "opened-throne",
-    title: "Position Twenty-Three",
+    title: PUZZLE_TITLES["opened-throne"],
     difficulty: "hard",
     objective: "Capture the black King in three divine turns.",
     hint: "The royal landing square is occupied by your Queen; Construction can clear it by stepping directly ahead.",
@@ -1921,7 +1954,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   },
   {
     id: "pinned-serpent",
-    title: "Position Twenty-Four",
+    title: PUZZLE_TITLES["pinned-serpent"],
     difficulty: "hard",
     objective: "Capture the black King in three divine turns.",
     hint: "Captivate the exposed rook before sending the g-file rook into the blast radius.",
@@ -1950,7 +1983,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   },
   {
     id: "hexed-provocation",
-    title: "Position Twenty-Five",
+    title: PUZZLE_TITLES["hexed-provocation"],
     difficulty: "hard",
     objective: "Capture the black King in three divine turns.",
     hint: "The rook can enter the enemy back rank while aligning with three curses, completing the reserve needed for a provocation and charge.",
@@ -1983,7 +2016,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   },
   {
     id: "last-second-flight",
-    title: "Position Twenty-Six",
+    title: PUZZLE_TITLES["last-second-flight"],
     difficulty: "easy",
     objective: "Avoid checkmate in one divine turn by using a specific ability.",
     hint: "The King needs to leave the entire corner cage without crossing it.",
@@ -1999,7 +2032,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   },
   {
     id: "centaur-blockade",
-    title: "Position Twenty-Seven",
+    title: PUZZLE_TITLES["centaur-blockade"],
     difficulty: "easy",
     objective: "Avoid checkmate in one divine turn by using a specific ability.",
     hint: "A knight can become the wall the King needs.",
@@ -2015,7 +2048,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   },
   {
     id: "rage-break",
-    title: "Position Twenty-Eight",
+    title: PUZZLE_TITLES["rage-break"],
     difficulty: "easy",
     objective: "Avoid checkmate in one divine turn by using a specific ability.",
     hint: "Every hostile piece surrounding the knight is part of the cage.",
@@ -2030,7 +2063,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   },
   {
     id: "grave-intercession",
-    title: "Position Twenty-Nine",
+    title: PUZZLE_TITLES["grave-intercession"],
     difficulty: "easy",
     objective: "Avoid checkmate in one divine turn by using a specific ability.",
     hint: "The hardened Bishop cannot move, but it can guide a fallen ally back into the attack line.",
@@ -2046,7 +2079,7 @@ export const PUZZLES: PuzzleDefinition[] = [
   },
   {
     id: "enchanted-retreat",
-    title: "Position Thirty",
+    title: PUZZLE_TITLES["enchanted-retreat"],
     difficulty: "easy",
     objective: "Avoid checkmate in one divine turn by using a specific ability.",
     hint: "The checking piece can be ordered to abandon its own attack line.",
