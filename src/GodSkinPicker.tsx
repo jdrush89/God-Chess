@@ -85,7 +85,6 @@ export function GodSkinPicker({
     >
       <div className="skin-picker-heading">
         <span>SKINS</span>
-        <small>{GOD_SKINS[godId].length} options</small>
       </div>
       <div className={`skin-select ${open ? "open" : ""}`}>
         <button
