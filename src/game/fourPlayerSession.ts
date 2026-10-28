@@ -83,17 +83,24 @@ export const normalizeFourPlayerAction = (
         : undefined;
     case "draft":
       if (
-        !hasExactKeys(value, ["type", "godId"], ["skinId"]) ||
+        !hasExactKeys(value, ["type", "godId"], ["skinId", "selectionMethod"]) ||
         !isGodId(value.godId) ||
         (
           value.skinId !== undefined &&
           !isGodSkinFor(value.godId, value.skinId)
+        ) ||
+        (
+          value.selectionMethod !== undefined &&
+          value.selectionMethod !== "random"
         )
       ) return undefined;
       return {
         type: "draft",
         godId: value.godId,
         ...(value.skinId === undefined ? {} : { skinId: value.skinId }),
+        ...(value.selectionMethod === undefined
+          ? {}
+          : { selectionMethod: value.selectionMethod }),
       };
     case "clear-god":
     case "confirm-ability":

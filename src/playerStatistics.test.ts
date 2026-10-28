@@ -36,6 +36,7 @@ describe("player statistics", () => {
           godsUsed: { death: 20 },
         },
       },
+      currentGame: { seats: {} },
     };
     const progress = updatePlayerMatchStatistics(
       createPlayerStatisticsProgress(),

@@ -220,7 +220,12 @@ export type FourPlayerMoveFirstCandidate = MoveFirstCandidate<
 >;
 
 export type FourPlayerAction =
-  | { type: "draft"; godId: GodId; skinId?: GodSkinId }
+  | {
+    type: "draft";
+    godId: GodId;
+    skinId?: GodSkinId;
+    selectionMethod?: "random";
+  }
   | { type: "select-god"; godId: GodId }
   | { type: "clear-god" }
   | { type: "select-ability"; abilityId: string }

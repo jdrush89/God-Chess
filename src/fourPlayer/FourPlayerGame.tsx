@@ -404,6 +404,7 @@ function FourPlayerDraft({
                   dispatch({
                     type: "draft",
                     godId,
+                    selectionMethod: "random",
                     skinId: favoriteGodSkin(
                       favorites,
                       godId,
@@ -2094,6 +2095,7 @@ export function FourPlayerGame({
         if (!applyAction({
           type: "draft",
           godId,
+          selectionMethod: "random",
           skinId: favoriteGodSkin(
             favorites,
             godId,

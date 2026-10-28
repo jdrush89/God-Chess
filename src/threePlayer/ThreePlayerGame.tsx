@@ -1321,6 +1321,7 @@ export function ThreePlayerGame({
     setAutoDraftPending(true);
     dispatchAction({
       ...action,
+      selectionMethod: "random",
       skinId: favoriteGodSkin(
         favorites,
         action.godId,
@@ -1353,6 +1354,7 @@ export function ThreePlayerGame({
         if (!action) break;
         dispatchAction({
           ...action,
+          selectionMethod: "random",
           skinId: favoriteGodSkin(
             favorites,
             action.godId,

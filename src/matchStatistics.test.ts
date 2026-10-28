@@ -16,6 +16,9 @@ describe("match statistics", () => {
       { type: "draft" },
     );
     expect(drafted.matchStats?.seats.white.godsUsed.ares).toBe(1);
+    expect(drafted.matchStats?.currentGame.seats.white.godPicks).toEqual([
+      { godId: "ares", actorType: "player", method: "manual" },
+    ]);
 
     const before = structuredClone(drafted);
     before.phase = "play";
@@ -62,8 +65,85 @@ describe("match statistics", () => {
           piecesLost: 1,
         },
       },
+      currentGame: {
+        seats: {
+          white: {
+            abilityUses: {
+              rage: { player: 1, cpu: 0 },
+            },
+          },
+        },
+      },
     });
   });
+
+  it("separates random and CPU picks and records both upgrade turns", () => {
+    const randomBefore = createGame(1, { mode: "local" });
+    const randomAfter = structuredClone(randomBefore);
+    randomAfter.players.white.gods.push("salem");
+    const randomlyDrafted = applyMatchStatisticsTransition(
+      randomBefore,
+      randomAfter,
+      { type: "auto-draft" },
+    );
+    expect(randomlyDrafted.matchStats?.currentGame.seats.white.godPicks)
+      .toEqual([{ godId: "salem", actorType: "player", method: "random" }]);
+
+    const cpuBefore = createGame(1, { mode: "ai" });
+    cpuBefore.activeColor = cpuBefore.aiColor!;
+    const cpuAfter = structuredClone(cpuBefore);
+    cpuAfter.players[cpuBefore.aiColor!].gods.push("midas");
+    const cpuDrafted = applyMatchStatisticsTransition(
+      cpuBefore,
+      cpuAfter,
+      { type: "draft" },
+    );
+    expect(
+      cpuDrafted.matchStats?.currentGame.seats[cpuBefore.aiColor!].godPicks,
+    ).toEqual([{ godId: "midas", actorType: "cpu", method: "cpu" }]);
+
+    const firstUpgradeBefore = createGame(1, { mode: "local" });
+    firstUpgradeBefore.phase = "upgrade";
+    firstUpgradeBefore.turn = 7;
+    firstUpgradeBefore.players.white.gods = ["kangus"];
+    firstUpgradeBefore.players.white.upgrades.rage = 1;
+    const firstUpgradeAfter = structuredClone(firstUpgradeBefore);
+    firstUpgradeAfter.players.white.upgrades.rage = 2;
+    const firstUpgrade = applyMatchStatisticsTransition(
+      firstUpgradeBefore,
+      firstUpgradeAfter,
+      { type: "upgrade", abilityId: "rage" },
+    );
+
+    const secondUpgradeBefore = structuredClone(firstUpgrade);
+    secondUpgradeBefore.phase = "upgrade";
+    secondUpgradeBefore.turn = 14;
+    const secondUpgradeAfter = structuredClone(secondUpgradeBefore);
+    secondUpgradeAfter.players.white.upgrades.rage = 3;
+    const secondUpgrade = applyMatchStatisticsTransition(
+      secondUpgradeBefore,
+      secondUpgradeAfter,
+      { type: "upgrade", abilityId: "rage" },
+    );
+    expect(secondUpgrade.matchStats?.currentGame.seats.white.abilityUpgrades)
+      .toEqual([
+        {
+          godId: "kangus",
+          abilityId: "rage",
+          actorType: "player",
+          level: 2,
+          turn: 7,
+        },
+        {
+          godId: "kangus",
+          abilityId: "rage",
+          actorType: "player",
+          level: 3,
+          turn: 14,
+        },
+      ]);
+  });
+
   it("carries completed games across restart while undo snapshots stay exact", () => {
     const finished = createGame(1);
     finished.matchStats = {
@@ -78,6 +158,7 @@ describe("match statistics", () => {
     expect(restarted.matchStats).toMatchObject({
       gamesPlayed: 2,
       wins: [{ winners: ["white"] }],
+      currentGame: { seats: {} },
     });
 
     const restored = structuredClone(finished);

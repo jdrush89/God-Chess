@@ -30,6 +30,42 @@ create table if not exists public.player_stats_public (
   snapshot jsonb not null
 );
 
+create table if not exists public.balance_match_reports (
+  match_key text primary key check (char_length(match_key) between 1 and 160),
+  mode text not null check (
+    mode in (
+      'classic-local',
+      'classic-ai',
+      'classic-online',
+      'classic-ranked',
+      'three-local',
+      'three-online',
+      'four-ffa-local',
+      'four-ffa-online',
+      'four-teams-local',
+      'four-teams-online',
+      'four-ranked'
+    )
+  ),
+  board text not null check (
+    board in (
+      'classic',
+      'three-player',
+      'three-hexagonal',
+      'triad',
+      'three-circular',
+      'three-half',
+      'four-player-ffa',
+      'four-player-teams'
+    )
+  ),
+  status text not null check (status in ('started', 'completed')),
+  started_at timestamptz not null default now(),
+  completed_at timestamptz,
+  report jsonb not null default '{}'::jsonb check (jsonb_typeof(report) = 'object'),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.ranked_ratings (
   user_id uuid primary key references auth.users(id) on delete cascade,
   rating double precision not null default 1500,
@@ -50,6 +86,7 @@ alter table public.profiles enable row level security;
 alter table public.game_saves enable row level security;
 alter table public.player_stats enable row level security;
 alter table public.player_stats_public enable row level security;
+alter table public.balance_match_reports enable row level security;
 alter table public.ranked_ratings enable row level security;
 
 drop policy if exists "Users can read their profile" on public.profiles;
@@ -130,6 +167,238 @@ drop policy if exists "Users can delete their public stats" on public.player_sta
 create policy "Users can delete their public stats"
   on public.player_stats_public for delete
   using (auth.uid() = user_id);
+
+revoke all on table public.balance_match_reports from anon, authenticated;
+
+create or replace function public.report_balance_match(
+  p_match_key text,
+  p_mode text,
+  p_board text,
+  p_status text,
+  p_report jsonb
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if p_match_key is null or char_length(p_match_key) not between 1 and 160 then
+    raise exception 'Invalid balance match key.';
+  end if;
+  if p_mode not in (
+    'classic-local',
+    'classic-ai',
+    'classic-online',
+    'classic-ranked',
+    'three-local',
+    'three-online',
+    'four-ffa-local',
+    'four-ffa-online',
+    'four-teams-local',
+    'four-teams-online',
+    'four-ranked'
+  ) then
+    raise exception 'Invalid balance game mode.';
+  end if;
+  if p_board not in (
+    'classic',
+    'three-player',
+    'three-hexagonal',
+    'triad',
+    'three-circular',
+    'three-half',
+    'four-player-ffa',
+    'four-player-teams'
+  ) then
+    raise exception 'Invalid balance board.';
+  end if;
+  if p_status not in ('started', 'completed') then
+    raise exception 'Invalid balance report status.';
+  end if;
+  if p_report is null or jsonb_typeof(p_report) <> 'object' then
+    raise exception 'Balance report must be a JSON object.';
+  end if;
+  if octet_length(p_report::text) > 131072 then
+    raise exception 'Balance report is too large.';
+  end if;
+  if p_status = 'completed' and (
+    p_report->>'version' <> '1' or
+    jsonb_typeof(p_report->'winners') <> 'array' or
+    jsonb_typeof(p_report->'seats') <> 'array'
+  ) then
+    raise exception 'Completed balance report is malformed.';
+  end if;
+
+  insert into public.balance_match_reports (
+    match_key,
+    mode,
+    board,
+    status,
+    completed_at,
+    report,
+    updated_at
+  )
+  values (
+    p_match_key,
+    p_mode,
+    p_board,
+    p_status,
+    case when p_status = 'completed' then now() else null end,
+    p_report,
+    now()
+  )
+  on conflict (match_key) do update set
+    mode = excluded.mode,
+    board = excluded.board,
+    status = case
+      when balance_match_reports.status = 'completed' then 'completed'
+      else excluded.status
+    end,
+    completed_at = case
+      when balance_match_reports.completed_at is not null
+        then balance_match_reports.completed_at
+      when excluded.status = 'completed'
+        then now()
+      else null
+    end,
+    report = case
+      when balance_match_reports.status = 'completed'
+        then balance_match_reports.report
+      when excluded.status = 'completed'
+        then excluded.report
+      else balance_match_reports.report
+    end,
+    updated_at = now();
+end;
+$$;
+
+revoke all on function public.report_balance_match(text, text, text, text, jsonb)
+  from public;
+grant execute on function public.report_balance_match(text, text, text, text, jsonb)
+  to anon, authenticated;
+
+create or replace view public.balance_games_by_mode as
+select
+  mode,
+  board,
+  count(*) as games_started,
+  count(*) filter (where status = 'completed') as games_completed,
+  count(*) filter (where status = 'started') as games_incomplete
+from public.balance_match_reports
+group by mode, board;
+
+create or replace view public.balance_god_pick_rates as
+with picks as (
+  select
+    report_row.mode,
+    report_row.board,
+    pick->>'actorType' as actor_type,
+    pick->>'method' as selection_method,
+    pick->>'godId' as god_id
+  from public.balance_match_reports report_row
+  cross join lateral jsonb_array_elements(report_row.report->'seats') seat
+  cross join lateral jsonb_array_elements(seat->'godPicks') pick
+  where report_row.status = 'completed'
+),
+grouped as (
+  select
+    mode,
+    board,
+    actor_type,
+    selection_method,
+    god_id,
+    count(*) as picks
+  from picks
+  group by mode, board, actor_type, selection_method, god_id
+)
+select
+  mode,
+  board,
+  actor_type,
+  selection_method,
+  god_id,
+  picks,
+  picks::numeric /
+    nullif(sum(picks) over (
+      partition by mode, board, actor_type, selection_method
+    ), 0) as pick_rate
+from grouped;
+
+create or replace view public.balance_god_win_rates as
+with results as (
+  select
+    report_row.mode,
+    report_row.board,
+    pick->>'actorType' as actor_type,
+    pick->>'method' as selection_method,
+    pick->>'godId' as god_id,
+    coalesce((seat->>'won')::boolean, false) as won
+  from public.balance_match_reports report_row
+  cross join lateral jsonb_array_elements(report_row.report->'seats') seat
+  cross join lateral jsonb_array_elements(seat->'godPicks') pick
+  where report_row.status = 'completed'
+)
+select
+  mode,
+  board,
+  actor_type,
+  selection_method,
+  god_id,
+  count(*) as games,
+  count(*) filter (where won) as wins,
+  count(*) filter (where won)::numeric / nullif(count(*), 0) as win_rate
+from results
+group by mode, board, actor_type, selection_method, god_id;
+
+create or replace view public.balance_ability_usage as
+select
+  report_row.mode,
+  report_row.board,
+  ability->>'actorType' as actor_type,
+  ability->>'godId' as god_id,
+  ability->>'abilityId' as ability_id,
+  sum((ability->>'count')::bigint) as uses
+from public.balance_match_reports report_row
+cross join lateral jsonb_array_elements(report_row.report->'seats') seat
+cross join lateral jsonb_array_elements(seat->'abilityUses') ability
+where report_row.status = 'completed'
+group by
+  report_row.mode,
+  report_row.board,
+  ability->>'actorType',
+  ability->>'godId',
+  ability->>'abilityId';
+
+create or replace view public.balance_ability_upgrade_timing as
+select
+  report_row.mode,
+  report_row.board,
+  upgrade->>'actorType' as actor_type,
+  upgrade->>'godId' as god_id,
+  upgrade->>'abilityId' as ability_id,
+  (upgrade->>'level')::integer as upgrade_level,
+  count(*) as upgrades,
+  avg((upgrade->>'turn')::numeric) as average_turn
+from public.balance_match_reports report_row
+cross join lateral jsonb_array_elements(report_row.report->'seats') seat
+cross join lateral jsonb_array_elements(seat->'abilityUpgrades') upgrade
+where report_row.status = 'completed'
+group by
+  report_row.mode,
+  report_row.board,
+  upgrade->>'actorType',
+  upgrade->>'godId',
+  upgrade->>'abilityId',
+  (upgrade->>'level')::integer;
+
+revoke all on table
+  public.balance_games_by_mode,
+  public.balance_god_pick_rates,
+  public.balance_god_win_rates,
+  public.balance_ability_usage,
+  public.balance_ability_upgrade_timing
+from anon, authenticated;
 
 drop policy if exists "Users can read their ranked rating" on public.ranked_ratings;
 create policy "Users can read their ranked rating"

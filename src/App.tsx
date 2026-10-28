@@ -197,6 +197,10 @@ import {
   upsertCloudPlayerStatistics,
 } from "./account/cloudPlayerStatistics";
 import {
+  reportBalanceMatch,
+  type BalanceGameMode,
+} from "./account/balanceAnalytics";
+import {
   completedAchievementIds,
   loadLocalAchievementProgress,
   mergeNormalizedAchievementProgress,
@@ -7125,6 +7129,14 @@ export default function App() {
     );
   };
 
+  const recordBalanceMatchState = (
+    matchId: string,
+    mode: BalanceGameMode,
+    current: GameState | ThreePlayerState | FourPlayerState,
+  ) => {
+    reportBalanceMatch(matchId, mode, current);
+  };
+
   const receiveState = (next: GameState) => {
     stateRef.current = next;
     baseDispatch({ type: "load-game", state: next });
@@ -7613,7 +7625,17 @@ export default function App() {
         : undefined);
     if (!matchId) return;
     recordPlayerMatchState(matchId, state, classicLocalActors(state));
+    recordBalanceMatchState(
+      matchId,
+      state.gameMode === "online"
+        ? online.ranked ? "classic-ranked" : "classic-online"
+        : state.gameMode === "ai"
+          ? "classic-ai"
+          : "classic-local",
+      state,
+    );
   }, [
+    online.ranked,
     online.roomCode,
     savePlayerStatistics,
     startView,
@@ -7755,7 +7777,7 @@ export default function App() {
         const godId = randomItem(stateRef.current.draft.available);
         if (!godId) break;
         dispatch({
-          type: "draft",
+          type: "auto-draft",
           godId,
           skinId: favoriteGodSkin(
             favorites,
@@ -9145,6 +9167,11 @@ export default function App() {
               [localSeat],
             );
           }
+          recordBalanceMatchState(
+            `online-three:${threeOnline.roomCode}`,
+            "three-online",
+            current,
+          );
         }}
         onQuit={() => {
           threeOnlineActions.disconnect();
@@ -9225,6 +9252,15 @@ export default function App() {
               [localSeat],
             );
           }
+          recordBalanceMatchState(
+            `online-four:${fourOnline.roomCode}`,
+            fourOnline.snapshot?.ranked
+              ? "four-ranked"
+              : current.config.mode === "teams"
+                ? "four-teams-online"
+                : "four-ffa-online",
+            current,
+          );
         }}
         undoPreferred={fourOnline.snapshot.localUndoConsent}
         onUndoPreferenceChange={fourOnlineActions.setUndoConsent}
@@ -9326,6 +9362,13 @@ export default function App() {
                 current,
                 localActors,
               );
+              recordBalanceMatchState(
+                fourPlayerSession.key,
+                current.config.mode === "teams"
+                  ? "four-teams-local"
+                  : "four-ffa-local",
+                current,
+              );
             }}
           initialUndoHistory={fourPlayerSession.undoHistory}
           initialTurnStart={fourPlayerSession.turnStart}
@@ -9410,6 +9453,11 @@ export default function App() {
                 threePlayerSession.key,
                 current,
                 localActors,
+              );
+              recordBalanceMatchState(
+                threePlayerSession.key,
+                "three-local",
+                current,
               );
             }
         }
