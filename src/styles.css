@@ -1413,6 +1413,7 @@ span.move-target-dot {
 }
 .setup-navigation-back:hover { color: #f3dfaa; border-color: var(--gold); }
 .setup-navigation-content { width: 100%; min-width: 0; }
+.play-menu-scene .setup-navigation-content { display: flow-root; }
 .play-menu-heading {
   max-width: 680px; margin: clamp(48px, 10vh, 100px) auto clamp(24px, 5vh, 46px);
   padding: 0 20px; text-align: center;
