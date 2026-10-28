@@ -576,7 +576,7 @@ function ThreePlayerDraft({
           </div>
           <button
             type="button"
-            className="primary-button three-draft-claim"
+            className={`primary-button three-draft-claim${selectedSkinUnlocked ? "" : " skin-locked-button"}`}
             onClick={confirmGodSelection}
             disabled={
               inputDisabled ||

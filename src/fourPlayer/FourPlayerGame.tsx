@@ -543,7 +543,7 @@ function FourPlayerDraft({
             ))}
           </div>
           <button
-            className="primary-button"
+            className={`primary-button${selectedSkinUnlocked ? "" : " skin-locked-button"}`}
             onClick={confirmGodSelection}
             disabled={
               inputDisabled ||

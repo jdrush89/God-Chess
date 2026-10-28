@@ -1360,6 +1360,7 @@ describe("game startup", () => {
     fireEvent.click(screen.getByRole("option", { name: /^businessman locked$/i }));
     const lockedClaim = screen.getByRole("button", { name: /^ares skin locked$/i });
     expect((lockedClaim as HTMLButtonElement).disabled).toBe(true);
+    expect(lockedClaim.classList.contains("skin-locked-button")).toBe(true);
   });
 
   it("closes sign-in for an existing profile and opens name editing from the account menu", async () => {
