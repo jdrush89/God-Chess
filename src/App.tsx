@@ -4164,9 +4164,11 @@ function PuzzleSelectScreen({
                   ).length
                   : 0;
                 const Icon = option.icon;
+                const hasLongTitle =
+                  option.id === "challenges" || option.id === "marketplace";
                 return (
                   <button
-                    className="puzzle-difficulty-card"
+                    className={`puzzle-difficulty-card${hasLongTitle ? " puzzle-difficulty-card-long-title" : ""}`}
                     key={option.id}
                     onClick={() => {
                       if (option.id === "daily-current") {
