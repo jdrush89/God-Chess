@@ -118,7 +118,20 @@ const loadProfile = async (user: User): Promise<AccountProfile> => {
   const portraitId = normalizeAccountPortraitId(
     data?.portrait_id ?? user.user_metadata.portrait_id,
   );
-  if ((!data || !savedDisplayName) && metadataDisplayName) {
+  if (!data && metadataDisplayName) {
+    const { error: createError } = await supabase
+      .from("profiles")
+      .upsert(createProfileUpsert(
+        user.id,
+        metadataDisplayName,
+        portraitId,
+        supportsPortraits,
+      ), {
+        onConflict: "id",
+        ignoreDuplicates: true,
+      });
+    if (createError) throw createError;
+  } else if (!savedDisplayName && metadataDisplayName) {
     const { error: createError } = await supabase
       .from("profiles")
       .upsert(createProfileUpsert(
@@ -328,6 +341,10 @@ export function useAccount() {
           updated_at: new Date().toISOString(),
         });
       if (error) throw error;
+      const { error: metadataError } = await supabase.auth.updateUser({
+        data: { portrait_id: normalized },
+      });
+      if (metadataError) throw metadataError;
       setAccount({ ...account, portraitId: normalized });
       setError(undefined);
       return "Account portrait updated.";

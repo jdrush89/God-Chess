@@ -1,4 +1,36 @@
-import { describe, expect, it } from "vitest";
+// @vitest-environment jsdom
+
+import { act, renderHook, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const accountMocks = vi.hoisted(() => ({
+  getSession: vi.fn(),
+  onAuthStateChange: vi.fn(),
+  updateUser: vi.fn(),
+  profileUpsert: vi.fn(),
+  profileMaybeSingle: vi.fn(),
+  unsubscribe: vi.fn(),
+}));
+
+vi.mock("./supabase", () => ({
+  accountsConfigured: true,
+  supabase: {
+    auth: {
+      getSession: accountMocks.getSession,
+      onAuthStateChange: accountMocks.onAuthStateChange,
+      updateUser: accountMocks.updateUser,
+    },
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          maybeSingle: accountMocks.profileMaybeSingle,
+        }),
+      }),
+      upsert: accountMocks.profileUpsert,
+    }),
+  },
+}));
+
 import {
   createProfileUpsert,
   createSignUpMetadata,
@@ -7,9 +39,93 @@ import {
   resolveAuthRedirectUrl,
   resolveDisplayName,
   resolveLocalDataImportPending,
+  useAccount,
 } from "./useAccount";
 
 describe("resolveAuthRedirectUrl", () => {
+  beforeEach(() => {
+    accountMocks.getSession.mockReset();
+    accountMocks.onAuthStateChange.mockReset();
+    accountMocks.updateUser.mockReset();
+    accountMocks.profileUpsert.mockReset();
+    accountMocks.profileMaybeSingle.mockReset();
+    accountMocks.unsubscribe.mockReset();
+    accountMocks.getSession.mockResolvedValue({
+      data: {
+        session: {
+          user: {
+            id: "player-id",
+            email: "athena@example.com",
+            user_metadata: {
+              display_name: "Athena",
+              portrait_id: "quetzacoatl",
+            },
+          },
+        },
+      },
+      error: null,
+    });
+    accountMocks.onAuthStateChange.mockReturnValue({
+      data: {
+        subscription: {
+          unsubscribe: accountMocks.unsubscribe,
+        },
+      },
+    });
+    accountMocks.profileMaybeSingle.mockResolvedValue({
+      data: {
+        display_name: "Athena",
+        public_id: "gc-athena01",
+        portrait_id: "quetzacoatl",
+      },
+      error: null,
+    });
+    accountMocks.profileUpsert.mockResolvedValue({ error: null });
+    accountMocks.updateUser.mockResolvedValue({ error: null });
+  });
+
+  it("backs up portrait changes in auth metadata for profile recovery", async () => {
+    const { result } = renderHook(() => useAccount());
+    await waitFor(() => expect(result.current.account?.portraitId).toBe(
+      "quetzacoatl",
+    ));
+
+    await act(async () => {
+      await result.current.updatePortrait("kangus");
+    });
+
+    expect(accountMocks.profileUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "player-id",
+        portrait_id: "kangus",
+      }),
+    );
+    expect(accountMocks.updateUser).toHaveBeenCalledWith({
+      data: { portrait_id: "kangus" },
+    });
+    expect(result.current.account?.portraitId).toBe("kangus");
+  });
+
+  it("does not overwrite an existing profile when sign-in hydration appears missing", async () => {
+    accountMocks.profileMaybeSingle.mockResolvedValue({
+      data: null,
+      error: null,
+    });
+
+    renderHook(() => useAccount());
+
+    await waitFor(() => expect(accountMocks.profileUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "player-id",
+        portrait_id: "quetzacoatl",
+      }),
+      {
+        onConflict: "id",
+        ignoreDuplicates: true,
+      },
+    ));
+  });
+
   it("only requests local-data import for the explicit signup marker", () => {
     expect(resolveLocalDataImportPending(true)).toBe(true);
     expect(resolveLocalDataImportPending(false)).toBe(false);
