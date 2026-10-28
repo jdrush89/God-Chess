@@ -252,6 +252,11 @@ must update this documentation.
 | A Queen in Waiting | Death, Midas, Salem | Ares, Chiron, Anubis | Death (resurrect) |
 | The Bishop's Path | Leonidas, Teles, Midas | Ares, Chiron, Anubis | Leonidas (escort) |
 | Across the Barricade | Quetzacoatl, Teles, Salem | Ares, Chiron, Anubis | Quetzacoatl (air-strike) |
+| The Corner Cage | Quetzacoatl, Teles, Midas | Ares, Chiron, Anubis | Quetzacoatl (air-lift) |
+| The Open File | Chiron, Teles, Midas | Ares, Chiron, Anubis | Chiron (charge) |
+| Surrounded in Check | Kangus Kong, Midas, Death | Ares, Chiron, Anubis | Kangus Kong (rage) |
+| The Missing Blocker | Death, Teles, Midas | Ares, Chiron, Anubis | Death (resurrect) |
+| The Rook Must Move | Teles, Midas, Death | Ares, Chiron, Anubis | Teles (enchant) |
 | The Watchful Bishop | Teles, Chiron, Medusa | Quetzacoatl, Artemis, Ares | Teles (lure); Chiron (charge) |
 | Enemy at the Gate | Midas, Death, Salem | Ares, Chiron, Anubis | Midas (leverage); Death (resurrect) |
 | The Crowded Corner | Chiron, Kangus Kong, Midas | Ares, Anubis, Salem | Chiron (mount); Kangus Kong (rage) |
@@ -272,11 +277,6 @@ must update this documentation.
 | The Queen Must Yield | Anubis, Quetzacoatl, Leonidas | Ares, Chiron, Salem | Anubis (construction); Quetzacoatl (air-lift); Leonidas (escort) |
 | The Exposed Rook | Medusa, Quetzacoatl, Kangus Kong | Ares, Chiron, Anubis | Medusa (captivate); Quetzacoatl (flight); Kangus Kong (rage) |
 | Three on the Back Rank | Salem, Ares, Chiron | Artemis, Anubis, Medusa | Salem (hex); Ares (pick-a-fight); Chiron (charge) |
-| The Corner Cage | Quetzacoatl, Teles, Midas | Ares, Chiron, Anubis | Quetzacoatl (air-lift) |
-| The Open File | Chiron, Teles, Midas | Ares, Chiron, Anubis | Chiron (charge) |
-| Surrounded in Check | Kangus Kong, Midas, Death | Ares, Chiron, Anubis | Kangus Kong (rage) |
-| The Missing Blocker | Death, Teles, Midas | Ares, Chiron, Anubis | Death (resurrect) |
-| The Rook Must Move | Teles, Midas, Death | Ares, Chiron, Anubis | Teles (enchant) |
 
 ## Accounts and cloud saves
 

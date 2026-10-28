@@ -1350,7 +1350,7 @@ const enchantedRetreat = (playerName?: string) => {
   return state;
 };
 
-export const PUZZLES: PuzzleDefinition[] = [
+const PUZZLE_DEFINITIONS: PuzzleDefinition[] = [
   {
     id: "centaurs-lance",
     title: PUZZLE_TITLES["centaurs-lance"],
@@ -2096,6 +2096,12 @@ export const PUZZLES: PuzzleDefinition[] = [
     createState: enchantedRetreat,
   },
 ];
+
+const PUZZLE_DIFFICULTY_ORDER: PuzzleDifficulty[] = ["easy", "medium", "hard"];
+
+export const PUZZLES = PUZZLE_DIFFICULTY_ORDER.flatMap((difficulty) =>
+  PUZZLE_DEFINITIONS.filter((puzzle) => puzzle.difficulty === difficulty)
+);
 
 export const PUZZLE_BY_ID = Object.fromEntries(
   PUZZLES.map((puzzle) => [puzzle.id, puzzle]),

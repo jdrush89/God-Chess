@@ -4647,6 +4647,9 @@ export function GameScreen({
   const puzzleIndex = puzzle
     ? difficultyPuzzles.findIndex((candidate) => candidate.id === puzzle.id)
     : -1;
+  const puzzleNumber = puzzle
+    ? PUZZLES.findIndex((candidate) => candidate.id === puzzle.id) + 1
+    : -1;
   const puzzleSolved = customPuzzle
     ? customPuzzleSolved(state, customPuzzle)
     : dailyPuzzle
@@ -5199,7 +5202,7 @@ export function GameScreen({
                 ? `CUSTOM · ${customPuzzle.playerColor.toUpperCase()} TO MOVE`
                 : dailyPuzzle
                 ? `DAILY · ${dailyPuzzle.playerTurns} PLAYER TURN${dailyPuzzle.playerTurns === 1 ? "" : "S"}`
-                : `PUZZLE ${puzzleIndex + 1} OF ${difficultyPuzzles.length}`}
+                : `PUZZLE ${puzzleNumber} OF ${PUZZLES.length}`}
             </span>
             <strong>{customPuzzle?.title ?? puzzle?.title}</strong>
           </div>

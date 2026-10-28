@@ -409,7 +409,7 @@ const commitMissedPuzzleMove = () => {
   const { container } = render(<App />);
   openPlayOption("Puzzles");
   fireEvent.click(screen.getByRole("button", { name: /^easy/i }));
-  fireEvent.click(screen.getByRole("button", { name: /puzzle 1/i }));
+  fireEvent.click(screen.getByRole("button", { name: /^puzzle 1,/i }));
   fireEvent.click(screen.getByTitle("Use Chiron"));
   fireEvent.click(screen.getByRole("button", { name: /Charge/ }));
   fireEvent.click(container.querySelector('[data-square="e2"]')!);
@@ -1933,9 +1933,11 @@ describe("game startup", () => {
     expect(screen.getByRole("heading", { name: /choose puzzle type/i })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /^easy/i }));
     expect(screen.getAllByRole("button", { name: /puzzle \d/i })).toHaveLength(10);
+    expect(screen.getByRole("button", { name: /puzzle 6.*the corner cage/i })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /puzzle types/i }));
     fireEvent.click(screen.getByRole("button", { name: /^medium/i }));
     expect(screen.getAllByRole("button", { name: /puzzle \d/i })).toHaveLength(10);
+    expect(screen.getByRole("button", { name: /puzzle 11.*the watchful bishop/i })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /puzzle types/i }));
     fireEvent.click(screen.getByRole("button", { name: /^easy/i }));
 
@@ -1946,6 +1948,7 @@ describe("game startup", () => {
     fireEvent.click(screen.getByRole("button", { name: /puzzle 1.*the distant king/i }));
 
     expect(screen.getByText("The Distant King")).toBeTruthy();
+    expect(screen.getByText(/puzzle 1 of 30/i)).toBeTruthy();
     expect(container.querySelector(".mobile-puzzle-turns")?.textContent)
       .toMatch(/player turns left\s*1/i);
     expect(container.querySelector(".game-meta")?.textContent)
@@ -2193,8 +2196,8 @@ describe("game startup", () => {
     fireEvent.click(screen.getByRole("button", { name: /^hard/i }));
 
     expect(screen.getByRole("heading", { name: /hard puzzles/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /puzzle 16.*the long way home/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /puzzle 25.*three on the back rank/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /puzzle 21.*the long way home/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /puzzle 30.*three on the back rank/i })).toBeTruthy();
     expect(screen.getAllByText(/win in three divine turns/i)).toHaveLength(10);
   });
 

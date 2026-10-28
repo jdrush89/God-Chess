@@ -190,6 +190,11 @@ describe("puzzle mode", () => {
         "A Queen in Waiting",
         "The Bishop's Path",
         "Across the Barricade",
+        "The Corner Cage",
+        "The Open File",
+        "Surrounded in Check",
+        "The Missing Blocker",
+        "The Rook Must Move",
         "The Watchful Bishop",
         "Enemy at the Gate",
         "The Crowded Corner",
@@ -210,11 +215,6 @@ describe("puzzle mode", () => {
         "The Queen Must Yield",
         "The Exposed Rook",
         "Three on the Back Rank",
-        "The Corner Cage",
-        "The Open File",
-        "Surrounded in Check",
-        "The Missing Blocker",
-        "The Rook Must Move",
       ],
     );
   });
