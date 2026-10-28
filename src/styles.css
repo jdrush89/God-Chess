@@ -1111,7 +1111,7 @@ span.move-target-dot {
   min-height: 100dvh;
   color: #e8e1d2;
   background:
-    linear-gradient(145deg, rgba(12,14,19,.2), rgba(5,6,9,.27) 58%, rgba(3,4,7,.31)),
+    linear-gradient(145deg, rgba(12,14,19,.6), rgba(5,6,9,.65) 58%, rgba(3,4,7,.68)),
     radial-gradient(circle at 50% -10%, rgba(198,161,91,.2), transparent 40%),
     url("./assets/scenes/Pieces-Falling.webp") center 32% / cover no-repeat;
 }
@@ -1142,13 +1142,7 @@ span.move-target-dot {
   position: absolute; top: 100%; right: 0;
 }
 .puzzle-select-screen > .eyebrow { margin: 0; color: #c9a85f; }
-.puzzle-select-screen > h1 {
-  margin: 8px 0 10px; color: #16181d; font: 600 clamp(25px, 4vw, 38px) "Cinzel";
-  text-shadow:
-    -1px -1px 0 rgba(245,231,199,.72), 1px -1px 0 rgba(245,231,199,.72),
-    -1px 1px 0 rgba(245,231,199,.72), 1px 1px 0 rgba(245,231,199,.72),
-    0 2px 14px rgba(245,231,199,.72);
-}
+.puzzle-select-screen > h1 { margin: 8px 0 10px; font: 600 clamp(25px, 4vw, 38px) "Cinzel"; }
 .puzzle-select-intro {
   max-width: 620px; margin: 0 auto clamp(24px, 5vw, 44px); color: #85868d; font-size: 11px; line-height: 1.6;
 }
@@ -1379,19 +1373,19 @@ span.move-target-dot {
 }
 .setup-navigation-shell.play-menu-scene {
   background:
-    linear-gradient(145deg, rgba(12,14,19,.2), rgba(7,8,12,.27) 58%, rgba(4,5,8,.31)),
+    linear-gradient(145deg, rgba(12,14,19,.56), rgba(7,8,12,.63) 58%, rgba(4,5,8,.67)),
     radial-gradient(circle at 50% -12%, rgba(198,161,91,.18), transparent 38rem),
     url("./assets/scenes/Pawn.webp") center 35% / cover no-repeat;
 }
 .setup-navigation-shell.local-menu-scene {
   background:
-    linear-gradient(145deg, rgba(12,14,19,.22), rgba(7,8,12,.29) 58%, rgba(4,5,8,.32)),
+    linear-gradient(145deg, rgba(12,14,19,.58), rgba(7,8,12,.64) 58%, rgba(4,5,8,.675)),
     radial-gradient(circle at 50% -12%, rgba(198,161,91,.2), transparent 38rem),
     url("./assets/scenes/Duel.webp") center 30% / cover no-repeat;
 }
 .setup-navigation-shell.online-menu-scene {
   background:
-    linear-gradient(145deg, rgba(12,14,19,.22), rgba(7,8,12,.29) 58%, rgba(4,5,8,.32)),
+    linear-gradient(145deg, rgba(12,14,19,.58), rgba(7,8,12,.64) 58%, rgba(4,5,8,.675)),
     radial-gradient(circle at 50% -12%, rgba(198,161,91,.2), transparent 38rem),
     url("./assets/scenes/Salem-Space.webp") center 32% / cover no-repeat;
 }
@@ -1426,11 +1420,7 @@ span.move-target-dot {
 }
 .play-menu-heading .eyebrow { margin: 0; }
 .play-menu-heading h1 {
-  margin: 9px 0 11px; color: #16181d; font: 600 clamp(32px, 5vw, 54px)/1.08 "Cinzel";
-  text-shadow:
-    -1px -1px 0 rgba(245,231,199,.72), 1px -1px 0 rgba(245,231,199,.72),
-    -1px 1px 0 rgba(245,231,199,.72), 1px 1px 0 rgba(245,231,199,.72),
-    0 2px 14px rgba(245,231,199,.72);
+  margin: 9px 0 11px; color: #f1ece2; font: 600 clamp(32px, 5vw, 54px)/1.08 "Cinzel";
 }
 .play-menu-heading > p:last-child { margin: 0; color: #85868d; font-size: 11px; line-height: 1.65; }
 .play-menu-grid {
@@ -1440,14 +1430,14 @@ span.move-target-dot {
 .play-menu-grid > button {
   min-width: 0; min-height: clamp(170px, 28vh, 250px); display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 16px; padding: 24px 16px;
-  color: #d2ccbf; background: #0d0f14f5; border: 1px solid #3b3f49; cursor: pointer;
+  color: #d2ccbf; background: #0d0f14; border: 1px solid #343740; cursor: pointer;
   box-shadow: 0 18px 50px rgba(0,0,0,.2);
 }
 .play-menu-grid > button:hover:not(:disabled) {
-  color: #fff0c8; border-color: rgba(198,161,91,.72); background: #040508fc;
+  color: #fff0c8; border-color: rgba(198,161,91,.72); background: #040508;
 }
 .play-menu-grid > button:disabled {
-  color: #85878e; background: #11141a; border-color: #30343d;
+  color: #777981; background: #07080c; border-color: #292c33;
   cursor: not-allowed; opacity: 1;
 }
 .play-menu-grid > button:disabled svg { color: #65676d; }
@@ -1850,11 +1840,7 @@ span.move-target-dot {
 .start-game-heading.compact { margin-bottom: 22px; }
 .start-game-heading .eyebrow { margin: 0; color: #c9a85f; }
 .start-game-heading h1 {
-  margin: 9px 0 11px; color: #16181d; font: 600 clamp(30px, 5vw, 52px)/1.08 "Cinzel";
-  text-shadow:
-    -1px -1px 0 rgba(245,231,199,.72), 1px -1px 0 rgba(245,231,199,.72),
-    -1px 1px 0 rgba(245,231,199,.72), 1px 1px 0 rgba(245,231,199,.72),
-    0 2px 14px rgba(245,231,199,.72);
+  margin: 9px 0 11px; color: #f1ece2; font: 600 clamp(30px, 5vw, 52px)/1.08 "Cinzel";
 }
 .start-game-heading.compact h1 { font-size: clamp(28px, 4vw, 42px); }
 .start-game-heading > p:last-child { margin: 0; color: #85868d; font-size: 11px; line-height: 1.65; }
@@ -1864,14 +1850,14 @@ span.move-target-dot {
 .player-count-grid > button {
   min-width: 0; min-height: clamp(190px, 30vh, 270px); display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 18px; padding: 28px 18px;
-  color: #d2ccbf; background: #0d0f14f5; border: 1px solid #3b3f49; cursor: pointer;
+  color: #d2ccbf; background: #0d0f14; border: 1px solid #343740; cursor: pointer;
   box-shadow: 0 18px 50px rgba(0,0,0,.2);
 }
 .player-count-grid > button:hover:not(:disabled) {
-  color: #fff0c8; border-color: rgba(198,161,91,.72); background: #040508fc;
+  color: #fff0c8; border-color: rgba(198,161,91,.72); background: #040508;
 }
 .player-count-grid > button:disabled {
-  color: #85878e; background: #11141a; border-color: #30343d;
+  color: #777981; background: #07080c; border-color: #292c33;
   cursor: not-allowed; opacity: 1;
 }
 .player-count-grid > button:disabled svg { color: #65676d; }
@@ -1883,7 +1869,7 @@ span.move-target-dot {
   border-color: rgba(198,161,91,.62);
   background:
     radial-gradient(circle at 50% 20%, rgba(198,161,91,.15), transparent 62%),
-    #0d0f14f5;
+    #0d0f14;
 }
 .ranked-leaderboard-panel {
   width: min(880px, 100%); display: grid; gap: 20px; margin: 0 auto;
@@ -1956,10 +1942,10 @@ span.move-target-dot {
 }
 .two-player-mode-grid > button {
   min-height: 180px; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 10px; padding: 24px; color: #aaa9a5; background: #0d0f14f5; border: 1px solid #3b3f49; cursor: pointer;
+  gap: 10px; padding: 24px; color: #aaa9a5; background: #101219; border: 1px solid #2d3038; cursor: pointer;
 }
 .two-player-mode-grid > button:hover, .two-player-mode-grid > button.active {
-  color: #f0e4c8; border-color: rgba(198,161,91,.65); background: #040508fc;
+  color: #f0e4c8; border-color: rgba(198,161,91,.65); background: rgba(4,5,8,.97);
 }
 .two-player-mode-grid strong { font: 600 16px "Cinzel"; }
 .two-player-mode-grid span { color: #74767d; font-size: 9px; line-height: 1.45; }
@@ -1968,9 +1954,9 @@ span.move-target-dot {
   background: rgba(5,6,9,.35); border: 1px solid var(--line);
 }
 .start-game-content.online-stage .online-setup {
-  width: 100%; margin-top: 0; background: #151820;
+  width: 100%; margin-top: 0; background: rgba(5,6,9,.96);
 }
-.local-menu-scene .difficulty-control { background: #151820; }
+.local-menu-scene .difficulty-control { background: rgba(5,6,9,.96); }
 .difficulty-control > div { display: flex; justify-content: space-between; align-items: baseline; }
 .difficulty-control span, .online-setup label {
   color: #9c9b98; font-size: 9px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
@@ -2723,11 +2709,7 @@ span.move-target-dot {
   padding: 0 52px 25px 0; border-bottom: 1px solid var(--line);
 }
 .three-setup-header h1 {
-  margin: 8px 0 10px; color: #16181d; font: 600 clamp(30px, 4vw, 50px)/1.08 "Cinzel";
-  text-shadow:
-    -1px -1px 0 rgba(245,231,199,.72), 1px -1px 0 rgba(245,231,199,.72),
-    -1px 1px 0 rgba(245,231,199,.72), 1px 1px 0 rgba(245,231,199,.72),
-    0 2px 14px rgba(245,231,199,.72);
+  margin: 8px 0 10px; color: #f1ece2; font: 600 clamp(30px, 4vw, 50px)/1.08 "Cinzel";
 }
 .three-setup-header p:last-child { max-width: 720px; margin: 0; color: #85868d; font-size: 12px; line-height: 1.6; }
 .three-setup-header .close-button { top: 0; right: 0; border: 1px solid var(--line); }
@@ -3264,11 +3246,7 @@ span.move-target-dot {
   padding: 0 54px 28px 0; border-bottom: 1px solid var(--line);
 }
 .four-setup-header h1 {
-  margin: 9px 0 10px; color: #16181d; font: 600 clamp(32px, 4vw, 50px)/1.08 "Cinzel";
-  text-shadow:
-    -1px -1px 0 rgba(245,231,199,.72), 1px -1px 0 rgba(245,231,199,.72),
-    -1px 1px 0 rgba(245,231,199,.72), 1px 1px 0 rgba(245,231,199,.72),
-    0 2px 14px rgba(245,231,199,.72);
+  margin: 9px 0 10px; color: #f1ece2; font: 600 clamp(32px, 4vw, 50px)/1.08 "Cinzel";
 }
 .four-setup-header > div > p:last-child {
   max-width: 720px; margin: 0; color: #85868d; font-size: 12px; line-height: 1.6;
