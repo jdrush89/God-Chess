@@ -180,6 +180,7 @@ body::before {
 .ability-rules .level-rule b { color: var(--gold-bright); font-weight: 700; }
 .level-selector { display: flex; align-items: center; gap: 6px; margin: 11px 0 5px; }
 .level-selector > span { margin-right: 2px; color: #5f6169; font-size: 7px; font-weight: 700; letter-spacing: .13em; text-transform: uppercase; }
+.ability-level-selector > span { font-size: x-small; }
 .level-selector button {
   display: inline-flex; align-items: center; gap: 5px; min-height: 24px; padding: 0 7px;
   color: #74767d; background: #0e1015; border: 1px solid #30323a; cursor: pointer;
@@ -225,10 +226,11 @@ body::before {
 }
 .skin-select-copy { min-width: 0; display: grid; gap: 4px; }
 .skin-select-copy strong {
-  overflow: hidden; font: 600 11px "Cinzel"; text-overflow: ellipsis; white-space: nowrap;
+  overflow: hidden; font-family: "Cinzel"; font-size: medium; font-weight: 600;
+  text-overflow: ellipsis; white-space: nowrap;
 }
 .skin-select-copy small {
-  color: #80828a; font-size: 7px; letter-spacing: .09em; text-transform: uppercase;
+  color: #80828a; font-size: x-small; letter-spacing: .09em; text-transform: uppercase;
 }
 .skin-select-status-icon { color: #6f727b; }
 .skin-select-chevron {
@@ -259,9 +261,10 @@ body::before {
 }
 .skin-option span { min-width: 0; display: grid; gap: 3px; }
 .skin-option strong {
-  overflow: hidden; font: 600 10px "Cinzel"; text-overflow: ellipsis; white-space: nowrap;
+  overflow: hidden; font-family: "Cinzel"; font-size: medium; font-weight: 600;
+  text-overflow: ellipsis; white-space: nowrap;
 }
-.skin-option small { color: #73757c; font-size: 7px; letter-spacing: .08em; text-transform: uppercase; }
+.skin-option small { color: #73757c; font-size: x-small; letter-spacing: .08em; text-transform: uppercase; }
 .skin-option.locked > svg { color: #666971; }
 .skin-favorite {
   position: absolute; z-index: 2; top: 4px; right: 4px; width: 25px; height: 25px;
@@ -2619,6 +2622,24 @@ span.move-target-dot {
 
 @media (min-width: 641px) and (max-width: 960px) {
   .draft-card .god-card-portrait { object-position: center 42%; }
+  .draft-card:is(
+    [id$="-medusa"],
+    [id$="-ares"],
+    [id$="-teles"]
+  ) .god-card-portrait { object-position: center top; }
+  .draft-card:is(
+    [id$="-chiron"],
+    [id$="-midas"]
+  ) .god-card-portrait { object-position: center 10%; }
+  .draft-card:is(
+    [id$="-quetzacoatl"],
+    [id$="-anubis"],
+    [id$="-artemis"],
+    [id$="-leonidas"],
+    [id$="-salem"],
+    [id$="-death"],
+    [id$="-kangus"]
+  ) .god-card-portrait { object-position: center 20%; }
   :is(.roster-page, .pantheon-draft-page) .draft-layout > .god-inspector { display: none; }
   :is(.roster-page, .pantheon-draft-page) .draft-layout > .god-inspector.two-column-inspector-dialog-open {
     --inspector-dialog-gutter: max(24px, calc((100vw - 720px) / 2));
@@ -3802,7 +3823,7 @@ span.move-target-dot {
 }
 .ability-card .ability-level-selector > span,
 .four-ability-card .ability-level-selector > span {
-  font-size: 8px;
+  font-size: x-small;
   line-height: 1.25;
 }
 .ability-card .ability-level-selector button,
