@@ -2075,11 +2075,13 @@ span.move-target-dot {
 .four-online-participants article div { min-width: 0; }
 .four-online-participants strong, .four-online-participants small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .four-online-participants strong { color: #e8e0cf; font: 600 10px "Cinzel"; }
-.four-online-participants small { margin-top: 3px; color: #6f7178; font-size: 7px; }
+.four-online-participants small { margin-top: 3px; color: #6f7178; font-size: small; }
 .four-online-participants article > span {
-  display: flex; align-items: center; gap: 3px; color: #8cae95; font-size: 7px; font-weight: 800; text-transform: uppercase;
+  display: flex; align-items: center; gap: 3px; color: #8cae95; font-size: small; font-weight: 800; text-transform: uppercase;
 }
-.four-online-options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.four-online-options {
+  display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 1fr; gap: 8px;
+}
 .four-online-seats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .four-online-seat {
   min-width: 0; padding: 11px; border: 1px solid color-mix(in srgb, var(--seat-color) 34%, var(--line));
@@ -2106,7 +2108,7 @@ span.move-target-dot {
   display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px;
   padding-top: 12px; border-top: 1px solid var(--line);
 }
-.four-online-footer p { margin: 2px 0; color: #e39a8e; font-size: 8px; }
+.four-online-footer p { margin: 2px 0; color: #e39a8e; font-size: small; }
 .four-online-footer p.valid { color: #95c3a4; }
 .four-online-footer > div:last-child { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .four-online-footer .leave-room-button { margin: 0; }
@@ -2141,10 +2143,10 @@ span.move-target-dot {
   display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .three-online-participants strong { color: #e8e0cf; font: 600 10px "Cinzel"; }
-.three-online-participants small { margin-top: 3px; color: #6f7178; font-size: 7px; }
+.three-online-participants small { margin-top: 3px; color: #6f7178; font-size: small; }
 .three-online-participants article > span {
   display: flex; align-items: center; gap: 3px; color: #8cae95;
-  font-size: 7px; font-weight: 800; text-transform: uppercase;
+  font-size: small; font-weight: 800; text-transform: uppercase;
 }
 .three-online-participants .account-portrait,
 .four-online-participants .account-portrait {
@@ -2168,7 +2170,9 @@ span.move-target-dot {
 .classic-online-participants span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .classic-online-participants strong { color: #e8e0cf; font: 600 10px "Cinzel"; }
 .classic-online-participants span { margin-top: 3px; color: #72747c; font-size: 7px; text-transform: uppercase; }
-.three-online-options { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 8px; }
+.three-online-options {
+  display: grid; grid-template-columns: 1.4fr 1fr 1fr; grid-auto-rows: 1fr; gap: 8px;
+}
 .three-online-variants {
   min-width: 0; display: grid; gap: 8px; padding: 12px;
   background: #101219; border: 1px solid var(--line);
@@ -2212,7 +2216,7 @@ span.move-target-dot {
   display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px;
   padding-top: 12px; border-top: 1px solid var(--line);
 }
-.three-online-footer p { margin: 2px 0; color: #e39a8e; font-size: 8px; }
+.three-online-footer p { margin: 2px 0; color: #e39a8e; font-size: small; }
 .three-online-footer p.valid { color: #95c3a4; }
 .three-online-footer > div:last-child { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .three-online-footer .leave-room-button { margin: 0; }
@@ -3828,8 +3832,6 @@ span.move-target-dot {
   .friend-remove-button { width: 100%; }
   .account-portrait-picker > div { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .classic-online-participants { grid-template-columns: 1fr; }
-  .friend-invite-control { grid-template-columns: 1fr; }
-  .friend-invite-button { width: 100%; }
   .statistics-record { justify-items: start; }
   .stat-summary-grid { grid-template-columns: 1fr; }
   .statistics-panel { padding: 18px 14px; }
