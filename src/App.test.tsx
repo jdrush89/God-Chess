@@ -1230,6 +1230,11 @@ describe("game startup", () => {
     })).toBeNull();
     expect(document.getElementById("draft-god-anubis")?.classList.contains("claimed"))
       .toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: /^anubis/i }));
+    expect((screen.getByRole("button", {
+      name: /anubis was already picked by (white|black)/i,
+    }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("opens the achievement gallery from the Play menu", () => {
