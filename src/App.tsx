@@ -3550,11 +3550,6 @@ function PlayerCountChooser({
               <strong>Ranked 1v1</strong>
               <small>{rankedAvailable ? "Automatic matchmaking" : "Sign in required"}</small>
             </button>
-            <button onClick={onLeaderboard}>
-              <Crown size={34} />
-              <strong>Leaderboard</strong>
-              <small>Top 100 Ranked players</small>
-            </button>
           </>
         )}
         {([2, 3, 4] as const).map((playerCount) => (
@@ -3568,6 +3563,13 @@ function PlayerCountChooser({
             {category === "online" && <small>Casual room</small>}
           </button>
         ))}
+        {category === "online" && (
+          <button onClick={onLeaderboard}>
+            <Crown size={34} />
+            <strong>Leaderboard</strong>
+            <small>Top 100 Ranked players</small>
+          </button>
+        )}
       </div>
     </>
   );

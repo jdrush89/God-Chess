@@ -1848,7 +1848,9 @@ span.move-target-dot {
 .player-count-grid small { color: #777982; font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
 .player-count-grid .ranked-mode-button {
   border-color: rgba(198,161,91,.62);
-  background: radial-gradient(circle at 50% 20%, rgba(198,161,91,.15), rgba(13,15,20,.88) 62%);
+  background:
+    radial-gradient(circle at 50% 20%, rgba(198,161,91,.15), transparent 62%),
+    rgba(13,15,20,.96);
 }
 .ranked-leaderboard-panel {
   width: min(880px, 100%); display: grid; gap: 20px; margin: 0 auto;
@@ -1932,7 +1934,9 @@ span.move-target-dot {
   width: min(760px, 100%); margin: 18px auto 0; padding: 18px; text-align: left;
   background: rgba(5,6,9,.35); border: 1px solid var(--line);
 }
-.start-game-content.online-stage .online-setup { width: 100%; margin-top: 0; }
+.start-game-content.online-stage .online-setup {
+  width: 100%; margin-top: 0; background: rgba(5,6,9,.96);
+}
 .difficulty-control > div { display: flex; justify-content: space-between; align-items: baseline; }
 .difficulty-control span, .online-setup label {
   color: #9c9b98; font-size: 9px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;

@@ -1628,6 +1628,17 @@ describe("game startup", () => {
   it("routes Online player counts to Host/Join and Puzzles directly", () => {
     render(<App />);
     openPlayOption("Online");
+    expect(
+      within(screen.getByLabelText("online player count"))
+        .getAllByRole("button")
+        .map((button) => button.querySelector("strong")?.textContent),
+    ).toEqual([
+      "Ranked 1v1",
+      "2 Player",
+      "3 Player",
+      "4 Player",
+      "Leaderboard",
+    ]);
     fireEvent.click(screen.getByRole("button", { name: /leaderboard/i }));
     expect(screen.getByRole("heading", { name: /divine leaderboard/i }))
       .toBeTruthy();
