@@ -139,9 +139,11 @@ export function GodSkinPicker({
                       <strong>{skin.name}</strong>
                       <small>{skinUnlocked ? "Unlocked" : "Locked"}</small>
                     </span>
-                    {selectedSkinId === skin.id
-                      ? <Check size={15} aria-hidden="true" />
-                      : !skinUnlocked && <Lock size={14} aria-hidden="true" />}
+                    {!skinUnlocked
+                      ? <Lock size={14} aria-hidden="true" />
+                      : selectedSkinId === skin.id
+                        ? <Check size={15} aria-hidden="true" />
+                        : null}
                   </button>
                   {onFavorite && skinUnlocked && (
                     <button

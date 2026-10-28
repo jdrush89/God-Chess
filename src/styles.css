@@ -189,7 +189,7 @@ body::before {
 .god-level-selector {
   justify-content: flex-end; margin: 0; padding: 10px 0; border-bottom: 1px solid var(--line);
 }
-.god-level-selector > span { margin-right: auto; color: #8d8f96; font-size: 8px; }
+.god-level-selector > span { margin-right: auto; color: #8d8f96; font-size: small; }
 .god-inspector > .god-level-selector { padding-inline: 2px; }
 .skin-picker {
   margin-top: 13px; padding: 13px 2px;
@@ -272,7 +272,7 @@ body::before {
 .skin-option-shell:has(.skin-favorite) .skin-option { padding-right: 32px; }
 .skin-locked-note {
   display: flex; align-items: center; gap: 6px; margin: 9px 0 0;
-  color: #8a8b91; font-size: 8px; line-height: 1.4;
+  color: #8a8b91; font-size: small; line-height: 1.4;
 }
 .action-panel > .god-level-selector,
 .three-action-panel > .god-level-selector,
