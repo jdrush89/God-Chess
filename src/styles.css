@@ -96,7 +96,10 @@ body::before {
     linear-gradient(rgba(198,161,91,.13), rgba(198,161,91,.13)),
     rgba(4,5,8,.99);
 }
-.auto-draft-button:disabled { opacity: .35; cursor: not-allowed; }
+.auto-draft-button:disabled {
+  color: #676a73; background: #12151b; border-color: #30333b;
+  opacity: 1; cursor: not-allowed;
+}
 .draft-progress { display: flex; justify-content: center; gap: 28px; margin-top: 32px; position: relative; }
 .draft-progress::before { content: ""; position: absolute; top: 15px; width: 280px; height: 1px; background: var(--line); }
 .draft-pip { display: grid; justify-items: center; gap: 7px; position: relative; }
@@ -203,9 +206,6 @@ body::before {
 .skin-picker-heading > span {
   color: var(--gold); font-size: 9px; font-weight: 800; letter-spacing: .15em;
 }
-.skin-picker-heading > small {
-  color: #85878e; font-size: 8px; letter-spacing: .06em; text-transform: uppercase;
-}
 .skin-select { position: relative; }
 .skin-select-trigger {
   width: 100%; min-height: 58px; display: grid;
@@ -283,13 +283,12 @@ body::before {
   border: 1px solid #d0ab65; background: linear-gradient(135deg, #bb914b, #80612f);
   color: #0c0c0d; font-weight: 700; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; cursor: pointer;
 }
-.primary-button:disabled { opacity: .35; cursor: not-allowed; }
-.primary-button.skin-locked-button:disabled {
+.primary-button:disabled {
   color: #858790;
   background: linear-gradient(135deg, #20232a, #12141a);
   border-color: #41444d;
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.025);
-  opacity: 1;
+  opacity: 1; cursor: not-allowed;
 }
 .draft-rosters {
   position: fixed; bottom: 0; left: 0; right: 0; z-index: 4;
@@ -337,10 +336,12 @@ body::before {
 .header-actions button:hover { color: #eee9df; background: rgba(255,255,255,.04); }
 .header-actions .forfeit-button { color: #d89082; }
 .header-actions .forfeit-button:hover { color: #f0b0a4; background: rgba(151,55,40,.12); }
-.header-actions button:disabled { cursor: not-allowed; }
+.header-actions button:disabled {
+  color: #62656d; background: #12151b; cursor: not-allowed;
+}
 .header-actions button:disabled > svg,
-.header-actions button:disabled > span { opacity: .3; }
-.header-actions button:disabled:hover { color: #8f9097; background: transparent; }
+.header-actions button:disabled > span { opacity: 1; }
+.header-actions button:disabled:hover { color: #62656d; background: #12151b; }
 .header-actions span { font-size: 10px; text-transform: uppercase; letter-spacing: .09em; }
 @media (max-width: 1000px) {
   .game-page.puzzle-mode .header-actions span { display: none; }
@@ -621,7 +622,10 @@ body::before {
   color: #fff0bd; border-color: rgba(198,161,91,.72);
 }
 .board-zoom-controls button:focus-visible { outline: 2px solid #fff0bd; outline-offset: 2px; }
-.board-zoom-controls button:disabled { opacity: .35; cursor: not-allowed; }
+.board-zoom-controls button:disabled {
+  color: #62656d; background: #12151b; border-color: #2d3038;
+  opacity: 1; cursor: not-allowed;
+}
 .board-zoom-controls .board-zoom-reset {
   min-width: 52px; font-size: 8px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase;
 }
@@ -860,7 +864,9 @@ span.move-target-dot {
 }
 .god-row:hover:not(:disabled) { background: rgba(255,255,255,.045); border-color: rgba(198,161,91,.35); }
 .god-row.selected { border-color: color-mix(in srgb, var(--accent) 65%, #d7c18e); box-shadow: inset 3px 0 var(--accent); }
-.god-row.maxed { opacity: .55; }
+.god-row.maxed {
+  color: #676a72; background: #101218; border-color: #292c34; opacity: 1;
+}
 .god-row .god-row-portrait { transition: transform .35s ease, filter .35s ease; }
 .god-row:hover .god-row-portrait { transform: scale(1.045); filter: saturate(1.08); }
 .god-row.resting { opacity: .5; }
@@ -910,7 +916,11 @@ span.move-target-dot {
 @media (prefers-reduced-motion: reduce) {
   .ability-card.opponent-selecting, .chosen-god.opponent-selecting { animation: none; border-color: var(--gold-bright); }
 }
-.ability-card.disabled { opacity: .42; cursor: not-allowed; }
+.ability-card.disabled {
+  color: #676a72; background: #101218; border-color: #292c34;
+  opacity: 1; cursor: not-allowed;
+}
+.ability-card.disabled :is(strong, p, small, .ability-footer > span) { color: #676a72; }
 .ability-card.read-only { cursor: default; }
 .ability-pending {
   cursor: default; border-top: 1px solid rgba(198,161,91,.22);
@@ -984,8 +994,8 @@ span.move-target-dot {
 .danger-button:hover { background: rgba(151,55,40,.22); border-color: #b95c4c; }
 .text-button { border-color: transparent; color: #74767d; }
 .secondary-button:disabled {
-  color: #5f6168; background: rgba(255,255,255,.012); border-color: #292b31;
-  cursor: not-allowed; opacity: .58;
+  color: #676a72; background: #12151b; border-color: #30333b;
+  cursor: not-allowed; opacity: 1;
 }
 .cancel-ability-button {
   min-height: 36px; margin-block: 2px; color: #d8d2c6;
@@ -1042,7 +1052,10 @@ span.move-target-dot {
   backdrop-filter: blur(8px);
 }
 .main-account-button:hover { color: #fff2cf; border-color: var(--gold); }
-.main-account-button:disabled { cursor: wait; opacity: .72; }
+.main-account-button:disabled {
+  color: #676a72; background: #11141a; border-color: #30333b;
+  cursor: wait; opacity: 1;
+}
 .main-account-button .account-portrait {
   width: 24px; height: 24px; flex: 0 0 auto; border-radius: 50%;
   border: 1px solid rgba(218,181,105,.55);
@@ -1064,7 +1077,9 @@ span.move-target-dot {
   letter-spacing: .08em; text-transform: uppercase; cursor: pointer; text-align: left;
 }
 .main-account-menu button:hover { color: #fff2cf; background: rgba(198,161,91,.1); }
-.main-account-menu button:disabled { cursor: wait; opacity: .55; }
+.main-account-menu button:disabled {
+  color: #676a72; background: #11141a; cursor: wait; opacity: 1;
+}
 .setup-account-area {
   position: relative; z-index: 1; top: auto; right: auto;
 }
@@ -1812,7 +1827,10 @@ span.move-target-dot {
   color: #b8b3a9; background: #111319; border: 1px solid #343740; cursor: pointer;
   font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
 }
-.tutorial-back:disabled { opacity: .35; cursor: not-allowed; }
+.tutorial-back:disabled {
+  color: #676a72; background: #101218; border-color: #2d3038;
+  opacity: 1; cursor: not-allowed;
+}
 .tutorial-skip {
   width: 100%; margin-top: 10px; padding: 8px; color: #73757d; background: transparent;
   border: 0; cursor: pointer; font-size: 8px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
@@ -2486,7 +2504,9 @@ span.move-target-dot {
 .account-portrait-picker button.selected {
   border-color: var(--gold-bright); box-shadow: inset 0 0 0 2px rgba(198,161,91,.28);
 }
-.account-portrait-picker button:disabled { cursor: wait; opacity: .7; }
+.account-portrait-picker button:disabled {
+  background: #101218; border-color: #292c34; cursor: wait; opacity: 1;
+}
 .account-portrait-picker .account-portrait { border-radius: 2px; }
 .account-save-portrait {
   width: 100%; margin-top: 10px; display: inline-flex;
@@ -2981,7 +3001,10 @@ span.move-target-dot {
   width: auto; min-width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; padding: 0 10px;
   color: #aaa69d; background: #0d0f14; border: 1px solid var(--line);
 }
-.three-game-actions button:disabled { opacity: .35; }
+.three-game-actions button:disabled {
+  color: #62656d; background: #12151b; border-color: #2d3038;
+  opacity: 1; cursor: not-allowed;
+}
 .three-game-layout {
   display: grid; grid-template-columns: 210px minmax(420px, 780px) minmax(290px, 350px);
   grid-template-areas: "players board actions"; gap: 14px; align-items: start;
@@ -3610,7 +3633,10 @@ span.move-target-dot {
   width: 100%; min-width: 0; display: grid; gap: 8px; padding: 12px; color: inherit;
   background: transparent; border: 0; text-align: left; cursor: pointer;
 }
-.four-ability-card-main:disabled { opacity: .42; cursor: not-allowed; }
+.four-ability-card-main:disabled {
+  color: #676a72; background: #101218; opacity: 1; cursor: not-allowed;
+}
+.four-ability-card-main:disabled :is(strong, p, small) { color: #676a72; }
 .four-ability-card-main > span { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
 .four-ability-card strong { color: #e9e3d7; font: 600 12px "Cinzel"; }
 .four-ability-card small { color: #777981; font-size: 7px; letter-spacing: .1em; text-transform: uppercase; }
@@ -3631,12 +3657,18 @@ span.move-target-dot {
   border-color: color-mix(in srgb, var(--accent) 72%, #fff);
   background: color-mix(in srgb, var(--accent) 7%, #151820);
 }
-.four-move-first-card.invalid { opacity: .5; }
+.four-move-first-card.invalid,
+.four-move-first-card.invalid:hover {
+  color: #676a72; background: #101218; border-color: #292c34; opacity: 1;
+}
 .four-move-first-card > button {
   width: 100%; min-width: 0; display: grid; gap: 12px; padding: 16px;
   color: #c8c4bb; background: transparent; border: 0; text-align: left; cursor: pointer;
 }
-.four-move-first-card > button:disabled { cursor: not-allowed; }
+.four-move-first-card > button:disabled {
+  color: #676a72; background: #101218; cursor: not-allowed;
+}
+.four-move-first-card > button:disabled :is(strong, p, small, b) { color: #676a72; }
 .four-move-first-title {
   min-width: 0; display: grid; grid-template-columns: 52px minmax(0, 1fr);
   align-items: center; gap: 12px;

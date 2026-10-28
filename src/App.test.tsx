@@ -1257,6 +1257,7 @@ describe("game startup", () => {
     openPlayMenu();
     fireEvent.click(screen.getByRole("button", { name: /^roster$/i }));
     fireEvent.click(screen.getByRole("button", { name: /salem/i }));
+    expect(screen.queryByText(/^3 options$/i)).toBeNull();
 
     fireEvent.click(screen.getByRole("button", {
       name: /choose salem skin, base unlocked/i,
