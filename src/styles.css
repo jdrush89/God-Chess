@@ -2352,6 +2352,18 @@ span.move-target-dot {
   grid-column: 1 / -1; padding-top: 8px; color: #d3bd89; border-top: 1px solid rgba(198,161,91,.15);
   font-size: 9px; line-height: 1.5; text-align: center;
 }
+@media (min-width: 821px) {
+  .game-page.puzzle-mode .game-meta {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    font-size: small;
+  }
+  .game-page.puzzle-mode .puzzle-banner { position: relative; }
+  .game-page.puzzle-mode .puzzle-banner > p {
+    position: absolute; left: 50%; width: min(48vw, 620px); transform: translateX(-50%);
+    display: flex; align-items: center; justify-content: center;
+    font-size: small; text-align: center; pointer-events: none;
+  }
+}
 .settings-modal { position: relative; width: min(520px, 100%); }
 .setting-row {
   display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: center;
