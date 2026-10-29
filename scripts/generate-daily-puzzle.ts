@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { chooseAiPlan } from "../src/game/ai";
 import { gameReducer } from "../src/game/engine";
 import type {
   ClassicResult,
@@ -26,8 +25,8 @@ const terminalResult = payload?.result?.terminalResult as
   | undefined;
 const resultSummary = payload?.result?.summary;
 const savedAt = payload?.save?.savedAt;
-let state = payload?.save?.state as GameState | undefined;
-let solutionActions = payload?.solutionActions as GameAction[] | undefined;
+const state = payload?.save?.state as GameState | undefined;
+const solutionActions = payload?.solutionActions as GameAction[] | undefined;
 const date = dateOverride ?? savedAt?.slice(0, 10);
 
 if (!Number.isInteger(reportedTurns) || reportedTurns <= 0) {
@@ -69,22 +68,7 @@ const targetMatches = (candidate: GameState) => {
   if (candidate.phase !== "gameover" || !candidate.result) return false;
   return candidate.result.kind === "winner" &&
     candidate.result.winner === targetResult.winner &&
-    (
-      candidate.result.reason === targetResult.reason ||
-      candidate.result.reason === "king-death"
-    );
-};
-
-const prepareDailySolverState = (initialState: GameState) => {
-  const candidate = structuredClone(initialState);
-  candidate.gameMode = "puzzle";
-  candidate.aiDifficulty = 10;
-  candidate.aiColor = initialState.activeColor === "white" ? "black" : "white";
-  candidate.puzzleId = `daily-${date}`;
-  candidate.puzzlePlayerTurnsRemaining = MAX_DAILY_TURNS;
-  candidate.winner = undefined;
-  candidate.result = undefined;
-  return candidate;
+    candidate.result.reason === targetResult.reason;
 };
 
 const replaySolution = (
@@ -114,25 +98,6 @@ const replaySolution = (
   return { state: candidate, playerTurns };
 };
 
-const deriveOptimalSolution = (initialState: GameState) => {
-  const actions: GameAction[] = [];
-  let candidate = structuredClone(initialState);
-  for (
-    let plans = 0;
-    plans < MAX_DAILY_TURNS * 2 + 6 && !targetMatches(candidate);
-    plans += 1
-  ) {
-    const plan = chooseAiPlan(candidate, () => 0);
-    if (!plan.length) break;
-    actions.push(...plan);
-    for (const action of plan) candidate = gameReducer(candidate, action);
-  }
-  if (!targetMatches(candidate)) {
-    throw new Error("Unable to derive a Daily solution matching the simulation result.");
-  }
-  return actions;
-};
-
 if (!Array.isArray(solutionActions) || !solutionActions.length) {
   throw new Error("The simulation export must include its exact solutionActions.");
 }
@@ -152,18 +117,6 @@ if (
 if (reportedTurns !== replayed.playerTurns) {
   throw new Error(
     `The export reports ${reportedTurns} player turns, but its exact solution takes ${replayed.playerTurns}.`,
-  );
-}
-
-const solverState = prepareDailySolverState(state);
-const optimalActions = deriveOptimalSolution(solverState);
-const optimalReplay = replaySolution(solverState, optimalActions);
-if (!targetMatches(optimalReplay.state)) {
-  throw new Error("The level 10 CPU no longer finds the exported checkmate.");
-}
-if (optimalReplay.playerTurns < MIN_DAILY_TURNS) {
-  throw new Error(
-    `The level 10 CPU finds checkmate in ${optimalReplay.playerTurns} player turns; choose an earlier checkpoint.`,
   );
 }
 
