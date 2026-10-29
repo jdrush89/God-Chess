@@ -1,4 +1,4 @@
-import { Crown, RotateCcw, Settings, Undo2 } from "lucide-react";
+import { ChevronRight, Crown, RotateCcw, Settings, Undo2 } from "lucide-react";
 import { useEffect, useId, useRef } from "react";
 
 interface GameResultPresentationProps {
@@ -7,6 +7,7 @@ interface GameResultPresentationProps {
   title: string;
   description: string;
   newGameLabel: string;
+  newGameIcon?: "restart" | "next";
   undoEnabled: boolean;
   canUndo: boolean;
   onOpenChange: (open: boolean) => void;
@@ -21,6 +22,7 @@ export function GameResultPresentation({
   title,
   description,
   newGameLabel,
+  newGameIcon = "restart",
   undoEnabled,
   canUndo,
   onOpenChange,
@@ -130,7 +132,10 @@ export function GameResultPresentation({
           </button>
           {undoControl}
           <button className="secondary-button" onClick={onNewGame}>
-            <RotateCcw size={16} /> {newGameLabel}
+            {newGameIcon === "next"
+              ? <ChevronRight size={16} />
+              : <RotateCcw size={16} />}
+            {newGameLabel}
           </button>
         </div>
       </section>

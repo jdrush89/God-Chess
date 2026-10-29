@@ -32,4 +32,28 @@ describe("GameResultPresentation", () => {
     fireEvent.keyDown(newGame, { key: "Tab" });
     expect(document.activeElement).toBe(viewBoard);
   });
+
+  it("uses a forward icon for the next-puzzle action", () => {
+    const { container } = render(
+      <GameResultPresentation
+        open
+        eyebrow="Puzzle complete"
+        title="Solved"
+        description="You completed the puzzle."
+        newGameLabel="Next puzzle"
+        newGameIcon="next"
+        undoEnabled
+        canUndo={false}
+        onOpenChange={vi.fn()}
+        onUndo={vi.fn()}
+        onNewGame={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: /next puzzle/i }),
+    ).toBeTruthy();
+    expect(container.querySelector(".lucide-chevron-right")).toBeTruthy();
+    expect(container.querySelector(".lucide-rotate-ccw")).toBeNull();
+  });
 });

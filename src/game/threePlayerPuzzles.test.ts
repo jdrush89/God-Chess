@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   threePlayerIsInCheck,
+  threePlayerLegalMoves,
 } from "./threePlayerChess";
 import { threePlayerReducer } from "./threePlayerEngine";
 import {
@@ -30,6 +31,11 @@ describe("three-player puzzles", () => {
       expect(state.config.victoryMode).toBe("last-survivor");
       expect(state.activeSeat).toBe("white");
       expect(state.phase).toBe("play");
+      const draftedGods = THREE_PLAYER_SEATS.flatMap(
+        (seat) => state.players[seat].gods,
+      );
+      expect(draftedGods).toHaveLength(9);
+      expect(new Set(draftedGods)).toHaveLength(9);
       expect(Object.values(state.board).some((piece) =>
         piece.status.frozen ||
         piece.status.frozenBy ||
@@ -48,15 +54,50 @@ describe("three-player puzzles", () => {
     }
   });
 
-  it("checkmates one rival per documented turn and wins on turn two", () => {
+  it("recognizes the red pawn capture that answers a knight check on White f3", () => {
+    const state = THREE_PLAYER_PUZZLES[0].createState();
+    delete state.board["three-player:4"];
+    state.board["three-player:13"] = {
+      id: "checking-knight",
+      type: "knight",
+      owner: "white",
+      controller: "white",
+      hasMoved: true,
+      status: {},
+    };
+    state.board["three-player:6"] = {
+      id: "red-answering-pawn",
+      type: "pawn",
+      owner: "red",
+      controller: "red",
+      hasMoved: true,
+      status: {},
+    };
+    state.activeSeat = "red";
+
+    expect(
+      threePlayerLegalMoves(state, "red").some(
+        (move) =>
+          move.from === "three-player:6" &&
+          move.to === "three-player:13",
+      ),
+    ).toBe(true);
+  });
+
+  it("allows a CPU turn between documented player turns and wins on turn two", () => {
     for (const puzzle of THREE_PLAYER_PUZZLES) {
       let state = puzzle.createState();
       state = puzzle.solutionTurns[0].reduce(threePlayerReducer, state);
       expect(state.players.red.eliminated, puzzle.id).toBe(true);
       expect(state.players.black.eliminated, puzzle.id).toBe(false);
-      expect(state.activeSeat, puzzle.id).toBe("white");
+      expect(state.activeSeat, puzzle.id).toBe("black");
       expect(state.completedTurns.white, puzzle.id).toBe(1);
       expect(state.result, puzzle.id).toBeUndefined();
+
+      const cpuTurn = puzzle.cpuTurns[0];
+      state = cpuTurn.reduce(threePlayerReducer, state);
+      expect(state.completedTurns.black, puzzle.id).toBe(1);
+      expect(state.activeSeat, puzzle.id).toBe("white");
 
       state = puzzle.solutionTurns[1].reduce(threePlayerReducer, state);
       expect(state.players.red.eliminated, puzzle.id).toBe(true);
