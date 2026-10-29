@@ -69,7 +69,7 @@ describe("three-player puzzles", () => {
     }
   });
 
-  it("mirrors the first Yalta rivals and gives the second puzzle new abilities", () => {
+  it("mirrors the first Yalta rivals and reverses the tactical order in the second", () => {
     const [first, second] = THREE_PLAYER_PUZZLES;
     const firstState = first.createState();
     const redKingCell = Object.entries(firstState.board).find(
@@ -88,8 +88,85 @@ describe("three-player puzzles", () => {
       puzzle.solutionTurns.map((turn) =>
         turn.find((action) => action.type === "select-ability")?.abilityId
       );
-    expect(abilities(first)).toEqual(["gallop", "flight"]);
-    expect(abilities(second)).toEqual(["charge", "royal-step"]);
+    expect(abilities(first)).toEqual(["charge", "air-lift"]);
+    expect(abilities(second)).toEqual(["air-lift", "charge"]);
+  });
+
+  it("uses varied advanced ability sequences instead of ordinary mating moves", () => {
+    const sequences = THREE_PLAYER_PUZZLES.map((puzzle) =>
+      puzzle.solutionTurns.map((turn) =>
+        turn.find((action) => action.type === "select-ability")?.abilityId
+      )
+    );
+    const abilityIds = new Set(sequences.flat());
+    const sequenceIds = new Set(sequences.map((sequence) => sequence.join(">")));
+
+    expect(abilityIds).toEqual(
+      new Set(["charge", "air-lift", "march-home"]),
+    );
+    expect(sequenceIds).toEqual(
+      new Set([
+        "charge>air-lift",
+        "air-lift>charge",
+        "march-home>charge",
+      ]),
+    );
+    expect(
+      sequences.filter(([first]) => first === "charge"),
+    ).toHaveLength(5);
+    expect(
+      sequences.filter(([first]) => first !== "charge"),
+    ).toHaveLength(5);
+  });
+
+  it("requires each advanced ability's special movement", () => {
+    for (const puzzle of THREE_PLAYER_PUZZLES) {
+      const state = puzzle.createState();
+      const topology = getThreePlayerTopology(puzzle.boardVariant);
+      for (const turn of puzzle.solutionTurns) {
+        const ability = turn.find(
+          (action) => action.type === "select-ability",
+        );
+        expect(ability?.type, puzzle.id).toBe("select-ability");
+        if (ability?.type !== "select-ability") continue;
+        const cells = turn.filter((action) => action.type === "cell");
+
+        if (ability.abilityId === "charge") {
+          const [source, destination] = cells;
+          expect(state.board[source.cell]?.type, puzzle.id).toBe("knight");
+          expect(
+            topology.knightTargets(source.cell).includes(destination.cell),
+            puzzle.id,
+          ).toBe(false);
+          expect(
+            topology.rookTraces(source.cell).some((trace) =>
+              trace.cells.includes(destination.cell)
+            ),
+            puzzle.id,
+          ).toBe(true);
+        } else if (ability.abilityId === "air-lift") {
+          const [source, destination] = cells;
+          expect(state.board[source.cell]?.type, puzzle.id).toBe("king");
+          expect(
+            topology.kingNeighbors(source.cell).includes(destination.cell),
+            puzzle.id,
+          ).toBe(false);
+          expect(
+            topology.distance(source.cell, destination.cell),
+            puzzle.id,
+          ).toBeLessThanOrEqual(3);
+        } else if (ability.abilityId === "march-home") {
+          const kingCell = Object.entries(state.board).find(
+            ([, piece]) =>
+              piece.owner === "white" && piece.type === "king",
+          )?.[0];
+          expect(kingCell, puzzle.id).toBeDefined();
+          expect(kingCell, puzzle.id).not.toBe(
+            topology.homeCell("white"),
+          );
+        }
+      }
+    }
   });
 
   it("recognizes the red pawn capture that answers a knight check on White f3", () => {
