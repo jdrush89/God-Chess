@@ -2259,10 +2259,10 @@ describe("game startup", () => {
       name: /puzzle 10.*the final file/i,
     })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", {
-      name: /puzzle 1.*frontier fork/i,
+      name: /puzzle 1.*break the frontier/i,
     }));
 
-    expect(screen.getByText("Frontier Fork")).toBeTruthy();
+    expect(screen.getByText("Break the Frontier")).toBeTruthy();
     expect(screen.getByText(/three-player puzzle 1 of 10/i)).toBeTruthy();
   });
 

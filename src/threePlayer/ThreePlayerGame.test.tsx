@@ -248,7 +248,7 @@ describe("ThreePlayerGame", () => {
       />,
     );
 
-    expect(screen.getByText("Frontier Fork")).toBeTruthy();
+    expect(screen.getByText("Break the Frontier")).toBeTruthy();
     expect(screen.getByText(/three-player puzzle 1 of 10/i)).toBeTruthy();
     expect(screen.getByText(/player turns left/i)).toBeTruthy();
     expect(

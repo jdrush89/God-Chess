@@ -11,6 +11,10 @@ import {
 import {
   THREE_PLAYER_PUZZLES,
 } from "./threePlayerPuzzles";
+import {
+  getThreePlayerTopology,
+  threePlayerCellCoordinate,
+} from "./threePlayerTopology";
 
 describe("three-player puzzles", () => {
   it("includes ten positions with two on every board variant", () => {
@@ -42,6 +46,17 @@ describe("three-player puzzles", () => {
         piece.status.gazing ||
         piece.status.stunned
       )).toBe(false);
+      if (puzzle.boardVariant === "three-player") {
+        const topology = getThreePlayerTopology(puzzle.boardVariant);
+        for (const [cell, piece] of Object.entries(state.board)) {
+          if (piece.type === "pawn") {
+            expect(
+              topology.isPromotionCell(piece.owner, cell),
+              `${puzzle.id}:${piece.id}`,
+            ).toBe(false);
+          }
+        }
+      }
       for (const seat of THREE_PLAYER_SEATS) {
         expect(threePlayerIsInCheck(state, seat)).toBe(false);
       }
@@ -51,6 +66,106 @@ describe("three-player puzzles", () => {
         .join("|");
       expect(signatures.has(signature)).toBe(false);
       signatures.add(signature);
+    }
+  });
+
+  it("mirrors the first Yalta rivals and reverses the tactical order in the second", () => {
+    const [first, second] = THREE_PLAYER_PUZZLES;
+    const firstState = first.createState();
+    const redKingCell = Object.entries(firstState.board).find(
+      ([, piece]) => piece.owner === "red" && piece.type === "king",
+    )![0];
+    const blackKingCell = Object.entries(firstState.board).find(
+      ([, piece]) => piece.owner === "black" && piece.type === "king",
+    )![0];
+
+    expect(threePlayerCellCoordinate("three-player", redKingCell)?.square)
+      .toBe("a1");
+    expect(threePlayerCellCoordinate("three-player", blackKingCell)?.square)
+      .toBe("h1");
+
+    const abilities = (puzzle: typeof first) =>
+      puzzle.solutionTurns.map((turn) =>
+        turn.find((action) => action.type === "select-ability")?.abilityId
+      );
+    expect(abilities(first)).toEqual(["charge", "air-lift"]);
+    expect(abilities(second)).toEqual(["air-lift", "charge"]);
+  });
+
+  it("uses varied advanced ability sequences instead of ordinary mating moves", () => {
+    const sequences = THREE_PLAYER_PUZZLES.map((puzzle) =>
+      puzzle.solutionTurns.map((turn) =>
+        turn.find((action) => action.type === "select-ability")?.abilityId
+      )
+    );
+    const abilityIds = new Set(sequences.flat());
+    const sequenceIds = new Set(sequences.map((sequence) => sequence.join(">")));
+
+    expect(abilityIds).toEqual(
+      new Set(["charge", "air-lift", "march-home"]),
+    );
+    expect(sequenceIds).toEqual(
+      new Set([
+        "charge>air-lift",
+        "air-lift>charge",
+        "march-home>charge",
+      ]),
+    );
+    expect(
+      sequences.filter(([first]) => first === "charge"),
+    ).toHaveLength(5);
+    expect(
+      sequences.filter(([first]) => first !== "charge"),
+    ).toHaveLength(5);
+  });
+
+  it("requires each advanced ability's special movement", () => {
+    for (const puzzle of THREE_PLAYER_PUZZLES) {
+      const state = puzzle.createState();
+      const topology = getThreePlayerTopology(puzzle.boardVariant);
+      for (const turn of puzzle.solutionTurns) {
+        const ability = turn.find(
+          (action) => action.type === "select-ability",
+        );
+        expect(ability?.type, puzzle.id).toBe("select-ability");
+        if (ability?.type !== "select-ability") continue;
+        const cells = turn.filter((action) => action.type === "cell");
+
+        if (ability.abilityId === "charge") {
+          const [source, destination] = cells;
+          expect(state.board[source.cell]?.type, puzzle.id).toBe("knight");
+          expect(
+            topology.knightTargets(source.cell).includes(destination.cell),
+            puzzle.id,
+          ).toBe(false);
+          expect(
+            topology.rookTraces(source.cell).some((trace) =>
+              trace.cells.includes(destination.cell)
+            ),
+            puzzle.id,
+          ).toBe(true);
+        } else if (ability.abilityId === "air-lift") {
+          const [source, destination] = cells;
+          expect(state.board[source.cell]?.type, puzzle.id).toBe("king");
+          expect(
+            topology.kingNeighbors(source.cell).includes(destination.cell),
+            puzzle.id,
+          ).toBe(false);
+          expect(
+            topology.distance(source.cell, destination.cell),
+            puzzle.id,
+          ).toBeLessThanOrEqual(3);
+        } else if (ability.abilityId === "march-home") {
+          const kingCell = Object.entries(state.board).find(
+            ([, piece]) =>
+              piece.owner === "white" && piece.type === "king",
+          )?.[0];
+          expect(kingCell, puzzle.id).toBeDefined();
+          expect(kingCell, puzzle.id).not.toBe(
+            topology.homeCell("white"),
+          );
+        }
+      }
     }
   });
 
