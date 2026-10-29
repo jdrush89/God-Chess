@@ -1,6 +1,8 @@
 import { createDefaultThreePlayerConfig } from "./threePlayerConfig";
 import {
+  availableThreePlayerActions,
   createThreePlayerGame,
+  isCompleteThreePlayerPlan,
   threePlayerReducer,
 } from "./threePlayerEngine";
 import type {
@@ -28,6 +30,7 @@ export interface ThreePlayerPuzzleDefinition {
   solutionSummary: string;
   playerTurns: 2;
   solutionTurns: ThreePlayerAction[][];
+  cpuTurns: ThreePlayerAction[][];
   createState: (playerName?: string) => ThreePlayerState;
 }
 
@@ -36,8 +39,10 @@ interface PuzzleLayout {
   blackKing: ThreePlayerCell;
   redKnight: ThreePlayerCell;
   redMate: ThreePlayerCell;
+  redFollowUps?: ThreePlayerCell[];
   blackKnight: ThreePlayerCell;
   blackMate: ThreePlayerCell;
+  blackFollowUps?: ThreePlayerCell[];
   redPawns: ThreePlayerCell[];
   supports: Array<{
     cell: ThreePlayerCell;
@@ -47,9 +52,11 @@ interface PuzzleLayout {
 
 interface PuzzleSeed extends Omit<
   ThreePlayerPuzzleDefinition,
-  "mode" | "objective" | "playerTurns" | "solutionTurns" | "createState"
+  "mode" | "objective" | "playerTurns" | "solutionTurns" | "cpuTurns" | "createState"
 > {
   layout: PuzzleLayout;
+  firstTurn?: ThreePlayerAction[];
+  secondTurn?: ThreePlayerAction[];
 }
 
 const piece = (
@@ -85,9 +92,9 @@ const createPuzzleState = (
   const { layout } = seed;
   state.phase = "play";
   state.activeSeat = "white";
-  state.players.white.gods = ["chiron", "quetzacoatl", "anubis"];
-  state.players.red.gods = ["chiron"];
-  state.players.black.gods = ["chiron"];
+  state.players.white.gods = ["chiron", "quetzacoatl", "leonidas"];
+  state.players.red.gods = ["teles", "artemis", "kangus"];
+  state.players.black.gods = ["death", "anubis", "midas"];
   state.players.white.orbs = { light: 10, dark: 10 };
   state.players.red.orbs = { light: 0, dark: 0 };
   state.players.black.orbs = { light: 0, dark: 0 };
@@ -124,17 +131,28 @@ const createPuzzleState = (
 const completeMoveTurn = (
   state: ThreePlayerState,
   actions: ThreePlayerAction[],
+  preferredCells: ThreePlayerCell[] = [],
 ) => {
   let staged = actions.reduce(threePlayerReducer, state);
-  if (staged.pending?.step !== "path-choice" || !staged.legalPaths[0]) {
-    return actions;
+  const completed = [...actions];
+  let guard = 0;
+  while (!isCompleteThreePlayerPlan(state, staged) && guard < 8) {
+    guard += 1;
+    const preferredCell = preferredCells.shift();
+    const followUp = preferredCell
+      ? availableThreePlayerActions(staged).find(
+        (action) => action.type === "cell" && action.cell === preferredCell,
+      )
+      : availableThreePlayerActions(staged).find(
+      (action) => action.type !== "cancel",
+    );
+    if (!followUp) break;
+    const next = threePlayerReducer(staged, followUp);
+    if (next === staged) break;
+    completed.push(followUp);
+    staged = next;
   }
-  const pathAction: ThreePlayerAction = {
-    type: "path",
-    pathId: staged.legalPaths[0],
-  };
-  staged = threePlayerReducer(staged, pathAction);
-  return [...actions, pathAction];
+  return completed;
 };
 
 const seeds: PuzzleSeed[] = [
@@ -155,6 +173,7 @@ const seeds: PuzzleSeed[] = [
       supports: [
         { cell: "three-player:8", type: "king" },
         { cell: "three-player:1", type: "queen" },
+        { cell: "three-player:17", type: "rook" },
       ],
     },
   },
@@ -162,24 +181,21 @@ const seeds: PuzzleSeed[] = [
     id: "three-distant-rampart",
     title: "Distant Rampart",
     boardVariant: "three-player",
-    hint: "Break the far pawn fortress first; the isolated black King cannot move while it waits.",
-    solutionSummary: "Use Chiron's Gallop from cell 37 to 54, then Quetzacoatl's Slither from cell 3 to 9.",
+    hint: "The extra bishop changes the lanes, but the two knight targets remain separate.",
+    solutionSummary: "Use Chiron's Gallop from cell 4 to 14, then Quetzacoatl's Slither from cell 3 to 9.",
     layout: {
-      redKing: "three-player:60",
+      redKing: "three-player:31",
       blackKing: "three-player:24",
-      redKnight: "three-player:37",
-      redMate: "three-player:54",
+      redKnight: "three-player:4",
+      redMate: "three-player:14",
       blackKnight: "three-player:3",
       blackMate: "three-player:9",
-      redPawns: [
-        "three-player:59",
-        "three-player:61",
-        "three-player:52",
-        "three-player:51",
-      ],
+      redPawns: ["three-player:30", "three-player:23", "three-player:22"],
       supports: [
         { cell: "three-player:8", type: "king" },
         { cell: "three-player:1", type: "queen" },
+        { cell: "three-player:17", type: "rook" },
+        { cell: "three-player:0", type: "bishop" },
       ],
     },
   },
@@ -207,6 +223,7 @@ const seeds: PuzzleSeed[] = [
         { cell: "three-hexagonal:10", type: "king" },
         { cell: "three-hexagonal:28", type: "queen" },
         { cell: "three-hexagonal:43", type: "rook" },
+        { cell: "three-hexagonal:26", type: "rook" },
       ],
     },
   },
@@ -236,6 +253,7 @@ const seeds: PuzzleSeed[] = [
         { cell: "three-hexagonal:10", type: "king" },
         { cell: "three-hexagonal:28", type: "queen" },
         { cell: "three-hexagonal:43", type: "rook" },
+        { cell: "three-hexagonal:26", type: "rook" },
       ],
     },
   },
@@ -291,12 +309,28 @@ const seeds: PuzzleSeed[] = [
     title: "Circular Convergence",
     boardVariant: "three-circular",
     hint: "Follow the ring inward: the red cage falls first, then the black King.",
-    solutionSummary: "Use Chiron's Gallop from cell 50 to 28, then Quetzacoatl's Slither from cell 4 to 26.",
+    solutionSummary: "Use Chiron's Gallop from cell 50 through cell 27, then Quetzacoatl's Slither from cell 4 to 26.",
+    firstTurn: [
+      { type: "select-god", godId: "chiron" },
+      { type: "select-ability", abilityId: "gallop" },
+      { type: "cell", cell: "three-circular:50" },
+      { type: "cell", cell: "three-circular:27" },
+      { type: "cell", cell: "three-circular:29" },
+    ],
+    secondTurn: [
+      { type: "select-god", godId: "quetzacoatl" },
+      { type: "select-ability", abilityId: "flight" },
+      { type: "cell", cell: "three-circular:50" },
+      { type: "cell", cell: "three-circular:4" },
+      { type: "cell", cell: "three-circular:29" },
+      { type: "cell", cell: "three-circular:25" },
+    ],
     layout: {
       redKing: "three-circular:6",
       blackKing: "three-circular:0",
       redKnight: "three-circular:50",
-      redMate: "three-circular:28",
+      redMate: "three-circular:27",
+      redFollowUps: ["three-circular:29"],
       blackKnight: "three-circular:4",
       blackMate: "three-circular:26",
       redPawns: [
@@ -317,26 +351,43 @@ const seeds: PuzzleSeed[] = [
     id: "circular-outer-ring",
     title: "Outer Ring",
     boardVariant: "three-circular",
-    hint: "The red King is sealed from the outside. Preserve the inner knight for the final turn.",
-    solutionSummary: "Use Chiron's Gallop from cell 7 to 33, then Quetzacoatl's Slither from cell 4 to 26.",
+    hint: "The extra bishop changes the outer lanes, but the same two-stage knight attack remains.",
+    solutionSummary: "Use Chiron's Gallop from cell 50 through cell 27, then Quetzacoatl's Slither through the inner ring.",
+    firstTurn: [
+      { type: "select-god", godId: "chiron" },
+      { type: "select-ability", abilityId: "gallop" },
+      { type: "cell", cell: "three-circular:50" },
+      { type: "cell", cell: "three-circular:27" },
+      { type: "cell", cell: "three-circular:29" },
+    ],
+    secondTurn: [
+      { type: "select-god", godId: "quetzacoatl" },
+      { type: "select-ability", abilityId: "flight" },
+      { type: "cell", cell: "three-circular:50" },
+      { type: "cell", cell: "three-circular:4" },
+      { type: "cell", cell: "three-circular:29" },
+      { type: "cell", cell: "three-circular:25" },
+    ],
     layout: {
-      redKing: "three-circular:11",
+      redKing: "three-circular:6",
       blackKing: "three-circular:0",
-      redKnight: "three-circular:7",
-      redMate: "three-circular:33",
+      redKnight: "three-circular:50",
+      redMate: "three-circular:27",
+      redFollowUps: ["three-circular:29"],
       blackKnight: "three-circular:4",
       blackMate: "three-circular:26",
       redPawns: [
-        "three-circular:35",
-        "three-circular:12",
-        "three-circular:10",
-        "three-circular:36",
-        "three-circular:34",
+        "three-circular:30",
+        "three-circular:7",
+        "three-circular:5",
+        "three-circular:31",
+        "three-circular:29",
       ],
       supports: [
         { cell: "three-circular:2", type: "king" },
         { cell: "three-circular:27", type: "queen" },
         { cell: "three-circular:47", type: "rook" },
+        { cell: "three-circular:1", type: "bishop" },
       ],
     },
   },
@@ -357,6 +408,7 @@ const seeds: PuzzleSeed[] = [
       supports: [
         { cell: "three-half:8", type: "king" },
         { cell: "three-half:1", type: "queen" },
+        { cell: "three-half:17", type: "rook" },
       ],
     },
   },
@@ -383,6 +435,7 @@ const seeds: PuzzleSeed[] = [
       supports: [
         { cell: "three-half:8", type: "king" },
         { cell: "three-half:1", type: "queen" },
+        { cell: "three-half:17", type: "rook" },
       ],
     },
   },
@@ -392,19 +445,25 @@ export const THREE_PLAYER_PUZZLES: ThreePlayerPuzzleDefinition[] = seeds.map(
   (seed) => {
     const createState = (playerName?: string) =>
       createPuzzleState(seed, playerName);
-    const firstTurn = completeMoveTurn(createState(), [
-        { type: "select-god", godId: "chiron" },
-        { type: "select-ability", abilityId: "gallop" },
-        { type: "cell", cell: seed.layout.redKnight },
-        { type: "cell", cell: seed.layout.redMate },
-    ]);
+    const firstTurn = seed.firstTurn ?? completeMoveTurn(createState(), [
+      { type: "select-god", godId: "chiron" },
+      { type: "select-ability", abilityId: "gallop" },
+      { type: "cell", cell: seed.layout.redKnight },
+      { type: "cell", cell: seed.layout.redMate },
+    ], [...(seed.layout.redFollowUps ?? [])]);
     const afterFirst = firstTurn.reduce(threePlayerReducer, createState());
-    const secondTurn = completeMoveTurn(afterFirst, [
-        { type: "select-god", godId: "quetzacoatl" },
-        { type: "select-ability", abilityId: "flight" },
-        { type: "cell", cell: seed.layout.blackKnight },
-        { type: "cell", cell: seed.layout.blackMate },
-    ]);
+    const cpuTurn: ThreePlayerAction[] = [
+      { type: "select-god", godId: "death" },
+      { type: "select-ability", abilityId: "marked" },
+      { type: "pass" },
+    ];
+    const afterCpu = cpuTurn.reduce(threePlayerReducer, afterFirst);
+    const secondTurn = seed.secondTurn ?? completeMoveTurn(afterCpu, [
+      { type: "select-god", godId: "quetzacoatl" },
+      { type: "select-ability", abilityId: "flight" },
+      { type: "cell", cell: seed.layout.blackKnight },
+      { type: "cell", cell: seed.layout.blackMate },
+    ], [...(seed.layout.blackFollowUps ?? [])]);
     return {
       id: seed.id,
       mode: "three-player",
@@ -415,6 +474,7 @@ export const THREE_PLAYER_PUZZLES: ThreePlayerPuzzleDefinition[] = seeds.map(
       solutionSummary: seed.solutionSummary,
       playerTurns: 2,
       solutionTurns: [firstTurn, secondTurn],
+      cpuTurns: [cpuTurn],
       createState,
     };
   },

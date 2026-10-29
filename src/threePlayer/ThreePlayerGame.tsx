@@ -1510,6 +1510,15 @@ export function ThreePlayerGame({
     }
     if (aiNoPlanRevision.current === state.revision) return;
     if (!aiPlan.current.length) {
+      const scriptedPuzzleTurn = puzzle && state.activeSeat === "black"
+        ? puzzle.cpuTurns[Math.max(0, state.completedTurns.white - 1)]
+        : undefined;
+      if (scriptedPuzzleTurn?.length) {
+        aiPlan.current = [...scriptedPuzzleTurn];
+        aiNoPlanRevision.current = undefined;
+        setAiPlanReady((value) => value + 1);
+        return;
+      }
       if (aiWorker.current) {
         if (aiRequestRevision.current !== state.revision) {
           aiRequestRevision.current = state.revision;
@@ -1558,7 +1567,15 @@ export function ThreePlayerGame({
       reducedMotion() ? 0 : 180,
     );
     return () => window.clearTimeout(timer);
-  }, [aiPlanReady, onlineSession, puzzleFailed, state.phase, state.revision]);
+  }, [
+    aiPlanReady,
+    onlineSession,
+    puzzle,
+    puzzleFailed,
+    state.completedTurns.white,
+    state.phase,
+    state.revision,
+  ]);
 
   useEffect(() => {
     if (onlineSession || !onPersist || !isStableState(state)) return;
@@ -1834,19 +1851,41 @@ export function ThreePlayerGame({
         <div>
           <p className="eyebrow">{variant?.name ?? "THREE-PLAYER"}</p>
           <strong>
-            Round {state.round} · Turn {state.turn}
+            {puzzle
+              ? <>PLAYER TURNS LEFT <b>{puzzleTurnsRemaining}</b></>
+              : <>Round {state.round} · Turn {state.turn}</>}
             {onlineSession ? ` · Room ${onlineSession.roomCode}` : ""}
           </strong>
         </div>
         <div className="three-game-actions">
-          <button onClick={() => setHistoryOpen(true)} aria-label="History"><History size={17} /></button>
           <button
             disabled={!canUndo}
             onClick={undo}
             aria-label="Undo"
+            data-tooltip="Undo the latest completed turn"
+            title="Undo the latest completed turn"
           >
             <Undo2 size={17} />
+            <span>Undo</span>
           </button>
+          <button
+            onClick={() => setHistoryOpen(true)}
+            aria-label="History"
+            data-tooltip="History"
+          >
+            <History size={17} />
+            <span>History</span>
+          </button>
+          {puzzle && (
+            <button
+              onClick={onQuit}
+              aria-label="Back to puzzles"
+              data-tooltip="Back to puzzles"
+            >
+              <ArrowLeft size={17} />
+              <span>Puzzles</span>
+            </button>
+          )}
         </div>
       </header>
 
@@ -1858,7 +1897,7 @@ export function ThreePlayerGame({
             <strong>{puzzle.title}</strong>
           </div>
           <p>
-            {puzzle.objective} {puzzleTurnsRemaining} divine turn{puzzleTurnsRemaining === 1 ? "" : "s"} remaining.
+            {puzzle.objective}
           </p>
           <div className="puzzle-banner-actions">
             <button onClick={() => setPuzzleHintOpen((open) => !open)}>
@@ -2265,7 +2304,7 @@ export function ThreePlayerGame({
               : "Draw"}
           description={puzzle
             ? puzzleSolved
-              ? puzzle.solutionSummary
+              ? "You completed the puzzle."
               : "Checkmate both rival Kings before the second divine turn ends."
             : state.result?.reason.replaceAll("-", " ") ?? "The match is complete."}
           newGameLabel={
@@ -2275,6 +2314,7 @@ export function ThreePlayerGame({
                 ? "Retry challenge"
                 : "New three-player game"
           }
+          newGameIcon={puzzleSolved ? "next" : "restart"}
           undoEnabled={puzzle ? true : onlineSession ? true : undoEnabled}
           canUndo={canUndo}
           onOpenChange={setResultOpen}

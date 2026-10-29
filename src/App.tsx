@@ -2739,11 +2739,9 @@ function PlayMenu({
   onOpenStats: () => void;
   onOpenLoad: () => void;
 }) {
-  const loadDescription = savesLoading
-    ? "Loading saved games."
-    : savedGames.length === 0
-      ? "No saved games available."
-      : undefined;
+  const loadDescription = !savesLoading && savedGames.length === 0
+    ? "No saved games available."
+    : undefined;
   return (
     <SetupNavigationShell
       backLabel="Back to title"
@@ -2753,7 +2751,7 @@ function PlayMenu({
       className="play-menu-scene"
     >
       <div className="play-menu-heading">
-        <h1>Choose your path.</h1>
+        <h1>Choose your path</h1>
       </div>
       <div className="play-menu-grid" role="group" aria-label="Play options">
         <button onClick={onOpenLocal}>

@@ -974,7 +974,7 @@ describe("game startup", () => {
     openPlayMenu();
     const load = screen.getByRole("button", { name: /^load$/i }) as HTMLButtonElement;
     expect(load.disabled).toBe(true);
-    expect(screen.getByText(/loading saved games/i)).toBeTruthy();
+    expect(screen.queryByText(/loading saved games/i)).toBeNull();
     expect((screen.getByRole("button", { name: /^local$/i }) as HTMLButtonElement).disabled)
       .toBe(false);
     expect(cloudSaveHarness.upsert).not.toHaveBeenCalled();

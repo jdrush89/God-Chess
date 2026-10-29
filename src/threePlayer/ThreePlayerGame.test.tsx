@@ -226,31 +226,81 @@ describe("ThreePlayerGame", () => {
 
   it("shows three-player puzzle objectives and reports a solved position", async () => {
     const puzzle = THREE_PLAYER_PUZZLES[0];
-    const solved = puzzle.solutionTurns
-      .flatMap((turn) => turn)
-      .reduce(threePlayerReducer, puzzle.createState());
+    const solved = puzzle.createState();
+    solved.phase = "gameover";
+    solved.players.red.eliminated = true;
+    solved.players.black.eliminated = true;
+    solved.result = {
+      kind: "winner",
+      seat: "white",
+      reason: "last-survivor",
+    };
     const onPuzzleComplete = vi.fn();
+    const onQuit = vi.fn();
 
     render(
       <ThreePlayerGame
         initialState={solved}
         puzzle={puzzle}
         onPuzzleComplete={onPuzzleComplete}
-        onQuit={() => undefined}
+        onQuit={onQuit}
         onNewGame={() => undefined}
       />,
     );
 
     expect(screen.getByText("Frontier Fork")).toBeTruthy();
     expect(screen.getByText(/three-player puzzle 1 of 10/i)).toBeTruthy();
-    expect(screen.getByText(/checkmate both rival kings within two divine turns/i))
-      .toBeTruthy();
+    expect(screen.getByText(/player turns left/i)).toBeTruthy();
+    expect(
+      screen.getAllByText(/checkmate both rival kings within two divine turns/i)
+        .length,
+    ).toBeGreaterThan(0);
     expect(screen.getByText("Both rivals checkmated")).toBeTruthy();
+    expect(screen.getByText("You completed the puzzle.")).toBeTruthy();
+    expect(screen.queryByText(puzzle.solutionSummary)).toBeNull();
+    const back = screen.getByRole("button", { name: /back to puzzles/i });
+    expect(back.getAttribute("data-tooltip")).toBe("Back to puzzles");
+    fireEvent.click(back);
+    expect(onQuit).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "History" }).textContent)
+      .toContain("History");
+    expect(screen.getAllByRole("button", { name: "Undo" })[0].textContent)
+      .toContain("Undo");
     await waitFor(() => expect(onPuzzleComplete).toHaveBeenCalledWith(puzzle.id));
 
     fireEvent.click(screen.getByRole("button", { name: /view board/i }));
     expect(screen.queryByRole("heading", { name: /puzzle solved/i })).toBeNull();
     expect(screen.getByRole("button", { name: /view result/i })).toBeTruthy();
+  });
+
+  it("plays the scripted rival turn between three-player puzzle turns", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(window, "matchMedia").mockImplementation(matchMedia(true));
+    const puzzle = THREE_PLAYER_PUZZLES[0];
+    const afterFirst = puzzle.solutionTurns[0].reduce(
+      threePlayerReducer,
+      puzzle.createState(),
+    );
+
+    render(
+      <ThreePlayerGame
+        initialState={afterFirst}
+        puzzle={puzzle}
+        onQuit={() => undefined}
+        onNewGame={() => undefined}
+      />,
+    );
+
+    expect(screen.getByText(/Onyx Rival is thinking/i)).toBeTruthy();
+    for (let index = 0; index < 6; index += 1) {
+      await act(async () => {
+        await vi.runOnlyPendingTimersAsync();
+      });
+    }
+    expect(screen.getByText(/PLAYER TURNS LEFT/i).textContent).toContain("1");
+    expect(screen.queryByText(/is thinking/i)).toBeNull();
+    expect(screen.getAllByText(/Puzzle Solver to (?:move|act)/i).length)
+      .toBeGreaterThan(0);
   });
 
   it("undoes a completed three-player puzzle without requiring the undo setting", () => {
