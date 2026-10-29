@@ -160,6 +160,24 @@ describe("three-player turn-start resolution", () => {
     expect(threePlayerPieceAffinity(state, redPiece)).toBe("dark");
   });
 
+  it("draws immediately when a stalemated seat is one of two survivors", () => {
+    mockedChess.mode = "red-skip-once";
+    const state = finishDraft();
+    state.players.black.eliminated = true;
+    state.activeSeat = "red";
+    state.rested = [...state.players.red.gods];
+
+    resolveThreePlayerTurnStart(state);
+
+    expect(state.phase).toBe("gameover");
+    expect(state.result).toEqual({
+      kind: "draw",
+      reason: "stalemate",
+    });
+    expect(state.passCycle.passedSeats).toEqual([]);
+    expect(state.notice).toBe("Red is stalemated. The match is a draw.");
+  });
+
   it("draws after a full unchanged-position cycle of stalemates", () => {
     mockedChess.mode = "all-stalemate";
     const state = finishDraft();

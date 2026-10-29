@@ -1167,7 +1167,10 @@ const isThreePlayerStateVersion = (value: unknown): boolean => {
         )
       ) return false;
     } else if (result.reason === "stalemate") {
-      if (value.config.victoryMode !== "first-checkmate") return false;
+      if (
+        value.config.victoryMode !== "first-checkmate" &&
+        living.length !== 2
+      ) return false;
     } else if (!living.every((seat) =>
       passCycle.passedSeats.includes(seat)
     )) return false;

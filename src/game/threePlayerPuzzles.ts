@@ -44,6 +44,11 @@ interface PuzzleLayout {
   blackMate: ThreePlayerCell;
   blackFollowUps?: ThreePlayerCell[];
   redPawns: ThreePlayerCell[];
+  rivalPieces?: Array<{
+    cell: ThreePlayerCell;
+    type: "pawn" | "knight" | "bishop" | "rook" | "queen";
+    owner: "red" | "black";
+  }>;
   supports: Array<{
     cell: ThreePlayerCell;
     type: "king" | "queen" | "rook" | "bishop";
@@ -111,6 +116,13 @@ const createPuzzleState = (
   layout.redPawns.forEach((cell, index) => {
     state.board[cell] = piece(`red-pawn-${index + 1}`, "pawn", "red");
   });
+  layout.rivalPieces?.forEach((rival, index) => {
+    state.board[rival.cell] = piece(
+      `${rival.owner}-support-${index + 1}`,
+      rival.type,
+      rival.owner,
+    );
+  });
   layout.supports.forEach((support, index) => {
     state.board[support.cell] = piece(
       `white-support-${index + 1}`,
@@ -161,19 +173,28 @@ const seeds: PuzzleSeed[] = [
     title: "Frontier Fork",
     boardVariant: "three-player",
     hint: "The two knights already have separate targets. Start with the surrounded red King.",
-    solutionSummary: "Use Chiron's Gallop to move the knight from cell 4 to 14, then Quetzacoatl's Slither from cell 3 to 9.",
+    solutionSummary: "Use Chiron's Gallop to move the knight from cell 3 to 9, then Quetzacoatl's Slither from cell 4 to 14.",
     layout: {
-      redKing: "three-player:31",
-      blackKing: "three-player:24",
-      redKnight: "three-player:4",
-      redMate: "three-player:14",
-      blackKnight: "three-player:3",
-      blackMate: "three-player:9",
-      redPawns: ["three-player:30", "three-player:23", "three-player:22"],
+      redKing: "three-player:24",
+      blackKing: "three-player:31",
+      redKnight: "three-player:3",
+      redMate: "three-player:9",
+      blackKnight: "three-player:4",
+      blackMate: "three-player:14",
+      redPawns: [],
+      rivalPieces: [
+        { cell: "three-player:16", type: "knight", owner: "red" },
+        { cell: "three-player:25", type: "rook", owner: "red" },
+        { cell: "three-player:23", type: "knight", owner: "black" },
+        { cell: "three-player:30", type: "rook", owner: "black" },
+      ],
       supports: [
         { cell: "three-player:8", type: "king" },
         { cell: "three-player:1", type: "queen" },
         { cell: "three-player:17", type: "rook" },
+        { cell: "three-player:6", type: "queen" },
+        { cell: "three-player:15", type: "bishop" },
+        { cell: "three-player:22", type: "rook" },
       ],
     },
   },
@@ -181,23 +202,47 @@ const seeds: PuzzleSeed[] = [
     id: "three-distant-rampart",
     title: "Distant Rampart",
     boardVariant: "three-player",
-    hint: "The extra bishop changes the lanes, but the two knight targets remain separate.",
-    solutionSummary: "Use Chiron's Gallop from cell 4 to 14, then Quetzacoatl's Slither from cell 3 to 9.",
+    hint: "One knight needs Chiron's rook-like Charge; save Leonidas for the other flank.",
+    solutionSummary: "Use Chiron's Charge from cell 12 to 9, then Leonidas's Royal Step from cell 4 to 14.",
     layout: {
-      redKing: "three-player:31",
-      blackKing: "three-player:24",
-      redKnight: "three-player:4",
-      redMate: "three-player:14",
-      blackKnight: "three-player:3",
-      blackMate: "three-player:9",
-      redPawns: ["three-player:30", "three-player:23", "three-player:22"],
+      redKing: "three-player:24",
+      blackKing: "three-player:31",
+      redKnight: "three-player:12",
+      redMate: "three-player:9",
+      blackKnight: "three-player:4",
+      blackMate: "three-player:14",
+      redPawns: [],
+      rivalPieces: [
+        { cell: "three-player:16", type: "knight", owner: "red" },
+        { cell: "three-player:25", type: "rook", owner: "red" },
+        { cell: "three-player:23", type: "knight", owner: "black" },
+        { cell: "three-player:30", type: "rook", owner: "black" },
+      ],
       supports: [
         { cell: "three-player:8", type: "king" },
         { cell: "three-player:1", type: "queen" },
         { cell: "three-player:17", type: "rook" },
-        { cell: "three-player:0", type: "bishop" },
+        { cell: "three-player:6", type: "queen" },
+        { cell: "three-player:15", type: "bishop" },
+        { cell: "three-player:22", type: "rook" },
       ],
     },
+    firstTurn: [
+      { type: "select-god", godId: "chiron" },
+      { type: "select-ability", abilityId: "charge" },
+      { type: "cell", cell: "three-player:12" },
+      { type: "cell", cell: "three-player:9" },
+    ],
+    secondTurn: [
+      { type: "select-god", godId: "leonidas" },
+      { type: "select-ability", abilityId: "royal-step" },
+      { type: "cell", cell: "three-player:4" },
+      { type: "cell", cell: "three-player:14" },
+      {
+        type: "path",
+        pathId: "three-player:knight:three-player:4:long:1:0",
+      },
+    ],
   },
   {
     id: "hexagonal-crossfire",

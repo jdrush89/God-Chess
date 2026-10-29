@@ -369,7 +369,9 @@ const setResult = (
   state.result = result;
   state.phase = "gameover";
   state.notice = result?.kind === "draw"
-    ? "The match is a draw: every surviving seat is stalemated."
+    ? result.reason === "stalemate"
+      ? `${name(state, state.activeSeat)} is stalemated. The match is a draw.`
+      : "The match is a draw: every surviving seat is stalemated."
     : `${name(state, result!.seat)} wins.`;
 };
 
@@ -661,6 +663,12 @@ const recordStalematePass = (
   state: ThreePlayerState,
   seat: ThreePlayerSeat,
 ) => {
+  const survivors = livingSeats(state);
+  if (survivors.length <= 2) {
+    appendHistory(state, `${name(state, seat)} was stalemated.`);
+    setResult(state, { kind: "draw", reason: "stalemate" });
+    return;
+  }
   if (state.passCycle.positionRevision !== state.positionRevision) {
     clearPassCycle(state);
   }
@@ -668,7 +676,6 @@ const recordStalematePass = (
     state.passCycle.passedSeats.push(seat);
   }
   appendHistory(state, `${name(state, seat)} was stalemated and skipped.`);
-  const survivors = livingSeats(state);
   if (survivors.every((survivor) =>
     state.passCycle.passedSeats.includes(survivor)
   )) {

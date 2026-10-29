@@ -11,6 +11,10 @@ import {
 import {
   THREE_PLAYER_PUZZLES,
 } from "./threePlayerPuzzles";
+import {
+  getThreePlayerTopology,
+  threePlayerCellCoordinate,
+} from "./threePlayerTopology";
 
 describe("three-player puzzles", () => {
   it("includes ten positions with two on every board variant", () => {
@@ -42,6 +46,17 @@ describe("three-player puzzles", () => {
         piece.status.gazing ||
         piece.status.stunned
       )).toBe(false);
+      if (puzzle.boardVariant === "three-player") {
+        const topology = getThreePlayerTopology(puzzle.boardVariant);
+        for (const [cell, piece] of Object.entries(state.board)) {
+          if (piece.type === "pawn") {
+            expect(
+              topology.isPromotionCell(piece.owner, cell),
+              `${puzzle.id}:${piece.id}`,
+            ).toBe(false);
+          }
+        }
+      }
       for (const seat of THREE_PLAYER_SEATS) {
         expect(threePlayerIsInCheck(state, seat)).toBe(false);
       }
@@ -52,6 +67,29 @@ describe("three-player puzzles", () => {
       expect(signatures.has(signature)).toBe(false);
       signatures.add(signature);
     }
+  });
+
+  it("mirrors the first Yalta rivals and gives the second puzzle new abilities", () => {
+    const [first, second] = THREE_PLAYER_PUZZLES;
+    const firstState = first.createState();
+    const redKingCell = Object.entries(firstState.board).find(
+      ([, piece]) => piece.owner === "red" && piece.type === "king",
+    )![0];
+    const blackKingCell = Object.entries(firstState.board).find(
+      ([, piece]) => piece.owner === "black" && piece.type === "king",
+    )![0];
+
+    expect(threePlayerCellCoordinate("three-player", redKingCell)?.square)
+      .toBe("a1");
+    expect(threePlayerCellCoordinate("three-player", blackKingCell)?.square)
+      .toBe("h1");
+
+    const abilities = (puzzle: typeof first) =>
+      puzzle.solutionTurns.map((turn) =>
+        turn.find((action) => action.type === "select-ability")?.abilityId
+      );
+    expect(abilities(first)).toEqual(["gallop", "flight"]);
+    expect(abilities(second)).toEqual(["charge", "royal-step"]);
   });
 
   it("recognizes the red pawn capture that answers a knight check on White f3", () => {
