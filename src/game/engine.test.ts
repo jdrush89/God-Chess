@@ -1732,6 +1732,30 @@ describe("game flow", () => {
     expect(setup(3, "queen").legalTargets).not.toContain("e4");
   });
 
+  it("keeps the single-pawn Air Strike available at level 3", () => {
+    let state = createGame(1);
+    (["quetzacoatl", "chiron", "teles", "death", "artemis", "midas"] as const).forEach((godId) => {
+      state = gameReducer(state, { type: "draft", godId });
+    });
+    state.board = {
+      a1: testPiece("king", "white", "white-king"),
+      h8: testPiece("king", "black", "black-king"),
+      a2: testPiece("rook", "white", "carrier"),
+      b2: testPiece("pawn", "white", "passenger"),
+    };
+    state.players.white.upgrades["air-strike"] = 3;
+    state.players.white.orbs.black = 3;
+
+    state = gameReducer(state, { type: "select-god", godId: "quetzacoatl" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "air-strike" });
+
+    state = gameReducer(state, { type: "square", square: "a2" });
+    expect(state.legalTargets).toEqual(["b2"]);
+    state = gameReducer(state, { type: "square", square: "b2" });
+    expect(state.pending?.step).toBe("air-strike-destination");
+    expect(state.legalTargets.length).toBeGreaterThan(0);
+  });
+
   it("rejects Air Strike routes whose carried piece would expose its King", () => {
     let state = createGame(1);
     (["quetzacoatl", "chiron", "teles", "death", "artemis", "midas"] as const).forEach((godId) => {

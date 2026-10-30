@@ -194,12 +194,25 @@ describe("three-player turn-start resolution", () => {
     mockedChess.mode = "white-mated";
     const config = createThreePlayerGame().config;
     config.takeover = true;
-    const state = finishDraft(createThreePlayerGame(config));
+    const initial = createThreePlayerGame(config);
+    const whiteKingCell = Object.entries(initial.board).find(
+      ([, piece]) => piece.owner === "white" && piece.type === "king",
+    )?.[0];
+    const whiteKingId = whiteKingCell
+      ? initial.board[whiteKingCell].id
+      : undefined;
+    const state = finishDraft(initial);
     expect(state.players.white.eliminated).toBe(true);
     expect(state.players.white.eliminatedBy).toBe("black");
     expect(Object.values(state.board)
       .filter((piece) => piece.owner === "white")
       .every((piece) => piece.controller === "black")).toBe(true);
+    expect(state.presentationEvents.at(-1)).toMatchObject({
+      kind: "capture",
+      seat: "black",
+      source: whiteKingCell,
+      pieceId: whiteKingId,
+    });
     expect(state.activeSeat).toBe("red");
     expect(state.result).toBeUndefined();
   });

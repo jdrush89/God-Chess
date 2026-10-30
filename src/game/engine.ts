@@ -1139,12 +1139,16 @@ const airStrikePassengerSquares = (
       airStrikeLandingTargets(state, carrierSquare, [square]).length > 0
     );
   }
-  return passengers.filter((first) =>
-    airStrikeSecondPassengerSquares(state, carrierSquare, first)
-      .some((second) =>
-        airStrikeLandingTargets(state, carrierSquare, [first, second]).length > 0
-      )
-  );
+  return passengers.filter((first) => {
+    const canFlyWithPawnOnly =
+      state.board[first]?.type === "pawn" &&
+      airStrikeLandingTargets(state, carrierSquare, [first]).length > 0;
+    return canFlyWithPawnOnly ||
+      airStrikeSecondPassengerSquares(state, carrierSquare, first)
+        .some((second) =>
+          airStrikeLandingTargets(state, carrierSquare, [first, second]).length > 0
+        );
+  });
 };
 
 const sourceIsAllowed = (state: GameState, square: Square) => {
@@ -2621,7 +2625,7 @@ const handleSquare = (state: GameState, square: Square) => {
           [square, second],
         ).length > 0
       );
-      if (currentLevel(state, "air-strike") >= 3) {
+      if (currentLevel(state, "air-strike") >= 3 && secondPassengers.length) {
         state.pending = {
           ...state.pending,
           step: "air-strike-passenger-two",

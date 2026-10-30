@@ -132,6 +132,19 @@ describe("four-player God abilities", () => {
     expect(result.board.g9?.id).toBe("passenger");
   });
 
+  it("keeps the single-pawn Air Strike available at level 3", () => {
+    let state = gameFor("quetzacoatl", 3);
+    state.board.g8 = piece(state, "rook", "north", "air-carrier");
+    state.board.h8 = piece(state, "pawn", "north", "passenger");
+
+    state = activate(state, "quetzacoatl", "air-strike");
+    state = fourPlayerReducer(state, { type: "square", square: "g8" });
+    expect(state.legalTargets).toEqual(["h8"]);
+    state = fourPlayerReducer(state, { type: "square", square: "h8" });
+    expect(state.pending?.step).toBe("air-strike-destination");
+    expect(state.legalTargets.length).toBeGreaterThan(0);
+  });
+
   it("commits Slither's extra choice and uses piece affinity rather than controller", () => {
     const state = gameFor("quetzacoatl", 2);
     state.board.g8 = piece(state, "rook", "north", "carrier");

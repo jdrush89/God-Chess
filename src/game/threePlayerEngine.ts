@@ -650,6 +650,12 @@ const resolveCheckmate = (
   const beforeElimination = clone(state);
   delete state.board[kingCell];
   sendToGraveyard(state, king);
+  emitPresentation(state, {
+    kind: "capture",
+    seat: captor,
+    source: kingCell,
+    pieceId: king.id,
+  });
   appendHistory(
     state,
     `${name(state, eliminated)} was checkmated by ${name(state, captor)}.`,
@@ -3089,11 +3095,15 @@ const airStrikePassengers = (
       airStrikeDestinations(state, carrier, [cell]).length > 0
     );
   }
-  return passengers.filter((first) =>
-    airStrikeSecondPassengers(state, carrier, first).some((second) =>
-      airStrikeDestinations(state, carrier, [first, second]).length > 0
-    )
-  );
+  return passengers.filter((first) => {
+    const canFlyWithPawnOnly =
+      state.board[first]?.type === "pawn" &&
+      airStrikeDestinations(state, carrier, [first]).length > 0;
+    return canFlyWithPawnOnly ||
+      airStrikeSecondPassengers(state, carrier, first).some((second) =>
+        airStrikeDestinations(state, carrier, [first, second]).length > 0
+      );
+  });
 };
 
 const exactMovementPaths = (
@@ -3353,16 +3363,20 @@ const handleCell = (state: ThreePlayerState, cell: string) => {
     ) {
       const passenger = state.board[cell];
       if (!passenger) return;
-      if (currentLevel(state, "air-strike") >= 3) {
+      const secondPassengers = airStrikeSecondPassengers(
+        state,
+        pending.source,
+        cell,
+      ).filter((second) =>
+        airStrikeDestinations(state, pending.source!, [cell, second]).length > 0
+      );
+      if (currentLevel(state, "air-strike") >= 3 && secondPassengers.length) {
         state.pending = {
           ...pending,
           step: "air-strike-passenger-two",
           passengerIds: [passenger.id],
         };
-        state.legalCells = airStrikeSecondPassengers(state, pending.source, cell)
-          .filter((second) =>
-            airStrikeDestinations(state, pending.source!, [cell, second]).length > 0
-          );
+        state.legalCells = secondPassengers;
         return;
       }
       state.pending = {

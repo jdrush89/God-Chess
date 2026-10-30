@@ -1043,12 +1043,16 @@ const airStrikePassengerSquares = (
       airStrikeLandingTargets(state, carrierSquare, [square]).length > 0
     );
   }
-  return passengers.filter((first) =>
-    airStrikeSecondPassengerSquares(state, carrierSquare, first)
-      .some((second) =>
-        airStrikeLandingTargets(state, carrierSquare, [first, second]).length > 0
-      )
-  );
+  return passengers.filter((first) => {
+    const canFlyWithPawnOnly =
+      state.board[first]?.type === "pawn" &&
+      airStrikeLandingTargets(state, carrierSquare, [first]).length > 0;
+    return canFlyWithPawnOnly ||
+      airStrikeSecondPassengerSquares(state, carrierSquare, first)
+        .some((second) =>
+          airStrikeLandingTargets(state, carrierSquare, [first, second]).length > 0
+        );
+  });
 };
 
 interface EscortLanding {
@@ -2715,26 +2719,26 @@ const handleSquare = (state: FourPlayerState, square: Square) => {
     ) {
       const passenger = state.board[square];
       if (!passenger) return;
-      if (currentLevel(state, "air-strike") >= 3) {
-        const carrierSource = state.pending.source;
+      const carrierSource = state.pending.source;
+      const secondPassengers = airStrikeSecondPassengerSquares(
+        state,
+        carrierSource,
+        square,
+      ).filter((second) =>
+        airStrikeLandingTargets(state, carrierSource, [square, second]).length > 0
+      );
+      if (currentLevel(state, "air-strike") >= 3 && secondPassengers.length) {
         state.pending = {
           ...state.pending,
           step: "air-strike-passenger-two",
           passengerIds: [passenger.id],
         };
-        state.legalTargets = airStrikeSecondPassengerSquares(
-          state,
-          carrierSource,
-          square,
-        ).filter((second) =>
-          airStrikeLandingTargets(state, state.pending!.source!, [square, second]).length > 0
-        );
+        state.legalTargets = secondPassengers;
         state.notice = passenger.type === "pawn"
           ? "Air Strike: choose an adjacent friendly knight or bishop as the second passenger."
           : "Air Strike: choose an adjacent friendly pawn as the second passenger.";
         return;
       }
-      const carrierSource = state.pending.source;
       state.pending = {
         ...state.pending,
         step: "air-strike-destination",

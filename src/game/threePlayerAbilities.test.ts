@@ -724,6 +724,46 @@ describe("three-player God catalog", () => {
     }
   });
 
+  it("keeps the single-pawn Air Strike available at level 3", () => {
+    let state = abilityState("quetzacoatl", 3);
+    const topology = getThreePlayerTopology(state.config.boardVariant);
+    const carrier = Object.entries(state.board).find(([cell, candidate]) =>
+      candidate.owner === "white" &&
+      candidate.type !== "pawn" &&
+      candidate.type !== "king" &&
+      topology.kingNeighbors(cell).some((neighbor) =>
+        state.board[neighbor]?.owner === "white" &&
+        state.board[neighbor]?.type === "pawn"
+      )
+    )?.[0];
+    expect(carrier).toBeTruthy();
+    const pawn = topology.kingNeighbors(carrier!).find((neighbor) =>
+      state.board[neighbor]?.owner === "white" &&
+      state.board[neighbor]?.type === "pawn"
+    )!;
+    for (const [cell, candidate] of Object.entries(state.board)) {
+      if (
+        candidate.owner === "white" &&
+        (candidate.type === "knight" || candidate.type === "bishop")
+      ) delete state.board[cell];
+    }
+
+    state = threePlayerReducer(state, {
+      type: "select-god",
+      godId: "quetzacoatl",
+    });
+    state = threePlayerReducer(state, {
+      type: "select-ability",
+      abilityId: "air-strike",
+    });
+
+    state = threePlayerReducer(state, { type: "cell", cell: carrier! });
+    expect(state.legalCells).toContain(pawn);
+    state = threePlayerReducer(state, { type: "cell", cell: pawn });
+    expect(state.pending?.step).toBe("air-strike-destination");
+    expect(state.legalCells.length).toBeGreaterThan(0);
+  });
+
   it("lets Hex target hostile living Kings without allowing their capture", () => {
     for (const level of [1, 2, 3] as const) {
       let state = abilityState("salem", level);
