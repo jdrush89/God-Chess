@@ -313,7 +313,7 @@ const completeClassicDraft = () => {
   return state;
 };
 
-const buildDailySimulationTrace = () => {
+const buildDailySimulationTrace = (kingDeath = false) => {
   const puzzle = currentDailyPuzzle(new Date("2026-10-15T12:00:00"))!;
   let state = puzzle.createState();
   state.gameMode = "simulation";
@@ -322,13 +322,51 @@ const buildDailySimulationTrace = () => {
   state.puzzlePlayerTurnsRemaining = undefined;
   state.puzzleFailed = undefined;
 
+  let solutionActions = puzzle.solutionActions;
+  if (kingDeath) {
+    state = createGame(1, { mode: "simulation", aiDifficulty: 10 });
+    state.phase = "play";
+    state.players.white.gods = ["anubis", "ares", "kangus"];
+    state.players.black.gods = ["medusa", "leonidas", "midas"];
+    state.players.white.orbs.black = 10;
+    const board = state.board;
+    state.board = {
+      e1: board.e1,
+      d4: { ...board.e8, hasMoved: true },
+      b1: board.b1,
+      a2: board.a2,
+      a7: board.a7,
+    };
+    solutionActions = [
+      { type: "select-god", godId: "anubis" },
+      { type: "select-ability", abilityId: "construction" },
+      { type: "square", square: "b1" },
+      { type: "square", square: "c3" },
+      { type: "select-god", godId: "medusa" },
+      { type: "select-ability", abilityId: "captivate" },
+      { type: "square", square: "a7" },
+      { type: "square", square: "a6" },
+      { type: "select-god", godId: "ares" },
+      { type: "select-ability", abilityId: "threaten" },
+      { type: "square", square: "a2" },
+      { type: "square", square: "a3" },
+      { type: "select-god", godId: "leonidas" },
+      { type: "select-ability", abilityId: "royal-step" },
+      { type: "square", square: "a6" },
+      { type: "square", square: "a5" },
+      { type: "select-god", godId: "kangus" },
+      { type: "select-ability", abilityId: "rage" },
+      { type: "square", square: "c3" },
+    ];
+  }
+
   const undoHistory = [];
   const completedActionGroups: GameAction[][] = [];
   let turnStart = prepareSavedState(state);
   let currentActions: GameAction[] = [];
   let completedTurns = 0;
 
-  for (const action of puzzle.solutionActions) {
+  for (const action of solutionActions) {
     currentActions.push(structuredClone(action));
     const before = state;
     state = gameReducer(state, action);
@@ -369,7 +407,7 @@ const buildDailySimulationTrace = () => {
     undoHistory,
     completedActionGroups,
     completedTurns,
-    solutionActions: puzzle.solutionActions,
+    solutionActions,
   };
 };
 
@@ -3282,6 +3320,48 @@ describe("game startup", () => {
     expect(rewound.exportData.solutionActions).toEqual(
       solutionActions,
     );
+  });
+
+  it("exports a three-player-turn king-death finish with its exact replay", () => {
+    const trace = buildDailySimulationTrace(true);
+    expect(trace.terminal).toMatchObject({
+      phase: "gameover",
+      result: { kind: "winner", winner: "white", reason: "king-death" },
+    });
+    expect(trace.completedTurns).toBe(5);
+    const rewound = rewindSimulationForExport(
+      trace.terminal,
+      trace.undoHistory,
+      trace.completedTurns,
+      () => 0,
+      trace.completedActionGroups,
+    );
+    expect(rewound.exportData.rewindRounds).toBe(3);
+    expect(rewound.exportData.requestedUndoActions).toBe(5);
+    expect(rewound.exportData.resultSummary).toBe("White won by king capture in 5 turns.");
+    expect(rewound.exportData.solutionActions).toEqual(trace.solutionActions);
+    expect(rewound.exportData.terminalResult).toEqual(trace.terminal.result);
+    let replayed = rewound.exportData.save.state;
+    for (const action of rewound.exportData.solutionActions) {
+      replayed = gameReducer(replayed, action);
+    }
+    expect(replayed.result).toEqual(trace.terminal.result);
+  });
+
+  it("rejects draws, unfinished results, and mismatched king-death replay reasons", () => {
+    const trace = buildDailySimulationTrace(true);
+    expect(() => rewindSimulationForExport(
+      { ...trace.terminal, phase: "play" },
+      trace.undoHistory, trace.completedTurns, () => 0, trace.completedActionGroups,
+    )).toThrow("require a checkmate or king-death result");
+    expect(() => rewindSimulationForExport(
+      { ...trace.terminal, result: { kind: "draw", reason: "stalemate" } },
+      trace.undoHistory, trace.completedTurns, () => 0, trace.completedActionGroups,
+    )).toThrow("require a checkmate or king-death result");
+    expect(() => rewindSimulationForExport(
+      { ...trace.terminal, result: { kind: "winner", winner: "white", reason: "checkmate" } },
+      trace.undoHistory, trace.completedTurns, () => 0, trace.completedActionGroups,
+    )).toThrow("Unable to create an exact 3-turn winning checkpoint");
   });
 
   it("copies the rewound simulation save and original result from its dialog", async () => {

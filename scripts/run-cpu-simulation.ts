@@ -123,7 +123,7 @@ const runOneAttempt = (): AttemptOutcome => {
     if (totalDivineTurns(track) > MAX_DIVINE_TURNS) {
       return {
         accepted: false,
-        reason: `Simulation exceeded ${MAX_DIVINE_TURNS} completed divine turns without checkmate.`,
+        reason: `Simulation exceeded ${MAX_DIVINE_TURNS} completed divine turns without a valid win.`,
       };
     }
     const strategy = classicSimulationPlanStrategy(state, track.completedTurns);
@@ -151,15 +151,18 @@ const runOneAttempt = (): AttemptOutcome => {
   if (turns > MAX_DIVINE_TURNS) {
     return {
       accepted: false,
-      reason: `Simulation exceeded ${MAX_DIVINE_TURNS} completed divine turns without checkmate.`,
+      reason: `Simulation exceeded ${MAX_DIVINE_TURNS} completed divine turns without a valid win.`,
     };
   }
-  if (terminal.result.kind !== "winner" || terminal.result.reason !== "checkmate") {
+  if (
+    terminal.result.kind !== "winner" ||
+    (terminal.result.reason !== "checkmate" && terminal.result.reason !== "king-death")
+  ) {
     return {
       accepted: false,
       reason: `Simulation ended in ${terminal.result.kind}/${
         "reason" in terminal.result ? terminal.result.reason : "?"
-      }, not checkmate.`,
+      }, not checkmate or king-death.`,
     };
   }
   return { accepted: true, track };
@@ -180,13 +183,13 @@ const main = () => {
       throw new Error(`Gave up after ${MAX_ATTEMPTS} rejected simulation attempts.`);
     }
     if (Date.now() - start > RUN_TIMEOUT_MS) {
-      throw new Error("Simulation search timed out before finding a checkmate result.");
+      throw new Error("Simulation search timed out before finding a valid winning result.");
     }
     const outcome = runOneAttempt();
     if (outcome.accepted) {
       const turns = totalDivineTurns(outcome.track);
       console.log(
-        `Attempt ${attempts}: checkmate in ${turns} divine turns. Accepted.`,
+        `Attempt ${attempts}: ${outcome.track.state.result?.reason} in ${turns} divine turns. Accepted.`,
       );
       accepted = outcome.track;
     } else {
@@ -206,9 +209,13 @@ const main = () => {
   if (
     !rewound.exportData.terminalResult ||
     rewound.exportData.terminalResult.kind !== "winner" ||
-    rewound.exportData.terminalResult.reason !== "checkmate"
+    (rewound.exportData.terminalResult.reason !== "checkmate" &&
+      rewound.exportData.terminalResult.reason !== "king-death") ||
+    terminal.result?.kind !== "winner" ||
+    rewound.exportData.terminalResult.winner !== terminal.result.winner ||
+    rewound.exportData.terminalResult.reason !== terminal.result.reason
   ) {
-    throw new Error("Rewound export lost its checkmate result; refusing to deploy.");
+    throw new Error("Rewound export lost its original winning result; refusing to deploy.");
   }
   if (!rewound.exportData.solutionActions.length) {
     throw new Error("Rewound export has empty solutionActions; refusing to deploy.");

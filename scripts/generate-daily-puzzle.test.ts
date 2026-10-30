@@ -93,14 +93,52 @@ describe("Daily puzzle generator", () => {
     await expect(generate({
       ...payload,
       save: { state: { ...payload.save.state, activeColor: "black" } },
-    })).rejects.toThrow("checkmating player's turn");
+    })).rejects.toThrow("winning player's turn");
     expect(mocks.writeFileSync).not.toHaveBeenCalled();
   });
 
-  it("rejects a non-checkmate simulation result", async () => {
+  it("rejects a drawn simulation result", async () => {
+    const payload = createPayload();
+    await expect(generate({
+      ...payload,
+      result: {
+        ...payload.result,
+        terminalResult: { kind: "draw", reason: "stalemate" },
+      },
+    })).rejects.toThrow("checkmate or king-death simulations");
+    expect(mocks.writeFileSync).not.toHaveBeenCalled();
+  });
+
+  it("preserves a matching king-death replay without relabeling it as checkmate", async () => {
+    const actual = await vi.importActual<typeof import("../src/game/engine")>(
+      "../src/game/engine",
+    );
+    vi.mocked(gameReducer).mockImplementation((state, action) => {
+      const next = actual.gameReducer(state, action);
+      if (next.result?.kind === "winner") next.result.reason = "king-death";
+      return next;
+    });
     const payload = createPayload();
     payload.result.terminalResult.reason = "king-death";
-    await expect(generate(payload)).rejects.toThrow("checkmate simulations");
+    payload.result.summary = "White won by king capture in 100 turns.";
+    try {
+      await generate(payload);
+      const output = JSON.parse(mocks.writeFileSync.mock.calls[0][1]) as DailyPuzzleSource;
+      expect(output.targetResult).toEqual(payload.result.terminalResult);
+      expect(output.solutionActions).toEqual(payload.solutionActions);
+      expect(output.playerTurns).toBe(4);
+      expect(mocks.chooseAiPlan).not.toHaveBeenCalled();
+    } finally {
+      vi.mocked(gameReducer).mockImplementation(actual.gameReducer);
+    }
+  });
+
+  it("rejects a checkmate replay mislabeled as king-death", async () => {
+    const payload = createPayload();
+    payload.result.terminalResult.reason = "king-death";
+    await expect(generate(payload)).rejects.toThrow(
+      "do not reproduce the simulation result",
+    );
     expect(mocks.writeFileSync).not.toHaveBeenCalled();
   });
 

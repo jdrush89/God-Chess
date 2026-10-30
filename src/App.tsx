@@ -377,12 +377,13 @@ export const rewindSimulationForExport = (
   completedActionGroups: GameAction[][] = [],
 ): SimulationRewindResult => {
   const rewindRounds = 3 + Math.floor(random() * 3);
-  const winner = terminal.result?.kind === "winner" &&
-      terminal.result.reason === "checkmate"
+  const winner = terminal.phase === "gameover" &&
+      terminal.result?.kind === "winner" &&
+      (terminal.result.reason === "checkmate" || terminal.result.reason === "king-death")
     ? terminal.result.winner
     : undefined;
   if (!winner) {
-    throw new Error("Daily checkpoints require a checkmate result.");
+    throw new Error("Daily checkpoints require a checkmate or king-death result.");
   }
 
   const availableBoundaries = Math.min(
@@ -431,7 +432,7 @@ export const rewindSimulationForExport = (
       replayed.phase === "gameover" &&
       replayed.result?.kind === "winner" &&
       replayed.result.winner === winner &&
-      replayed.result.reason === "checkmate"
+      replayed.result.reason === terminal.result?.reason
     ) {
       requestedUndoActions = boundaryCount;
       state = candidate;
@@ -442,7 +443,7 @@ export const rewindSimulationForExport = (
 
   if (!state) {
     throw new Error(
-      `Unable to create an exact ${rewindRounds}-turn checkmate checkpoint.`,
+      `Unable to create an exact ${rewindRounds}-turn winning checkpoint.`,
     );
   }
 
@@ -7765,11 +7766,11 @@ export default function App() {
       const completedTurns =
         simulationCompletedTurns.current.white +
         simulationCompletedTurns.current.black;
-      const isCheckmate =
+      const isWinningResult =
         tracked.phase === "gameover" &&
         tracked.result?.kind === "winner" &&
-        tracked.result.reason === "checkmate";
-      if (completedTurns > 200 || (tracked.phase === "gameover" && !isCheckmate)) {
+        (tracked.result.reason === "checkmate" || tracked.result.reason === "king-death");
+      if (completedTurns > 200 || (tracked.phase === "gameover" && !isWinningResult)) {
         recordDiagnostic({
           category: "ui",
           event: "simulation-attempt-restarted",
@@ -7778,11 +7779,11 @@ export default function App() {
             completedTurns,
             reason: completedTurns > 200
               ? "turn-limit"
-              : tracked.result?.reason ?? "non-checkmate",
+              : tracked.result?.reason ?? "non-winning-result",
           },
         });
         next = resetSimulationAttempt();
-      } else if (isCheckmate) {
+      } else if (isWinningResult) {
         try {
           next = finalizeSimulation(tracked);
         } catch (error) {
