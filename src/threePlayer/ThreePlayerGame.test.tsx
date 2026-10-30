@@ -225,6 +225,7 @@ describe("ThreePlayerGame", () => {
   });
 
   it("shows three-player puzzle objectives and reports a solved position", async () => {
+    vi.useFakeTimers();
     const puzzle = THREE_PLAYER_PUZZLES[0];
     const solved = puzzle.createState();
     solved.phase = "gameover";
@@ -255,9 +256,27 @@ describe("ThreePlayerGame", () => {
       screen.getAllByText(/checkmate both rival kings within two divine turns/i)
         .length,
     ).toBeGreaterThan(0);
+    expect(screen.queryByText("Both rivals checkmated")).toBeNull();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(999);
+    });
+    expect(screen.queryByText("Both rivals checkmated")).toBeNull();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
     expect(screen.getByText("Both rivals checkmated")).toBeTruthy();
     expect(screen.getByText("You completed the puzzle.")).toBeTruthy();
     expect(screen.queryByText(puzzle.solutionSummary)).toBeNull();
+    const resultDialog = screen.getByRole("dialog");
+    expect(within(resultDialog).getAllByRole("button")).toHaveLength(4);
+    expect(within(resultDialog).getByRole("button", { name: /next puzzle/i }))
+      .toBeTruthy();
+    expect(within(resultDialog).getByRole("button", { name: /play again/i }))
+      .toBeTruthy();
+    expect(within(resultDialog).getByRole("button", { name: /view board/i }))
+      .toBeTruthy();
+    expect(within(resultDialog).getByRole("button", { name: /puzzle menu/i }))
+      .toBeTruthy();
     const back = screen.getByRole("button", { name: /back to puzzles/i });
     expect(back.getAttribute("data-tooltip")).toBe("Back to puzzles");
     fireEvent.click(back);
@@ -266,9 +285,9 @@ describe("ThreePlayerGame", () => {
       .toContain("History");
     expect(screen.getAllByRole("button", { name: "Undo" })[0].textContent)
       .toContain("Undo");
-    await waitFor(() => expect(onPuzzleComplete).toHaveBeenCalledWith(puzzle.id));
+    expect(onPuzzleComplete).toHaveBeenCalledWith(puzzle.id);
 
-    fireEvent.click(screen.getByRole("button", { name: /view board/i }));
+    fireEvent.click(within(resultDialog).getByRole("button", { name: /view board/i }));
     expect(screen.queryByRole("heading", { name: /puzzle solved/i })).toBeNull();
     expect(screen.getByRole("button", { name: /view result/i })).toBeTruthy();
   });

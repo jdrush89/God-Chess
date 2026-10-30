@@ -19,7 +19,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTwoColumnGodInspector } from "../useTwoColumnGodInspector";
 import type { AchievementId } from "../achievements";
 import { AccountPortrait } from "../account/AccountPortrait";
@@ -104,6 +104,14 @@ type UiAction = ThreePlayerAction | ({ type: string } & Record<string, unknown>)
 interface MoveFirstDraft {
   source: ThreePlayerCell;
   destination?: ThreePlayerCell;
+}
+interface CaptureFlight {
+  id: number;
+  piece: ThreePlayerPiece;
+  startX: number;
+  startY: number;
+  deltaX: number;
+  deltaY: number;
 }
 type UiState = Omit<
   ThreePlayerState,
@@ -700,7 +708,10 @@ function PlayerPanel({
           </span>
         ))}
       </div>
-      <small className="three-graveyard">
+      <small
+        className="three-graveyard"
+        data-three-graveyard-target={seat}
+      >
         Graveyard {player.graveyard.length}
         {player.eliminated ? " · Eliminated" : checked ? " · Check" : ""}
       </small>
@@ -1081,6 +1092,13 @@ export function ThreePlayerGame({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [resultOpen, setResultOpen] = useState(initialState.phase === "gameover");
+  const [captureFlights, setCaptureFlights] = useState<CaptureFlight[]>([]);
+  const processedCaptureEvents = useRef(new Set(
+    initialState.presentationEvents
+      .filter((event) => event.kind === "capture")
+      .map((event) => event.id),
+  ));
+  const captureAnimationTimers = useRef<number[]>([]);
   const [undoEnabled, setUndoEnabled] = useState(undoPreferred);
   const [autoDraftPending, setAutoDraftPending] = useState(false);
   const autoDraftPendingRef = useRef(false);
@@ -1115,9 +1133,11 @@ export function ThreePlayerGame({
       state.completedTurns.white >= puzzle.playerTurns
     ),
   );
+  const [puzzleVictoryReady, setPuzzleVictoryReady] = useState(false);
   const [puzzleFailureReady, setPuzzleFailureReady] = useState(false);
   const resultReady = puzzle
-    ? puzzleSolved || (puzzleFailed && puzzleFailureReady)
+    ? (puzzleSolved && puzzleVictoryReady) ||
+      (puzzleFailed && puzzleFailureReady)
     : state.phase === "gameover";
   const puzzleIndex = puzzle
     ? THREE_PLAYER_PUZZLES.findIndex((candidate) => candidate.id === puzzle.id)
@@ -1127,6 +1147,10 @@ export function ThreePlayerGame({
     : undefined;
   const completionReported = useRef(false);
   const challengeCompletionReported = useRef(false);
+  const captureEventKey = state.presentationEvents
+    .filter((event) => event.kind === "capture")
+    .map((event) => event.id)
+    .join(",");
   const previousOnlineState = useRef<ThreePlayerState | undefined>(undefined);
   const onlineControl = onlineSession?.participantSeat
     ? state.players[onlineSession.participantSeat].control
@@ -1410,11 +1434,70 @@ export function ThreePlayerGame({
   ]);
 
   useEffect(() => {
+    setPuzzleVictoryReady(false);
+    if (!puzzleSolved) return;
+    const timer = window.setTimeout(() => setPuzzleVictoryReady(true), 1000);
+    return () => window.clearTimeout(timer);
+  }, [puzzle?.id, puzzleSolved]);
+
+  useEffect(() => {
     setPuzzleFailureReady(false);
     if (!puzzleFailed) return;
     const timer = window.setTimeout(() => setPuzzleFailureReady(true), 1000);
     return () => window.clearTimeout(timer);
   }, [puzzle?.id, puzzleFailed]);
+
+  useLayoutEffect(() => {
+    const events = state.presentationEvents.filter(
+      (event) =>
+        event.kind === "capture" &&
+        event.source &&
+        event.pieceId &&
+        !processedCaptureEvents.current.has(event.id),
+    );
+    events.forEach((event) => processedCaptureEvents.current.add(event.id));
+    if (reducedMotion()) return;
+
+    const flights = events.flatMap((event): CaptureFlight[] => {
+      const graveEntry = THREE_PLAYER_SEATS
+        .flatMap((seat) => state.players[seat].graveyard)
+        .find(({ piece }) => piece.id === event.pieceId);
+      if (!graveEntry || !event.source) return [];
+      const source = document.querySelector(`[data-cell="${event.source}"]`);
+      const target = document.querySelector(
+        `[data-three-graveyard-target="${graveEntry.piece.owner}"]`,
+      );
+      if (!source || !target) return [];
+      const sourceRect = source.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      const startX = sourceRect.left + sourceRect.width / 2;
+      const startY = sourceRect.top + sourceRect.height / 2;
+      return [{
+        id: event.id,
+        piece: graveEntry.piece,
+        startX,
+        startY,
+        deltaX: targetRect.left + targetRect.width / 2 - startX,
+        deltaY: targetRect.top + targetRect.height / 2 - startY,
+      }];
+    });
+    if (!flights.length) return;
+
+    setCaptureFlights((current) => [...current, ...flights]);
+    const timer = window.setTimeout(() => {
+      const ids = new Set(flights.map((flight) => flight.id));
+      setCaptureFlights((current) =>
+        current.filter((flight) => !ids.has(flight.id))
+      );
+    }, 1000);
+    captureAnimationTimers.current.push(timer);
+  }, [captureEventKey, state.players]);
+
+  useEffect(() => () => {
+    captureAnimationTimers.current.forEach((timer) =>
+      window.clearTimeout(timer)
+    );
+  }, []);
 
   useEffect(() => {
     setResultOpen(resultReady);
@@ -2289,7 +2372,89 @@ export function ThreePlayerGame({
         </aside>
       )}
 
-      {resultReady && (
+      {captureFlights.map((flight) => (
+        <div
+          className="capture-flight"
+          style={{
+            left: `${flight.startX}px`,
+            top: `${flight.startY}px`,
+            "--capture-flight-x": `${flight.deltaX}px`,
+            "--capture-flight-y": `${flight.deltaY}px`,
+            "--capture-piece-color":
+              state.players[flight.piece.owner].displayColor,
+          } as React.CSSProperties}
+          key={flight.id}
+          aria-hidden="true"
+        >
+          <span className="capture-flight-path">
+            <span className="capture-flight-piece three-player-capture-piece">
+              {THREE_PLAYER_PIECE_SYMBOLS[flight.piece.type]}
+            </span>
+          </span>
+        </div>
+      ))}
+
+      {puzzle && puzzleSolved && resultReady && (
+        resultOpen ? (
+          <div className="modal-backdrop">
+            <section
+              className="gameover-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="three-player-puzzle-result-title"
+            >
+              <div className="victory-crown"><Crown size={38} /></div>
+              <p className="eyebrow">PUZZLE COMPLETE</p>
+              <h2 id="three-player-puzzle-result-title">Both rivals checkmated</h2>
+              <p>You completed the puzzle.</p>
+              <div className="puzzle-result-actions">
+                <button
+                  className="primary-button"
+                  onClick={onNextPuzzle ?? onQuit}
+                >
+                  {puzzleIndex === THREE_PLAYER_PUZZLES.length - 1
+                    ? "Choose another puzzle"
+                    : "Next puzzle"}
+                </button>
+                <button
+                  className="secondary-button"
+                  onClick={onRestartPuzzle ?? onQuit}
+                >
+                  Play again
+                </button>
+                <button
+                  className="secondary-button"
+                  onClick={() => setResultOpen(false)}
+                >
+                  View board
+                </button>
+                <button className="secondary-button" onClick={onQuit}>
+                  Puzzle menu
+                </button>
+              </div>
+            </section>
+          </div>
+        ) : (
+          <aside
+            className="finished-result-control puzzle-finished-result-control"
+            role="status"
+            aria-label="Puzzle finished"
+          >
+            <span>
+              <strong>Puzzle complete</strong>
+              <small>Both rivals checkmated</small>
+            </span>
+            <button
+              className="primary-button"
+              onClick={() => setResultOpen(true)}
+            >
+              View result
+            </button>
+          </aside>
+        )
+      )}
+
+      {resultReady && (!puzzle || !puzzleSolved) && (
         <GameResultPresentation
           open={resultOpen}
           eyebrow={puzzle ? puzzleSolved ? "PUZZLE COMPLETE" : "PUZZLE FAILED" : "MATCH COMPLETE"}
