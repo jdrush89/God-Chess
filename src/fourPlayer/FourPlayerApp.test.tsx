@@ -10,6 +10,7 @@ import {
   fourPlayerMoveFirstTargets,
   fourPlayerReducer,
 } from "../game/fourPlayerEngine";
+import { homeSquares } from "../game/fourPlayerChess";
 import { GOD_BY_ID, GODS } from "../game/gods";
 import { createSavedGame } from "../saves";
 import { FourPlayerGame } from "./FourPlayerGame";
@@ -847,6 +848,47 @@ describe("four-player app integration", () => {
     expect(preview?.classList.contains("effect-preview")).toBe(true);
     expect(preview?.classList.contains("legal-destination")).toBe(false);
     expect(preview?.querySelector(".move-target-dot")).toBeNull();
+  });
+
+  it("keeps the four-player March Home destination visible while choosing companions", () => {
+    const state = completeFourPlayerDraft();
+    const [startingSquare, king] = Object.entries(state.board).find(
+      ([, piece]) =>
+        piece.owner === state.activeSeat && piece.type === "king",
+    )!;
+    const destination = homeSquares(king.owner)[4];
+    const movedSquare = "g8";
+    const companionTarget = "h8";
+    delete state.board[startingSquare];
+    state.board[movedSquare] = king;
+    state.selectedGod = "leonidas";
+    state.selectedAbility = "march-home";
+    state.pending = {
+      godId: "leonidas",
+      abilityId: "march-home",
+      step: "march-companions",
+      source: movedSquare,
+      selected: [],
+    };
+    state.legalTargets = [companionTarget];
+    const { container } = render(
+      <FourPlayerGame
+        initialState={state}
+        undoPreferred={false}
+        onUndoPreferenceChange={vi.fn()}
+        onPersist={vi.fn(async () => false)}
+        onQuit={vi.fn()}
+        onNewGame={vi.fn()}
+      />,
+    );
+
+    const destinationCell = screen.getByRole("gridcell", {
+      name: new RegExp(`${destination}.*March Home destination`, "i"),
+    });
+    expect(destinationCell.classList.contains("effect-preview")).toBe(true);
+    expect(destinationCell.classList.contains("legal-destination")).toBe(false);
+    expect(container.querySelector(`[data-square="${companionTarget}"]`)
+      ?.classList.contains("legal-destination")).toBe(true);
   });
 
   it("stacks side-seat identity above a complete resource row for long team names", () => {

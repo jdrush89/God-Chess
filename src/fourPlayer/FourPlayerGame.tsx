@@ -61,7 +61,7 @@ import {
   chooseFourPlayerAiPlan,
   isFourPlayerAiTurn,
 } from "../game/fourPlayerAi";
-import { fourPlayerSquareAt } from "../game/fourPlayerChess";
+import { fourPlayerSquareAt, homeSquares } from "../game/fourPlayerChess";
 import { seatsAreAllies } from "../game/fourPlayerConfig";
 import {
   canStartFourPlayerMoveFirst,
@@ -753,8 +753,13 @@ function FourPlayerBoard({
     }
     return result;
   }, []);
-  const previewing = state.pending?.step === "confirm-stone-gaze" ||
-    state.pending?.step === "confirm-march-home";
+  const previewingStoneGaze = state.pending?.step === "confirm-stone-gaze";
+  const marchHomePreviewSquare = state.pending?.abilityId === "march-home" &&
+      state.pending.source
+    ? homeSquares(
+      state.board[state.pending.source]?.owner ?? state.activeSeat,
+    )[4]
+    : undefined;
   const enchantSourceChoice = (
     state.pending?.step === "enchant-enemy-move" ||
     state.pending?.step === "enchant-followup-move"
@@ -819,8 +824,13 @@ function FourPlayerBoard({
                 state.pending?.abilityId === "escort" &&
                 state.pending.selected?.includes(piece.id),
               );
-              const legal = !previewing && legalTargets.includes(square);
-              const effectPreview = previewing && state.legalTargets.includes(square);
+              const marchHomePreview = square === marchHomePreviewSquare;
+              const effectPreview = (
+                previewingStoneGaze && state.legalTargets.includes(square)
+              ) || marchHomePreview;
+              const legal = !previewingStoneGaze &&
+                state.pending?.step !== "confirm-march-home" &&
+                legalTargets.includes(square);
               const isProvisionalSource = provisionalSource === square;
               const isProvisionalDestination = provisionalDestination === square;
               const banana = state.bananas.find((item) => item.square === square);
@@ -828,7 +838,7 @@ function FourPlayerBoard({
                 <button
                   role="gridcell"
                   data-square={square}
-                  aria-label={`${square}${piece ? `, ${state.players[piece.owner].name} ${piece.type}${piece.controller ? `, controlled by ${state.players[piece.controller].name}` : ", inert"}` : ""}${escortSelected ? ", selected escort" : ""}${legal ? ", legal target" : ""}${isProvisionalSource ? ", provisional move source" : ""}${isProvisionalDestination ? ", provisional move destination, not committed" : ""}`}
+                  aria-label={`${square}${piece ? `, ${state.players[piece.owner].name} ${piece.type}${piece.controller ? `, controlled by ${state.players[piece.controller].name}` : ", inert"}` : ""}${escortSelected ? ", selected escort" : ""}${legal ? ", legal target" : ""}${marchHomePreview ? ", March Home destination" : effectPreview ? ", affected by selected ability" : ""}${isProvisionalSource ? ", provisional move source" : ""}${isProvisionalDestination ? ", provisional move destination, not committed" : ""}`}
                   className={`four-board-square ${(file + rank) % 2 ? "light" : "dark"} ${selected ? "selected" : ""} ${escortSelected ? "escort-selected" : ""} ${legal ? "legal" : ""} ${legal && piece ? "legal-occupied" : ""} ${legal && enchantSourceChoice ? "legal-source" : ""} ${legal && !enchantSourceChoice ? "legal-destination" : ""} ${effectPreview ? "effect-preview" : ""} ${isProvisionalSource ? "provisional-source" : ""} ${isProvisionalDestination ? "provisional-destination" : ""}`}
                   onClick={() => {
                     if (drag.consumeClick()) return;

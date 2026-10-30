@@ -5,6 +5,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   availableThreePlayerActions,
   createThreePlayerGame,
+  threePlayerMoveFirstCandidates,
   threePlayerMoveFirstSources,
   threePlayerMoveFirstTargets,
   threePlayerReducer,
@@ -349,6 +350,86 @@ describe("ThreePlayerGame", () => {
     expect((screen.getByRole("button", { name: "Undo" }) as HTMLButtonElement).disabled)
       .toBe(true);
   });
+
+  it.each(["top bar", "failed dialog"] as const)(
+    "undoes only the latest puzzle turn from the %s",
+    async (undoLocation) => {
+      vi.useFakeTimers();
+      vi.spyOn(window, "matchMedia").mockImplementation(matchMedia(true));
+      const puzzle = THREE_PLAYER_PUZZLES[0];
+      const initial = puzzle.createState();
+      const afterFirstPlayerTurn = puzzle.solutionTurns[0].reduce(
+        threePlayerReducer,
+        initial,
+      );
+      const beforeSecondPlayerTurn = puzzle.cpuTurns[0].reduce(
+        threePlayerReducer,
+        afterFirstPlayerTurn,
+      );
+      const candidate = threePlayerMoveFirstSources(beforeSecondPlayerTurn)
+        .flatMap((from) =>
+          threePlayerMoveFirstTargets(beforeSecondPlayerTurn, from)
+            .flatMap((to) =>
+              threePlayerMoveFirstCandidates(
+                beforeSecondPlayerTurn,
+                { from, to },
+              )
+            )
+        )
+        .find((option) => {
+          if (!option.valid) return false;
+          const result = threePlayerReducer(beforeSecondPlayerTurn, {
+            type: "commit-move-first",
+            godId: option.godId,
+            abilityId: option.abilityId,
+            move: option.move,
+            expectedSeat: beforeSecondPlayerTurn.activeSeat,
+            expectedTurn: beforeSecondPlayerTurn.turn,
+            expectedRevision: beforeSecondPlayerTurn.revision,
+          });
+          return result.phase !== "gameover";
+        })!;
+      const abilityName = GOD_BY_ID[candidate.godId].abilities.find(
+        ({ id }) => id === candidate.abilityId,
+      )!.name;
+      const { container } = render(
+        <ThreePlayerGame
+          initialState={beforeSecondPlayerTurn}
+          initialUndoHistory={[initial]}
+          puzzle={puzzle}
+          undoPreferred={false}
+          onQuit={() => undefined}
+          onNewGame={() => undefined}
+        />,
+      );
+
+      fireEvent.click(container.querySelector(
+        `[data-cell="${candidate.move.from}"]`,
+      )!);
+      fireEvent.click(container.querySelector(
+        `[data-cell="${candidate.move.to}"]`,
+      )!);
+      fireEvent.click(screen.getByText(abilityName).closest(
+        ".ability-card-main",
+      )!);
+
+      expect(screen.getByText(/PLAYER TURNS LEFT/i).textContent).toContain("0");
+      let undo: HTMLElement;
+      if (undoLocation === "failed dialog") {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(1000);
+        });
+        undo = within(screen.getByRole("dialog")).getByRole("button", {
+          name: /^undo$/i,
+        });
+      } else {
+        undo = screen.getAllByRole("button", { name: /^undo$/i })[0];
+      }
+      fireEvent.click(undo);
+
+      expect(screen.getByText(/PLAYER TURNS LEFT/i).textContent).toContain("1");
+    },
+  );
 
   it("locks a three-player puzzle immediately but waits one second to show failure", async () => {
     vi.useFakeTimers();

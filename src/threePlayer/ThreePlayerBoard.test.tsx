@@ -401,6 +401,47 @@ describe("ThreePlayerBoard", () => {
     expect(targetCell.parentElement?.querySelector(".move-target-dot")).toBeNull();
   });
 
+  it("keeps the March Home destination visible while choosing companions", () => {
+    const state = createThreePlayerGame();
+    const topology = getThreePlayerTopology(state.config.boardVariant);
+    const [startingCell, king] = Object.entries(state.board).find(
+      ([, piece]) => piece.owner === state.activeSeat && piece.type === "king",
+    )!;
+    const destination = topology.homeCell(king.owner);
+    const movedCell = topology.cellDescriptors.find(
+      ({ id }) => id !== destination && !state.board[id],
+    )!.id;
+    const companionCell = topology.cellDescriptors.find(
+      ({ id }) =>
+        id !== destination &&
+        id !== movedCell &&
+        !state.board[id],
+    )!.id;
+    delete state.board[startingCell];
+    state.board[movedCell] = king;
+    state.pending = {
+      godId: "leonidas",
+      abilityId: "march-home",
+      step: "march-companions",
+      source: movedCell,
+      selected: [],
+    };
+
+    const { container } = render(
+      <ThreePlayerBoard state={state} legalCells={[companionCell]} />,
+    );
+
+    const destinationCell = container.querySelector(
+      `[data-cell="${destination}"]`,
+    )!;
+    expect(destinationCell.classList.contains("effect-preview")).toBe(true);
+    expect(destinationCell.classList.contains("legal-destination")).toBe(false);
+    expect(destinationCell.parentElement?.getAttribute("aria-label"))
+      .toContain("March Home destination");
+    expect(container.querySelector(`[data-cell="${companionCell}"]`)
+      ?.classList.contains("legal-destination")).toBe(true);
+  });
+
   it("visually distinguishes Enchant source and destination highlights", () => {
     const state = createThreePlayerGame();
     const source = Object.keys(state.board)[0];

@@ -2733,6 +2733,37 @@ describe("game startup", () => {
     ).toContain("selected escort");
   });
 
+  it("keeps the March Home destination visible while choosing companions", () => {
+    let state = createGame(1);
+    state.phase = "play";
+    state.board.e4 = state.board.e1;
+    delete state.board.e1;
+    state.players.white.gods = ["leonidas"];
+    state.players.white.orbs.white = 2;
+    state.players.white.upgrades["march-home"] = 2;
+    state = gameReducer(state, { type: "select-god", godId: "leonidas" });
+    state = gameReducer(state, {
+      type: "select-ability",
+      abilityId: "march-home",
+    });
+
+    const { container } = render(
+      <ChessBoard
+        state={state}
+        dispatch={vi.fn()}
+        onInspectSquare={vi.fn()}
+      />,
+    );
+
+    const destination = screen.getByRole("gridcell", {
+      name: /e1, March Home destination/i,
+    });
+    expect(destination.classList.contains("effect-preview")).toBe(true);
+    expect(destination.classList.contains("legal-destination")).toBe(false);
+    expect(container.querySelector('[data-square="e4"]')
+      ?.classList.contains("legal-destination")).toBe(true);
+  });
+
   it("keeps Rage cancellable until its capture choice is confirmed", () => {
     let state = createGame(1);
     state.phase = "play";
