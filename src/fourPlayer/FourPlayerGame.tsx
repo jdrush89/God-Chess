@@ -92,6 +92,7 @@ import {
   FOUR_PLAYER_SEAT_LABELS,
 } from "./setupConfig";
 import { AbilityRules, LevelSelector } from "../UpgradePreview";
+import { PieceThemeSymbol } from "../pieceThemes";
 
 type FourPlayerDispatch = (action: FourPlayerAction) => void;
 
@@ -99,25 +100,6 @@ interface FourPlayerMoveFirstDraft {
   source: Square;
   destination?: Square;
 }
-
-const PIECES: Record<OrbAffinity, Record<PieceType, string>> = {
-  light: {
-    king: "♔",
-    queen: "♕",
-    rook: "♖",
-    bishop: "♗",
-    knight: "♘",
-    pawn: "♙",
-  },
-  dark: {
-    king: "♚",
-    queen: "♛",
-    rook: "♜",
-    bishop: "♝",
-    knight: "♞",
-    pawn: "♟",
-  },
-};
 
 const PIECE_NAMES: Record<PieceType, string> = {
   king: "King",
@@ -278,7 +260,10 @@ function PieceView({
       aria-label={label}
       title={label}
     >
-      {PIECES[piece.orbAffinity][piece.type]}
+      <PieceThemeSymbol
+        type={piece.type}
+        classicColor={piece.orbAffinity === "light" ? "white" : "black"}
+      />
       {statuses.length > 0 && (
         <span className="status-markers" title={statuses.map(({ label: item }) => item).join(", ")}>
           {statuses.map(({ key, label: item, icon: Icon }) => (

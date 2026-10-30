@@ -96,9 +96,9 @@ import {
 } from "./setupConfig";
 import {
   THREE_PLAYER_PIECE_NAMES,
-  THREE_PLAYER_PIECE_SYMBOLS,
   THREE_PLAYER_STATUS_LABELS,
 } from "./presentation";
+import { PieceThemeSymbol } from "../pieceThemes";
 
 type UiAction = ThreePlayerAction | ({ type: string } & Record<string, unknown>);
 interface MoveFirstDraft {
@@ -759,7 +759,7 @@ function ThreePlayerPieceInfo({
           } as React.CSSProperties}
           aria-hidden="true"
         >
-          {THREE_PLAYER_PIECE_SYMBOLS[piece.type]}
+          <PieceThemeSymbol type={piece.type} classicColor="black" />
         </span>
         <div>
           <small>{cell.toUpperCase()} · {owner.name}</small>
@@ -2400,7 +2400,10 @@ export function ThreePlayerGame({
         >
           <span className="capture-flight-path">
             <span className="capture-flight-piece three-player-capture-piece">
-              {THREE_PLAYER_PIECE_SYMBOLS[flight.piece.type]}
+              <PieceThemeSymbol
+                type={flight.piece.type}
+                classicColor="black"
+              />
             </span>
           </span>
         </div>

@@ -3,15 +3,6 @@ import type {
   ThreePlayerPieceStatus,
 } from "../game/threePlayerTypes";
 
-export const THREE_PLAYER_PIECE_SYMBOLS: Record<ThreePlayerPiece["type"], string> = {
-  king: "♚",
-  queen: "♛",
-  rook: "♜",
-  bishop: "♝",
-  knight: "♞",
-  pawn: "♟",
-};
-
 export const THREE_PLAYER_PIECE_NAMES: Record<ThreePlayerPiece["type"], string> = {
   king: "King",
   queen: "Queen",

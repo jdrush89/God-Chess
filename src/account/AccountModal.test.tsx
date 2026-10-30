@@ -21,6 +21,7 @@ const baseProps = {
   onUpdatePassword: vi.fn(async () => "Password updated."),
   onUpdateDisplayName: vi.fn(async () => "Display name updated."),
   onUpdatePortrait: vi.fn(async () => "Account portrait updated."),
+  onUpdatePieceTheme: vi.fn(async () => "Piece theme updated."),
 };
 
 const social = (overrides: Partial<SocialContract> = {}): SocialContract => ({
@@ -49,6 +50,7 @@ const account = {
   displayName: "Athena",
   publicId: "gc-athena22",
   portraitId: "quetzacoatl" as const,
+  pieceTheme: "classic" as const,
 };
 
 afterEach(() => {
@@ -126,6 +128,16 @@ describe("account modal", () => {
 
     await waitFor(() =>
       expect(baseProps.onUpdatePortrait).toHaveBeenCalledWith("ares")
+    );
+  });
+
+  it("lets a signed-in player choose the mushroom piece theme", async () => {
+    render(<AccountModal {...baseProps} account={account} />);
+    fireEvent.click(screen.getByRole("radio", { name: "Mushroom" }));
+    fireEvent.click(screen.getByRole("button", { name: /save piece theme/i }));
+
+    await waitFor(() =>
+      expect(baseProps.onUpdatePieceTheme).toHaveBeenCalledWith("mushroom")
     );
   });
 

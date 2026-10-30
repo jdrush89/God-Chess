@@ -48,31 +48,13 @@ import {
   publishCustomPuzzle,
 } from "./marketplace";
 import { useBoardDrag } from "../components/useBoardDrag";
+import { PieceThemeSymbol } from "../pieceThemes";
 
 type HubTab = "library" | "editor" | "marketplace";
 type EditorTool = PieceType | "move" | "erase";
 type EditorDragSource =
   | `board:${Square}`
   | `palette:${Color}:${PieceType}`;
-
-const PIECE_SYMBOLS: Record<Color, Record<PieceType, string>> = {
-  white: {
-    king: "♔",
-    queen: "♕",
-    rook: "♖",
-    bishop: "♗",
-    knight: "♘",
-    pawn: "♙",
-  },
-  black: {
-    king: "♚",
-    queen: "♛",
-    rook: "♜",
-    bishop: "♝",
-    knight: "♞",
-    pawn: "♟",
-  },
-};
 
 const PIECE_TYPES: PieceType[] = [
   "king",
@@ -105,12 +87,16 @@ const cloneDraft = (draft: CustomPuzzleDraft): CustomPuzzleDraft =>
 
 const setPieceDragImage = (
   event: DragEvent<HTMLElement>,
-  type: PieceType,
   color: Color,
 ) => {
   const preview = document.createElement("span");
   preview.className = `custom-piece-symbol ${color} custom-piece-drag-image`;
-  preview.textContent = PIECE_SYMBOLS[color][type];
+  const renderedPiece = event.currentTarget.querySelector(
+    ".piece-theme-symbol",
+  );
+  if (renderedPiece) {
+    preview.append(renderedPiece.cloneNode(true));
+  }
   document.body.append(preview);
   event.dataTransfer.setDragImage(preview, 28, 28);
   window.requestAnimationFrame(() => preview.remove());
@@ -549,7 +535,7 @@ export function CustomPuzzleHub({
                       onDragStart={(event) => {
                         event.dataTransfer.setData("application/god-chess-piece", pieceType);
                         event.dataTransfer.setData("application/god-chess-color", pieceColor);
-                        setPieceDragImage(event, pieceType, pieceColor);
+                        setPieceDragImage(event, pieceColor);
                       }}
                       onClick={() => {
                         if (pointerDrag.consumeClick()) return;
@@ -558,7 +544,10 @@ export function CustomPuzzleHub({
                       }}
                     >
                       <span className={`custom-piece-symbol ${pieceColor}`}>
-                        {PIECE_SYMBOLS[pieceColor][pieceType]}
+                        <PieceThemeSymbol
+                          type={pieceType}
+                          classicColor={pieceColor}
+                        />
                       </span>
                       <small>{pieceType}</small>
                     </button>
@@ -609,10 +598,13 @@ export function CustomPuzzleHub({
                           draggable
                           onDragStart={(event) => {
                             event.dataTransfer.setData("application/god-chess-square", square);
-                            setPieceDragImage(event, piece.type, piece.color);
+                            setPieceDragImage(event, piece.color);
                           }}
                         >
-                          {PIECE_SYMBOLS[piece.color][piece.type]}
+                          <PieceThemeSymbol
+                            type={piece.type}
+                            classicColor={piece.color}
+                          />
                         </span>
                       )}
                       {square[1] === "1" && <small className="file-label">{square[0]}</small>}
@@ -631,7 +623,10 @@ export function CustomPuzzleHub({
                   aria-hidden="true"
                 >
                   <span className={`custom-piece-symbol ${pointerDragPiece.color}`}>
-                    {PIECE_SYMBOLS[pointerDragPiece.color][pointerDragPiece.type]}
+                    <PieceThemeSymbol
+                      type={pointerDragPiece.type}
+                      classicColor={pointerDragPiece.color}
+                    />
                   </span>
                 </div>
               )}

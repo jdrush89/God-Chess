@@ -250,6 +250,7 @@ describe("social account contracts", () => {
       displayName: "Athena",
       publicId: "gc-athena22",
       portraitId: "artemis",
+      pieceTheme: "classic",
     }));
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(mocks.channel).toHaveBeenCalledWith("social-inbox:user-1");
