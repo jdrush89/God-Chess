@@ -27,7 +27,6 @@ export interface ThreePlayerPuzzleDefinition {
   solutionSummary: string;
   playerTurns: 2 | 3;
   solutionTurns: ThreePlayerAction[][];
-  cpuTurns: ThreePlayerAction[][];
   createState: (playerName?: string) => ThreePlayerState;
 }
 
@@ -41,12 +40,13 @@ interface PuzzlePiecePlacement {
 
 interface PuzzleSeed extends Omit<
   ThreePlayerPuzzleDefinition,
-  "mode" | "objective" | "playerTurns" | "solutionTurns" | "cpuTurns" | "createState"
+  "mode" | "objective" | "playerTurns" | "solutionTurns" | "createState"
 > {
   pieces: PuzzlePiecePlacement[];
   whiteGods: [GodId, GodId, GodId];
+  redGods?: [GodId, GodId, GodId];
+  blackGods?: [GodId, GodId, GodId];
   solutionTurns: ThreePlayerAction[][];
-  cpuTurns?: ThreePlayerAction[][];
   whiteUpgrades?: Record<string, 1 | 2 | 3>;
 }
 
@@ -144,6 +144,19 @@ const withoutCells = (
   cells: ThreePlayerCell[],
 ) => pieces.filter((placement) => !cells.includes(placement.cell));
 
+const configurePlacements = (
+  pieces: PuzzlePiecePlacement[],
+  changes: Partial<
+    Record<
+      ThreePlayerCell,
+      Partial<Omit<PuzzlePiecePlacement, "cell">>
+    >
+  >,
+) => pieces.map((placement) => {
+  const change = changes[placement.cell];
+  return change ? { ...placement, ...change } : placement;
+});
+
 const turnCountLabel = (turns: number) => turns === 2 ? "two" : "three";
 
 const yaltaPieces = (
@@ -184,14 +197,15 @@ const createPuzzleState = (
   state.phase = "play";
   state.activeSeat = "white";
   state.players.white.gods = seed.whiteGods;
-  const rivalGods = GODS.map((god) => god.id)
+  const blackGods = seed.blackGods ?? ["death", "anubis", "midas"];
+  const redGods = seed.redGods ?? GODS.map((god) => god.id)
     .filter((godId) =>
       !seed.whiteGods.includes(godId) &&
-      !["death", "anubis", "midas"].includes(godId)
+      !blackGods.includes(godId)
     )
-    .slice(0, 3);
-  state.players.red.gods = rivalGods;
-  state.players.black.gods = ["death", "anubis", "midas"];
+    .slice(0, 3) as [GodId, GodId, GodId];
+  state.players.red.gods = redGods;
+  state.players.black.gods = blackGods;
   state.players.white.orbs = { light: 10, dark: 10 };
   state.players.red.orbs = { light: 0, dark: 0 };
   state.players.black.orbs = { light: 0, dark: 0 };
@@ -268,17 +282,33 @@ const seeds: PuzzleSeed[] = [
     hint: "Unmask the rook attack first. The surviving King can only be reached if the knight stops moving like a knight.",
     solutionSummary: "Air Lift the King to reveal the first mate, then Charge through the opposite rampart.",
     whiteGods: ["quetzacoatl", "chiron", "medusa"],
-    pieces: withoutCells(
-      swapRivalOwners(yaltaPieces("three-player:12")),
-      [
-        "three-player:23",
-        "three-player:1",
-        "three-player:6",
-        "three-player:8",
-        "three-player:15",
-        "three-player:17",
-      ],
-    ),
+    redGods: ["leonidas", "salem", "death"],
+    blackGods: ["teles", "artemis", "ares"],
+    pieces: [
+      ...configurePlacements(
+        withoutCells(
+          swapRivalOwners(yaltaPieces("three-player:12")),
+          [
+            "three-player:23",
+            "three-player:1",
+            "three-player:6",
+            "three-player:8",
+            "three-player:15",
+            "three-player:16",
+            "three-player:17",
+          ],
+        ),
+        {
+          "three-player:25": { owner: "white", type: "bishop" },
+        },
+      ),
+      place(
+        "three-player:0",
+        "pawn",
+        "black",
+        "black-active-defender",
+      ),
+    ],
     solutionTurns: [
       airLiftTurn("three-player:28", "three-player:2"),
       chargeTurn("three-player:12", "three-player:9"),
@@ -393,19 +423,42 @@ const seeds: PuzzleSeed[] = [
     hint: "The inner-ring knight must teleport to a square where it attacks two enemies. The far King is hidden behind your own King.",
     solutionSummary: "Pick a Fight across the rings, then Air Lift the King to uncover the circular rook ray.",
     whiteGods: ["ares", "quetzacoatl", "medusa"],
-    pieces: withoutCells([
-      place("three-circular:6", "king", "red", "red-king"),
-      ...["30", "7", "5", "31", "29"].map((cell) =>
-        place(`three-circular:${cell}`, "pawn", "red")
+    redGods: ["leonidas", "salem", "death"],
+    blackGods: ["teles", "artemis", "chiron"],
+    pieces: [
+      ...configurePlacements(
+        withoutCells([
+          place("three-circular:6", "king", "red", "red-king"),
+          ...["30", "7", "5", "31", "29"].map((cell) =>
+            place(`three-circular:${cell}`, "pawn", "red")
+          ),
+          place("three-circular:16", "king", "black", "black-king"),
+          ...["40", "15", "41", "39"].map((cell) =>
+            place(`three-circular:${cell}`, "pawn", "black")
+          ),
+          place("three-circular:1", "knight", "white", "white-pick-knight"),
+          place("three-circular:0", "rook", "white", "white-discovery-rook"),
+          place("three-circular:23", "king", "white", "white-airlift-king"),
+        ], ["three-circular:15"]),
+        {
+          "three-circular:39": { owner: "red" },
+          "three-circular:40": { owner: "red" },
+          "three-circular:41": { owner: "red" },
+        },
       ),
-      place("three-circular:16", "king", "black", "black-king"),
-      ...["40", "15", "41", "39"].map((cell) =>
-        place(`three-circular:${cell}`, "pawn", "black")
+      place(
+        "three-circular:64",
+        "queen",
+        "white",
+        "white-cage-queen",
       ),
-      place("three-circular:1", "knight", "white", "white-pick-knight"),
-      place("three-circular:0", "rook", "white", "white-discovery-rook"),
-      place("three-circular:23", "king", "white", "white-airlift-king"),
-    ], ["three-circular:15"]),
+      place(
+        "three-circular:12",
+        "pawn",
+        "black",
+        "black-active-defender",
+      ),
+    ],
     whiteUpgrades: { "pick-a-fight": 2 },
     solutionTurns: [
       pickAFightTurn("three-circular:1", "three-circular:28"),
@@ -498,12 +551,6 @@ const seeds: PuzzleSeed[] = [
   },
 ];
 
-const cpuTurn: ThreePlayerAction[] = [
-  { type: "select-god", godId: "death" },
-  { type: "select-ability", abilityId: "marked" },
-  { type: "pass" },
-];
-
 export const THREE_PLAYER_PUZZLES: ThreePlayerPuzzleDefinition[] = seeds.map(
   (seed) => ({
     id: seed.id,
@@ -518,11 +565,6 @@ export const THREE_PLAYER_PUZZLES: ThreePlayerPuzzleDefinition[] = seeds.map(
     solutionSummary: seed.solutionSummary,
     playerTurns: seed.solutionTurns.length as 2 | 3,
     solutionTurns: seed.solutionTurns,
-    cpuTurns: seed.cpuTurns ??
-      Array.from(
-        { length: seed.solutionTurns.length - 1 },
-        () => cpuTurn,
-      ),
     createState: (playerName?: string) =>
       createPuzzleState(seed, playerName),
   }),

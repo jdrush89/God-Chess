@@ -3,6 +3,9 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
+  chooseThreePlayerAiPlan,
+} from "../game/threePlayerAi";
+import {
   availableThreePlayerActions,
   createThreePlayerGame,
   threePlayerMoveFirstCandidates,
@@ -319,16 +322,17 @@ describe("ThreePlayerGame", () => {
     expect(screen.getByRole("button", { name: /view result/i })).toBeTruthy();
   });
 
-  it("plays the scripted rival turn between three-player puzzle turns", async () => {
+  it("plays the CPU rival turn between three-player puzzle turns", async () => {
     vi.useFakeTimers();
     vi.spyOn(window, "matchMedia").mockImplementation(matchMedia(true));
+    const terminateWorker = installDeterministicAiWorker();
     const puzzle = THREE_PLAYER_PUZZLES[0];
     const afterFirst = puzzle.solutionTurns[0].reduce(
       threePlayerReducer,
       puzzle.createState(),
     );
 
-    render(
+    const { unmount } = render(
       <ThreePlayerGame
         initialState={afterFirst}
         puzzle={puzzle}
@@ -347,41 +351,6 @@ describe("ThreePlayerGame", () => {
     expect(screen.queryByText(/is thinking/i)).toBeNull();
     expect(screen.getAllByText(/Puzzle Solver to (?:move|act)/i).length)
       .toBeGreaterThan(0);
-  });
-
-  it("falls back to a legal CPU plan when the scripted puzzle response is invalid", async () => {
-    vi.useFakeTimers();
-    vi.spyOn(window, "matchMedia").mockImplementation(matchMedia(true));
-    const terminateWorker = installDeterministicAiWorker();
-    const puzzle = THREE_PLAYER_PUZZLES.find(
-      (candidate) => candidate.id === "triad-pincer",
-    )!;
-    const afterFirst = puzzle.solutionTurns[0].reduce(
-      threePlayerReducer,
-      puzzle.createState(),
-    );
-    afterFirst.players.black.gods = ["anubis", "midas", "ares"];
-
-    const { unmount } = render(
-      <ThreePlayerGame
-        initialState={afterFirst}
-        puzzle={puzzle}
-        onQuit={() => undefined}
-        onNewGame={() => undefined}
-      />,
-    );
-
-    expect(screen.getByText(/Onyx Rival is thinking/i)).toBeTruthy();
-    for (let index = 0; index < 8; index += 1) {
-      await act(async () => {
-        await vi.runOnlyPendingTimersAsync();
-      });
-    }
-
-    expect(screen.queryByText(/is thinking/i)).toBeNull();
-    expect(screen.getAllByText(/Puzzle Solver to (?:move|act)/i).length)
-      .toBeGreaterThan(0);
-    expect(screen.queryByText(/Choose a piece for Marked/i)).toBeNull();
 
     unmount();
     expect(terminateWorker).toHaveBeenCalledTimes(1);
@@ -426,7 +395,10 @@ describe("ThreePlayerGame", () => {
         threePlayerReducer,
         initial,
       );
-      const beforeSecondPlayerTurn = puzzle.cpuTurns[0].reduce(
+      const beforeSecondPlayerTurn = chooseThreePlayerAiPlan(
+        afterFirstPlayerTurn,
+        1,
+      ).reduce(
         threePlayerReducer,
         afterFirstPlayerTurn,
       );
