@@ -1109,6 +1109,9 @@ export function ThreePlayerGame({
   const chainStart = useRef<UiState | undefined>(
     initialTurnStart ? clone(initialTurnStart) as UiState : undefined,
   );
+  const [chainUndoAvailable, setChainUndoAvailable] = useState(
+    Boolean(initialTurnStart),
+  );
   const [undoDepth, setUndoDepth] = useState(undoStack.current.length);
   const aiPlan = useRef<ThreePlayerAction[]>([]);
   const aiNoPlanRevision = useRef<number | undefined>(undefined);
@@ -1273,9 +1276,10 @@ export function ThreePlayerGame({
       }
       return;
     }
-    if (source === "human" && isStableState(current) && !chainStart.current) {
-      chainStart.current = clone(current);
-    }
+    const startsHumanBoundary =
+      source === "human" &&
+      isStableState(current) &&
+      !chainStart.current;
     const next = applyMatchStatisticsTransition(
       current as ThreePlayerState,
       threePlayerReducer(
@@ -1299,6 +1303,10 @@ export function ThreePlayerGame({
       after: next as unknown as Record<string, unknown>,
     });
     if (next === current) return;
+    if (startsHumanBoundary) {
+      chainStart.current = clone(current);
+      setChainUndoAvailable(true);
+    }
     setLocalSelectedCell(undefined);
     stateRef.current = next;
     setState(next);
@@ -1313,6 +1321,7 @@ export function ThreePlayerGame({
     if (isStableState(next) && completedHumanBoundary && chainStart.current) {
       undoStack.current.push(chainStart.current);
       chainStart.current = undefined;
+      setChainUndoAvailable(false);
       setUndoDepth(undoStack.current.length);
     }
   };
@@ -1771,9 +1780,10 @@ export function ThreePlayerGame({
       return;
     }
     if ((!undoEnabled && !puzzle) || !isStableState(stateRef.current)) return;
-    const snapshot = undoStack.current.pop();
+    const snapshot = chainStart.current ?? undoStack.current.pop();
     if (!snapshot) return;
     chainStart.current = undefined;
+    setChainUndoAvailable(false);
     aiPlan.current = [];
     setLocalSelectedCell(undefined);
     setMoveFirstDraft(undefined);
@@ -1809,7 +1819,8 @@ export function ThreePlayerGame({
   };
 
   const canUndo = puzzle
-    ? canCancelDivineSelection || (undoDepth > 0 && isStableState(state))
+    ? canCancelDivineSelection ||
+      ((chainUndoAvailable || undoDepth > 0) && isStableState(state))
     : onlineSession
     ? canCancelDivineSelection || (
       onlineSession.undoAvailable &&
@@ -1818,7 +1829,11 @@ export function ThreePlayerGame({
       !onlineSession.undoProposal
     )
     : canCancelDivineSelection ||
-      (undoEnabled && undoDepth > 0 && isStableState(state));
+      (
+        undoEnabled &&
+        (chainUndoAvailable || undoDepth > 0) &&
+        isStableState(state)
+      );
 
   if (state.phase === "draft") {
     return (
