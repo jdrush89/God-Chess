@@ -224,11 +224,13 @@ npm run generate:daily -- path/to/simulation-checkpoint.json [YYYY-MM-DD]
 ```
 
 The generator validates the stable rewound state and exact exported replay,
-requires a checkmate that takes the winning side three to five player turns,
+requires a checkmate or king-death win that takes the winning side three to five player turns,
 and writes a compact dated file under `src/game/dailies/`. The recorded solution
 is authoritative; the CPU does not need to rediscover it or prove that no shorter
 solution exists. Dated files are discovered automatically; no registry edit is
-required.
+required. Both win reasons are eligible, but the replay must preserve the original
+winner and exact win reason. Draws, unfinished matches, and simulations exceeding
+200 completed divine turns remain ineligible for publication.
 
 ## Achievements
 

@@ -53,15 +53,15 @@ if (
 
 if (
   terminalResult.kind !== "winner" ||
-  terminalResult.reason !== "checkmate"
+  (terminalResult.reason !== "checkmate" && terminalResult.reason !== "king-death")
 ) {
-  throw new Error("Daily puzzles can only be generated from checkmate simulations.");
+  throw new Error("Daily puzzles can only be generated from checkmate or king-death simulations.");
 }
 const playerColor: Color = terminalResult.winner;
 const targetResult = terminalResult;
 
 if (state.activeColor !== playerColor) {
-  throw new Error("The checkpoint must begin on the checkmating player's turn.");
+  throw new Error("The checkpoint must begin on the winning player's turn.");
 }
 
 const targetMatches = (candidate: GameState) => {
