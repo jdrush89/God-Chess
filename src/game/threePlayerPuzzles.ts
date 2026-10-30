@@ -1,5 +1,6 @@
 import { createDefaultThreePlayerConfig } from "./threePlayerConfig";
 import { createThreePlayerGame } from "./threePlayerEngine";
+import { GODS } from "./gods";
 import type {
   ThreePlayerAction,
   ThreePlayerBoardVariant,
@@ -11,6 +12,7 @@ import type {
 } from "./threePlayerTypes";
 import type {
   PieceType,
+  GodId,
   PuzzleId,
   ThreePlayerPuzzleId,
 } from "./types";
@@ -23,7 +25,7 @@ export interface ThreePlayerPuzzleDefinition {
   objective: string;
   hint: string;
   solutionSummary: string;
-  playerTurns: 2;
+  playerTurns: 2 | 3;
   solutionTurns: ThreePlayerAction[][];
   cpuTurns: ThreePlayerAction[][];
   createState: (playerName?: string) => ThreePlayerState;
@@ -42,8 +44,9 @@ interface PuzzleSeed extends Omit<
   "mode" | "objective" | "playerTurns" | "solutionTurns" | "cpuTurns" | "createState"
 > {
   pieces: PuzzlePiecePlacement[];
-  firstTurn: ThreePlayerAction[];
-  secondTurn: ThreePlayerAction[];
+  whiteGods: [GodId, GodId, GodId];
+  solutionTurns: ThreePlayerAction[][];
+  cpuTurns?: ThreePlayerAction[][];
   whiteUpgrades?: Record<string, 1 | 2 | 3>;
 }
 
@@ -98,6 +101,32 @@ const marchHomeTurn = (): ThreePlayerAction[] => [
   { type: "confirm-ability" },
 ];
 
+const pickAFightTurn = (
+  from: ThreePlayerCell,
+  to: ThreePlayerCell,
+): ThreePlayerAction[] => [
+  { type: "select-god", godId: "ares" },
+  { type: "select-ability", abilityId: "pick-a-fight" },
+  { type: "cell", cell: from },
+  { type: "cell", cell: to },
+];
+
+const mountTurn = (
+  carrier: ThreePlayerCell,
+  destination: ThreePlayerCell,
+  rider: ThreePlayerCell,
+  landing: ThreePlayerCell,
+  pathId?: string,
+): ThreePlayerAction[] => [
+  { type: "select-god", godId: "chiron" },
+  { type: "select-ability", abilityId: "mount" },
+  { type: "cell", cell: carrier },
+  { type: "cell", cell: destination },
+  ...(pathId ? [{ type: "path", pathId } as ThreePlayerAction] : []),
+  { type: "cell", cell: rider },
+  { type: "cell", cell: landing },
+];
+
 const swapRivalOwners = (
   pieces: PuzzlePiecePlacement[],
 ): PuzzlePiecePlacement[] =>
@@ -109,6 +138,13 @@ const swapRivalOwners = (
       ? "red"
       : placement.owner,
   }));
+
+const withoutCells = (
+  pieces: PuzzlePiecePlacement[],
+  cells: ThreePlayerCell[],
+) => pieces.filter((placement) => !cells.includes(placement.cell));
+
+const turnCountLabel = (turns: number) => turns === 2 ? "two" : "three";
 
 const yaltaPieces = (
   chargeCell: ThreePlayerCell,
@@ -147,8 +183,14 @@ const createPuzzleState = (
   const state = createThreePlayerGame(config);
   state.phase = "play";
   state.activeSeat = "white";
-  state.players.white.gods = ["chiron", "quetzacoatl", "leonidas"];
-  state.players.red.gods = ["teles", "artemis", "kangus"];
+  state.players.white.gods = seed.whiteGods;
+  const rivalGods = GODS.map((god) => god.id)
+    .filter((godId) =>
+      !seed.whiteGods.includes(godId) &&
+      !["death", "anubis", "midas"].includes(godId)
+    )
+    .slice(0, 3);
+  state.players.red.gods = rivalGods;
   state.players.black.gods = ["death", "anubis", "midas"];
   state.players.white.orbs = { light: 10, dark: 10 };
   state.players.red.orbs = { light: 0, dark: 0 };
@@ -177,7 +219,10 @@ const createPuzzleState = (
     black: { king: false, queen: false },
   };
   state.history = [`Puzzle: ${seed.title}`];
-  state.notice = "Checkmate both rival Kings within two divine turns.";
+  state.notice =
+    `Checkmate both rival Kings within ${
+      turnCountLabel(seed.solutionTurns.length)
+    } divine turns.`;
   return state;
 };
 
@@ -186,11 +231,35 @@ const seeds: PuzzleSeed[] = [
     id: "three-frontier-fork",
     title: "Break the Frontier",
     boardVariant: "three-player",
-    hint: "The knight cannot reach the red mating square normally. Afterward, move the King without moving the rook behind it.",
-    solutionSummary: "Charge through the left frontier, then Air Lift the King to uncover the final rook line.",
-    pieces: yaltaPieces("three-player:11"),
-    firstTurn: chargeTurn("three-player:11", "three-player:9"),
-    secondTurn: airLiftTurn("three-player:28", "three-player:2"),
+    hint: "The mating knight cannot cross the frontier alone. Carry it through the long seam, then clear the far rook line.",
+    solutionSummary: "Mount one knight on another across the frontier, then Air Lift the King to uncover the final rook line.",
+    whiteGods: ["chiron", "quetzacoatl", "leonidas"],
+    pieces: [
+      ...withoutCells(
+        yaltaPieces("three-player:11").filter((placement) =>
+          placement.id !== "white-charge-knight"
+        ),
+        [
+          "three-player:23",
+          "three-player:1",
+          "three-player:6",
+          "three-player:8",
+          "three-player:15",
+        ],
+      ),
+      place("three-player:4", "knight", "white", "white-mount-carrier"),
+      place("three-player:5", "knight", "white", "white-mount-rider"),
+    ],
+    solutionTurns: [
+      mountTurn(
+        "three-player:4",
+        "three-player:10",
+        "three-player:5",
+        "three-player:9",
+        "three-player:knight:three-player:4:long:0:0",
+      ),
+      airLiftTurn("three-player:28", "three-player:2"),
+    ],
   },
   {
     id: "three-distant-rampart",
@@ -198,17 +267,31 @@ const seeds: PuzzleSeed[] = [
     boardVariant: "three-player",
     hint: "Unmask the rook attack first. The surviving King can only be reached if the knight stops moving like a knight.",
     solutionSummary: "Air Lift the King to reveal the first mate, then Charge through the opposite rampart.",
-    pieces: swapRivalOwners(yaltaPieces("three-player:12")),
-    firstTurn: airLiftTurn("three-player:28", "three-player:2"),
-    secondTurn: chargeTurn("three-player:12", "three-player:9"),
+    whiteGods: ["quetzacoatl", "chiron", "medusa"],
+    pieces: withoutCells(
+      swapRivalOwners(yaltaPieces("three-player:12")),
+      [
+        "three-player:23",
+        "three-player:1",
+        "three-player:6",
+        "three-player:8",
+        "three-player:15",
+        "three-player:17",
+      ],
+    ),
+    solutionTurns: [
+      airLiftTurn("three-player:28", "three-player:2"),
+      chargeTurn("three-player:12", "three-player:9"),
+    ],
   },
   {
     id: "hexagonal-crossfire",
     title: "Hexagonal Crossfire",
     boardVariant: "three-hexagonal",
-    hint: "The first knight needs a straight-line assault. The second mate appears only after the King leaves the rook's ray.",
-    solutionSummary: "Charge across the hex, then Air Lift the King and complete the circular follow-up.",
-    pieces: [
+    hint: "A distant knight can enter the hex only where it attacks two rivals. The second mate appears after the King leaves the rook's ray.",
+    solutionSummary: "Pick a Fight to teleport the knight into the crossfire, then Air Lift the King and complete the circular follow-up.",
+    whiteGods: ["ares", "quetzacoatl", "medusa"],
+    pieces: withoutCells([
       place("three-hexagonal:16", "king", "red", "red-king"),
       place("three-hexagonal:8", "king", "black", "black-king"),
       ...["33", "32", "15", "31", "49"].map((cell) =>
@@ -217,16 +300,19 @@ const seeds: PuzzleSeed[] = [
       place("three-hexagonal:28", "queen", "white"),
       place("three-hexagonal:43", "rook", "white"),
       place("three-hexagonal:26", "rook", "white"),
-      place("three-hexagonal:14", "knight", "white", "white-charge-knight"),
+      place("three-hexagonal:9", "knight", "white", "white-pick-knight"),
       place("three-hexagonal:56", "rook", "white", "white-discovery-rook"),
       place("three-hexagonal:40", "king", "white", "white-airlift-king"),
+    ], ["three-hexagonal:28", "three-hexagonal:26"]),
+    whiteUpgrades: { "pick-a-fight": 2 },
+    solutionTurns: [
+      pickAFightTurn("three-hexagonal:9", "three-hexagonal:30"),
+      airLiftTurn(
+        "three-hexagonal:40",
+        "three-hexagonal:9",
+        ["three-hexagonal:10"],
+      ),
     ],
-    firstTurn: chargeTurn("three-hexagonal:14", "three-hexagonal:30"),
-    secondTurn: airLiftTurn(
-      "three-hexagonal:40",
-      "three-hexagonal:9",
-      ["three-hexagonal:10"],
-    ),
   },
   {
     id: "hexagonal-last-gate",
@@ -234,7 +320,8 @@ const seeds: PuzzleSeed[] = [
     boardVariant: "three-hexagonal",
     hint: "The King is masking a long rook ray. Recall it before turning the knight toward the last gate.",
     solutionSummary: "March Home to reveal the first mate, then Charge into the final hex gate.",
-    pieces: swapRivalOwners([
+    whiteGods: ["leonidas", "chiron", "salem"],
+    pieces: withoutCells(swapRivalOwners([
       place("three-hexagonal:15", "king", "red", "red-king"),
       place("three-hexagonal:8", "king", "black", "black-king"),
       ...["16", "32", "31", "14", "33", "30", "48"].map((cell) =>
@@ -246,29 +333,35 @@ const seeds: PuzzleSeed[] = [
       place("three-hexagonal:12", "knight", "white", "white-charge-knight"),
       place("three-hexagonal:56", "rook", "white", "white-discovery-rook"),
       place("three-hexagonal:40", "king", "white", "white-airlift-king"),
-    ]),
-    firstTurn: marchHomeTurn(),
-    secondTurn: chargeTurn("three-hexagonal:12", "three-hexagonal:29"),
+    ]), ["three-hexagonal:48", "three-hexagonal:28"]),
+    solutionTurns: [
+      marchHomeTurn(),
+      chargeTurn("three-hexagonal:12", "three-hexagonal:29"),
+    ],
   },
   {
     id: "triad-pincer",
     title: "Triad Pincer",
     boardVariant: "triad",
-    hint: "The first mating square is aligned with the knight, not jumped to. The second attack is hidden behind your King.",
-    solutionSummary: "Charge into the pincer, then Air Lift the King off the rook's line.",
-    pieces: [
+    hint: "The mating knight cannot reach the pincer alone. Carry it across the triad, then uncover the hidden rook attack.",
+    solutionSummary: "Mount one knight on another to build the pincer, then Air Lift the King off the rook's line.",
+    whiteGods: ["chiron", "quetzacoatl", "salem"],
+    pieces: withoutCells([
       place("triad:111", "king", "red", "red-king"),
       place("triad:14", "king", "black", "black-king"),
       ...["112", "129", "128", "130", "146"].map((cell) =>
         place(`triad:${cell}`, "pawn", "red")
       ),
       place("triad:51", "queen", "white"),
-      place("triad:113", "knight", "white", "white-charge-knight"),
+      place("triad:99", "knight", "white", "white-mount-carrier"),
+      place("triad:100", "knight", "white", "white-mount-rider"),
       place("triad:68", "rook", "white", "white-discovery-rook"),
       place("triad:50", "king", "white", "white-airlift-king"),
+    ], ["triad:112", "triad:146"]),
+    solutionTurns: [
+      mountTurn("triad:99", "triad:132", "triad:100", "triad:131"),
+      airLiftTurn("triad:50", "triad:48"),
     ],
-    firstTurn: chargeTurn("triad:113", "triad:131"),
-    secondTurn: airLiftTurn("triad:50", "triad:48"),
   },
   {
     id: "triad-long-march",
@@ -276,7 +369,8 @@ const seeds: PuzzleSeed[] = [
     boardVariant: "triad",
     hint: "Reveal the short rook line first. The remaining King is vulnerable only to a straight-line knight assault.",
     solutionSummary: "Air Lift the King off the first file, then Charge down the long triad arm.",
-    pieces: swapRivalOwners([
+    whiteGods: ["quetzacoatl", "chiron", "ares"],
+    pieces: withoutCells(swapRivalOwners([
       place("triad:198", "king", "red", "red-king"),
       place("triad:14", "king", "black", "black-king"),
       ...["199", "216", "181", "217", "182", "163"].map((cell) =>
@@ -286,17 +380,20 @@ const seeds: PuzzleSeed[] = [
       place("triad:112", "knight", "white", "white-charge-knight"),
       place("triad:68", "rook", "white", "white-discovery-rook"),
       place("triad:50", "king", "white", "white-airlift-king"),
-    ]),
-    firstTurn: airLiftTurn("triad:50", "triad:48"),
-    secondTurn: chargeTurn("triad:112", "triad:146"),
+    ]), ["triad:199", "triad:163"]),
+    solutionTurns: [
+      airLiftTurn("triad:50", "triad:48"),
+      chargeTurn("triad:112", "triad:146"),
+    ],
   },
   {
     id: "circular-convergence",
     title: "Circular Convergence",
     boardVariant: "three-circular",
-    hint: "The knight's target is one ring away but not a knight jump. The far King is hidden behind your own King.",
-    solutionSummary: "Charge between rings, then Air Lift the King to uncover the circular rook ray.",
-    pieces: [
+    hint: "The inner-ring knight must teleport to a square where it attacks two enemies. The far King is hidden behind your own King.",
+    solutionSummary: "Pick a Fight across the rings, then Air Lift the King to uncover the circular rook ray.",
+    whiteGods: ["ares", "quetzacoatl", "medusa"],
+    pieces: withoutCells([
       place("three-circular:6", "king", "red", "red-king"),
       ...["30", "7", "5", "31", "29"].map((cell) =>
         place(`three-circular:${cell}`, "pawn", "red")
@@ -305,12 +402,15 @@ const seeds: PuzzleSeed[] = [
       ...["40", "15", "41", "39"].map((cell) =>
         place(`three-circular:${cell}`, "pawn", "black")
       ),
-      place("three-circular:4", "knight", "white", "white-charge-knight"),
+      place("three-circular:1", "knight", "white", "white-pick-knight"),
       place("three-circular:0", "rook", "white", "white-discovery-rook"),
       place("three-circular:23", "king", "white", "white-airlift-king"),
+    ], ["three-circular:15"]),
+    whiteUpgrades: { "pick-a-fight": 2 },
+    solutionTurns: [
+      pickAFightTurn("three-circular:1", "three-circular:28"),
+      airLiftTurn("three-circular:23", "three-circular:1"),
     ],
-    firstTurn: chargeTurn("three-circular:4", "three-circular:28"),
-    secondTurn: airLiftTurn("three-circular:23", "three-circular:1"),
   },
   {
     id: "circular-outer-ring",
@@ -318,7 +418,8 @@ const seeds: PuzzleSeed[] = [
     boardVariant: "three-circular",
     hint: "Open the circular file before attacking the outer cage. The knight must finish with a rook move.",
     solutionSummary: "Air Lift the King off the ring, then Charge outward to the final mating square.",
-    pieces: swapRivalOwners([
+    whiteGods: ["quetzacoatl", "chiron", "teles"],
+    pieces: withoutCells(swapRivalOwners([
       place("three-circular:9", "king", "red", "red-king"),
       ...["33", "10", "8", "34", "32"].map((cell) =>
         place(`three-circular:${cell}`, "pawn", "red")
@@ -330,9 +431,11 @@ const seeds: PuzzleSeed[] = [
       place("three-circular:7", "knight", "white", "white-charge-knight"),
       place("three-circular:0", "rook", "white", "white-discovery-rook"),
       place("three-circular:23", "king", "white", "white-airlift-king"),
-    ]),
-    firstTurn: airLiftTurn("three-circular:23", "three-circular:1"),
-    secondTurn: chargeTurn("three-circular:7", "three-circular:31"),
+    ]), ["three-circular:18"]),
+    solutionTurns: [
+      airLiftTurn("three-circular:23", "three-circular:1"),
+      chargeTurn("three-circular:7", "three-circular:31"),
+    ],
   },
   {
     id: "half-board-siege",
@@ -340,7 +443,8 @@ const seeds: PuzzleSeed[] = [
     boardVariant: "three-half",
     hint: "Recall the King to expose the compact rook line. Then choose the correct straight route for the knight.",
     solutionSummary: "March Home to reveal the first mate, then Charge across the half-board.",
-    pieces: swapRivalOwners([
+    whiteGods: ["leonidas", "chiron", "salem"],
+    pieces: withoutCells(swapRivalOwners([
       place("three-half:31", "king", "red", "red-king"),
       place("three-half:24", "king", "black", "black-king"),
       ...["30", "23", "22"].map((cell) =>
@@ -351,21 +455,24 @@ const seeds: PuzzleSeed[] = [
       place("three-half:6", "knight", "white", "white-charge-knight"),
       place("three-half:27", "rook", "white", "white-discovery-rook"),
       place("three-half:26", "king", "white", "white-airlift-king"),
-    ]),
-    firstTurn: marchHomeTurn(),
-    secondTurn: chargeTurn(
-      "three-half:6",
-      "three-half:14",
-      "three-half:rook:three-half:6:white-red:3",
-    ),
+    ]), ["three-half:22"]),
+    solutionTurns: [
+      marchHomeTurn(),
+      chargeTurn(
+        "three-half:6",
+        "three-half:14",
+        "three-half:rook:three-half:6:white-red:3",
+      ),
+    ],
   },
   {
     id: "half-board-final-file",
     title: "The Final File",
     boardVariant: "three-half",
-    hint: "The knight's straight-line route has two choices. The final file opens only when the King teleports away.",
-    solutionSummary: "Charge along the white-red route, then Air Lift the King clear of the last file.",
-    pieces: [
+    hint: "One knight must carry another through the half-board seam. The final file opens only when the King teleports away.",
+    solutionSummary: "Mount the attacking knight across the seam, then Air Lift the King clear of the last file.",
+    whiteGods: ["chiron", "quetzacoatl", "salem"],
+    pieces: withoutCells([
       place("three-half:28", "king", "red", "red-king"),
       place("three-half:24", "king", "black", "black-king"),
       ...["29", "27", "20", "21", "19"].map((cell) =>
@@ -373,16 +480,21 @@ const seeds: PuzzleSeed[] = [
       ),
       place("three-half:1", "queen", "white"),
       place("three-half:17", "rook", "white"),
-      place("three-half:6", "knight", "white", "white-charge-knight"),
+      place("three-half:6", "knight", "white", "white-mount-carrier"),
+      place("three-half:38", "knight", "white", "white-mount-rider"),
       place("three-half:32", "rook", "white", "white-discovery-rook"),
       place("three-half:0", "king", "white", "white-airlift-king"),
+    ], ["three-half:29", "three-half:17"]),
+    solutionTurns: [
+      mountTurn(
+        "three-half:6",
+        "three-half:23",
+        "three-half:38",
+        "three-half:22",
+        "three-half:knight:three-half:6:white-red:3:0",
+      ),
+      airLiftTurn("three-half:0", "three-half:2"),
     ],
-    firstTurn: chargeTurn(
-      "three-half:6",
-      "three-half:22",
-      "three-half:rook:three-half:6:white-red:3",
-    ),
-    secondTurn: airLiftTurn("three-half:0", "three-half:2"),
   },
 ];
 
@@ -398,12 +510,19 @@ export const THREE_PLAYER_PUZZLES: ThreePlayerPuzzleDefinition[] = seeds.map(
     mode: "three-player",
     title: seed.title,
     boardVariant: seed.boardVariant,
-    objective: "Checkmate both rival Kings within two divine turns.",
+    objective:
+      `Checkmate both rival Kings within ${
+        turnCountLabel(seed.solutionTurns.length)
+      } divine turns.`,
     hint: seed.hint,
     solutionSummary: seed.solutionSummary,
-    playerTurns: 2,
-    solutionTurns: [seed.firstTurn, seed.secondTurn],
-    cpuTurns: [cpuTurn],
+    playerTurns: seed.solutionTurns.length as 2 | 3,
+    solutionTurns: seed.solutionTurns,
+    cpuTurns: seed.cpuTurns ??
+      Array.from(
+        { length: seed.solutionTurns.length - 1 },
+        () => cpuTurn,
+      ),
     createState: (playerName?: string) =>
       createPuzzleState(seed, playerName),
   }),

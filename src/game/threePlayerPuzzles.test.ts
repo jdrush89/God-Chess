@@ -69,7 +69,7 @@ describe("three-player puzzles", () => {
     }
   });
 
-  it("mirrors the first Yalta rivals and reverses the tactical order in the second", () => {
+  it("mirrors the first Yalta rivals and uses a different tactical order in the second", () => {
     const [first, second] = THREE_PLAYER_PUZZLES;
     const firstState = first.createState();
     const redKingCell = Object.entries(firstState.board).find(
@@ -88,7 +88,7 @@ describe("three-player puzzles", () => {
       puzzle.solutionTurns.map((turn) =>
         turn.find((action) => action.type === "select-ability")?.abilityId
       );
-    expect(abilities(first)).toEqual(["charge", "air-lift"]);
+    expect(abilities(first)).toEqual(["mount", "air-lift"]);
     expect(abilities(second)).toEqual(["air-lift", "charge"]);
   });
 
@@ -102,21 +102,35 @@ describe("three-player puzzles", () => {
     const sequenceIds = new Set(sequences.map((sequence) => sequence.join(">")));
 
     expect(abilityIds).toEqual(
-      new Set(["charge", "air-lift", "march-home"]),
+      new Set([
+        "air-lift",
+        "charge",
+        "march-home",
+        "mount",
+        "pick-a-fight",
+      ]),
     );
     expect(sequenceIds).toEqual(
       new Set([
-        "charge>air-lift",
         "air-lift>charge",
         "march-home>charge",
+        "mount>air-lift",
+        "pick-a-fight>air-lift",
       ]),
     );
-    expect(
-      sequences.filter(([first]) => first === "charge"),
-    ).toHaveLength(5);
-    expect(
-      sequences.filter(([first]) => first !== "charge"),
-    ).toHaveLength(5);
+    expect(sequenceIds.size).toBe(4);
+    expect(abilityIds.size).toBe(5);
+
+    const whiteRosters = THREE_PLAYER_PUZZLES.map((puzzle) =>
+      puzzle.createState().players.white.gods.join(",")
+    );
+    const whiteGods = new Set(
+      THREE_PLAYER_PUZZLES.flatMap((puzzle) =>
+        puzzle.createState().players.white.gods
+      ),
+    );
+    expect(new Set(whiteRosters).size).toBeGreaterThanOrEqual(5);
+    expect(whiteGods.size).toBeGreaterThanOrEqual(7);
   });
 
   it("requires each advanced ability's special movement", () => {
@@ -164,6 +178,25 @@ describe("three-player puzzles", () => {
           expect(kingCell, puzzle.id).not.toBe(
             topology.homeCell("white"),
           );
+        } else if (ability.abilityId === "pick-a-fight") {
+          const [source, destination] = cells;
+          expect(state.board[source.cell]?.type, puzzle.id).toBe("knight");
+          expect(
+            topology.knightTargets(source.cell).includes(destination.cell),
+            puzzle.id,
+          ).toBe(false);
+        } else if (ability.abilityId === "mount") {
+          const [carrier, destination, rider, landing] = cells;
+          expect(state.board[carrier.cell]?.type, puzzle.id).toBe("knight");
+          expect(state.board[rider.cell]?.type, puzzle.id).toBe("knight");
+          expect(
+            topology.knightTargets(carrier.cell).includes(destination.cell),
+            puzzle.id,
+          ).toBe(true);
+          expect(
+            topology.knightTargets(rider.cell).includes(landing.cell),
+            puzzle.id,
+          ).toBe(false);
         }
       }
     }
@@ -199,25 +232,24 @@ describe("three-player puzzles", () => {
     ).toBe(true);
   });
 
-  it("allows a CPU turn between documented player turns and wins on turn two", () => {
+  it("allows CPU turns between documented player turns and wins within the budget", () => {
     for (const puzzle of THREE_PLAYER_PUZZLES) {
       let state = puzzle.createState();
-      state = puzzle.solutionTurns[0].reduce(threePlayerReducer, state);
-      expect(state.players.red.eliminated, puzzle.id).toBe(true);
-      expect(state.players.black.eliminated, puzzle.id).toBe(false);
-      expect(state.activeSeat, puzzle.id).toBe("black");
-      expect(state.completedTurns.white, puzzle.id).toBe(1);
-      expect(state.result, puzzle.id).toBeUndefined();
+      expect(puzzle.solutionTurns).toHaveLength(puzzle.playerTurns);
+      expect(puzzle.cpuTurns).toHaveLength(puzzle.playerTurns - 1);
 
-      const cpuTurn = puzzle.cpuTurns[0];
-      state = cpuTurn.reduce(threePlayerReducer, state);
-      expect(state.completedTurns.black, puzzle.id).toBe(1);
-      expect(state.activeSeat, puzzle.id).toBe("white");
+      for (const [turnIndex, turn] of puzzle.solutionTurns.entries()) {
+        state = turn.reduce(threePlayerReducer, state);
+        expect(state.completedTurns.white, puzzle.id).toBe(turnIndex + 1);
+        if (turnIndex < puzzle.cpuTurns.length) {
+          expect(state.result, puzzle.id).toBeUndefined();
+          state = puzzle.cpuTurns[turnIndex].reduce(threePlayerReducer, state);
+          expect(state.activeSeat, puzzle.id).toBe("white");
+        }
+      }
 
-      state = puzzle.solutionTurns[1].reduce(threePlayerReducer, state);
       expect(state.players.red.eliminated, puzzle.id).toBe(true);
       expect(state.players.black.eliminated, puzzle.id).toBe(true);
-      expect(state.completedTurns.white, puzzle.id).toBe(2);
       expect(state.result, puzzle.id).toEqual({
         kind: "winner",
         seat: "white",
