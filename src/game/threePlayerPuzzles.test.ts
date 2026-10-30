@@ -274,6 +274,7 @@ describe("three-player puzzles", () => {
     expect(cpuTurn).not.toContainEqual({ type: "pass" });
     state = cpuTurn.reduce(threePlayerReducer, state);
     expect(JSON.stringify(state.board)).not.toBe(boardBefore);
-    expect(state.lastAction).toMatch(/used Sing with Teles/i);
+    expect(state.lastAction).toMatch(/moved Pawn/i);
+    expect(state.lastAction).not.toMatch(/Marked|Death/i);
   });
 });
