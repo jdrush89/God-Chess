@@ -59,6 +59,7 @@ describe("resolveAuthRedirectUrl", () => {
             user_metadata: {
               display_name: "Athena",
               portrait_id: "quetzacoatl",
+              piece_theme: "classic",
             },
           },
         },
@@ -77,6 +78,7 @@ describe("resolveAuthRedirectUrl", () => {
         display_name: "Athena",
         public_id: "gc-athena01",
         portrait_id: "quetzacoatl",
+        piece_theme: "classic",
       },
       error: null,
     });
@@ -104,6 +106,23 @@ describe("resolveAuthRedirectUrl", () => {
       data: { portrait_id: "kangus" },
     });
     expect(result.current.account?.portraitId).toBe("kangus");
+  });
+
+  it("stores piece theme changes in account metadata and applies them", async () => {
+    const { result } = renderHook(() => useAccount());
+    await waitFor(() => expect(result.current.account?.pieceTheme).toBe(
+      "classic",
+    ));
+
+    await act(async () => {
+      await result.current.updatePieceTheme("mushroom");
+    });
+
+    expect(accountMocks.updateUser).toHaveBeenCalledWith({
+      data: { piece_theme: "mushroom" },
+    });
+    expect(result.current.account?.pieceTheme).toBe("mushroom");
+    expect(document.documentElement.dataset.pieceTheme).toBe("mushroom");
   });
 
   it("does not overwrite an existing profile when sign-in hydration appears missing", async () => {
@@ -137,6 +156,7 @@ describe("resolveAuthRedirectUrl", () => {
     expect(createSignUpMetadata("  Athena  ")).toEqual({
       display_name: "Athena",
       portrait_id: "quetzacoatl",
+      piece_theme: "classic",
       local_data_import_pending: true,
     });
   });

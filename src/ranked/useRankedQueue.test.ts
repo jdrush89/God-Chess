@@ -20,6 +20,7 @@ const account: AccountProfile = {
   email: "athena@example.com",
   displayName: "Athena",
   portraitId: "artemis",
+  pieceTheme: "classic",
 };
 
 const matchedPayload = {

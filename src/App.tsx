@@ -162,6 +162,7 @@ import {
   upsertCloudCompletedChallenges,
 } from "./account/cloudChallengeProgress";
 import { useAccount, type AccountProfile } from "./account/useAccount";
+import { PieceThemeSymbol, type PieceThemeId } from "./pieceThemes";
 import { CustomPuzzleHub } from "./customPuzzles/CustomPuzzleHub";
 import {
   createCustomPuzzleGame,
@@ -496,11 +497,6 @@ interface ThreePlayerSession {
   puzzleId?: ThreePlayerPuzzleId;
   challengeId?: ChallengeId;
 }
-
-const PIECES: Record<Color, Record<Piece["type"], string>> = {
-  white: { king: "♔", queen: "♕", rook: "♖", bishop: "♗", knight: "♘", pawn: "♙" },
-  black: { king: "♚", queen: "♛", rook: "♜", bishop: "♝", knight: "♞", pawn: "♟" },
-};
 
 const TITLE_ART_AVIF = `${import.meta.env.BASE_URL}god-chess-title.avif`;
 const TITLE_ART_WEBP = `${import.meta.env.BASE_URL}god-chess-title.webp`;
@@ -1329,7 +1325,7 @@ function PieceView({ piece }: { piece: Piece }) {
       className={`chess-piece ${piece.color} ${piece.status.hired ? "hired" : ""}`}
       data-piece-id={piece.id}
     >
-      {PIECES[piece.color][displayType]}
+      <PieceThemeSymbol type={displayType} classicColor={piece.color} />
       {statuses.length > 0 && (
         <span className="status-markers" title={statuses.map(({ label }) => label).join(", ")}>
           {statuses.map(({ key, label, icon: Icon }) => (
@@ -1477,7 +1473,10 @@ export function ChessBoard({
                     <span
                       className={`chess-piece defeated-king-piece ${defeatedKingHere.piece.color}`}
                     >
-                      {PIECES[defeatedKingHere.piece.color].king}
+                      <PieceThemeSymbol
+                        type="king"
+                        classicColor={defeatedKingHere.piece.color}
+                      />
                     </span>
                     <X />
                   </span>
@@ -1603,7 +1602,12 @@ function SquareInfoPanel({
       {piece && markers.length > 0 && (
         <>
           <div className="square-info-heading">
-            <span className={`piece-info-symbol ${piece.color}`}>{PIECES[piece.color][piece.type]}</span>
+            <span className={`piece-info-symbol ${piece.color}`}>
+              <PieceThemeSymbol
+                type={piece.type}
+                classicColor={piece.color}
+              />
+            </span>
             <div>
               <small>{square.toUpperCase()} · {colorLabel(piece.controller)}</small>
               <h3>{PIECE_NAMES[piece.type]}</h3>
@@ -2490,6 +2494,7 @@ interface AccountControlProps {
   onUpdatePassword: (password: string) => Promise<string>;
   onUpdateDisplayName: (displayName: string) => Promise<string>;
   onUpdatePortrait: (portraitId: AccountPortraitId) => Promise<string>;
+  onUpdatePieceTheme: (pieceTheme: PieceThemeId) => Promise<string>;
   onImportLocalData: () => Promise<void>;
   onStartAccountFresh: () => Promise<void>;
   social?: SocialContract;
@@ -2515,6 +2520,7 @@ function AccountControl({
   onUpdatePassword,
   onUpdateDisplayName,
   onUpdatePortrait,
+  onUpdatePieceTheme,
   onImportLocalData,
   onStartAccountFresh,
   social,
@@ -2674,6 +2680,7 @@ function AccountControl({
             onUpdatePassword={onUpdatePassword}
             onUpdateDisplayName={updateDisplayName}
             onUpdatePortrait={onUpdatePortrait}
+            onUpdatePieceTheme={onUpdatePieceTheme}
           />,
           document.body,
         )
@@ -5434,7 +5441,10 @@ export function GameScreen({
         >
           <span className="capture-flight-path">
             <span className={`capture-flight-piece ${flight.piece.color}`}>
-              {PIECES[flight.piece.color][flight.piece.type]}
+              <PieceThemeSymbol
+                type={flight.piece.type}
+                classicColor={flight.piece.color}
+              />
             </span>
           </span>
         </div>
@@ -8801,6 +8811,7 @@ export default function App() {
       onUpdatePassword={accountService.updatePassword}
       onUpdateDisplayName={accountService.updateDisplayName}
       onUpdatePortrait={accountService.updatePortrait}
+      onUpdatePieceTheme={accountService.updatePieceTheme}
       onImportLocalData={() => finishLocalDataImportDecision(true)}
       onStartAccountFresh={() => finishLocalDataImportDecision(false)}
       social={social}
@@ -8831,6 +8842,7 @@ export default function App() {
         onUpdatePassword={accountService.updatePassword}
         onUpdateDisplayName={accountService.updateDisplayName}
         onUpdatePortrait={accountService.updatePortrait}
+        onUpdatePieceTheme={accountService.updatePieceTheme}
         onImportLocalData={() => finishLocalDataImportDecision(true)}
         onStartAccountFresh={() => finishLocalDataImportDecision(false)}
         social={social}

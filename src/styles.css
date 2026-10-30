@@ -733,6 +733,56 @@ span.move-target-dot {
   position: relative; z-index: 3; font-family: Georgia, serif; font-size: clamp(18px, 9cqi, 65px); line-height: 1;
   filter: drop-shadow(0 4px 2px rgba(0,0,0,.42)); transition: transform .15s;
 }
+.piece-theme-symbol {
+  position: relative; width: 1em; height: 1em; display: inline-grid;
+  place-items: center; line-height: 1; vertical-align: middle;
+}
+.piece-theme-symbol > * { grid-area: 1 / 1; }
+.classic-piece-glyph { display: block; }
+.mushroom-piece-glyph {
+  display: none; width: 1em; height: 1em; overflow: visible;
+  color: var(--piece-color, currentColor); -webkit-text-stroke: 0; text-shadow: none;
+}
+html[data-piece-theme="mushroom"] .piece-theme-symbol > .classic-piece-glyph,
+html[data-piece-theme="mushroom"] .three-board-piece.classic-piece-glyph {
+  display: none;
+}
+html[data-piece-theme="mushroom"] .mushroom-piece-glyph { display: block; }
+.mushroom-piece-glyph :where(path, ellipse, circle) {
+  vector-effect: non-scaling-stroke;
+}
+.mushroom-piece-cap,
+.mushroom-piece-base {
+  fill: currentColor;
+  stroke: #21150f;
+  stroke-width: 3.6;
+  stroke-linejoin: round;
+}
+.mushroom-piece-stem {
+  fill: #f3d995;
+  stroke: #21150f;
+  stroke-width: 3.6;
+  stroke-linejoin: round;
+}
+.mushroom-piece-stem-shade { fill: #d69d4f; opacity: .34; }
+.mushroom-piece-gill {
+  fill: #deb66c;
+  stroke: #4c2b18;
+  stroke-width: 2.1;
+  stroke-linejoin: round;
+}
+.mushroom-piece-spot { fill: #f7d06c; stroke: #5c351c; stroke-width: 1.2; }
+.mushroom-piece-cut,
+.mushroom-piece-collar,
+.mushroom-piece-crown,
+.mushroom-piece-cross {
+  fill: none;
+  stroke: #f2c86a;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.mushroom-piece-eye { fill: #21150f; stroke: #f3d995; stroke-width: 1.2; }
 
 .chess-piece,
 .three-board-piece {
@@ -2535,6 +2585,56 @@ span.move-target-dot {
   width: 100%; margin-top: 10px; display: inline-flex;
   align-items: center; justify-content: center;
 }
+.piece-theme-picker {
+  display: grid; gap: 9px; margin-top: 18px; text-align: left;
+}
+.piece-theme-picker > span {
+  color: #9c9b98; font-size: 9px; font-weight: 700;
+  letter-spacing: .12em; text-transform: uppercase;
+}
+.piece-theme-picker > div {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;
+}
+.piece-theme-picker button {
+  min-width: 0; display: grid; grid-template-rows: auto auto 1fr; gap: 5px;
+  padding: 11px 9px; color: #aaa8a2; text-align: left;
+  background: #0b0d12; border: 1px solid #30333b; cursor: pointer;
+}
+.piece-theme-picker button:hover { border-color: rgba(198,161,91,.65); }
+.piece-theme-picker button.selected {
+  color: #f0dba8; border-color: var(--gold-bright);
+  box-shadow: inset 0 0 0 2px rgba(198,161,91,.2);
+}
+.piece-theme-picker button:disabled { cursor: wait; }
+.piece-theme-picker strong {
+  font: 600 11px "Cinzel"; letter-spacing: .04em;
+}
+.piece-theme-picker small {
+  color: #74767d; font-size: 8px; line-height: 1.45;
+}
+.piece-theme-preview {
+  min-height: 35px; display: grid; grid-template-columns: repeat(6, 1fr);
+  align-items: end; gap: 1px; font: 25px/1 Georgia, serif;
+}
+.piece-theme-preview .piece-theme-symbol { justify-self: center; }
+.piece-theme-preview .white { color: #f5f0e6; }
+.piece-theme-preview .black { color: #272a30; }
+.piece-theme-picker [data-preview-theme="classic"] .classic-piece-glyph {
+  display: block !important;
+}
+.piece-theme-picker [data-preview-theme="classic"] .mushroom-piece-glyph {
+  display: none !important;
+}
+.piece-theme-picker [data-preview-theme="mushroom"] .classic-piece-glyph {
+  display: none !important;
+}
+.piece-theme-picker [data-preview-theme="mushroom"] .mushroom-piece-glyph {
+  display: block !important;
+}
+.account-save-piece-theme {
+  width: 100%; margin-top: 10px; display: inline-flex;
+  align-items: center; justify-content: center;
+}
 .account-signout { width: 100%; margin-top: 12px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
 .account-import-actions { display: grid; gap: 10px; margin-top: 22px; }
 .account-import-actions button {
@@ -2941,6 +3041,11 @@ span.move-target-dot {
   filter: drop-shadow(0 .08px .04px rgba(0,0,0,.7));
 }
 .three-board-piece.inert { opacity: .38; }
+.three-board-mushroom-piece {
+  pointer-events: none;
+  filter: drop-shadow(0 .08px .04px rgba(0,0,0,.7));
+}
+.three-board-mushroom-piece.inert { opacity: .38; }
 .three-status-marker { pointer-events: none; }
 .three-status-marker polygon {
   fill: #5b3a76; stroke: #e2c8f4; stroke-width: .045; vector-effect: non-scaling-stroke;

@@ -28,9 +28,23 @@ import {
   DEFAULT_ACCOUNT_PORTRAIT_ID,
   type AccountPortraitId,
 } from "./portraits";
+import {
+  PIECE_THEME_OPTIONS,
+  PieceThemeSymbol,
+  type PieceThemeId,
+} from "../pieceThemes";
+import type { PieceType } from "../game/types";
 
 type AccountSection = "profile" | "friends";
 type AuthMode = "signin" | "signup" | "forgot";
+const PIECE_PREVIEW_TYPES: PieceType[] = [
+  "king",
+  "queen",
+  "rook",
+  "bishop",
+  "knight",
+  "pawn",
+];
 
 function PasswordInput({
   id,
@@ -67,6 +81,50 @@ function PasswordInput({
         >
           {visible ? <EyeOff size={17} /> : <Eye size={17} />}
         </button>
+      </div>
+    </div>
+  );
+}
+
+function PieceThemePicker({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: PieceThemeId;
+  disabled?: boolean;
+  onChange: (value: PieceThemeId) => void;
+}) {
+  return (
+    <div className="piece-theme-picker">
+      <span>Piece theme</span>
+      <div role="radiogroup" aria-label="Piece theme">
+        {PIECE_THEME_OPTIONS.map((theme) => (
+          <button
+            type="button"
+            role="radio"
+            aria-checked={value === theme.id}
+            aria-label={theme.name}
+            className={value === theme.id ? "selected" : ""}
+            disabled={disabled}
+            data-preview-theme={theme.id}
+            onClick={() => onChange(theme.id)}
+            key={theme.id}
+          >
+            <span className="piece-theme-preview" aria-hidden="true">
+              {PIECE_PREVIEW_TYPES.map((type, index) => (
+                <PieceThemeSymbol
+                  type={type}
+                  classicColor={index < 3 ? "white" : "black"}
+                  className={index < 3 ? "white" : "black"}
+                  key={type}
+                />
+              ))}
+            </span>
+            <strong>{theme.name}</strong>
+            <small>{theme.description}</small>
+          </button>
+        ))}
       </div>
     </div>
   );
@@ -297,6 +355,7 @@ export function AccountModal({
   passwordRecovery = false,
   onUpdateDisplayName,
   onUpdatePortrait,
+  onUpdatePieceTheme,
 }: {
   account?: AccountProfile;
   configured: boolean;
@@ -321,6 +380,7 @@ export function AccountModal({
   passwordRecovery?: boolean;
   onUpdateDisplayName: (displayName: string) => Promise<string>;
   onUpdatePortrait: (portraitId: AccountPortraitId) => Promise<string>;
+  onUpdatePieceTheme: (pieceTheme: PieceThemeId) => Promise<string>;
 }) {
   const [mode, setMode] = useState<AuthMode>("signin");
   const [section, setSection] = useState<AccountSection>(initialSection);
@@ -332,12 +392,16 @@ export function AccountModal({
   const [portraitId, setPortraitId] = useState<AccountPortraitId>(
     account?.portraitId ?? DEFAULT_ACCOUNT_PORTRAIT_ID,
   );
+  const [pieceTheme, setPieceTheme] = useState<PieceThemeId>(
+    account?.pieceTheme ?? "classic",
+  );
   const [feedback, setFeedback] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
     setDisplayName(account?.displayName ?? "");
     setPortraitId(account?.portraitId ?? DEFAULT_ACCOUNT_PORTRAIT_ID);
+    setPieceTheme(account?.pieceTheme ?? "classic");
     setSection(initialSection);
     setFeedback("");
     setError("");
@@ -345,6 +409,7 @@ export function AccountModal({
     account?.userId,
     account?.displayName,
     account?.portraitId,
+    account?.pieceTheme,
     initialSection,
   ]);
 
@@ -526,6 +591,19 @@ export function AccountModal({
                   onClick={() => void run(() => onUpdatePortrait(portraitId))}
                 >
                   Save portrait
+                </button>
+                <PieceThemePicker
+                  value={pieceTheme}
+                  disabled={working}
+                  onChange={setPieceTheme}
+                />
+                <button
+                  className="secondary-button account-save-piece-theme"
+                  disabled={working || pieceTheme === account.pieceTheme}
+                  onClick={() =>
+                    void run(() => onUpdatePieceTheme(pieceTheme))}
+                >
+                  Save piece theme
                 </button>
                 <button className="secondary-button account-signout" disabled={working} onClick={() => void run(onSignOut)}>
                   <LogOut size={16} /> Sign out

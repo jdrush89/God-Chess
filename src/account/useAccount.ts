@@ -6,12 +6,19 @@ import {
   normalizeAccountPortraitId,
   type AccountPortraitId,
 } from "./portraits";
+import {
+  DEFAULT_PIECE_THEME_ID,
+  normalizePieceThemeId,
+  savePieceThemePreference,
+  type PieceThemeId,
+} from "../pieceThemes";
 
 export interface AccountProfile {
   userId: string;
   email: string;
   displayName: string;
   portraitId: AccountPortraitId;
+  pieceTheme: PieceThemeId;
   publicId?: string;
   needsDisplayName?: boolean;
   needsLocalDataImport?: boolean;
@@ -70,6 +77,7 @@ export const createSignUpMetadata = (
 ) => ({
   display_name: displayName.trim().slice(0, 24),
   portrait_id: normalizeAccountPortraitId(portraitId),
+  piece_theme: DEFAULT_PIECE_THEME_ID,
   local_data_import_pending: true,
 });
 
@@ -118,6 +126,8 @@ const loadProfile = async (user: User): Promise<AccountProfile> => {
   const portraitId = normalizeAccountPortraitId(
     data?.portrait_id ?? user.user_metadata.portrait_id,
   );
+  const pieceTheme = normalizePieceThemeId(user.user_metadata.piece_theme);
+  savePieceThemePreference(pieceTheme);
   if (!data && metadataDisplayName) {
     const { error: createError } = await supabase
       .from("profiles")
@@ -147,6 +157,7 @@ const loadProfile = async (user: User): Promise<AccountProfile> => {
     email: user.email ?? "",
     displayName,
     portraitId,
+    pieceTheme,
     publicId: data?.public_id ?? "",
     needsDisplayName,
     needsLocalDataImport: resolveLocalDataImportPending(
@@ -353,6 +364,26 @@ export function useAccount() {
     }
   };
 
+  const updatePieceTheme = async (pieceTheme: PieceThemeId) => {
+    if (!supabase || !account) {
+      throw new Error("You must be signed in to update your piece theme.");
+    }
+    const normalized = normalizePieceThemeId(pieceTheme);
+    setWorking(true);
+    try {
+      const { error } = await supabase.auth.updateUser({
+        data: { piece_theme: normalized },
+      });
+      if (error) throw error;
+      savePieceThemePreference(normalized);
+      setAccount({ ...account, pieceTheme: normalized });
+      setError(undefined);
+      return "Piece theme updated.";
+    } finally {
+      setWorking(false);
+    }
+  };
+
   const completeLocalDataImportDecision = async () => {
     if (!supabase || !account) {
       throw new Error("You must be signed in to finish account setup.");
@@ -387,6 +418,7 @@ export function useAccount() {
     signOut,
     updateDisplayName,
     updatePortrait,
+    updatePieceTheme,
     completeLocalDataImportDecision,
   };
 }

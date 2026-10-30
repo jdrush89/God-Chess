@@ -14,9 +14,13 @@ import type {
 } from "../game/threePlayerTypes";
 import { THREE_PLAYER_SEATS } from "../game/threePlayerTypes";
 import {
-  THREE_PLAYER_PIECE_SYMBOLS,
   threePlayerPieceStatusLabels,
 } from "./presentation";
+import {
+  CLASSIC_PIECE_SYMBOLS,
+  MushroomPieceSvg,
+  PieceThemeSymbol,
+} from "../pieceThemes";
 
 const RENDER_PADDING = 0.6;
 const YALTA_COORDINATE_PADDING = 2.1;
@@ -447,19 +451,35 @@ export function ThreePlayerBoard({
               />
             )}
             {piece && !preview && !isDraggedSource && (
-              <text
-                className={`three-board-piece seat-${piece.controller ?? piece.owner} ${piece.controller ? "" : "inert"}`}
-                x={descriptor.render.x}
-                y={descriptor.render.y}
-                style={{
-                  "--piece-color":
-                    state.players[piece.controller ?? piece.owner].displayColor,
-                  fontSize,
-                } as React.CSSProperties}
-                aria-hidden="true"
-              >
-                {THREE_PLAYER_PIECE_SYMBOLS[piece.type]}
-              </text>
+              <>
+                <text
+                  className={`three-board-piece classic-piece-glyph seat-${piece.controller ?? piece.owner} ${piece.controller ? "" : "inert"}`}
+                  x={descriptor.render.x}
+                  y={descriptor.render.y}
+                  style={{
+                    "--piece-color":
+                      state.players[piece.controller ?? piece.owner].displayColor,
+                    fontSize,
+                  } as React.CSSProperties}
+                  aria-hidden="true"
+                >
+                  {CLASSIC_PIECE_SYMBOLS.black[piece.type]}
+                </text>
+                <MushroomPieceSvg
+                  type={piece.type}
+                  className={`three-board-mushroom-piece seat-${piece.controller ?? piece.owner} ${piece.controller ? "" : "inert"}`}
+                  x={descriptor.render.x - fontSize * 0.57}
+                  y={descriptor.render.y - fontSize * 0.57}
+                  width={fontSize * 1.14}
+                  height={fontSize * 1.14}
+                  style={{
+                    "--piece-color":
+                      state.players[piece.controller ?? piece.owner].displayColor,
+                    color:
+                      state.players[piece.controller ?? piece.owner].displayColor,
+                  } as React.CSSProperties}
+                />
+              </>
             )}
             {piece && hexedBy && !preview && !isDraggedSource && (
               <g
@@ -532,7 +552,10 @@ export function ThreePlayerBoard({
           } as React.CSSProperties}
           aria-hidden="true"
         >
-          {THREE_PLAYER_PIECE_SYMBOLS[state.board[drag.preview.source].type]}
+          <PieceThemeSymbol
+            type={state.board[drag.preview.source].type}
+            classicColor="black"
+          />
         </div>
       )}
     </>
