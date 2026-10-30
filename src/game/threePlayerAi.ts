@@ -173,12 +173,16 @@ const enumerateAiCandidates = (
   const maxPlans = difficulty >= 8 ? 8 : difficulty >= 4 ? 4 : 2;
   const maxStates = difficulty >= 8 ? 60 : difficulty >= 4 ? 35 : 24;
   const maxActionsPerState = difficulty >= 8 ? 12 : difficulty >= 4 ? 8 : 6;
-  const maxMilliseconds = difficulty >= 8
+  const maxMilliseconds = difficulty >= 10
+    ? Number.POSITIVE_INFINITY
+    : difficulty >= 8
     ? 6_000
     : difficulty >= 4
       ? 3_500
       : 2_000;
-  const refinementMilliseconds = difficulty >= 8
+  const refinementMilliseconds = difficulty >= 10
+    ? Number.POSITIVE_INFINITY
+    : difficulty >= 8
     ? 900
     : difficulty >= 4
       ? 450
