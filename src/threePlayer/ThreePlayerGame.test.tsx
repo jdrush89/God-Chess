@@ -323,6 +323,44 @@ describe("ThreePlayerGame", () => {
       .toBeGreaterThan(0);
   });
 
+  it("falls back to a legal CPU plan when the scripted puzzle response is invalid", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(window, "matchMedia").mockImplementation(matchMedia(true));
+    const terminateWorker = installDeterministicAiWorker();
+    const puzzle = THREE_PLAYER_PUZZLES.find(
+      (candidate) => candidate.id === "triad-pincer",
+    )!;
+    const afterFirst = puzzle.solutionTurns[0].reduce(
+      threePlayerReducer,
+      puzzle.createState(),
+    );
+    afterFirst.players.black.gods = ["anubis", "midas", "ares"];
+
+    const { unmount } = render(
+      <ThreePlayerGame
+        initialState={afterFirst}
+        puzzle={puzzle}
+        onQuit={() => undefined}
+        onNewGame={() => undefined}
+      />,
+    );
+
+    expect(screen.getByText(/Onyx Rival is thinking/i)).toBeTruthy();
+    for (let index = 0; index < 8; index += 1) {
+      await act(async () => {
+        await vi.runOnlyPendingTimersAsync();
+      });
+    }
+
+    expect(screen.queryByText(/is thinking/i)).toBeNull();
+    expect(screen.getAllByText(/Puzzle Solver to (?:move|act)/i).length)
+      .toBeGreaterThan(0);
+    expect(screen.queryByText(/Choose a piece for Marked/i)).toBeNull();
+
+    unmount();
+    expect(terminateWorker).toHaveBeenCalledTimes(1);
+  });
+
   it("undoes a completed three-player puzzle without requiring the undo setting", () => {
     const puzzle = THREE_PLAYER_PUZZLES[0];
     const initial = puzzle.createState();
