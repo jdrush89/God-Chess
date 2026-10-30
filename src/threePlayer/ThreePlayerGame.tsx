@@ -1930,7 +1930,9 @@ export function ThreePlayerGame({
   const selectedGodPlayer = selectedGodOwner
     ? state.players[selectedGodOwner]
     : activePlayer;
-  const committedAbility = Boolean(state.selectedAbility && state.pending);
+  const committedAbility = hasCommittedThreePlayerAction(
+    state as ThreePlayerState,
+  );
   const defaultPreviewLevel = selectedGodDefinition
     ? Math.min(...selectedGodDefinition.abilities.map((ability) =>
       abilityLevel(activePlayer.upgrades, ability.id)
@@ -1946,7 +1948,6 @@ export function ThreePlayerGame({
   const selectedGodActions = actions.filter((action) => action.type === "select-god");
   const selectedAbilityActions = actions.filter((action) => action.type === "select-ability");
   const upgradeActions = actions.filter((action) => action.type === "upgrade");
-  const clearGodAction = actions.find((action) => action.type === "clear-god");
   const genericActions = actions.filter((action) =>
     ![
       "draft",
@@ -2322,7 +2323,7 @@ export function ThreePlayerGame({
                       setInspectedGod(undefined);
                       return;
                     }
-                    if (clearGodAction) dispatchAction(clearGodAction);
+                    dispatchAction({ type: "clear-god" });
                   }}
                   aria-label={readOnlyGod ? "Close god details" : "Choose a different god"}
                 >

@@ -102,6 +102,32 @@ it("uses Undo to return an uncommitted God or ability selection to the God list"
   expect(screen.getByRole("button", { name: /ares conflict/i })).toBeTruthy();
 });
 
+it("uses the God panel back arrow to cancel an uncommitted ability", () => {
+  const state = completeDraft();
+  state.phase = "play";
+  state.activeSeat = "white";
+  state.players.white.gods = ["ares"];
+  state.rested = [];
+  renderGame(state);
+
+  fireEvent.click(screen.getByRole("button", { name: /ares conflict/i }));
+  fireEvent.click(screen.getByRole("button", { name: /^threaten/i }));
+
+  const back = screen.getByRole("button", {
+    name: /choose a different god/i,
+  }) as HTMLButtonElement;
+  expect(back.disabled).toBe(false);
+  expect(screen.getByRole("button", { name: /cancel/i })).toBeTruthy();
+
+  fireEvent.click(back);
+
+  expect(screen.queryByRole("button", {
+    name: /choose a different god/i,
+  })).toBeNull();
+  expect(screen.queryByRole("button", { name: /cancel/i })).toBeNull();
+  expect(screen.getByRole("button", { name: /ares conflict/i })).toBeTruthy();
+});
+
 it("renders Quetzacoatl's committed Slither orb choice", () => {
   const state = completeDraft();
   state.phase = "play";
