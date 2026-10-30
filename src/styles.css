@@ -785,12 +785,18 @@ html[data-piece-theme="mushroom"] .mushroom-piece-glyph { display: block; }
 .mushroom-piece-cut,
 .mushroom-piece-collar,
 .mushroom-piece-crown,
-.mushroom-piece-cross {
+.mushroom-piece-cross,
+.mushroom-piece-finial-stem {
   fill: none;
   stroke: var(--mushroom-accent, #f2c86a);
   stroke-width: 4;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+.mushroom-piece-finial {
+  fill: var(--mushroom-accent, #f2c86a);
+  stroke: var(--mushroom-outline, #21150f);
+  stroke-width: 2.5;
 }
 .mushroom-piece-eye {
   fill: var(--mushroom-eye, var(--mushroom-outline, #21150f));
@@ -3124,8 +3130,10 @@ html[data-piece-theme="mushroom"] .mushroom-piece-glyph { display: block; }
   .mushroom-piece-cut,
   .mushroom-piece-collar,
   .mushroom-piece-crown,
-  .mushroom-piece-cross
+  .mushroom-piece-cross,
+  .mushroom-piece-finial-stem
 ) { stroke-width: 2.2; }
+.three-board-mushroom-piece .mushroom-piece-finial { stroke-width: 1.2; }
 .three-board-mushroom-piece.inert { opacity: .38; }
 .three-status-marker { pointer-events: none; }
 .three-status-marker polygon {

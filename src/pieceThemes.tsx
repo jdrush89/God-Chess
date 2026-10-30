@@ -177,11 +177,18 @@ function MushroomPieceArt({ type }: { type: PieceType }) {
     return (
       <MushroomStem>
         <path
-          className="mushroom-piece-cap"
-          d="M12 42 Q19 17 50 15 Q81 17 88 42 L79 53 L70 45 L60 55 L50 46 L40 55 L30 45 L21 53 Z"
+          className="mushroom-piece-finial-stem"
+          d="M38 21 L35 10 M50 17 V5 M62 21 L66 10"
         />
-        <path className="mushroom-piece-gill" d="M18 42 Q50 32 82 42 Q69 51 50 51 Q31 51 18 42 Z" />
-        <path className="mushroom-piece-collar" d="M37 54 L43 61 L50 55 L57 61 L63 54" />
+        <circle className="mushroom-piece-finial" cx="34" cy="8" r="4.5" />
+        <circle className="mushroom-piece-finial" cx="50" cy="4.5" r="5" />
+        <circle className="mushroom-piece-finial" cx="67" cy="8" r="4.5" />
+        <path
+          className="mushroom-piece-cap"
+          d="M9 42 Q17 19 31 16 Q50 10 69 16 Q83 19 91 42 L81 54 L71 44 L60 57 L50 45 L40 57 L29 44 L19 54 Z"
+        />
+        <path className="mushroom-piece-gill" d="M15 41 Q50 29 85 41 Q70 52 50 53 Q30 52 15 41 Z" />
+        <path className="mushroom-piece-collar" d="M34 55 L42 64 L50 55 L58 64 L66 55" />
         <MushroomSpots wide />
       </MushroomStem>
     );
