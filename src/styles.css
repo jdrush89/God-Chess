@@ -332,20 +332,23 @@ body::before {
 .game-meta { display: flex; align-items: center; gap: 14px; color: #777981; font-size: 9px; letter-spacing: .18em; }
 .game-meta strong { color: #d9d4c9; margin-left: 4px; }
 .game-meta i { width: 1px; height: 18px; background: var(--line); }
-.header-actions { display: flex; gap: 4px; }
-.header-actions button, .history-drawer button, .close-button {
+.header-actions, .three-game-actions { display: flex; gap: 4px; }
+.header-actions button, .three-game-actions button, .history-drawer button, .close-button {
   display: flex; align-items: center; gap: 7px; padding: 9px 11px; color: #8f9097; background: transparent; border: 0; cursor: pointer;
 }
-.header-actions button:hover { color: #eee9df; background: rgba(255,255,255,.04); }
+.header-actions button:hover, .three-game-actions button:hover { color: #eee9df; background: rgba(255,255,255,.04); }
 .header-actions .forfeit-button { color: #d89082; }
 .header-actions .forfeit-button:hover { color: #f0b0a4; background: rgba(151,55,40,.12); }
-.header-actions button:disabled {
+.header-actions button:disabled, .three-game-actions button:disabled {
   color: #62656d; background: #12151b; cursor: not-allowed;
 }
 .header-actions button:disabled > svg,
-.header-actions button:disabled > span { opacity: 1; }
-.header-actions button:disabled:hover { color: #62656d; background: #12151b; }
-.header-actions span { font-size: 10px; text-transform: uppercase; letter-spacing: .09em; }
+.header-actions button:disabled > span,
+.three-game-actions button:disabled > svg,
+.three-game-actions button:disabled > span { opacity: 1; }
+.header-actions button:disabled:hover,
+.three-game-actions button:disabled:hover { color: #62656d; background: #12151b; }
+.header-actions span, .three-game-actions span { font-size: 10px; text-transform: uppercase; letter-spacing: .09em; }
 @media (max-width: 1000px) {
   .game-page.puzzle-mode .header-actions span,
   .three-game-page.puzzle-mode .three-game-actions span { display: none; }
@@ -3041,23 +3044,11 @@ span.move-target-dot {
 }
 .three-level-preview button.active { color: #f1dda9; border-color: rgba(198,161,91,.65); }
 
-.three-game-actions { display: flex; gap: 6px; }
-.three-game-actions button {
-  width: auto; min-width: 38px; min-height: 38px; display: flex; align-items: center; justify-content: center; gap: 7px; padding: 9px 11px;
-  color: #aaa69d; background: #0d0f14; border: 1px solid var(--line);
-}
-.three-game-actions span {
-  font-size: 10px; text-transform: uppercase; letter-spacing: .09em;
-}
 .three-game-page.puzzle-mode .three-game-topbar > div:first-child strong {
   color: #777981; font-size: small; font-weight: 400; letter-spacing: .18em;
 }
 .three-game-page.puzzle-mode .three-game-topbar > div:first-child strong b {
   color: #d9d4c9; margin-left: 4px;
-}
-.three-game-actions button:disabled {
-  color: #62656d; background: #12151b; border-color: #2d3038;
-  opacity: 1; cursor: not-allowed;
 }
 .three-game-layout {
   display: grid; grid-template-columns: 210px minmax(420px, 780px) minmax(290px, 350px);

@@ -1498,7 +1498,7 @@ describe("ThreePlayerGame", () => {
     expect(screen.queryByRole("group", { name: /available actions/i })).toBeNull();
   });
 
-  it("undoes a Human boundary together with the following AI chain", async () => {
+  it("undoes the in-progress Human boundary instead of an older snapshot", async () => {
     const terminateWorker = installDeterministicAiWorker();
     vi.spyOn(window, "matchMedia").mockImplementation(matchMedia(true));
     const config = createDefaultThreePlayerConfig();
@@ -1507,27 +1507,34 @@ describe("ThreePlayerGame", () => {
     const state = completeDraft(createThreePlayerGame(config));
     const { container, unmount } = renderGame(state);
 
-    const godButton = screen.getByRole("button", {
-      name: new RegExp(state.players.white.gods[0], "i"),
-    });
-    fireEvent.click(godButton);
-    const ability = screen.getAllByRole("button").find((button) =>
-      button.closest(".ability-list") && !button.hasAttribute("aria-disabled")
-    )!;
-    fireEvent.click(ability);
-    const source = container.querySelector(".three-board-cell.legal")?.getAttribute("data-cell");
-    expect(source).toBeTruthy();
-    fireEvent.click(screen.getByRole("gridcell", { name: new RegExp(`^${source}`) }));
-    const destination = container.querySelector(".three-board-cell.legal")?.getAttribute("data-cell");
-    expect(destination).toBeTruthy();
-    fireEvent.click(screen.getByRole("gridcell", { name: new RegExp(`^${destination}`) }));
+    const completeHumanTurn = () => {
+      const source = container.querySelector<HTMLElement>(
+        ".three-board-cell.legal-source",
+      );
+      expect(source).toBeTruthy();
+      fireEvent.click(source!);
+      const destination = container.querySelector<HTMLElement>(
+        ".three-board-cell.legal-destination",
+      );
+      expect(destination).toBeTruthy();
+      fireEvent.click(destination!);
+      fireEvent.click(container.querySelector<HTMLElement>(
+        ".move-first-ability-list .ability-card-main",
+      )!);
+    };
+
+    completeHumanTurn();
 
     await waitFor(
       () => expect(screen.getByText(/Round \d+ · Turn [4-9]\d*/i)).toBeTruthy(),
       { timeout: 5000 },
     );
+    const firstBoundary = screen.getByText(/Round \d+ · Turn [4-9]\d*/i)
+      .textContent;
+    completeHumanTurn();
+    expect(screen.getByText(/is thinking/i)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /^Undo$/i }));
-    expect(screen.getByText("Round 1 · Turn 1")).toBeTruthy();
+    expect(screen.getByText(firstBoundary!)).toBeTruthy();
     unmount();
     expect(terminateWorker).toHaveBeenCalledTimes(1);
   });
