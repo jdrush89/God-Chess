@@ -5194,7 +5194,7 @@ export function GameScreen({
       </header>
 
       {puzzleMode && (
-        <section className="puzzle-banner">
+        <section className={`puzzle-banner ${dailyPuzzle ? "daily-puzzle-banner" : ""}`}>
           <div className="puzzle-banner-title">
             <Crosshair size={18} />
             <span>
@@ -5213,11 +5213,13 @@ export function GameScreen({
             <span>Player turns left</span>
             <strong>{puzzleTurnsRemaining}</strong>
           </div>
-          <p>
-            {customPuzzle
-              ? customPuzzleObjectiveText(customPuzzle)
-              : puzzle?.objective}
-          </p>
+          {!dailyPuzzle && (
+            <p>
+              {customPuzzle
+                ? customPuzzleObjectiveText(customPuzzle)
+                : puzzle?.objective}
+            </p>
+          )}
           <div className="puzzle-banner-actions">
             {puzzle && (
               <button onClick={() => setPuzzleHintOpen((open) => !open)}>

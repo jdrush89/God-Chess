@@ -1985,6 +1985,7 @@ describe("game startup", () => {
     expect(screen.getByText(
       new RegExp(`daily · ${daily.playerTurns} player turns?`, "i"),
     )).toBeTruthy();
+    expect(screen.getAllByText(daily.objective)).toHaveLength(1);
     expect(window.location.pathname).toBe("/daily");
   });
 
