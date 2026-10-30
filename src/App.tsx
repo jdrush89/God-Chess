@@ -1362,8 +1362,11 @@ export function ChessBoard({
   onMoveFirstSquare?: (square: Square) => void;
 }) {
   const displaySquares = useMemo(() => [...allSquares].sort((a, b) => Number(b[1]) - Number(a[1]) || a.localeCompare(b)), []);
-  const previewingEffect = state.pending?.step === "confirm-stone-gaze" ||
-    state.pending?.step === "confirm-march-home";
+  const previewingStoneGaze = state.pending?.step === "confirm-stone-gaze";
+  const marchHomePreviewSquare = state.pending?.abilityId === "march-home" &&
+      state.pending.source
+    ? state.board[state.pending.source]?.color === "black" ? "e8" : "e1"
+    : undefined;
   const enchantSourceChoice = (
     state.pending?.step === "enchant-enemy-move" ||
     state.pending?.step === "enchant-followup-move"
@@ -1428,8 +1431,12 @@ export function ChessBoard({
             );
             const provisionalSource = moveFirstDraft?.source === square;
             const provisionalDestination = moveFirstDraft?.destination === square;
-            const effectPreview = previewingEffect && state.legalTargets.includes(square);
-            const legal = !previewingEffect && (
+            const marchHomePreview = square === marchHomePreviewSquare;
+            const effectPreview = (
+              previewingStoneGaze && state.legalTargets.includes(square)
+            ) || marchHomePreview;
+            const legal = !previewingStoneGaze &&
+              state.pending?.step !== "confirm-march-home" && (
               state.legalTargets.includes(square) ||
               moveFirstTargets.includes(square)
             );
@@ -1437,7 +1444,7 @@ export function ChessBoard({
             return (
               <button
                 role="gridcell"
-                aria-label={`${square}${piece ? `, ${piece.color} ${piece.type}` : ""}${escortSelected ? ", selected escort" : ""}${defeatedKingHere ? `, defeated ${defeatedKingHere.piece.color} king` : ""}${effectPreview ? ", affected by selected ability" : ""}${provisionalSource ? ", provisional move source" : ""}${provisionalDestination ? ", provisional move destination, not committed" : ""}`}
+                aria-label={`${square}${piece ? `, ${piece.color} ${piece.type}` : ""}${escortSelected ? ", selected escort" : ""}${defeatedKingHere ? `, defeated ${defeatedKingHere.piece.color} king` : ""}${marchHomePreview ? ", March Home destination" : effectPreview ? ", affected by selected ability" : ""}${provisionalSource ? ", provisional move source" : ""}${provisionalDestination ? ", provisional move destination, not committed" : ""}`}
                 data-square={square}
                 className={`board-square ${(file.charCodeAt(0) + Number(rank)) % 2 ? "light" : "dark"} ${selected ? "selected" : ""} ${escortSelected ? "escort-selected" : ""} ${provisionalSource ? "provisional-source" : ""} ${provisionalDestination ? "provisional-destination" : ""} ${legal ? "legal" : ""} ${legal && piece ? "legal-occupied" : ""} ${legal && enchantSourceChoice ? "legal-source" : ""} ${legal && !enchantSourceChoice ? "legal-destination" : ""} ${effectPreview ? "effect-preview" : ""}`}
                 key={square}

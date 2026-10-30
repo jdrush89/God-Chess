@@ -1302,8 +1302,13 @@ export function ThreePlayerGame({
     setLocalSelectedCell(undefined);
     stateRef.current = next;
     setState(next);
+    const completedPuzzleBoundary = Boolean(
+      puzzle &&
+      next.completedTurns.white >= puzzle.playerTurns,
+    );
     const completedHumanBoundary =
       next.phase === "gameover" ||
+      completedPuzzleBoundary ||
       next.players[next.activeSeat].control.kind !== "ai";
     if (isStableState(next) && completedHumanBoundary && chainStart.current) {
       undoStack.current.push(chainStart.current);

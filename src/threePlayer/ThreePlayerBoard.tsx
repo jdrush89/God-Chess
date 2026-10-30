@@ -278,8 +278,14 @@ export function ThreePlayerBoard({
     state.pending?.step === "enchant-enemy-move" ||
     state.pending?.step === "enchant-followup-move"
   ) && !selectedCell;
-  const previewingEffect = state.pending?.step === "confirm-stone-gaze" ||
-    state.pending?.step === "confirm-march-home";
+  const previewingStoneGaze = state.pending?.step === "confirm-stone-gaze";
+  const marchHomeSource = state.pending?.source
+    ? state.board[state.pending.source]
+    : undefined;
+  const marchHomePreviewCell = state.pending?.abilityId === "march-home" &&
+      marchHomeSource
+    ? topology.homeCell(marchHomeSource.owner)
+    : undefined;
   const drag = useBoardDrag<ThreePlayerCell>({
     attribute: "data-cell",
     canDrag: (cell) =>
@@ -310,8 +316,13 @@ export function ThreePlayerBoard({
         const piece = state.board[descriptor.id];
         const banana = state.bananas.find(({ cell }) => cell === descriptor.id);
         const isLegal = legal.has(descriptor.id);
-        const isEffectPreview = previewingEffect && isLegal;
-        const isMoveTarget = isLegal && !isEffectPreview;
+        const isMarchHomePreview = descriptor.id === marchHomePreviewCell;
+        const isEffectPreview = (
+          previewingStoneGaze && isLegal
+        ) || isMarchHomePreview;
+        const isMoveTarget = isLegal &&
+          !previewingStoneGaze &&
+          state.pending?.step !== "confirm-march-home";
         const isSource = isMoveTarget && (
           sources.has(descriptor.id) ||
           (sources.size === 0 && enchantSourceChoice)
@@ -358,6 +369,10 @@ export function ThreePlayerBoard({
           statusLabels.length ? statusLabels.join(", ") : undefined,
           banana ? `banana placed by ${banana.owner}` : undefined,
           isSource ? "legal move source" : undefined,
+          isMarchHomePreview ? "March Home destination" : undefined,
+          isEffectPreview && !isMarchHomePreview
+            ? "affected by selected ability"
+            : undefined,
           isEscortSelected ? "selected escort" : undefined,
           isProvisionalSource ? "provisional move source" : undefined,
           isProvisionalDestination
