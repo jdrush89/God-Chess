@@ -36,19 +36,6 @@ const GOD_DRAFT_VALUE: Record<GodId, number> = {
   ares: 9.2,
 };
 
-export const isValidThreePlayerAiPlan = (
-  state: ThreePlayerState,
-  actions: ThreePlayerAction[],
-) => {
-  let next = state;
-  for (const action of actions) {
-    const reduced = threePlayerReducer(next, action);
-    if (reduced === next) return false;
-    next = reduced;
-  }
-  return isCompleteThreePlayerPlan(state, next);
-};
-
 const beneficialStatusValue = (piece: ThreePlayerPiece) =>
   (piece.status.hardened ? 1.7 : 0) +
   (piece.status.prepared ? 1.5 : 0) +

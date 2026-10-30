@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { chooseThreePlayerAiPlan } from "./threePlayerAi";
 import {
   threePlayerIsInCheck,
   threePlayerLegalMoves,
@@ -232,18 +233,19 @@ describe("three-player puzzles", () => {
     ).toBe(true);
   });
 
-  it("allows CPU turns between documented player turns and wins within the budget", () => {
+  it("wins against the strongest CPU response within the turn budget", () => {
     for (const puzzle of THREE_PLAYER_PUZZLES) {
       let state = puzzle.createState();
       expect(puzzle.solutionTurns).toHaveLength(puzzle.playerTurns);
-      expect(puzzle.cpuTurns).toHaveLength(puzzle.playerTurns - 1);
 
       for (const [turnIndex, turn] of puzzle.solutionTurns.entries()) {
         state = turn.reduce(threePlayerReducer, state);
         expect(state.completedTurns.white, puzzle.id).toBe(turnIndex + 1);
-        if (turnIndex < puzzle.cpuTurns.length) {
+        if (turnIndex < puzzle.solutionTurns.length - 1) {
           expect(state.result, puzzle.id).toBeUndefined();
-          state = puzzle.cpuTurns[turnIndex].reduce(threePlayerReducer, state);
+          const cpuTurn = chooseThreePlayerAiPlan(state, 1);
+          expect(cpuTurn.length, puzzle.id).toBeGreaterThan(0);
+          state = cpuTurn.reduce(threePlayerReducer, state);
           expect(state.activeSeat, puzzle.id).toBe("white");
         }
       }
@@ -256,5 +258,22 @@ describe("three-player puzzles", () => {
         reason: "last-survivor",
       });
     }
+  });
+
+  it("makes an active defensive move in Circular Convergence", () => {
+    const puzzle = THREE_PLAYER_PUZZLES.find(
+      ({ id }) => id === "circular-convergence",
+    )!;
+    let state = puzzle.solutionTurns[0].reduce(
+      threePlayerReducer,
+      puzzle.createState(),
+    );
+    const boardBefore = JSON.stringify(state.board);
+    const cpuTurn = chooseThreePlayerAiPlan(state, 1);
+
+    expect(cpuTurn).not.toContainEqual({ type: "pass" });
+    state = cpuTurn.reduce(threePlayerReducer, state);
+    expect(JSON.stringify(state.board)).not.toBe(boardBefore);
+    expect(state.lastAction).toMatch(/used Sing with Teles/i);
   });
 });
