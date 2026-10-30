@@ -48,6 +48,7 @@ import {
 import { applyMatchStatisticsTransition } from "../matchStatistics";
 import {
   chooseThreePlayerAiPlan,
+  isValidThreePlayerAiPlan,
   isThreePlayerAiTurn,
 } from "../game/threePlayerAi";
 import { threePlayerIsInCheck } from "../game/threePlayerChess";
@@ -1610,11 +1611,33 @@ export function ThreePlayerGame({
       const scriptedPuzzleTurn = puzzle && state.activeSeat === "black"
         ? puzzle.cpuTurns[Math.max(0, state.completedTurns.white - 1)]
         : undefined;
-      if (scriptedPuzzleTurn?.length) {
+      const scriptedPlanIsValid = Boolean(
+        scriptedPuzzleTurn?.length &&
+          isValidThreePlayerAiPlan(
+            state as ThreePlayerState,
+            scriptedPuzzleTurn,
+          ),
+      );
+      if (
+        scriptedPuzzleTurn?.length &&
+        scriptedPlanIsValid
+      ) {
         aiPlan.current = [...scriptedPuzzleTurn];
         aiNoPlanRevision.current = undefined;
         setAiPlanReady((value) => value + 1);
         return;
+      }
+      if (scriptedPuzzleTurn?.length) {
+        recordDiagnostic({
+          category: "ai",
+          event: "three-player-scripted-plan-invalid",
+          context: { variant: "three-player" },
+          data: {
+            puzzleId: puzzle?.id,
+            revision: state.revision,
+            actions: scriptedPuzzleTurn,
+          },
+        });
       }
       if (aiWorker.current) {
         if (aiRequestRevision.current !== state.revision) {

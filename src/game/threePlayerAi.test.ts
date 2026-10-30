@@ -3,6 +3,7 @@ import { createDefaultThreePlayerConfig } from "./threePlayerConfig";
 import {
   chooseThreePlayerAiPlan,
   evaluateThreePlayerState,
+  isValidThreePlayerAiPlan,
 } from "./threePlayerAi";
 import {
   createThreePlayerGame,
@@ -10,6 +11,7 @@ import {
 } from "./threePlayerEngine";
 import { isCompleteThreePlayerPlan } from "./threePlayerPlans";
 import { GODS } from "./gods";
+import { THREE_PLAYER_PUZZLE_BY_ID } from "./threePlayerPuzzles";
 
 describe("three-player AI", () => {
   it("is deterministic for an injected seed and returns legal complete plans", () => {
@@ -99,6 +101,23 @@ describe("three-player AI", () => {
       }
       expect(isCompleteThreePlayerPlan(state, result)).toBe(true);
     }
+  });
+
+  it("rejects scripted plans when any action is no longer legal", () => {
+    const puzzle = THREE_PLAYER_PUZZLE_BY_ID["triad-pincer"];
+    const state = puzzle.solutionTurns[0].reduce(
+      threePlayerReducer,
+      puzzle.createState(),
+    );
+
+    expect(isValidThreePlayerAiPlan(state, puzzle.cpuTurns[0])).toBe(true);
+    expect(isValidThreePlayerAiPlan(state, [
+      ...puzzle.cpuTurns[0],
+      { type: "cell", cell: "triad:0" },
+    ])).toBe(false);
+
+    state.players.black.gods = ["anubis", "midas", "ares"];
+    expect(isValidThreePlayerAiPlan(state, puzzle.cpuTurns[0])).toBe(false);
   });
 
   it("plans both CPU opening turns promptly in the reported three-player position", () => {
