@@ -238,7 +238,7 @@ export function PieceThemeSymbol({
 }) {
   return (
     <span
-      className={`piece-theme-symbol ${className}`.trim()}
+      className={`piece-theme-symbol piece-theme-${classicColor === "white" ? "light" : "dark"} ${className}`.trim()}
       style={style}
       aria-hidden="true"
     >

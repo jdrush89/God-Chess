@@ -753,36 +753,103 @@ html[data-piece-theme="mushroom"] .mushroom-piece-glyph { display: block; }
 }
 .mushroom-piece-cap,
 .mushroom-piece-base {
-  fill: currentColor;
-  stroke: #21150f;
+  fill: var(--mushroom-cap, currentColor);
+  stroke: var(--mushroom-outline, #21150f);
   stroke-width: 3.6;
   stroke-linejoin: round;
+}
+.mushroom-piece-base {
+  fill: var(--mushroom-base, var(--mushroom-cap, currentColor));
 }
 .mushroom-piece-stem {
-  fill: #f3d995;
-  stroke: #21150f;
+  fill: var(--mushroom-stem, #f3d995);
+  stroke: var(--mushroom-outline, #21150f);
   stroke-width: 3.6;
   stroke-linejoin: round;
 }
-.mushroom-piece-stem-shade { fill: #d69d4f; opacity: .34; }
+.mushroom-piece-stem-shade {
+  fill: var(--mushroom-stem-shade, #d69d4f);
+  opacity: .38;
+}
 .mushroom-piece-gill {
-  fill: #deb66c;
-  stroke: #4c2b18;
+  fill: var(--mushroom-gill, #deb66c);
+  stroke: var(--mushroom-gill-outline, var(--mushroom-outline, #4c2b18));
   stroke-width: 2.1;
   stroke-linejoin: round;
 }
-.mushroom-piece-spot { fill: #f7d06c; stroke: #5c351c; stroke-width: 1.2; }
+.mushroom-piece-spot {
+  fill: var(--mushroom-spot, #f7d06c);
+  stroke: var(--mushroom-spot-outline, var(--mushroom-outline, #5c351c));
+  stroke-width: 1.2;
+}
 .mushroom-piece-cut,
 .mushroom-piece-collar,
 .mushroom-piece-crown,
 .mushroom-piece-cross {
   fill: none;
-  stroke: #f2c86a;
+  stroke: var(--mushroom-accent, #f2c86a);
   stroke-width: 4;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.mushroom-piece-eye { fill: #21150f; stroke: #f3d995; stroke-width: 1.2; }
+.mushroom-piece-eye {
+  fill: var(--mushroom-eye, var(--mushroom-outline, #21150f));
+  stroke: var(--mushroom-stem, #f3d995);
+  stroke-width: 1.2;
+}
+.piece-theme-light,
+.three-board-mushroom-piece.seat-white {
+  --mushroom-cap: currentColor;
+  --mushroom-base: #d6b570;
+  --mushroom-outline: #7b5633;
+  --mushroom-stem: #f5d98f;
+  --mushroom-stem-shade: #c58f43;
+  --mushroom-gill: #d3a85a;
+  --mushroom-gill-outline: #8b6132;
+  --mushroom-spot: #a86232;
+  --mushroom-spot-outline: #72401f;
+  --mushroom-accent: #9b6a36;
+  --mushroom-eye: #68411f;
+}
+.piece-theme-dark {
+  --mushroom-cap: currentColor;
+  --mushroom-base: #66728a;
+  --mushroom-outline: #0c1320;
+  --mushroom-stem: #bdc9d9;
+  --mushroom-stem-shade: #7789a2;
+  --mushroom-gill: #8fa2ba;
+  --mushroom-gill-outline: #27354a;
+  --mushroom-spot: #d5ad54;
+  --mushroom-spot-outline: #4b3a1b;
+  --mushroom-accent: #e2bf68;
+  --mushroom-eye: #111a2b;
+}
+.three-board-mushroom-piece.seat-red {
+  --mushroom-cap: currentColor;
+  --mushroom-base: #8f2635;
+  --mushroom-outline: #4c1820;
+  --mushroom-stem: #f1c39b;
+  --mushroom-stem-shade: #c8735d;
+  --mushroom-gill: #d88c66;
+  --mushroom-gill-outline: #6b2930;
+  --mushroom-spot: #ffd076;
+  --mushroom-spot-outline: #73352f;
+  --mushroom-accent: #ffe19a;
+  --mushroom-eye: #4b1820;
+}
+.three-board-mushroom-piece.seat-black {
+  --mushroom-cap: currentColor;
+  --mushroom-base: #465775;
+  --mushroom-outline: #18243a;
+  --mushroom-stem: #c8d8e6;
+  --mushroom-stem-shade: #829db7;
+  --mushroom-gill: #9eb7ca;
+  --mushroom-gill-outline: #30455f;
+  --mushroom-spot: #f0c76b;
+  --mushroom-spot-outline: #594923;
+  --mushroom-accent: #e4edf5;
+  --mushroom-eye: #152239;
+}
 
 .chess-piece,
 .three-board-piece {
@@ -3045,6 +3112,20 @@ html[data-piece-theme="mushroom"] .mushroom-piece-glyph { display: block; }
   pointer-events: none;
   filter: drop-shadow(0 .08px .04px rgba(0,0,0,.7));
 }
+.three-board-mushroom-piece :where(
+  .mushroom-piece-cap,
+  .mushroom-piece-base,
+  .mushroom-piece-stem
+) { stroke-width: 1.65; }
+.three-board-mushroom-piece .mushroom-piece-gill { stroke-width: 1; }
+.three-board-mushroom-piece .mushroom-piece-spot,
+.three-board-mushroom-piece .mushroom-piece-eye { stroke-width: .65; }
+.three-board-mushroom-piece :where(
+  .mushroom-piece-cut,
+  .mushroom-piece-collar,
+  .mushroom-piece-crown,
+  .mushroom-piece-cross
+) { stroke-width: 2.2; }
 .three-board-mushroom-piece.inert { opacity: .38; }
 .three-status-marker { pointer-events: none; }
 .three-status-marker polygon {
