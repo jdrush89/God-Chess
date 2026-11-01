@@ -1349,6 +1349,52 @@ describe("game flow", () => {
     expect(availableClassicActions(preCommit)).toContainEqual({ type: "cancel" });
   });
 
+  it("prevents Rage from capturing the acting player's King", () => {
+    let state = createGame(1);
+    state.phase = "play";
+    state.activeColor = "white";
+    state.players.white.gods = ["kangus"];
+    state.players.white.orbs.black = 3;
+    state.board = {
+      e5: testPiece("king", "white", "white-king"),
+      h8: testPiece("king", "black", "black-king"),
+      d4: testPiece("rook", "white", "rage-center"),
+      d5: testPiece("pawn", "white", "friendly-pawn"),
+      c5: testPiece("queen", "black", "enemy-queen"),
+    };
+
+    state = gameReducer(state, { type: "select-god", godId: "kangus" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "rage" });
+    expect(state.legalTargets).not.toContain("d4");
+
+    state.players.white.upgrades.rage = 2;
+    state = gameReducer(state, { type: "cancel" });
+    state = gameReducer(state, { type: "select-god", godId: "kangus" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "rage" });
+    state = gameReducer(state, { type: "square", square: "d4" });
+
+    expect(availableClassicActions(state)).not.toContainEqual({
+      type: "rage-resolve",
+      spareFriendly: false,
+    });
+    expect(availableClassicActions(state)).toContainEqual({
+      type: "rage-resolve",
+      spareFriendly: true,
+    });
+    expect(gameReducer(state, {
+      type: "rage-resolve",
+      spareFriendly: false,
+    })).toBe(state);
+
+    state = gameReducer(state, {
+      type: "rage-resolve",
+      spareFriendly: true,
+    });
+    expect(state.board.e5?.id).toBe("white-king");
+    expect(state.board.d5?.id).toBe("friendly-pawn");
+    expect(state.board.c5).toBeUndefined();
+  });
+
   it("rejects cancellation and ability switching after a Mount move", () => {
     let state = createGame(2);
     state.phase = "play";

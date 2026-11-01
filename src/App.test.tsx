@@ -2832,6 +2832,9 @@ describe("game startup", () => {
     expect((screen.getByRole("button", {
       name: /choose a different god/i,
     }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", {
+      name: /capture all/i,
+    }) as HTMLButtonElement).disabled).toBe(true);
 
     fireEvent.click(screen.getByRole("button", { name: /cancel ability/i }));
     expect(dispatch).toHaveBeenCalledWith({ type: "cancel" });

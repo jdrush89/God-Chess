@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { chooseAiPlan } from "./ai";
 import {
   currentDailyPuzzle,
+  DAILY_PUZZLE_BY_ID,
   DAILY_PUZZLES,
   dailyPuzzleResultMatches,
 } from "./dailyPuzzles";
@@ -102,6 +103,19 @@ describe("daily puzzles", () => {
         JSON.stringify({ puzzle: puzzle.id, result: state.result }),
       ).toBe(true);
     }
+  });
+
+  it("keeps the November 1 solver's King alive through the winning line", () => {
+    const puzzle = DAILY_PUZZLE_BY_ID["daily-2026-11-01"]!;
+    const result = puzzle.solutionActions.reduce(gameReducer, puzzle.createState());
+
+    expect(dailyPuzzleResultMatches(puzzle, result)).toBe(true);
+    expect(Object.values(result.board)).toContainEqual(
+      expect.objectContaining({
+        type: "king",
+        controller: puzzle.playerColor,
+      }),
+    );
   });
 
   it("requires four player turns along the stored winning line", () => {

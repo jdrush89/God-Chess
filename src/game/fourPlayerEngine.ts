@@ -1581,7 +1581,10 @@ const startTargetAbility = (state: FourPlayerState, abilityId: string) => {
       .map(([square]) => square);
   } else if (abilityId === "rage") {
     state.legalTargets = Object.entries(state.board)
-      .filter(([, piece]) => piece.controller === state.activeSeat)
+      .filter(([square, piece]) =>
+        piece.controller === state.activeSeat &&
+        (level >= 2 || !rageWouldCaptureOwnKing(state, square))
+      )
       .map(([square]) => square);
     state.pending = {
       godId: state.selectedGod!,
@@ -2435,6 +2438,7 @@ const resolveRage = (
     const victim = state.board[square];
     if (
       !victim ||
+      (victim.type === "king" && victim.controller === state.activeSeat) ||
       (
         spareAllies &&
         victim.controller &&
@@ -2444,6 +2448,15 @@ const resolveRage = (
     captureAt(state, square, true, true);
   }
 };
+
+const rageWouldCaptureOwnKing = (
+  state: FourPlayerState,
+  center: Square,
+) =>
+  fourPlayerAdjacentSquares(center).some((square) => {
+    const victim = state.board[square];
+    return victim?.type === "king" && victim.controller === state.activeSeat;
+  });
 
 const chooseTarget = (state: FourPlayerState, square: Square) => {
   const abilityId = state.selectedAbility!;
@@ -3498,7 +3511,17 @@ export const availableFourPlayerActions = (
     ];
   }
   if (
-    state.pending?.step === "rage-choice" ||
+    state.pending?.step === "rage-choice"
+  ) {
+    return [
+      { type: "choice", value: true },
+      ...(!state.pending.destination ||
+        rageWouldCaptureOwnKing(state, state.pending.destination)
+        ? []
+        : [{ type: "choice", value: false } as FourPlayerAction]),
+    ];
+  }
+  if (
     state.pending?.step === "marked-choice" ||
     state.pending?.step === "resurrect-more"
   ) {
@@ -3689,6 +3712,13 @@ const reduceFourPlayerState = (
     return loaded;
   }
   if (action.type === "restart") return createFourPlayerGame(state.config);
+  if (
+    action.type === "choice" &&
+    !action.value &&
+    state.pending?.step === "rage-choice" &&
+    state.pending.destination &&
+    rageWouldCaptureOwnKing(state, state.pending.destination)
+  ) return state;
   const previousOrbs = Object.fromEntries(
     FOUR_PLAYER_SEATS.map((seat) => [seat, { ...state.players[seat].orbs }]),
   ) as Record<Seat, Record<OrbAffinity, number>>;

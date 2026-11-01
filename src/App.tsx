@@ -70,6 +70,7 @@ import {
   type ClassicAiWorkerResponse,
 } from "./game/ai";
 import {
+  availableClassicActions,
   canStartClassicMoveFirst,
   classicAbilityMoveSources,
   classicMoveFirstCandidates,
@@ -1658,6 +1659,9 @@ function PendingAbilityChoices({
   committed: boolean;
 }) {
   const player = state.players[state.activeColor];
+  const canCaptureAllWithRage = availableClassicActions(state).some(
+    (action) => action.type === "rage-resolve" && !action.spareFriendly,
+  );
   return (
     <>
       <p className="ability-pending-prompt" role="status">{state.notice}</p>
@@ -1689,7 +1693,14 @@ function PendingAbilityChoices({
         )}
         {state.pending?.step === "rage-choice" && (
           <>
-            <button className="danger-button" onClick={() => dispatch({ type: "rage-resolve", spareFriendly: false })}>
+            <button
+              className="danger-button"
+              disabled={!canCaptureAllWithRage}
+              title={canCaptureAllWithRage
+                ? undefined
+                : "Rage cannot capture your own King."}
+              onClick={() => dispatch({ type: "rage-resolve", spareFriendly: false })}
+            >
               Capture all
             </button>
             <button className="secondary-button" onClick={() => dispatch({ type: "rage-resolve", spareFriendly: true })}>
