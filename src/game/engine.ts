@@ -1538,7 +1538,10 @@ const startTargetAbility = (state: GameState, abilityId: string) => {
       .map(([square]) => square);
   } else if (abilityId === "rage") {
     state.legalTargets = Object.entries(state.board)
-      .filter(([, piece]) => piece.controller === state.activeColor)
+      .filter(([square, piece]) =>
+        piece.controller === state.activeColor &&
+        (level >= 2 || !rageWouldCaptureOwnKing(state, square))
+      )
       .map(([square]) => square);
     state.pending = {
       godId: state.selectedGod!,
@@ -2342,10 +2345,20 @@ const executeMarchHome = (state: GameState, kingSquare: Square, companionSquares
 const abilityName = (state: GameState, abilityId: string) =>
   GOD_BY_ID[state.selectedGod!].abilities.find((ability) => ability.id === abilityId)?.name ?? abilityId;
 
+const rageWouldCaptureOwnKing = (state: GameState, square: Square) =>
+  adjacentSquares(square).some((adjacent) => {
+    const victim = state.board[adjacent];
+    return victim?.type === "king" && victim.controller === state.activeColor;
+  });
+
 const resolveRage = (state: GameState, square: Square, spareFriendly: boolean) => {
   for (const adjacent of adjacentSquares(square)) {
     const victim = state.board[adjacent];
-    if (!victim || (spareFriendly && victim.controller === state.activeColor)) continue;
+    if (
+      !victim ||
+      (victim.type === "king" && victim.controller === state.activeColor) ||
+      (spareFriendly && victim.controller === state.activeColor)
+    ) continue;
     captureAt(state, adjacent, state.activeColor, true);
   }
 };
@@ -3197,7 +3210,9 @@ export const availableClassicActions = (state: GameState): GameAction[] => {
   }
   if (state.pending?.step === "rage-choice") {
     return [
-      { type: "rage-resolve", spareFriendly: false },
+      ...(!state.pending.destination || rageWouldCaptureOwnKing(state, state.pending.destination)
+        ? []
+        : [{ type: "rage-resolve", spareFriendly: false } as GameAction]),
       { type: "rage-resolve", spareFriendly: true },
       ...(!hasCommittedClassicAction(state)
         ? [{ type: "cancel" } as GameAction]
@@ -3715,6 +3730,13 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
     action.type === "pass" &&
     hasCommittedClassicAction(state) &&
     !canPassAction(state)
+  ) return state;
+  if (
+    action.type === "rage-resolve" &&
+    !action.spareFriendly &&
+    state.pending?.step === "rage-choice" &&
+    state.pending.destination &&
+    rageWouldCaptureOwnKing(state, state.pending.destination)
   ) return state;
   const previousOrbs = {
     white: { ...state.players.white.orbs },

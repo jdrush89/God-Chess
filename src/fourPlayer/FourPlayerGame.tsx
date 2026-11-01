@@ -64,6 +64,7 @@ import {
 import { fourPlayerSquareAt, homeSquares } from "../game/fourPlayerChess";
 import { seatsAreAllies } from "../game/fourPlayerConfig";
 import {
+  availableFourPlayerActions,
   canStartFourPlayerMoveFirst,
   fourPlayerAbilityMoveSources,
   fourPlayerMoveFirstBoardIdentity,
@@ -1181,12 +1182,22 @@ function PendingChoices({
       );
     }
     if (pending.step === "rage-choice") {
+      const canCaptureAll = availableFourPlayerActions(state).some(
+        (action) => action.type === "choice" && action.value === false,
+      );
       return (
         <div className="four-choice-buttons">
           <button className="secondary-button" onClick={() => dispatch({ type: "choice", value: true })}>
             Spare allies
           </button>
-          <button className="danger-button" onClick={() => dispatch({ type: "choice", value: false })}>
+          <button
+            className="danger-button"
+            disabled={!canCaptureAll}
+            title={canCaptureAll
+              ? undefined
+              : "Rage cannot capture your own King."}
+            onClick={() => dispatch({ type: "choice", value: false })}
+          >
             Capture all
           </button>
         </div>

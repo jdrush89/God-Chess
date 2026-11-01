@@ -1800,7 +1800,10 @@ const startTargetAbility = (
       step: level >= 3 ? "rage-source" : "target",
     };
     state.legalCells = Object.entries(state.board)
-      .filter(([, piece]) => piece.controller === state.activeSeat)
+      .filter(([cell, piece]) =>
+        piece.controller === state.activeSeat &&
+        (level >= 2 || !rageWouldCaptureOwnKing(state, cell))
+      )
       .map(([cell]) => cell);
     state.notice = level >= 3
       ? "Rage: choose a controlled piece to move up to one space."
@@ -2719,12 +2722,22 @@ const resolveRage = (
     );
     if (
       !victim ||
+      (victim.type === "king" && victim.controller === state.activeSeat) ||
       alliedTeammate ||
       (spareAllies && alliedPiece(state, victim))
     ) continue;
     captureAt(state, cell, true, true);
   }
 };
+
+const rageWouldCaptureOwnKing = (
+  state: ThreePlayerState,
+  center: string,
+) =>
+  threePlayerAdjacentCells(state, center).some((cell) => {
+    const victim = state.board[cell];
+    return victim?.type === "king" && victim.controller === state.activeSeat;
+  });
 
 function resurrectionCells(state: ThreePlayerState) {
   const level = currentLevel(state, "resurrect");
@@ -4448,10 +4461,29 @@ export const availableThreePlayerActions = (
       { type: "orb", orb: "dark" },
     ];
   }
+  if (state.pending?.step === "rage-choice") {
+    const canSpareAllies = currentLevel(state, "rage") >= 2;
+    const canCaptureAll = Boolean(
+      state.pending.destination &&
+      !rageWouldCaptureOwnKing(state, state.pending.destination),
+    );
+    if (canSpareAllies) {
+      return [
+        { type: "choice", value: true },
+        ...(canCaptureAll
+          ? [{ type: "choice", value: false } as ThreePlayerAction]
+          : []),
+      ];
+    }
+    return canCaptureAll
+      ? [
+        { type: "choice", value: true },
+        { type: "choice", value: false },
+      ]
+      : [];
+  }
   if (
-    ["rage-choice", "marked-choice", "resurrect-more"].includes(
-      state.pending?.step ?? "",
-    )
+    ["marked-choice", "resurrect-more"].includes(state.pending?.step ?? "")
   ) {
     return [
       { type: "choice", value: true },
@@ -4522,6 +4554,13 @@ export const threePlayerReducer = (
     return restarted;
   }
   if (state.phase === "gameover") return state;
+  if (
+    action.type === "choice" &&
+    state.pending?.step === "rage-choice" &&
+    state.pending.destination &&
+    !(currentLevel(state, "rage") >= 2 && action.value) &&
+    rageWouldCaptureOwnKing(state, state.pending.destination)
+  ) return state;
   const next = ensureLayer2(clone(state));
   const before = JSON.stringify(next);
   const actor = state.activeSeat;

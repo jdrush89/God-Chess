@@ -909,20 +909,21 @@ describe("three-player God catalog", () => {
     expect(targeted.board[kingCell]?.type).toBe("king");
   });
 
-  it("lets Rage destroy adjacent Kings, hostile pieces, and friendly pieces", () => {
+  it("lets Rage destroy hostile Kings while protecting the acting player's King", () => {
     let state = abilityState("kangus", 2);
     const topology = getThreePlayerTopology(state.config.boardVariant);
     const center = topology.cells.find((cell) =>
-      topology.kingNeighbors(cell).length >= 3
+      topology.kingNeighbors(cell).length >= 4
     )!;
-    const [kingCell, friendlyCell, hostileCell] = topology.kingNeighbors(center);
+    const [ownKingCell, enemyKingCell, friendlyCell, hostileCell] =
+      topology.kingNeighbors(center);
     state.board = {
       [center]: piece("center", "pawn", "white"),
-      [kingCell]: piece("red-king", "king", "red"),
+      [ownKingCell]: piece("white-king", "king", "white"),
+      [enemyKingCell]: piece("red-king", "king", "red"),
       [friendlyCell]: piece("white-pawn", "pawn", "white"),
       [hostileCell]: piece("black-pawn", "pawn", "black"),
     };
-    addSafeWhiteKing(state);
     state = threePlayerReducer(state, {
       type: "select-god",
       godId: "kangus",
@@ -932,11 +933,23 @@ describe("three-player God catalog", () => {
       abilityId: "rage",
     });
     state = threePlayerReducer(state, { type: "cell", cell: center });
-    state = threePlayerReducer(state, { type: "choice", value: false });
 
-    expect(state.board[kingCell]).toBeUndefined();
+    expect(availableThreePlayerActions(state)).not.toContainEqual({
+      type: "choice",
+      value: false,
+    });
+    expect(availableThreePlayerActions(state)).toContainEqual({
+      type: "choice",
+      value: true,
+    });
+    expect(threePlayerReducer(state, { type: "choice", value: false })).toBe(state);
+
+    state = threePlayerReducer(state, { type: "choice", value: true });
+
+    expect(state.board[ownKingCell]?.id).toBe("white-king");
+    expect(state.board[enemyKingCell]).toBeUndefined();
     expect(state.players.red.eliminated).toBe(true);
-    expect(state.board[friendlyCell]).toBeUndefined();
+    expect(state.board[friendlyCell]?.id).toBe("white-pawn");
     expect(state.board[hostileCell]).toBeUndefined();
   });
 

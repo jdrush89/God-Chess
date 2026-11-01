@@ -135,6 +135,36 @@ describe("Divine AI", () => {
     expect(state.activeColor).toBe("black");
   });
 
+  it("uses Rage offensively without capturing its own King", () => {
+    const state = createGame(1, { mode: "ai", aiDifficulty: 10 });
+    state.phase = "play";
+    state.activeColor = "black";
+    state.aiColor = "black";
+    state.players.white.gods = ["medusa"];
+    state.players.black.gods = ["kangus"];
+    state.players.black.orbs.black = 3;
+    state.players.black.upgrades.rage = 2;
+    state.rested = [];
+    state.board = {
+      a1: piece("king", "white", "white-king"),
+      c5: piece("queen", "white", "white-queen"),
+      d4: piece("rook", "black", "rage-center"),
+      e5: piece("king", "black", "black-king"),
+    };
+
+    const plan = chooseAiPlan(state, () => 0);
+    expect(plan).toEqual([
+      { type: "select-god", godId: "kangus" },
+      { type: "select-ability", abilityId: "rage" },
+      { type: "square", square: "d4" },
+      { type: "rage-resolve", spareFriendly: true },
+    ]);
+
+    const result = plan.reduce(gameReducer, state);
+    expect(result.board.e5?.id).toBe("black-king");
+    expect(result.board.c5).toBeUndefined();
+  });
+
   it("chooses an immediate checkmate in the October 18 Daily position", () => {
     const state = createDailyPuzzleGame("daily-2026-10-18");
     const directMate = [

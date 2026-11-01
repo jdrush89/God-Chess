@@ -11,6 +11,7 @@ import {
   validateFourPlayerConfig,
 } from "./fourPlayerConfig";
 import {
+  availableFourPlayerActions,
   createFourPlayerGame,
   fourPlayerReducer,
   unsupportedFourPlayerAbilities,
@@ -530,7 +531,7 @@ describe("four-player configuration and flow", () => {
     expect(result.winner).toEqual({ seat: "north", team: undefined, reason: "first-king-captured" });
   });
 
-  it("lets Rage destroy the acting player's adjacent King", () => {
+  it("prevents Rage from targeting a center that would destroy the acting player's King", () => {
     let state = readyGame();
     state.config.victoryMode = "first-king-captured";
     state.players.north.gods = ["kangus"];
@@ -544,20 +545,19 @@ describe("four-player configuration and flow", () => {
     };
     state = fourPlayerReducer(state, { type: "select-god", godId: "kangus" });
     state = fourPlayerReducer(state, { type: "select-ability", abilityId: "rage" });
-    state = fourPlayerReducer(state, { type: "square", square: "g8" });
-    expect(state.players.north.eliminated).toBe(true);
-    expect(state.winner).toBeUndefined();
-    expect(state.phase).toBe("play");
-    expect(state.activeSeat).toBe("east");
-    expect(state.board.g9).toBeUndefined();
+    expect(state.legalTargets).not.toContain("g8");
+    const unchanged = fourPlayerReducer(state, { type: "square", square: "g8" });
+    expect(unchanged.pending?.step).toBe("target");
+    expect(unchanged.board.g9?.id).toBe("north-king");
   });
 
-  it("lets Rage capture every adjacent King", () => {
+  it("requires Rage to spare allies when the acting player's King is adjacent", () => {
     let state = readyGame();
     state.config.victoryMode = "first-king-captured";
     state.config.takeover = true;
     state.players.north.gods = ["kangus"];
     state.players.north.orbs.dark = 10;
+    state.players.north.upgrades.rage = 2;
     state.board = {
       g9: piece(state, "king", "north", "north-king"),
       h9: piece(state, "king", "east", "east-king"),
@@ -568,10 +568,21 @@ describe("four-player configuration and flow", () => {
     state = fourPlayerReducer(state, { type: "select-god", godId: "kangus" });
     state = fourPlayerReducer(state, { type: "select-ability", abilityId: "rage" });
     state = fourPlayerReducer(state, { type: "square", square: "g8" });
-    expect(state.players.north.eliminated).toBe(true);
+    expect(availableFourPlayerActions(state)).not.toContainEqual({
+      type: "choice",
+      value: false,
+    });
+    expect(fourPlayerReducer(state, { type: "choice", value: false })).toBe(state);
+
+    state = fourPlayerReducer(state, { type: "choice", value: true });
+    expect(state.players.north.eliminated).toBe(false);
     expect(state.players.east.eliminated).toBe(true);
-    expect(state.winner).toBeUndefined();
-    expect(state.board.g9).toBeUndefined();
+    expect(state.winner).toEqual({
+      seat: "north",
+      team: undefined,
+      reason: "first-king-captured",
+    });
+    expect(state.board.g9?.id).toBe("north-king");
     expect(state.board.h9).toBeUndefined();
   });
 
