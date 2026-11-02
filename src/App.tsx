@@ -163,7 +163,11 @@ import {
   upsertCloudCompletedChallenges,
 } from "./account/cloudChallengeProgress";
 import { useAccount, type AccountProfile } from "./account/useAccount";
-import { PieceThemeSymbol, type PieceThemeId } from "./pieceThemes";
+import {
+  PieceThemeSymbol,
+  pieceThemeIsUnlocked,
+  type PieceThemeId,
+} from "./pieceThemes";
 import { CustomPuzzleHub } from "./customPuzzles/CustomPuzzleHub";
 import {
   createCustomPuzzleGame,
@@ -2506,6 +2510,7 @@ interface AccountControlProps {
   onUpdateDisplayName: (displayName: string) => Promise<string>;
   onUpdatePortrait: (portraitId: AccountPortraitId) => Promise<string>;
   onUpdatePieceTheme: (pieceTheme: PieceThemeId) => Promise<string>;
+  completedAchievements: AchievementProgress["completed"];
   onImportLocalData: () => Promise<void>;
   onStartAccountFresh: () => Promise<void>;
   social?: SocialContract;
@@ -2532,6 +2537,7 @@ function AccountControl({
   onUpdateDisplayName,
   onUpdatePortrait,
   onUpdatePieceTheme,
+  completedAchievements,
   onImportLocalData,
   onStartAccountFresh,
   social,
@@ -2692,6 +2698,7 @@ function AccountControl({
             onUpdateDisplayName={updateDisplayName}
             onUpdatePortrait={onUpdatePortrait}
             onUpdatePieceTheme={onUpdatePieceTheme}
+            completedAchievements={completedAchievements}
           />,
           document.body,
         )
@@ -8804,6 +8811,19 @@ export default function App() {
     setFriendPublicId(friend.publicId);
     setStartView("friend-profile");
   };
+  const updatePieceTheme = async (pieceTheme: PieceThemeId) => {
+    if (
+      !pieceThemeIsUnlocked(
+        pieceTheme,
+        visibleAchievementProgress.completed,
+      )
+    ) {
+      throw new Error(
+        "Complete the Consistency challenge to unlock the Gargoyle theme.",
+      );
+    }
+    return accountService.updatePieceTheme(pieceTheme);
+  };
   const renderAccountControl = (className = "setup-account-area") => (
     <AccountControl
       account={accountService.account}
@@ -8822,7 +8842,8 @@ export default function App() {
       onUpdatePassword={accountService.updatePassword}
       onUpdateDisplayName={accountService.updateDisplayName}
       onUpdatePortrait={accountService.updatePortrait}
-      onUpdatePieceTheme={accountService.updatePieceTheme}
+      onUpdatePieceTheme={updatePieceTheme}
+      completedAchievements={visibleAchievementProgress.completed}
       onImportLocalData={() => finishLocalDataImportDecision(true)}
       onStartAccountFresh={() => finishLocalDataImportDecision(false)}
       social={social}
@@ -8853,7 +8874,8 @@ export default function App() {
         onUpdatePassword={accountService.updatePassword}
         onUpdateDisplayName={accountService.updateDisplayName}
         onUpdatePortrait={accountService.updatePortrait}
-        onUpdatePieceTheme={accountService.updatePieceTheme}
+        onUpdatePieceTheme={updatePieceTheme}
+        completedAchievements={visibleAchievementProgress.completed}
         onImportLocalData={() => finishLocalDataImportDecision(true)}
         onStartAccountFresh={() => finishLocalDataImportDecision(false)}
         social={social}
