@@ -105,17 +105,63 @@ describe("daily puzzles", () => {
     }
   });
 
-  it("keeps the October 31 and November 1 Dailies unique from the archive", () => {
+  it("keeps the latest Dailies unique from the archive", () => {
     const fingerprints = DAILY_PUZZLES.map((puzzle) => JSON.stringify({
       board: puzzle.createState().board,
       solutionActions: puzzle.solutionActions,
     }));
 
-    for (const id of ["daily-2026-10-31", "daily-2026-11-01"] as const) {
+    for (const id of [
+      "daily-2026-10-31",
+      "daily-2026-11-01",
+      "daily-2026-11-02",
+    ] as const) {
       const index = DAILY_PUZZLES.findIndex((puzzle) => puzzle.id === id);
       expect(index).toBeGreaterThanOrEqual(0);
       expect(fingerprints.indexOf(fingerprints[index])).toBe(index);
     }
+  });
+
+  it("preserves the November 2 Black checkmate replay and its hints", () => {
+    const puzzle = DAILY_PUZZLE_BY_ID["daily-2026-11-02"]!;
+    expect(currentDailyPuzzle(new Date("2026-11-02T12:00:00"))).toBe(puzzle);
+    expect(puzzle.playerColor).toBe("black");
+    expect(puzzle.playerTurns).toBe(5);
+    expect(puzzle.targetResult).toEqual({
+      kind: "winner",
+      winner: "black",
+      reason: "checkmate",
+    });
+    expect(puzzle.hint).toBe(
+      "Start by moving a queen. Find the strongest continuation from there.",
+    );
+    expect(puzzle.abilityHint).toBe(
+      "The winning CPU line used Cull the Weak, Royal Step, Gallop, and Threaten.",
+    );
+
+    let state = puzzle.createState();
+    const completedTurns = { white: 0, black: 0 };
+    for (const action of puzzle.solutionActions) {
+      const before = state;
+      state = gameReducer(state, action);
+      if (
+        before.phase === "play" &&
+        action.type !== "adjudicate-no-turn" &&
+        (
+          state.turn !== before.turn ||
+          state.phase === "upgrade" ||
+          state.phase === "gameover"
+        )
+      ) {
+        completedTurns[before.activeColor] += 1;
+      }
+    }
+
+    expect(state.phase).toBe("gameover");
+    expect(state.result).toEqual(puzzle.targetResult);
+    expect(completedTurns).toEqual({ white: 4, black: 5 });
+    expect(state.puzzlePlayerTurnsRemaining).toBe(0);
+    expect(state.puzzleFailed).toBe(false);
   });
 
   it("keeps the November 1 solver's King alive through the winning line", () => {
