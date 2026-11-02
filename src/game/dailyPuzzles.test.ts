@@ -105,6 +105,19 @@ describe("daily puzzles", () => {
     }
   });
 
+  it("keeps the October 31 and November 1 Dailies unique from the archive", () => {
+    const fingerprints = DAILY_PUZZLES.map((puzzle) => JSON.stringify({
+      board: puzzle.createState().board,
+      solutionActions: puzzle.solutionActions,
+    }));
+
+    for (const id of ["daily-2026-10-31", "daily-2026-11-01"] as const) {
+      const index = DAILY_PUZZLES.findIndex((puzzle) => puzzle.id === id);
+      expect(index).toBeGreaterThanOrEqual(0);
+      expect(fingerprints.indexOf(fingerprints[index])).toBe(index);
+    }
+  });
+
   it("keeps the November 1 solver's King alive through the winning line", () => {
     const puzzle = DAILY_PUZZLE_BY_ID["daily-2026-11-01"]!;
     const result = puzzle.solutionActions.reduce(gameReducer, puzzle.createState());
