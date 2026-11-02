@@ -141,6 +141,32 @@ describe("account modal", () => {
     );
   });
 
+  it("keeps the gargoyle theme locked until Consistency is complete", () => {
+    render(<AccountModal {...baseProps} account={account} />);
+
+    const gargoyle = screen.getByRole("radio", { name: "Gargoyle" });
+    expect((gargoyle as HTMLButtonElement).disabled).toBe(true);
+    expect(gargoyle.textContent).toContain("Complete the Consistency challenge");
+  });
+
+  it("lets a consistent player choose the gargoyle piece theme", async () => {
+    render(
+      <AccountModal
+        {...baseProps}
+        account={account}
+        completedAchievements={{
+          consistency: "2026-11-01T00:00:00.000Z",
+        }}
+      />,
+    );
+    fireEvent.click(screen.getByRole("radio", { name: "Gargoyle" }));
+    fireEvent.click(screen.getByRole("button", { name: /save piece theme/i }));
+
+    await waitFor(() =>
+      expect(baseProps.onUpdatePieceTheme).toHaveBeenCalledWith("gargoyle")
+    );
+  });
+
   it("updates the saved display name for a signed-in account", async () => {
     render(
       <AccountModal

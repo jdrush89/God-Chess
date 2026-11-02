@@ -4,6 +4,7 @@ import {
   Eye,
   EyeOff,
   KeyRound,
+  LockKeyhole,
   LoaderCircle,
   LogIn,
   LogOut,
@@ -31,8 +32,10 @@ import {
 import {
   PIECE_THEME_OPTIONS,
   PieceThemeSymbol,
+  pieceThemeIsUnlocked,
   type PieceThemeId,
 } from "../pieceThemes";
+import type { AchievementProgress } from "../achievements";
 import type { PieceType } from "../game/types";
 
 type AccountSection = "profile" | "friends";
@@ -89,42 +92,63 @@ function PasswordInput({
 function PieceThemePicker({
   value,
   disabled,
+  completedAchievements,
   onChange,
 }: {
   value: PieceThemeId;
   disabled?: boolean;
+  completedAchievements: AchievementProgress["completed"];
   onChange: (value: PieceThemeId) => void;
 }) {
   return (
     <div className="piece-theme-picker">
       <span>Piece theme</span>
       <div role="radiogroup" aria-label="Piece theme">
-        {PIECE_THEME_OPTIONS.map((theme) => (
-          <button
-            type="button"
-            role="radio"
-            aria-checked={value === theme.id}
-            aria-label={theme.name}
-            className={value === theme.id ? "selected" : ""}
-            disabled={disabled}
-            data-preview-theme={theme.id}
-            onClick={() => onChange(theme.id)}
-            key={theme.id}
-          >
-            <span className="piece-theme-preview" aria-hidden="true">
-              {PIECE_PREVIEW_TYPES.map((type, index) => (
-                <PieceThemeSymbol
-                  type={type}
-                  classicColor={index < 3 ? "white" : "black"}
-                  className={index < 3 ? "white" : "black"}
-                  key={type}
-                />
-              ))}
-            </span>
-            <strong>{theme.name}</strong>
-            <small>{theme.description}</small>
-          </button>
-        ))}
+        {PIECE_THEME_OPTIONS.map((theme) => {
+          const locked = !pieceThemeIsUnlocked(
+            theme.id,
+            completedAchievements,
+          );
+          return (
+            <button
+              type="button"
+              role="radio"
+              aria-checked={value === theme.id}
+              aria-label={theme.name}
+              className={[
+                value === theme.id ? "selected" : "",
+                locked ? "theme-locked" : "",
+              ].filter(Boolean).join(" ")}
+              disabled={disabled || locked}
+              data-preview-theme={theme.id}
+              onClick={() => onChange(theme.id)}
+              key={theme.id}
+            >
+              {locked && (
+                <span className="piece-theme-lock">
+                  <LockKeyhole size={9} /> Locked
+                </span>
+              )}
+              <span className="piece-theme-preview" aria-hidden="true">
+                {PIECE_PREVIEW_TYPES.map((type, index) => (
+                  <PieceThemeSymbol
+                    type={type}
+                    classicColor={index < 3 ? "white" : "black"}
+                    className={index < 3 ? "white" : "black"}
+                    key={type}
+                  />
+                ))}
+              </span>
+              <strong>{theme.name}</strong>
+              <small>
+                {theme.description}
+                {locked && theme.unlockDescription && (
+                  <> {theme.unlockDescription}</>
+                )}
+              </small>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -356,6 +380,7 @@ export function AccountModal({
   onUpdateDisplayName,
   onUpdatePortrait,
   onUpdatePieceTheme,
+  completedAchievements = {},
 }: {
   account?: AccountProfile;
   configured: boolean;
@@ -381,6 +406,7 @@ export function AccountModal({
   onUpdateDisplayName: (displayName: string) => Promise<string>;
   onUpdatePortrait: (portraitId: AccountPortraitId) => Promise<string>;
   onUpdatePieceTheme: (pieceTheme: PieceThemeId) => Promise<string>;
+  completedAchievements?: AchievementProgress["completed"];
 }) {
   const [mode, setMode] = useState<AuthMode>("signin");
   const [section, setSection] = useState<AccountSection>(initialSection);
@@ -595,6 +621,7 @@ export function AccountModal({
                 <PieceThemePicker
                   value={pieceTheme}
                   disabled={working}
+                  completedAchievements={completedAchievements}
                   onChange={setPieceTheme}
                 />
                 <button

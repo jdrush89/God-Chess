@@ -18,6 +18,7 @@ import {
 } from "./presentation";
 import {
   CLASSIC_PIECE_SYMBOLS,
+  GargoylePieceSvg,
   MushroomPieceSvg,
   PieceThemeSymbol,
 } from "../pieceThemes";
@@ -472,6 +473,20 @@ export function ThreePlayerBoard({
                   y={descriptor.render.y - fontSize * 0.57}
                   width={fontSize * 1.14}
                   height={fontSize * 1.14}
+                  style={{
+                    "--piece-color":
+                      state.players[piece.controller ?? piece.owner].displayColor,
+                    color:
+                      state.players[piece.controller ?? piece.owner].displayColor,
+                  } as React.CSSProperties}
+                />
+                <GargoylePieceSvg
+                  type={piece.type}
+                  className={`three-board-gargoyle-piece seat-${piece.controller ?? piece.owner} ${piece.controller ? "" : "inert"}`}
+                  x={descriptor.render.x - fontSize * 0.62}
+                  y={descriptor.render.y - fontSize * 0.62}
+                  width={fontSize * 1.24}
+                  height={fontSize * 1.24}
                   style={{
                     "--piece-color":
                       state.players[piece.controller ?? piece.owner].displayColor,

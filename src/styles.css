@@ -739,7 +739,8 @@ span.move-target-dot {
 }
 .piece-theme-symbol > * { grid-area: 1 / 1; }
 .classic-piece-glyph { display: block; }
-.mushroom-piece-glyph {
+.mushroom-piece-glyph,
+.gargoyle-piece-glyph {
   display: none; width: 1em; height: 1em; overflow: visible;
   color: var(--piece-color, currentColor); -webkit-text-stroke: 0; text-shadow: none;
 }
@@ -748,6 +749,11 @@ html[data-piece-theme="mushroom"] .three-board-piece.classic-piece-glyph {
   display: none;
 }
 html[data-piece-theme="mushroom"] .mushroom-piece-glyph { display: block; }
+html[data-piece-theme="gargoyle"] .piece-theme-symbol > .classic-piece-glyph,
+html[data-piece-theme="gargoyle"] .three-board-piece.classic-piece-glyph {
+  display: none;
+}
+html[data-piece-theme="gargoyle"] .gargoyle-piece-glyph { display: block; }
 .mushroom-piece-glyph :where(path, ellipse, circle) {
   vector-effect: non-scaling-stroke;
 }
@@ -855,6 +861,93 @@ html[data-piece-theme="mushroom"] .mushroom-piece-glyph { display: block; }
   --mushroom-spot-outline: #594923;
   --mushroom-accent: #e4edf5;
   --mushroom-eye: #152239;
+}
+.gargoyle-piece-glyph :where(path, circle) {
+  vector-effect: non-scaling-stroke;
+}
+.gargoyle-piece-base,
+.gargoyle-piece-stone,
+.gargoyle-piece-horn {
+  fill: var(--gargoyle-stone, currentColor);
+  stroke: var(--gargoyle-outline, #1c2025);
+  stroke-width: 3.4;
+  stroke-linejoin: round;
+}
+.gargoyle-piece-base {
+  fill: var(--gargoyle-base, var(--gargoyle-stone, currentColor));
+}
+.gargoyle-piece-base-shadow,
+.gargoyle-piece-shadow {
+  fill: var(--gargoyle-shadow, #6f747a);
+  opacity: .78;
+}
+.gargoyle-piece-wing {
+  fill: var(--gargoyle-wing, #7c8289);
+  stroke: var(--gargoyle-outline, #1c2025);
+  stroke-width: 3.1;
+  stroke-linejoin: round;
+}
+.gargoyle-piece-detail,
+.gargoyle-piece-brow,
+.gargoyle-piece-slit,
+.gargoyle-piece-cross {
+  fill: none;
+  stroke: var(--gargoyle-detail, #363b42);
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.gargoyle-piece-slit { stroke-width: 4.4; }
+.gargoyle-piece-cross {
+  stroke: var(--gargoyle-accent, #c99b45);
+  stroke-width: 4;
+}
+.gargoyle-piece-eye,
+.gargoyle-piece-jewel {
+  fill: var(--gargoyle-eye, #e6b84e);
+  stroke: var(--gargoyle-outline, #1c2025);
+  stroke-width: 1.4;
+}
+.piece-theme-light,
+.three-board-gargoyle-piece.seat-white {
+  --gargoyle-stone: #f2eee5;
+  --gargoyle-base: #a69e90;
+  --gargoyle-shadow: #777166;
+  --gargoyle-wing: #c8c1b5;
+  --gargoyle-outline: #272c33;
+  --gargoyle-detail: #4e5864;
+  --gargoyle-accent: #bd842c;
+  --gargoyle-eye: #c57920;
+}
+.piece-theme-dark {
+  --gargoyle-stone: currentColor;
+  --gargoyle-base: #303640;
+  --gargoyle-shadow: #1d222b;
+  --gargoyle-wing: #414955;
+  --gargoyle-outline: #080b10;
+  --gargoyle-detail: #697483;
+  --gargoyle-accent: #bf8b42;
+  --gargoyle-eye: #e04d39;
+}
+.three-board-gargoyle-piece.seat-red {
+  --gargoyle-stone: currentColor;
+  --gargoyle-base: #7e2e36;
+  --gargoyle-shadow: #591d26;
+  --gargoyle-wing: #a84950;
+  --gargoyle-outline: #3b1118;
+  --gargoyle-detail: #e0a2a0;
+  --gargoyle-accent: #e4b45c;
+  --gargoyle-eye: #ffd06b;
+}
+.three-board-gargoyle-piece.seat-black {
+  --gargoyle-stone: currentColor;
+  --gargoyle-base: #374459;
+  --gargoyle-shadow: #222c3b;
+  --gargoyle-wing: #4d6079;
+  --gargoyle-outline: #101827;
+  --gargoyle-detail: #91a5bb;
+  --gargoyle-accent: #d4a95c;
+  --gargoyle-eye: #ff6754;
 }
 
 .chess-piece,
@@ -2679,6 +2772,17 @@ html[data-piece-theme="mushroom"] .mushroom-piece-glyph { display: block; }
   box-shadow: inset 0 0 0 2px rgba(198,161,91,.2);
 }
 .piece-theme-picker button:disabled { cursor: wait; }
+.piece-theme-picker button.theme-locked {
+  position: relative; opacity: .68; cursor: not-allowed;
+}
+.piece-theme-picker button.theme-locked:hover { border-color: #30333b; }
+.piece-theme-lock {
+  position: absolute; top: 7px; right: 7px; display: inline-flex;
+  align-items: center; gap: 3px; padding: 3px 5px;
+  color: #d6bd82; background: rgba(8,10,14,.9);
+  border: 1px solid rgba(198,161,91,.34);
+  font: 700 7px/1 "Cinzel"; letter-spacing: .06em; text-transform: uppercase;
+}
 .piece-theme-picker strong {
   font: 600 11px "Cinzel"; letter-spacing: .04em;
 }
@@ -2698,10 +2802,23 @@ html[data-piece-theme="mushroom"] .mushroom-piece-glyph { display: block; }
 .piece-theme-picker [data-preview-theme="classic"] .mushroom-piece-glyph {
   display: none !important;
 }
+.piece-theme-picker [data-preview-theme="classic"] .gargoyle-piece-glyph {
+  display: none !important;
+}
 .piece-theme-picker [data-preview-theme="mushroom"] .classic-piece-glyph {
   display: none !important;
 }
 .piece-theme-picker [data-preview-theme="mushroom"] .mushroom-piece-glyph {
+  display: block !important;
+}
+.piece-theme-picker [data-preview-theme="mushroom"] .gargoyle-piece-glyph {
+  display: none !important;
+}
+.piece-theme-picker [data-preview-theme="gargoyle"] .classic-piece-glyph,
+.piece-theme-picker [data-preview-theme="gargoyle"] .mushroom-piece-glyph {
+  display: none !important;
+}
+.piece-theme-picker [data-preview-theme="gargoyle"] .gargoyle-piece-glyph {
   display: block !important;
 }
 .account-save-piece-theme {
@@ -3135,6 +3252,34 @@ html[data-piece-theme="mushroom"] .mushroom-piece-glyph { display: block; }
 ) { stroke-width: 2.2; }
 .three-board-mushroom-piece .mushroom-piece-finial { stroke-width: 1.2; }
 .three-board-mushroom-piece.inert { opacity: .38; }
+.three-board-gargoyle-piece {
+  pointer-events: none;
+  filter:
+    drop-shadow(0 .08px .04px rgba(0,0,0,.88))
+    drop-shadow(0 0 .035px rgba(0,0,0,.7));
+}
+.three-board-gargoyle-piece.seat-white {
+  filter:
+    drop-shadow(0 .1px .055px rgba(0,0,0,.95))
+    drop-shadow(0 0 .04px rgba(0,0,0,.8));
+}
+.three-board-gargoyle-piece :where(
+  .gargoyle-piece-base,
+  .gargoyle-piece-stone,
+  .gargoyle-piece-horn
+) { stroke-width: 1.05; }
+.three-board-gargoyle-piece .gargoyle-piece-wing { stroke-width: .95; }
+.three-board-gargoyle-piece :where(
+  .gargoyle-piece-detail,
+  .gargoyle-piece-brow,
+  .gargoyle-piece-cross
+) { stroke-width: 1.2; }
+.three-board-gargoyle-piece .gargoyle-piece-slit { stroke-width: 1.5; }
+.three-board-gargoyle-piece :where(
+  .gargoyle-piece-eye,
+  .gargoyle-piece-jewel
+) { stroke-width: .45; }
+.three-board-gargoyle-piece.inert { opacity: .38; }
 .three-status-marker { pointer-events: none; }
 .three-status-marker polygon {
   fill: #5b3a76; stroke: #e2c8f4; stroke-width: .045; vector-effect: non-scaling-stroke;
