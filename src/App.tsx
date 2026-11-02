@@ -10,6 +10,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useTwoColumnGodInspector } from "./useTwoColumnGodInspector";
+import { BananaPeelIcon } from "./components/BananaPeelIcon";
 import {
   ArrowLeft,
   Bell,
@@ -1466,7 +1467,7 @@ export function ChessBoard({
                     {state.selectedAbility === "stone-gaze" ? <Eye /> : <Crown />}
                   </span>
                 )}
-                {banana && <span className="banana" title="Banana peel">⌁</span>}
+                {banana && <BananaPeelIcon className="banana" />}
                 {piece && drag.draggingSource !== square && (
                   <PieceView piece={piece} />
                 )}
@@ -1633,7 +1634,7 @@ function SquareInfoPanel({
       )}
       {banana && (
         <div className="board-marker-info">
-          <span className="banana-info-icon">⌁</span>
+          <BananaPeelIcon className="banana-info-icon" />
           <div>
             <small>{square.toUpperCase()} · BOARD MARKER</small>
             <h3>Banana Peel</h3>

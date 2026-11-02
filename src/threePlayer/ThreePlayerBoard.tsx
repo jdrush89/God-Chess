@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useBoardDrag } from "../components/useBoardDrag";
+import { BananaPeelIcon } from "../components/BananaPeelIcon";
 import { threePlayerHasAlternatingNeutralCells } from "../game/threePlayerDivineGeometry";
 import {
   getThreePlayerTopology,
@@ -509,14 +510,13 @@ export function ThreePlayerBoard({
               </g>
             )}
             {banana && !preview && (
-              <text
+              <BananaPeelIcon
                 className="three-board-banana"
-                x={descriptor.render.x}
-                y={descriptor.render.y}
-                aria-hidden="true"
-              >
-                🍌
-              </text>
+                x={descriptor.render.x - basePieceFontSize(descriptor, variant) * 0.29}
+                y={descriptor.render.y - basePieceFontSize(descriptor, variant) * 0.29}
+                width={basePieceFontSize(descriptor, variant) * 0.58}
+                height={basePieceFontSize(descriptor, variant) * 0.58}
+              />
             )}
           </g>
         );

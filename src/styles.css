@@ -1077,7 +1077,19 @@ html[data-piece-theme="gargoyle"] .gargoyle-piece-glyph { display: block; }
 .file-label { right: 5px; bottom: 3px; }
 .light .rank-label, .light .file-label { color: #4d4942; }
 .dark .rank-label, .dark .file-label { color: #dad2c2; }
-.banana { position: absolute; z-index: 2; font: 700 clamp(12px, 3.4cqi, 24px) Georgia; color: #d4ae49; transform: rotate(-24deg); text-shadow: 0 1px 2px #29200e; }
+.banana-peel-icon { overflow: visible; }
+.banana-peel-fruit {
+  fill: #f2c84b; stroke: #634714; stroke-width: 2.2; stroke-linejoin: round;
+}
+.banana-peel-highlight {
+  fill: none; stroke: #ffe48a; stroke-width: 2.2; stroke-linecap: round;
+}
+.banana-peel-tip { fill: #8a641d; stroke: #4e370e; stroke-width: 1.2; stroke-linejoin: round; }
+.banana {
+  position: absolute; z-index: 2; inset: 20%; width: 60%; height: 60%;
+  transform: rotate(-16deg);
+  filter: drop-shadow(0 2px 1px rgba(37,27,8,.72));
+}
 
 /* Action panel */
 .action-panel {
@@ -1125,9 +1137,9 @@ html[data-piece-theme="gargoyle"] .gargoyle-piece-glyph { display: block; }
 .board-marker-info { display: grid; grid-template-columns: auto 1fr; gap: 13px; padding-right: 28px; }
 .board-marker-info p + p { margin-top: 6px; color: #777981; }
 .banana-info-icon {
-  width: 43px; height: 43px; display: grid; place-items: center; color: #e0ba54;
+  width: 43px; height: 43px; padding: 6px; box-sizing: border-box;
   border: 1px solid rgba(224,186,84,.3); background: rgba(224,186,84,.06);
-  font: 700 28px Georgia; transform: rotate(-18deg);
+  transform: rotate(-12deg);
 }
 .panel-empty { text-align: center; padding: 36px 30px 28px; color: var(--gold); }
 .panel-empty h3 { margin: 12px 0 7px; color: #ddd8cf; font: 600 16px "Cinzel"; }
@@ -3344,12 +3356,12 @@ html[data-piece-theme="gargoyle"] .gargoyle-piece-glyph { display: block; }
 }
 .three-status-marker circle { fill: #f2dcff; }
 .three-board-banana {
-  font: .46px sans-serif;
-  text-anchor: middle;
-  dominant-baseline: central;
   pointer-events: none;
   filter: drop-shadow(0 .05px .03px rgba(0,0,0,.7));
 }
+.three-board-banana .banana-peel-fruit { stroke-width: .65; }
+.three-board-banana .banana-peel-highlight { stroke-width: .55; }
+.three-board-banana .banana-peel-tip { stroke-width: .35; }
 .three-board.preview .three-board-cell { pointer-events: none; }
 .three-yalta-coordinates {
   pointer-events: none;
@@ -4038,7 +4050,7 @@ html[data-piece-theme="gargoyle"] .gargoyle-piece-glyph { display: block; }
 .four-board-square .status-marker { width: 9px; height: 9px; border-radius: 2px; }
 .four-board-square .status-marker svg { width: 6px; height: 6px; }
 .four-board-square .rank-label, .four-board-square .file-label { font-size: clamp(4px, 1.1cqi, 7px); }
-.four-board-square .banana { font-size: clamp(8px, 2.2cqi, 17px); }
+.four-board-square .banana { inset: 22%; width: 56%; height: 56%; }
 .four-capture-effect {
   position: absolute; z-index: 7; inset: 4px; display: grid; place-items: center;
   color: #e3a69b; background: rgba(116,36,29,.54); border: 1px solid rgba(232,141,126,.72);

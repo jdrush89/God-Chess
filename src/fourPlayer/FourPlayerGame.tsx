@@ -41,6 +41,7 @@ import type { AccountPortraitId } from "../account/portraits";
 import { GameResultPresentation } from "../GameResultPresentation";
 import { MatchEscapeMenu } from "../MatchEscapeMenu";
 import { BoardViewport } from "../components/BoardViewport";
+import { BananaPeelIcon } from "../components/BananaPeelIcon";
 import { useBoardDrag } from "../components/useBoardDrag";
 import { GodPortrait } from "../PlayerGodPanel";
 import { GodSkinPicker } from "../GodSkinPicker";
@@ -839,7 +840,7 @@ function FourPlayerBoard({
                     <span className="file-label">{String.fromCharCode(97 + file)}</span>
                   )}
                   {legal && !piece && <span className="move-target-dot" aria-hidden="true" />}
-                  {banana && <span className="banana" title="Banana peel">⌁</span>}
+                  {banana && <BananaPeelIcon className="banana" />}
                   {captureEffects.has(square) && <span className="four-capture-effect"><Skull /></span>}
                   {piece && drag.draggingSource !== square && (
                     <PieceView piece={piece} state={state} square={square} />
@@ -1617,7 +1618,7 @@ function SquareInfo({
       )}
       {banana && (
         <div className="board-marker-info">
-          <span className="banana-info-icon">⌁</span>
+          <BananaPeelIcon className="banana-info-icon" />
           <div>
             <small>{square.toUpperCase()} · BOARD MARKER</small>
             <h3>Banana Peel</h3>
