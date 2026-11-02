@@ -4412,6 +4412,13 @@ export const puzzleInputIsLocked = (state: GameState) =>
   Boolean(state.puzzleFailed || state.puzzleSolved) &&
   state.activeColor !== state.aiColor;
 
+export const puzzleFailureCanBePresented = (state: GameState) =>
+  state.phase === "gameover" ||
+  (
+    state.phase === "play" &&
+    state.activeColor !== state.aiColor
+  );
+
 export const formatDailyCompletionTime = (elapsedMs: number) => {
   const totalSeconds = Math.max(0, Math.floor(elapsedMs / 1000));
   const hours = Math.floor(totalSeconds / 3600);
@@ -4709,10 +4716,7 @@ export function GameScreen({
       state.puzzleFailed ||
       (dailyPuzzle && state.phase === "gameover" && !puzzleSolved)
     ) &&
-    (
-      state.phase === "gameover" ||
-      state.activeColor !== state.aiColor
-    ),
+    puzzleFailureCanBePresented(state),
   );
   const dailyTurnsRemaining = dailyPuzzle
     ? state.puzzlePlayerTurnsRemaining ?? 0
