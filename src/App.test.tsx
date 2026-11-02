@@ -205,6 +205,7 @@ import App, {
   dailyShareText,
   dailyGolfScoreForTurnsRemaining,
   formatDailyCompletionTime,
+  puzzleFailureCanBePresented,
   puzzleInputIsLocked,
   FriendProfileScreen,
   GameScreen,
@@ -822,10 +823,12 @@ describe("game startup", () => {
       puzzleFailed: true,
     });
     expect(puzzleInputIsLocked(awaitingUpgrade)).toBe(false);
+    expect(puzzleFailureCanBePresented(awaitingUpgrade)).toBe(false);
 
     const missed = structuredClone(awaitingUpgrade);
     missed.phase = "play";
     expect(puzzleInputIsLocked(missed)).toBe(true);
+    expect(puzzleFailureCanBePresented(missed)).toBe(true);
   });
 
   it("starts today's Daily puzzle directly from /daily", () => {
