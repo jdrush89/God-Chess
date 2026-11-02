@@ -205,6 +205,7 @@ import App, {
   dailyShareText,
   dailyGolfScoreForTurnsRemaining,
   formatDailyCompletionTime,
+  puzzleInputIsLocked,
   FriendProfileScreen,
   GameScreen,
   SimulationExportDialog,
@@ -807,6 +808,24 @@ describe("game startup", () => {
       "Eagle - 2 player turns left",
       "https://playgodchess.com/daily",
     ].join("\n"));
+  });
+
+  it("keeps a final Daily upgrade interactive until checkmate is adjudicated", () => {
+    const daily = currentDailyPuzzle(new Date("2026-11-02T12:00:00"))!;
+    const awaitingUpgrade = daily.solutionActions.slice(0, -1)
+      .reduce(gameReducer, daily.createState());
+
+    expect(awaitingUpgrade).toMatchObject({
+      phase: "upgrade",
+      activeColor: daily.playerColor,
+      puzzlePlayerTurnsRemaining: 0,
+      puzzleFailed: true,
+    });
+    expect(puzzleInputIsLocked(awaitingUpgrade)).toBe(false);
+
+    const missed = structuredClone(awaitingUpgrade);
+    missed.phase = "play";
+    expect(puzzleInputIsLocked(missed)).toBe(true);
   });
 
   it("starts today's Daily puzzle directly from /daily", () => {
