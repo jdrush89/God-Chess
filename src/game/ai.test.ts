@@ -588,6 +588,32 @@ describe("Divine AI", () => {
     expect(kingSquare(state.board, "black")).not.toBe("f7");
   });
 
+  it("moves the King away from Rage that can upgrade before the next turn", () => {
+    let state = createGame(2, { mode: "simulation", aiDifficulty: 10 });
+    state.phase = "play";
+    state.activeColor = "black";
+    state.players.white.gods = ["kangus", "medusa", "anubis"];
+    state.players.black.gods = ["leonidas", "death", "chiron"];
+    state.players.white.upgrades.rage = 2;
+    state.players.white.orbs.black = 8;
+    state.rested = ["kangus", "medusa", "anubis", "death", "chiron"];
+    state.board = {
+      e1: piece("king", "white", "white-king"),
+      f5: piece("bishop", "white", "white-bishop"),
+      e7: piece("king", "black", "black-king"),
+      g4: piece("pawn", "black", "black-pawn"),
+    };
+
+    expect(state.activeColor).toBe("black");
+    expect(kingSquare(state.board, "black")).toBe("e7");
+    expect(state.players.white.upgrades.rage).toBe(2);
+    const response = chooseAiPlan(state, () => 0);
+    state = response.reduce(gameReducer, state);
+
+    expect(kingSquare(state.board, "black")).toBeTruthy();
+    expect(kingSquare(state.board, "black")).not.toBe("e7");
+  });
+
   it("only treats a piece as Air Strike exposed when the carrier can land beyond it", () => {
     const corner = createGame(2, { mode: "ai", aiDifficulty: 10 });
     corner.phase = "play";

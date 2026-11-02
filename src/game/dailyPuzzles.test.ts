@@ -131,6 +131,44 @@ describe("daily puzzles", () => {
     );
   });
 
+  it("keeps the November 1 solution valid against the current level 10 CPU", () => {
+    const puzzle = DAILY_PUZZLE_BY_ID["daily-2026-11-01"]!;
+    let recorded = puzzle.createState();
+    let live = puzzle.createState();
+    let segment: typeof puzzle.solutionActions = [];
+
+    const replaySegment = () => {
+      if (!segment.length) return;
+      if (live.activeColor === puzzle.playerColor) {
+        live = segment.reduce(gameReducer, live);
+      } else {
+        live = chooseAiPlan(live, () => 0).reduce(gameReducer, live);
+      }
+      segment = [];
+    };
+
+    for (const action of puzzle.solutionActions) {
+      const before = recorded;
+      segment.push(action);
+      recorded = gameReducer(recorded, action);
+      const completedSegment = before.phase === "play"
+        ? (
+          recorded.phase !== before.phase ||
+          recorded.turn !== before.turn ||
+          recorded.activeColor !== before.activeColor
+        )
+        : (
+          recorded.phase !== before.phase ||
+          recorded.upgradeQueue.length !== before.upgradeQueue.length ||
+          recorded.activeColor !== before.activeColor
+        );
+      if (completedSegment) replaySegment();
+    }
+    replaySegment();
+
+    expect(dailyPuzzleResultMatches(puzzle, live)).toBe(true);
+  });
+
   it("requires four player turns along the stored winning line", () => {
     const puzzle = DAILY_PUZZLES[0];
     let state = puzzle.createState();

@@ -468,6 +468,43 @@ const resolveMandatoryUpgrades = (state: GameState) => {
   return next;
 };
 
+const resolveMandatoryUpgradesFavoring = (
+  state: GameState,
+  color: Color,
+  abilityId: string,
+) => {
+  let next = state;
+  let favored = false;
+  for (let count = 0; count < 4 && next.phase === "upgrade"; count += 1) {
+    const upgrades = availableClassicActions(next)
+      .filter((candidate) => candidate.type === "upgrade");
+    const preferred = upgrades.find((candidate) =>
+      candidate.type === "upgrade" && candidate.abilityId === abilityId
+    );
+    if (next.activeColor === color && !preferred) return undefined;
+    const action = next.activeColor === color ? preferred : upgrades[0];
+    if (!action) break;
+    favored ||= next.activeColor === color;
+    next = simulateClassicAction(next, action);
+  }
+  return favored ? next : undefined;
+};
+
+const hasWinningRageTurnAfterUpgrade = (
+  state: GameState,
+  color: Color,
+) => {
+  if (
+    state.phase !== "upgrade" ||
+    !state.upgradeQueue.includes(color) ||
+    (state.players[color].upgrades.rage ?? 1) >= 3
+  ) return false;
+
+  const turn = resolveMandatoryUpgradesFavoring(state, color, "rage");
+  if (!turn || turn.phase !== "play" || turn.activeColor !== color) return false;
+  return hasWinningTurn(turn, color);
+};
+
 const bestAirStrikeSafetyPlan = (
   color: Color,
   plans: AiTurnPlan[],
@@ -570,6 +607,7 @@ const bestImmediateMateAvoidance = (
 ) => {
   const enemy = opposite(color);
   const allowsImmediateMate = (candidate: GameState) => {
+    if (hasWinningRageTurnAfterUpgrade(candidate, enemy)) return true;
     const playable = resolveMandatoryUpgrades(candidate);
     return Boolean(winningEscortTurn(playable, enemy)) ||
       hasWinningAirStrikeTurn(playable, enemy) ||
