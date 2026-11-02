@@ -224,6 +224,7 @@ import {
   type AchievementProgress,
   type AchievementTransition,
 } from "./achievements";
+import { announceAchievementUnlocks } from "./AchievementNotificationHost";
 import {
   createPlayerStatisticsProgress,
   createPlayerStatisticsSnapshot,
@@ -6095,6 +6096,8 @@ export default function App() {
   const [achievementProgress, setAchievementProgress] = useState(
     loadLocalAchievementProgress,
   );
+  const achievementProgressRef = useRef(achievementProgress);
+  achievementProgressRef.current = achievementProgress;
   const [achievementProgressLoadedFor, setAchievementProgressLoadedFor] =
     useState<string>();
   const [achievementProgressLoading, setAchievementProgressLoading] =
@@ -6436,39 +6439,40 @@ export default function App() {
   const saveAchievementProgress = useCallback((
     update: (current: AchievementProgress) => AchievementProgress,
   ) => {
-    setAchievementProgress((current) => {
-      const next = update(current);
-      if (next === current) return current;
-      const account = accountService.account;
-      if (
-        account &&
-        achievementProgressLoadedFor === account.userId &&
-        !achievementProgressLoading
-      ) {
-        cloudAchievementQueue.current = cloudAchievementQueue.current
-          .then(() => upsertCloudAchievementProgress(account.userId, next))
-          .catch((error) => {
-            console.error("Unable to save cloud achievement progress.", error);
-            setSaveError(
-              error instanceof Error
-                ? error.message
-                : "Unable to save achievement progress.",
-            );
-          });
-      } else if (!account) {
-        try {
-          persistLocalAchievementProgress(next);
-        } catch (error) {
-          console.error("Unable to save local achievement progress.", error);
+    const current = achievementProgressRef.current;
+    const next = update(current);
+    if (next === current) return;
+    achievementProgressRef.current = next;
+    setAchievementProgress(next);
+    announceAchievementUnlocks(current, next);
+    const account = accountService.account;
+    if (
+      account &&
+      achievementProgressLoadedFor === account.userId &&
+      !achievementProgressLoading
+    ) {
+      cloudAchievementQueue.current = cloudAchievementQueue.current
+        .then(() => upsertCloudAchievementProgress(account.userId, next))
+        .catch((error) => {
+          console.error("Unable to save cloud achievement progress.", error);
           setSaveError(
             error instanceof Error
               ? error.message
               : "Unable to save achievement progress.",
           );
-        }
+        });
+    } else if (!account) {
+      try {
+        persistLocalAchievementProgress(next);
+      } catch (error) {
+        console.error("Unable to save local achievement progress.", error);
+        setSaveError(
+          error instanceof Error
+            ? error.message
+            : "Unable to save achievement progress.",
+        );
       }
-      return next;
-    });
+    }
   }, [
     accountService.account,
     achievementProgressLoadedFor,

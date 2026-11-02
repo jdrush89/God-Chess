@@ -412,6 +412,63 @@ body::before {
   width: 28px; height: 28px; display: grid; place-items: center; flex: 0 0 auto; padding: 0;
   color: #e7b0a6; background: transparent; border: 1px solid rgba(231,176,166,.3); cursor: pointer;
 }
+.achievement-notification-region {
+  position: fixed; z-index: 2100; right: 20px; bottom: 20px;
+  width: min(390px, calc(100vw - 40px)); pointer-events: none;
+}
+.achievement-notification {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 13px; align-items: start;
+  padding: 16px 17px; overflow: hidden;
+  color: #f4efe4;
+  background:
+    linear-gradient(135deg, rgba(203,160,75,.17), transparent 42%),
+    rgba(14,18,25,.97);
+  border: 1px solid rgba(224,184,97,.72); border-radius: 12px;
+  box-shadow: 0 16px 45px rgba(0,0,0,.52), inset 0 0 0 1px rgba(255,235,180,.06);
+  animation: achievement-notification-enter .35s cubic-bezier(.2,.8,.2,1) both;
+}
+.achievement-notification.leaving {
+  animation: achievement-notification-exit .35s ease-in both;
+}
+.achievement-notification-icon {
+  width: 40px; height: 40px; display: grid; place-items: center;
+  color: #f0c66e; background: rgba(202,157,68,.13);
+  border: 1px solid rgba(224,184,97,.38); border-radius: 50%;
+}
+.achievement-notification-copy { min-width: 0; display: grid; gap: 4px; }
+.achievement-notification-copy > small {
+  color: #d3a955; font: 600 8px "Cinzel"; letter-spacing: .15em; text-transform: uppercase;
+}
+.achievement-notification-copy > strong {
+  color: #fff4d5; font: 700 16px "Cinzel"; line-height: 1.2;
+}
+.achievement-notification-copy > span {
+  color: #adb3bf; font-size: 11px; line-height: 1.45;
+}
+.achievement-notification-copy .achievement-notification-reward {
+  display: flex; align-items: center; gap: 7px; margin-top: 4px; padding-top: 8px;
+  color: #e7c77e; border-top: 1px solid rgba(224,184,97,.2);
+  font-weight: 700;
+}
+@keyframes achievement-notification-enter {
+  from { opacity: 0; transform: translateX(calc(100% + 28px)); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes achievement-notification-exit {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(calc(100% + 28px)); }
+}
+@media (max-width: 600px) {
+  .achievement-notification-region {
+    right: 12px; bottom: 12px; width: calc(100vw - 24px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .achievement-notification,
+  .achievement-notification.leaving {
+    animation-duration: .01ms;
+  }
+}
 .game-layout {
   --board-size: clamp(220px, calc(100dvh - 305px), 790px);
   display: grid; grid-template-columns: minmax(0, 790px) 350px; gap: 30px;
