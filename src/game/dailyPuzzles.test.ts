@@ -164,27 +164,28 @@ describe("daily puzzles", () => {
     expect(state.puzzleFailed).toBe(false);
   });
 
-  it("adjudicates the November 2 checkmate after the final player upgrade", () => {
+  it("adjudicates the November 2 checkmate before opening final upgrades", () => {
     const puzzle = DAILY_PUZZLE_BY_ID["daily-2026-11-02"]!;
     const finalAction = puzzle.solutionActions.at(-1)!;
     let state = puzzle.solutionActions.slice(0, -1)
       .reduce(gameReducer, puzzle.createState());
 
     expect(state).toMatchObject({
-      phase: "upgrade",
+      phase: "play",
       activeColor: puzzle.playerColor,
-      puzzlePlayerTurnsRemaining: 0,
-      puzzleFailed: true,
+      puzzlePlayerTurnsRemaining: 1,
+      puzzleFailed: false,
     });
     expect(finalAction).toEqual({
-      type: "upgrade",
-      abilityId: "pick-a-fight",
+      type: "square",
+      square: "b1",
     });
 
     state = gameReducer(state, finalAction);
 
     expect(state).toMatchObject({
       phase: "gameover",
+      upgradeQueue: [],
       winner: "black",
       result: {
         kind: "winner",
