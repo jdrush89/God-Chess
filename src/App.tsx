@@ -6450,13 +6450,20 @@ export default function App() {
   const saveAchievementProgress = useCallback((
     update: (current: AchievementProgress) => AchievementProgress,
   ) => {
+    const account = accountService.account;
+    if (
+      account &&
+      (
+        achievementProgressLoadedFor !== account.userId ||
+        achievementProgressLoading
+      )
+    ) return;
     const current = achievementProgressRef.current;
     const next = update(current);
     if (next === current) return;
     achievementProgressRef.current = next;
     setAchievementProgress(next);
     announceAchievementUnlocks(current, next);
-    const account = accountService.account;
     if (
       account &&
       achievementProgressLoadedFor === account.userId &&

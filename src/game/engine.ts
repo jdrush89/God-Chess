@@ -740,6 +740,18 @@ const advanceUpgradeQueue = (state: GameState) => {
   state.notice = `${colorName(state.activeColor)} upgrades one ability.`;
 };
 
+const adjudicatePreparedTurnBeforeUpgrade = (
+  state: GameState,
+  prepareTurn: (candidate: GameState) => void,
+) => {
+  const candidate = cloneState(state);
+  prepareTurn(candidate);
+  resolveClassicTurnStart(candidate);
+  if (candidate.phase !== "gameover") return false;
+  Object.assign(state, candidate);
+  return true;
+};
+
 const finishTurn = (state: GameState, description: string) => {
   const actingAbility = state.selectedAbility;
   if (state.selectedGod === "death") resolveMarkedForDeath(state);
@@ -806,6 +818,10 @@ const finishTurn = (state: GameState, description: string) => {
   if (state.challengeId === "there-can-only-be-one") {
     const nextColor = opposite(endingColor);
     if (hasUpgradeableAbility(state, endingColor)) {
+      if (adjudicatePreparedTurnBeforeUpgrade(state, (candidate) => {
+        candidate.challengeUpgradeResumeColor = nextColor;
+        resumeOneGodChallenge(candidate);
+      })) return;
       state.phase = "upgrade";
       state.upgradeQueue = [endingColor];
       state.challengeUpgradeResumeColor = nextColor;
@@ -826,6 +842,7 @@ const finishTurn = (state: GameState, description: string) => {
         : drafted.every((god) => state.rested.includes(god))
     )
   ) {
+    if (adjudicatePreparedTurnBeforeUpgrade(state, startNextRound)) return;
     state.phase = "upgrade";
     state.upgradeQueue = ["white", "black"];
     advanceUpgradeQueue(state);

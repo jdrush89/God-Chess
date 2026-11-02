@@ -811,17 +811,37 @@ describe("game startup", () => {
     ].join("\n"));
   });
 
-  it("keeps a final Daily upgrade interactive until checkmate is adjudicated", () => {
+  it("ends a final Daily checkmate before upgrades or failure presentation", () => {
     const daily = currentDailyPuzzle(new Date("2026-11-02T12:00:00"))!;
-    const awaitingUpgrade = daily.solutionActions.slice(0, -1)
+    const beforeCheckmate = daily.solutionActions.slice(0, -1)
       .reduce(gameReducer, daily.createState());
 
-    expect(awaitingUpgrade).toMatchObject({
-      phase: "upgrade",
+    expect(beforeCheckmate).toMatchObject({
+      phase: "play",
       activeColor: daily.playerColor,
-      puzzlePlayerTurnsRemaining: 0,
-      puzzleFailed: true,
+      puzzlePlayerTurnsRemaining: 1,
+      puzzleFailed: false,
     });
+    const checkmate = gameReducer(
+      beforeCheckmate,
+      daily.solutionActions.at(-1)!,
+    );
+    expect(checkmate).toMatchObject({
+      phase: "gameover",
+      puzzlePlayerTurnsRemaining: 0,
+      puzzleFailed: false,
+      upgradeQueue: [],
+      result: {
+        kind: "winner",
+        winner: daily.playerColor,
+        reason: "checkmate",
+      },
+    });
+
+    const awaitingUpgrade = structuredClone(beforeCheckmate);
+    awaitingUpgrade.phase = "upgrade";
+    awaitingUpgrade.puzzlePlayerTurnsRemaining = 0;
+    awaitingUpgrade.puzzleFailed = true;
     expect(puzzleInputIsLocked(awaitingUpgrade)).toBe(false);
     expect(puzzleFailureCanBePresented(awaitingUpgrade)).toBe(false);
 
@@ -1696,6 +1716,61 @@ describe("game startup", () => {
     expect(screen.getByRole("button", {
       name: new RegExp(`today's daily, ${daily.title}.*thumbed down`, "i"),
     })).toBeTruthy();
+  });
+
+  it("does not replay completed achievement notifications during account hydration", async () => {
+    accountHarness.configured = true;
+    accountHarness.account = {
+      userId: "existing-account",
+      email: "existing@example.com",
+      displayName: "Existing Player",
+    };
+    let resolvePuzzles!: (puzzles: string[]) => void;
+    let resolveAchievements!: (
+      progress: ReturnType<typeof createAchievementProgress>,
+    ) => void;
+    cloudProgressHarness.loadPuzzles.mockReturnValue(new Promise((resolve) => {
+      resolvePuzzles = resolve;
+    }));
+    cloudProgressHarness.loadAchievements.mockReturnValue(
+      new Promise((resolve) => {
+        resolveAchievements = resolve;
+      }),
+    );
+    const dispatchEvent = vi.spyOn(window, "dispatchEvent");
+
+    render(<App />);
+    await waitFor(() => {
+      expect(cloudProgressHarness.loadPuzzles)
+        .toHaveBeenCalledWith("existing-account");
+      expect(cloudProgressHarness.loadAchievements)
+        .toHaveBeenCalledWith("existing-account");
+    });
+
+    await act(async () => {
+      resolvePuzzles([
+        "daily-2026-10-25",
+        "daily-2026-10-26",
+        "daily-2026-10-27",
+        "daily-2026-10-28",
+        "daily-2026-10-29",
+        "daily-2026-10-30",
+        "daily-2026-10-31",
+      ]);
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+    });
+
+    const cloudAchievements = createAchievementProgress();
+    cloudAchievements.completed.consistency = "2026-10-31T12:00:00.000Z";
+    await act(async () => {
+      resolveAchievements(cloudAchievements);
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+    });
+
+    expect(dispatchEvent.mock.calls.some(([event]) =>
+      event.type === "god-chess:achievement-unlocked"
+    )).toBe(false);
+    expect(cloudProgressHarness.upsertAchievements).not.toHaveBeenCalled();
   });
 
   it("routes Online player counts to Host/Join and Puzzles directly", () => {

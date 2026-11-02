@@ -178,24 +178,6 @@
     {
       "type": "square",
       "square": "b1"
-    },
-    {
-      "type": "preview-upgrade",
-      "godId": "teles",
-      "abilityId": "lure"
-    },
-    {
-      "type": "upgrade",
-      "abilityId": "lure"
-    },
-    {
-      "type": "preview-upgrade",
-      "godId": "ares",
-      "abilityId": "pick-a-fight"
-    },
-    {
-      "type": "upgrade",
-      "abilityId": "pick-a-fight"
     }
   ],
   "state": {
