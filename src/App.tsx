@@ -4406,6 +4406,12 @@ export const dailyGolfScoreForTurnsRemaining = (
   return undefined;
 };
 
+export const puzzleInputIsLocked = (state: GameState) =>
+  state.gameMode === "puzzle" &&
+  state.phase === "play" &&
+  Boolean(state.puzzleFailed || state.puzzleSolved) &&
+  state.activeColor !== state.aiColor;
+
 export const formatDailyCompletionTime = (elapsedMs: number) => {
   const totalSeconds = Math.max(0, Math.floor(elapsedMs / 1000));
   const hours = Math.floor(totalSeconds / 3600);
@@ -8741,10 +8747,7 @@ export default function App() {
     }
   };
 
-  const puzzleInputLocked =
-    state.gameMode === "puzzle" &&
-    Boolean(state.puzzleFailed || state.puzzleSolved) &&
-    state.activeColor !== state.aiColor;
+  const puzzleInputLocked = puzzleInputIsLocked(state);
   const inputDisabled =
     isAiTurn(state) ||
     Boolean(dailyReplayActions) ||

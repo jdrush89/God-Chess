@@ -164,6 +164,37 @@ describe("daily puzzles", () => {
     expect(state.puzzleFailed).toBe(false);
   });
 
+  it("adjudicates the November 2 checkmate after the final player upgrade", () => {
+    const puzzle = DAILY_PUZZLE_BY_ID["daily-2026-11-02"]!;
+    const finalAction = puzzle.solutionActions.at(-1)!;
+    let state = puzzle.solutionActions.slice(0, -1)
+      .reduce(gameReducer, puzzle.createState());
+
+    expect(state).toMatchObject({
+      phase: "upgrade",
+      activeColor: puzzle.playerColor,
+      puzzlePlayerTurnsRemaining: 0,
+      puzzleFailed: true,
+    });
+    expect(finalAction).toEqual({
+      type: "upgrade",
+      abilityId: "pick-a-fight",
+    });
+
+    state = gameReducer(state, finalAction);
+
+    expect(state).toMatchObject({
+      phase: "gameover",
+      winner: "black",
+      result: {
+        kind: "winner",
+        winner: "black",
+        reason: "checkmate",
+      },
+      puzzleFailed: false,
+    });
+  });
+
   it("keeps the November 1 solver's King alive through the winning line", () => {
     const puzzle = DAILY_PUZZLE_BY_ID["daily-2026-11-01"]!;
     const result = puzzle.solutionActions.reduce(gameReducer, puzzle.createState());
