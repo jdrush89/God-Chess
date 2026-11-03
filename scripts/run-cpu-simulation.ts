@@ -27,7 +27,7 @@ import { prepareSavedState } from "../src/saves";
 const MAX_DIVINE_TURNS = 200;
 const MAX_ACTIONS_PER_ATTEMPT = 20_000;
 const MAX_ATTEMPTS = 500;
-const RUN_TIMEOUT_MS = 10 * 60 * 1000;
+const RUN_TIMEOUT_MS = 20 * 60 * 1000;
 
 interface SimTrack {
   state: GameState;
@@ -112,9 +112,16 @@ type AttemptOutcome =
   | { accepted: true; track: SimTrack }
   | { accepted: false; reason: string };
 
-const runOneAttempt = (): AttemptOutcome => {
+const assertBeforeDeadline = (deadline: number) => {
+  if (Date.now() >= deadline) {
+    throw new Error("Simulation search timed out before obtaining a valid export.");
+  }
+};
+
+const runOneAttempt = (deadline: number): AttemptOutcome => {
   let track = startTrack();
   for (let steps = 0; steps < MAX_ACTIONS_PER_ATTEMPT; steps += 1) {
+    assertBeforeDeadline(deadline);
     const state = track.state;
     if (state.phase === "gameover") break;
     if (!isAiTurn(state)) {
@@ -140,7 +147,17 @@ const runOneAttempt = (): AttemptOutcome => {
       }
       return { accepted: false, reason: `No AI plan available in phase "${state.phase}".` };
     }
-    for (const action of actions) track = applyTrackedAction(track, action);
+    assertBeforeDeadline(deadline);
+    for (const action of actions) {
+      track = applyTrackedAction(track, action);
+      if (totalDivineTurns(track) > MAX_DIVINE_TURNS) {
+        return {
+          accepted: false,
+          reason: `Simulation exceeded ${MAX_DIVINE_TURNS} completed divine turns.`,
+        };
+      }
+      if (track.state.phase === "gameover") break;
+    }
   }
 
   const terminal = track.state;
@@ -173,7 +190,10 @@ const main = () => {
   const outputPath = path.resolve(
     outputArg ?? "scripts/.simulation-export.json",
   );
-  const start = Date.now();
+  const deadline = process.env.DAILY_SEARCH_DEADLINE
+    ? Number(process.env.DAILY_SEARCH_DEADLINE)
+    : Date.now() + RUN_TIMEOUT_MS;
+  if (!Number.isFinite(deadline)) throw new Error("Invalid Daily search deadline.");
   let accepted: SimTrack | undefined;
   let attempts = 0;
 
@@ -182,10 +202,8 @@ const main = () => {
     if (attempts > MAX_ATTEMPTS) {
       throw new Error(`Gave up after ${MAX_ATTEMPTS} rejected simulation attempts.`);
     }
-    if (Date.now() - start > RUN_TIMEOUT_MS) {
-      throw new Error("Simulation search timed out before finding a valid winning result.");
-    }
-    const outcome = runOneAttempt();
+    assertBeforeDeadline(deadline);
+    const outcome = runOneAttempt(deadline);
     if (outcome.accepted) {
       const turns = totalDivineTurns(outcome.track);
       console.log(
@@ -240,6 +258,7 @@ const main = () => {
     exportPayload.save.savedAt = `${dateArg}T00:00:00.000Z`;
   }
 
+  assertBeforeDeadline(deadline);
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   fs.writeFileSync(outputPath, `${JSON.stringify(exportPayload, null, 2)}\n`);
   console.log(`Wrote simulation export to ${path.relative(process.cwd(), outputPath)}`);

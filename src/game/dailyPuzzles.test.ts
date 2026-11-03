@@ -47,7 +47,7 @@ describe("daily puzzles", () => {
     expect(puzzle?.completionText).toBe("Puzzle complete.");
   });
 
-  it("stores a target checkmate within the generated turn limit", () => {
+  it("replays the latest Daily to its exact win reason within the generated turn limit", () => {
     const puzzle = DAILY_PUZZLES.at(-1)!;
     let state = puzzle.createState();
     let completedPlayerTurns = 0;
@@ -88,7 +88,9 @@ describe("daily puzzles", () => {
     }
 
     expect(dailyPuzzleResultMatches(puzzle, state)).toBe(true);
+    expect(state.result).toEqual(puzzle.targetResult);
     expect(completedPlayerTurns).toBe(puzzle.playerTurns);
+    expect(state.puzzleFailed).toBe(false);
   });
 
   it("replays the stored simulation solution to the target result", () => {
@@ -207,6 +209,16 @@ describe("daily puzzles", () => {
         controller: puzzle.playerColor,
       }),
     );
+  });
+
+  it("accepts the November 1 king capture even though its UI turn counter remains positive", () => {
+    const puzzle = DAILY_PUZZLE_BY_ID["daily-2026-11-01"]!;
+    const result = puzzle.solutionActions.reduce(gameReducer, puzzle.createState());
+
+    expect(result.result).toEqual(puzzle.targetResult);
+    expect(result.result).toMatchObject({ kind: "winner", reason: "king-death" });
+    expect(result.puzzleFailed).toBe(false);
+    expect(result.puzzlePlayerTurnsRemaining).toBeGreaterThan(0);
   });
 
   it("keeps the November 1 solution valid against the current level 10 CPU", () => {
