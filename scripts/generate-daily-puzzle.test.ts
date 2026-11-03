@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import source from "../src/game/dailies/2026-10-14.json";
+import kingCaptureSource from "../src/game/dailies/2026-11-01.json";
 import { gameReducer } from "../src/game/engine";
 import type { DailyPuzzleSource } from "../src/game/dailyPuzzles";
 
@@ -109,6 +110,15 @@ describe("Daily puzzle generator", () => {
     expect(mocks.writeFileSync).not.toHaveBeenCalled();
   });
 
+  it.each([0, 201, undefined])("rejects invalid simulation turn count %s", async (completedTurns) => {
+    const payload = createPayload();
+    await expect(generate({
+      ...payload,
+      result: { ...payload.result, completedTurns },
+    })).rejects.toThrow("1-200 completed divine turns");
+    expect(mocks.writeFileSync).not.toHaveBeenCalled();
+  });
+
   it("preserves a matching king-death replay without relabeling it as checkmate", async () => {
     const actual = await vi.importActual<typeof import("../src/game/engine")>(
       "../src/game/engine",
@@ -118,6 +128,7 @@ describe("Daily puzzle generator", () => {
       if (next.result?.kind === "winner") next.result.reason = "king-death";
       return next;
     });
+
     const payload = createPayload();
     payload.result.terminalResult.reason = "king-death";
     payload.result.summary = "White won by king capture in 100 turns.";
@@ -131,6 +142,27 @@ describe("Daily puzzle generator", () => {
     } finally {
       vi.mocked(gameReducer).mockImplementation(actual.gameReducer);
     }
+  });
+
+  it("accepts a real king-capture solution without requiring the UI turn counter to reach zero", async () => {
+    const payload = {
+      ...createPayload(),
+      result: {
+        summary: kingCaptureSource.resultSummary,
+        completedTurns: 100,
+        terminalResult: kingCaptureSource.targetResult,
+      },
+      rewind: { rounds: kingCaptureSource.playerTurns, requestedUndoActions: 9, appliedUndoActions: 9 },
+      solutionActions: kingCaptureSource.solutionActions,
+      save: { state: kingCaptureSource.state },
+    };
+    await generate(payload);
+
+    const output = JSON.parse(mocks.writeFileSync.mock.calls[0][1]) as DailyPuzzleSource;
+    expect(output.targetResult).toEqual({ kind: "winner", winner: "black", reason: "king-death" });
+    expect(output.solutionActions).toEqual(kingCaptureSource.solutionActions);
+    expect(output.playerTurns).toBe(kingCaptureSource.playerTurns);
+    expect(mocks.chooseAiPlan).not.toHaveBeenCalled();
   });
 
   it("rejects a checkmate replay mislabeled as king-death", async () => {

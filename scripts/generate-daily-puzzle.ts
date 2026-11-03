@@ -20,6 +20,7 @@ if (!inputPath) {
 
 const payload = JSON.parse(fs.readFileSync(path.resolve(inputPath), "utf8"));
 const reportedTurns = payload?.rewind?.rounds;
+const simulationTurns = payload?.result?.completedTurns;
 const terminalResult = payload?.result?.terminalResult as
   | ClassicResult
   | undefined;
@@ -34,6 +35,9 @@ if (!Number.isInteger(reportedTurns) || reportedTurns <= 0) {
 }
 if (!terminalResult || typeof resultSummary !== "string") {
   throw new Error("The simulation export must include its terminal result and summary.");
+}
+if (!Number.isInteger(simulationTurns) || simulationTurns <= 0 || simulationTurns > 200) {
+  throw new Error("The simulation must finish within 1-200 completed divine turns.");
 }
 if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
   throw new Error("Provide a YYYY-MM-DD date or use an export with save.savedAt.");
@@ -76,7 +80,7 @@ const replaySolution = (
   actions: GameAction[],
 ) => {
   let candidate = structuredClone(initialState);
-  let playerTurns = 0;
+  const completedTurns = { white: 0, black: 0 };
   for (const action of actions) {
     const before = candidate;
     candidate = gameReducer(candidate, action);
@@ -89,13 +93,12 @@ const replaySolution = (
       );
     if (
       completedPlayTurn &&
-      action.type !== "adjudicate-no-turn" &&
-      before.activeColor === playerColor
+      action.type !== "adjudicate-no-turn"
     ) {
-      playerTurns += 1;
+      completedTurns[before.activeColor] += 1;
     }
   }
-  return { state: candidate, playerTurns };
+  return { state: candidate, playerTurns: completedTurns[playerColor], completedTurns };
 };
 
 if (!Array.isArray(solutionActions) || !solutionActions.length) {
@@ -135,3 +138,4 @@ const outputPath = path.join(outputDirectory, `${date}.json`);
 fs.mkdirSync(outputDirectory, { recursive: true });
 fs.writeFileSync(outputPath, `${JSON.stringify(output, null, 2)}\n`);
 console.log(`Generated ${path.relative(process.cwd(), outputPath)}`);
+console.log(`Exact replay: ${JSON.stringify(replayed.completedTurns)}; ${targetResult.winner}/${targetResult.reason}.`);

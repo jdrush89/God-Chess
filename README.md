@@ -191,6 +191,29 @@ mode chooser.
 
 ## Puzzle mode
 
+### Publishing a Daily
+
+Run `npm run prepare:daily -- YYYY-MM-DD /absolute/path/to/simulation-export.json`.
+This starts fresh hidden level-10 CPU simulations under **one 20-minute deadline**,
+including retries, and preserves the complete accepted export. A parent watchdog
+stops even a blocked synchronous AI search. Rejected attempts and their generated
+files are discarded. Existing Daily/export files are never overwritten.
+Validation and build may finish after a valid export is obtained within the
+deadline; a failed validation can start a new search only before that same
+deadline expires.
+
+The preparation command uses `rewindSimulationForExport`, runs `generate:daily`
+with the exact recorded actions, and checks the Daily replay, hints, and build.
+Only finished checkmate or king-death wins within 200 divine turns qualify.
+The exact replay must reproduce the original winner and reason in 3-5 winning
+player turns. Upgrade checkpoints are not divine turns.
+
+Do not add a requirement that `puzzlePlayerTurnsRemaining` reaches zero: king
+capture can finish the game before that UI counter decrements. Count completed
+divine turns from the replay instead. A fresh CPU solve, shortest-line proof, or
+undo-boundary count must not override a valid recorded replay. Commit, merge,
+and deploy only after preparation succeeds, then verify the Pages deployment.
+
 Puzzle mode has a dedicated browser with a Daily simulation finish, five Easy
 positions won in one divine turn, five Easy positions where one specific
 ability must prevent checkmate, ten Medium positions won across two player
