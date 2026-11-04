@@ -6,7 +6,11 @@ import type {
   PieceType,
   PuzzleId,
 } from "./types";
-import { gameReducer, type GameAction } from "./engine";
+import {
+  gameReducer,
+  isCompleteClassicTurn,
+  type GameAction,
+} from "./engine";
 import { GODS } from "./gods";
 import { opposite } from "./types";
 
@@ -98,9 +102,37 @@ const pieceLocations = (state: GameState) => {
   return locations;
 };
 
-const firstSolutionPieceType = (source: DailyPuzzleSource) => {
+const formatList = (items: string[]) => {
+  if (items.length <= 1) return items[0] ?? "";
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(", ")}, and ${items.at(-1)}`;
+};
+
+const PIECE_TYPE_HINT_ORDER: PieceType[] = [
+  "king",
+  "queen",
+  "rook",
+  "bishop",
+  "knight",
+  "pawn",
+];
+
+const firstSolutionMovedPieceTypes = (source: DailyPuzzleSource) => {
   let state = structuredClone(source.state);
+  let firstTurnStarted = false;
+  const movedPieces = new Map<string, PieceType>();
   for (const action of source.solutionActions) {
+    if (
+      !firstTurnStarted &&
+      (
+        state.phase !== "play" ||
+        state.activeColor !== source.playerColor
+      )
+    ) {
+      state = gameReducer(state, action);
+      continue;
+    }
+    firstTurnStarted = true;
     const before = pieceLocations(state);
     const next = gameReducer(state, action);
     const after = pieceLocations(next);
@@ -110,18 +142,35 @@ const firstSolutionPieceType = (source: DailyPuzzleSource) => {
         after.has(pieceId) &&
         after.get(pieceId)?.location !== piece.location
       ) {
-        return piece.type;
+        movedPieces.set(pieceId, piece.type);
       }
+    }
+    if (isCompleteClassicTurn(state, next)) {
+      return [...movedPieces.values()];
     }
     state = next;
   }
-  return undefined;
+  return [...movedPieces.values()];
 };
 
 const hintFor = (source: DailyPuzzleSource) => {
-  const pieceType = firstSolutionPieceType(source);
-  return pieceType
-    ? `Start by moving a ${pieceType}. Find the strongest continuation from there.`
+  const movedPieceTypes = firstSolutionMovedPieceTypes(source);
+  const pieceCounts = movedPieceTypes.reduce(
+    (counts, pieceType) => {
+      counts[pieceType] += 1;
+      return counts;
+    },
+    Object.fromEntries(
+      PIECE_TYPE_HINT_ORDER.map((pieceType) => [pieceType, 0]),
+    ) as Record<PieceType, number>,
+  );
+  const pieceLabels = PIECE_TYPE_HINT_ORDER.flatMap((pieceType) => {
+    const count = pieceCounts[pieceType];
+    if (!count) return [];
+    return [count === 1 ? `a ${pieceType}` : `${count} ${pieceType}s`];
+  });
+  return pieceLabels.length
+    ? `Start by moving ${formatList(pieceLabels)}. Find the strongest continuation from there.`
     : "Find the strongest continuation and complete the objective within the turn limit.";
 };
 
@@ -130,12 +179,6 @@ const abilityNameById = new Map(
     god.abilities.map((ability) => [ability.id, ability.name] as const)
   ),
 );
-
-const formatList = (items: string[]) => {
-  if (items.length <= 1) return items[0] ?? "";
-  if (items.length === 2) return `${items[0]} and ${items[1]}`;
-  return `${items.slice(0, -1).join(", ")}, and ${items.at(-1)}`;
-};
 
 const abilityHintFor = (source: DailyPuzzleSource) => {
   let state = structuredClone(source.state);
