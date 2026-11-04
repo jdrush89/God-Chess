@@ -926,24 +926,38 @@ describe("game startup", () => {
     expect(within(shareCard).getByRole("button", {
       name: /result copied/i,
     })).toBeTruthy();
+    expect(screen.queryByText(/how difficult was it/i)).toBeNull();
 
     fireEvent.click(screen.getByRole("button", {
       name: /thumbs up this daily puzzle/i,
     }));
-    expect(loadLocalDailyPuzzleRatings()[daily.id]).toBe("up");
+    expect(loadLocalDailyPuzzleRatings()[daily.id]).toEqual({ rating: "up" });
     expect(screen.getByRole("button", {
       name: /thumbs up this daily puzzle/i,
     }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByText(/how difficult was it/i)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", {
+      name: /rate this daily as medium/i,
+    }));
+    expect(loadLocalDailyPuzzleRatings()[daily.id]).toEqual({
+      rating: "up",
+      difficulty: "medium",
+    });
 
     fireEvent.click(screen.getByRole("button", {
       name: /thumbs down this daily puzzle/i,
     }));
-    expect(loadLocalDailyPuzzleRatings()[daily.id]).toBe("down");
+    expect(loadLocalDailyPuzzleRatings()[daily.id]).toEqual({
+      rating: "down",
+      difficulty: "medium",
+    });
 
     fireEvent.click(screen.getByRole("button", {
       name: /thumbs down this daily puzzle/i,
     }));
     expect(loadLocalDailyPuzzleRatings()[daily.id]).toBeUndefined();
+    expect(screen.queryByText(/how difficult was it/i)).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: /view board/i }));
     expect(screen.queryByText(/player turns left and scored/i)).toBeNull();
@@ -1569,7 +1583,9 @@ describe("game startup", () => {
     persistLocalSavedGames([localSave]);
     persistLocalCompletedPuzzles(["centaurs-lance"]);
     persistLocalDailyPuzzleGiveUps([currentDailyPuzzle()!.id]);
-    persistLocalDailyPuzzleRatings({ [currentDailyPuzzle()!.id]: "up" });
+    persistLocalDailyPuzzleRatings({
+      [currentDailyPuzzle()!.id]: { rating: "up", difficulty: "easy" },
+    });
     persistLocalCompletedChallenges(["phalanx"]);
     const localAchievements = createAchievementProgress();
     localAchievements.completed["it-begins"] = "2026-10-12T12:00:00.000Z";
@@ -1615,7 +1631,12 @@ describe("game startup", () => {
       .toHaveBeenCalledWith("new-account", [currentDailyPuzzle()!.id]);
     expect(cloudProgressHarness.upsertDailyRatings).toHaveBeenCalledWith(
       "new-account",
-      { [currentDailyPuzzle()!.id]: "up" },
+      {
+        [currentDailyPuzzle()!.id]: {
+          rating: "up",
+          difficulty: "easy",
+        },
+      },
     );
     expect(cloudProgressHarness.upsertChallenges)
       .toHaveBeenCalledWith("new-account", ["phalanx"]);
@@ -1675,7 +1696,7 @@ describe("game startup", () => {
       createSavedGame("local-save", createGame(1), []),
     ]);
     persistLocalCompletedPuzzles(["centaurs-lance"]);
-    persistLocalDailyPuzzleRatings({ [daily.id]: "up" });
+    persistLocalDailyPuzzleRatings({ [daily.id]: { rating: "up" } });
     persistLocalCompletedChallenges(["phalanx"]);
     const localAchievements = createAchievementProgress();
     localAchievements.completed["it-begins"] = "2026-10-12T12:00:00.000Z";
@@ -1687,7 +1708,7 @@ describe("game startup", () => {
       displayName: "Existing Player",
     };
     cloudProgressHarness.loadDailyRatings.mockResolvedValue({
-      [daily.id]: "down",
+      [daily.id]: { rating: "down" },
     });
 
     render(<App />);
@@ -2147,7 +2168,9 @@ describe("game startup", () => {
     const daily = currentDailyPuzzle()!;
     const archived = DAILY_PUZZLES[0];
     persistLocalCompletedPuzzles([archived.id]);
-    persistLocalDailyPuzzleRatings({ [archived.id]: "up" });
+    persistLocalDailyPuzzleRatings({
+      [archived.id]: { rating: "up", difficulty: "medium" },
+    });
     vi.stubGlobal("Worker", FakeClassicAiWorker);
     const { container } = render(<App />);
     openPlayOption("Puzzles");
@@ -2164,10 +2187,12 @@ describe("game startup", () => {
     );
     expect(screen.getByRole("button", {
       name: new RegExp(
-        `archived daily, ${archived.title}.*completed.*thumbed up`,
+        `archived daily, ${archived.title}.*completed.*thumbed up.*rated medium`,
         "i",
       ),
     })).toBeTruthy();
+    expect(screen.getByText(/^medium$/i).className)
+      .toContain("daily-archive-difficulty");
     expect(window.location.pathname).toBe("/puzzles/daily");
     expect(FakeClassicAiWorker.instances).toHaveLength(0);
 
