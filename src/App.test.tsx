@@ -2630,6 +2630,42 @@ describe("game startup", () => {
     expect(finish.classList.contains("secondary-button")).toBe(true);
   });
 
+  it("keeps Barter's Decline action enabled when an orb choice is unavailable", () => {
+    const state = createGame(1);
+    state.phase = "play";
+    state.activeColor = "white";
+    state.players.white.gods = ["midas"];
+    state.players.white.orbs = { white: 0, black: 1 };
+    state.selectedGod = "midas";
+    state.selectedAbility = "barter";
+    state.pending = {
+      godId: "midas",
+      abilityId: "barter",
+      step: "barter-choice",
+      destination: "e4",
+    };
+    const dispatch = vi.fn();
+
+    render(
+      <ActionPanel
+        state={state}
+        dispatch={dispatch}
+        onInspectGod={vi.fn()}
+        onCloseInspection={vi.fn()}
+      />,
+    );
+
+    expect((screen.getByRole("button", {
+      name: /give white/i,
+    }) as HTMLButtonElement).disabled).toBe(true);
+    const decline = screen.getByRole("button", { name: /decline/i });
+    expect((decline as HTMLButtonElement).disabled).toBe(false);
+    expect(decline.classList.contains("secondary-button")).toBe(true);
+
+    fireEvent.click(decline);
+    expect(dispatch).toHaveBeenCalledWith({ type: "barter" });
+  });
+
   it("highlights The Watchful Bishop's Enchant sources and attaches both stage prompts to Enchant", () => {
     let state = PUZZLES.find((puzzle) => puzzle.id === "opened-file")!.createState();
     state = gameReducer(state, { type: "select-god", godId: "teles" });

@@ -1146,7 +1146,7 @@ function PendingChoices({
           >
             Give dark
           </button>
-          <button className="text-button" onClick={() => dispatch({ type: "orb" })}>
+          <button className="secondary-button" onClick={() => dispatch({ type: "orb" })}>
             Decline
           </button>
         </div>
