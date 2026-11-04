@@ -1530,12 +1530,18 @@ html[data-piece-theme="gargoyle"] .gargoyle-piece-glyph { display: block; }
 .puzzle-select-card > strong { min-height: 38px; font: 600 13px/1.45 "Cinzel"; text-align: center; }
 .puzzle-select-card > small { color: #797b82; font-size: 9px; line-height: 1.4; text-align: center; }
 .daily-archive-card { min-height: 190px; }
+.daily-archive-feedback { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
 .daily-archive-rating {
   display: inline-flex; align-items: center; gap: 6px; padding: 6px 9px; border-radius: 999px;
   font-size: 8px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
 }
 .daily-archive-rating.up { color: #dff3e6; background: rgba(49,92,66,.56); border: 1px solid rgba(113,161,129,.62); }
 .daily-archive-rating.down { color: #f2d7d3; background: rgba(104,47,48,.5); border: 1px solid rgba(181,91,86,.58); }
+.daily-archive-difficulty {
+  display: inline-flex; align-items: center; padding: 6px 9px; color: #e8ddc0; background: rgba(111,84,38,.38);
+  border: 1px solid rgba(198,161,91,.48); border-radius: 999px; font-size: 8px; font-weight: 800;
+  letter-spacing: .1em; text-transform: uppercase;
+}
 .puzzle-complete-badge {
   position: absolute; top: 10px; right: 10px; width: 27px; height: 27px; display: grid; place-items: center;
   color: #dff3e6; background: #315c42; border: 1px solid #71a181; border-radius: 50%;
@@ -2653,20 +2659,27 @@ html[data-piece-theme="gargoyle"] .gargoyle-piece-glyph { display: block; }
 .daily-share-card-heading strong { color: #fff0c7; font: 600 14px "Cinzel"; }
 .daily-share-card-heading > svg { color: var(--gold-bright); }
 .daily-rating-controls {
-  display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 14px; padding: 14px 16px;
+  display: grid; gap: 12px; margin-top: 14px; padding: 14px 16px;
   color: #ded8ca; background: rgba(8,10,15,.76); border: 1px solid rgba(255,255,255,.09); text-align: left;
 }
-.daily-rating-controls > div:first-child { display: grid; gap: 4px; }
+.daily-rating-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.daily-rating-copy { display: grid; gap: 4px; }
 .daily-rating-controls strong { color: #fff0c7; font: 600 13px "Cinzel"; }
 .daily-rating-controls span { color: #85868d; font-size: 9px; line-height: 1.4; }
 .daily-rating-actions { display: flex; gap: 8px; }
-.daily-rating-actions button {
+.daily-rating-actions button, .daily-difficulty-actions button {
   width: 40px; height: 40px; display: grid; place-items: center; color: #8d8f96; background: #11141a;
   border: 1px solid #333740; border-radius: 50%; cursor: pointer; transition: color .2s, border-color .2s, background .2s;
 }
-.daily-rating-actions button:hover { color: #f2dfb0; border-color: rgba(198,161,91,.7); }
-.daily-rating-actions button.selected {
+.daily-rating-actions button:hover, .daily-difficulty-actions button:hover { color: #f2dfb0; border-color: rgba(198,161,91,.7); }
+.daily-rating-actions button.selected, .daily-difficulty-actions button.selected {
   color: #fff0c7; background: rgba(198,161,91,.18); border-color: rgba(198,161,91,.8);
+}
+.daily-difficulty-rating { padding-top: 12px; border-top: 1px solid rgba(255,255,255,.08); }
+.daily-difficulty-actions { display: grid; grid-template-columns: repeat(3, auto); gap: 7px; }
+.daily-difficulty-actions button {
+  width: auto; min-width: 68px; padding: 0 12px; border-radius: 4px; font-size: 9px; font-weight: 800;
+  letter-spacing: .08em; text-transform: uppercase;
 }
 .daily-share-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .daily-share-stats > div {
@@ -3161,9 +3174,11 @@ html[data-piece-theme="gargoyle"] .gargoyle-piece-glyph { display: block; }
   .puzzle-select-card { min-height: 150px; padding: 17px 9px; }
   .puzzle-card-grid { grid-template-columns: 1fr 1fr; }
   .puzzle-result-actions { grid-template-columns: 1fr; }
-  .daily-rating-controls { align-items: stretch; flex-direction: column; }
+  .daily-rating-row { align-items: stretch; flex-direction: column; }
   .daily-rating-actions button { flex: 1; border-radius: 4px; }
   .daily-rating-actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .daily-difficulty-actions { grid-template-columns: repeat(3, 1fr); }
+  .daily-difficulty-actions button { min-width: 0; width: 100%; padding: 0 6px; }
   .simulation-export-actions { grid-template-columns: 1fr; }
   .simulation-export-data { font-size: 9px; }
   .rule-columns { grid-template-columns: 1fr; }

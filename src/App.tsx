@@ -192,6 +192,8 @@ import {
 import {
   loadLocalDailyPuzzleRatings,
   persistLocalDailyPuzzleRatings,
+  type DailyPuzzleDifficultyRating,
+  type DailyPuzzleFeedback,
   type DailyPuzzleRating,
   type DailyPuzzleRatings,
 } from "./dailyPuzzleRatings";
@@ -4267,14 +4269,16 @@ function PuzzleSelectScreen({
                 ? dailyArchivePuzzles.map((puzzle) => {
                   const completed = completedPuzzles.has(puzzle.id);
                   const givenUp = givenUpDailyPuzzles.has(puzzle.id);
-                  const rating = dailyPuzzleRatings[puzzle.id];
+                  const feedback = dailyPuzzleRatings[puzzle.id];
+                  const rating = feedback?.rating;
+                  const difficultyRating = feedback?.difficulty;
                   const current = dailyPuzzle?.id === puzzle.id;
                   return (
                     <button
                       className={`puzzle-select-card daily-archive-card${completed ? " completed" : ""}${givenUp ? " given-up" : ""}`}
                       key={puzzle.id}
                       onClick={() => onStartPuzzle(puzzle.id)}
-                      aria-label={`${current ? "Today's Daily" : "Archived Daily"}, ${puzzle.title}${completed ? ", completed" : ""}${givenUp ? ", given up" : ""}${rating ? `, thumbed ${rating}` : ""}`}
+                      aria-label={`${current ? "Today's Daily" : "Archived Daily"}, ${puzzle.title}${completed ? ", completed" : ""}${givenUp ? ", given up" : ""}${rating ? `, thumbed ${rating}` : ""}${difficultyRating ? `, rated ${difficultyRating}` : ""}`}
                     >
                       {completed && (
                         <span className="puzzle-complete-badge" aria-hidden="true">
@@ -4292,16 +4296,28 @@ function PuzzleSelectScreen({
                       <small>
                         Play as {puzzle.playerColor} · {puzzle.playerTurns} player turn{puzzle.playerTurns === 1 ? "" : "s"}
                       </small>
-                      {rating && (
-                        <span
-                          className={`daily-archive-rating ${rating}`}
-                          aria-label={`Thumbed ${rating}`}
-                        >
-                          {rating === "up"
-                            ? <ThumbsUp size={14} />
-                            : <ThumbsDown size={14} />}
-                          {rating === "up" ? "Liked" : "Disliked"}
-                        </span>
+                      {(rating || difficultyRating) && (
+                        <div className="daily-archive-feedback">
+                          {rating && (
+                            <span
+                              className={`daily-archive-rating ${rating}`}
+                              aria-label={`Thumbed ${rating}`}
+                            >
+                              {rating === "up"
+                                ? <ThumbsUp size={14} />
+                                : <ThumbsDown size={14} />}
+                              {rating === "up" ? "Liked" : "Disliked"}
+                            </span>
+                          )}
+                          {difficultyRating && (
+                            <span
+                              className={`daily-archive-difficulty ${difficultyRating}`}
+                              aria-label={`Rated ${difficultyRating}`}
+                            >
+                              {difficultyRating}
+                            </span>
+                          )}
+                        </div>
                       )}
                     </button>
                   );
@@ -4561,36 +4577,79 @@ function DailyShareCard({
 }
 
 function DailyRatingControls({
-  rating,
-  onRate,
+  feedback,
+  onChange,
 }: {
-  rating?: DailyPuzzleRating;
-  onRate: (rating?: DailyPuzzleRating) => void;
+  feedback?: DailyPuzzleFeedback;
+  onChange: (feedback?: DailyPuzzleFeedback) => void;
 }) {
+  const rating = feedback?.rating;
+  const difficulty = feedback?.difficulty;
+  const setRating = (nextRating?: DailyPuzzleRating) => {
+    if (!nextRating) {
+      onChange(undefined);
+      return;
+    }
+    onChange({ ...feedback, rating: nextRating });
+  };
+  const setDifficulty = (nextDifficulty: DailyPuzzleDifficultyRating) => {
+    onChange({
+      ...feedback,
+      rating,
+      difficulty: difficulty === nextDifficulty ? undefined : nextDifficulty,
+    });
+  };
+
   return (
     <section className="daily-rating-controls" aria-label="Rate this Daily puzzle">
-      <div>
-        <strong>Rate this Daily</strong>
-        <span>Your rating is saved to your puzzle archive.</span>
+      <div className="daily-rating-row">
+        <div className="daily-rating-copy">
+          <strong>Rate this Daily</strong>
+          <span>Your rating is saved to your puzzle archive.</span>
+        </div>
+        <div className="daily-rating-actions">
+          <button
+            className={rating === "up" ? "selected" : ""}
+            onClick={() => setRating(rating === "up" ? undefined : "up")}
+            aria-label="Thumbs up this Daily puzzle"
+            aria-pressed={rating === "up"}
+          >
+            <ThumbsUp size={17} />
+          </button>
+          <button
+            className={rating === "down" ? "selected" : ""}
+            onClick={() => setRating(rating === "down" ? undefined : "down")}
+            aria-label="Thumbs down this Daily puzzle"
+            aria-pressed={rating === "down"}
+          >
+            <ThumbsDown size={17} />
+          </button>
+        </div>
       </div>
-      <div className="daily-rating-actions">
-        <button
-          className={rating === "up" ? "selected" : ""}
-          onClick={() => onRate(rating === "up" ? undefined : "up")}
-          aria-label="Thumbs up this Daily puzzle"
-          aria-pressed={rating === "up"}
+      {rating && (
+        <div
+          className="daily-rating-row daily-difficulty-rating"
+          aria-label="Rate Daily difficulty"
         >
-          <ThumbsUp size={17} />
-        </button>
-        <button
-          className={rating === "down" ? "selected" : ""}
-          onClick={() => onRate(rating === "down" ? undefined : "down")}
-          aria-label="Thumbs down this Daily puzzle"
-          aria-pressed={rating === "down"}
-        >
-          <ThumbsDown size={17} />
-        </button>
-      </div>
+          <div className="daily-rating-copy">
+            <strong>How difficult was it?</strong>
+            <span>Help us tune future Daily puzzles.</span>
+          </div>
+          <div className="daily-difficulty-actions">
+            {(["easy", "medium", "hard"] as const).map((option) => (
+              <button
+                key={option}
+                className={difficulty === option ? "selected" : ""}
+                onClick={() => setDifficulty(option)}
+                aria-label={`Rate this Daily as ${option}`}
+                aria-pressed={difficulty === option}
+              >
+                {option}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -4605,8 +4664,8 @@ export function GameScreen({
   dailyReplayActive = false,
   dailySolutionRevealed = false,
   dailyCompletionMs,
-  dailyRating,
-  onDailyRating,
+  dailyFeedback,
+  onDailyFeedback,
   onNextPuzzle,
   inputDisabled = false,
   opponentColor,
@@ -4633,8 +4692,8 @@ export function GameScreen({
   dailyReplayActive?: boolean;
   dailySolutionRevealed?: boolean;
   dailyCompletionMs?: number;
-  dailyRating?: DailyPuzzleRating;
-  onDailyRating?: (rating?: DailyPuzzleRating) => void;
+  dailyFeedback?: DailyPuzzleFeedback;
+  onDailyFeedback?: (feedback?: DailyPuzzleFeedback) => void;
   onNextPuzzle: () => void;
   inputDisabled?: boolean;
   opponentColor?: Color;
@@ -5573,10 +5632,10 @@ export function GameScreen({
                   golfScore={dailyGolfScore}
                 />
               )}
-            {dailyPuzzle && !dailySolutionRevealed && onDailyRating && (
+            {dailyPuzzle && !dailySolutionRevealed && onDailyFeedback && (
               <DailyRatingControls
-                rating={dailyRating}
-                onRate={onDailyRating}
+                feedback={dailyFeedback}
+                onChange={onDailyFeedback}
               />
             )}
             <div className="puzzle-result-actions">
@@ -6982,9 +7041,9 @@ export default function App() {
     localDailyPuzzleGiveUps,
   ]);
 
-  const recordDailyPuzzleRating = useCallback((
+  const recordDailyPuzzleFeedback = useCallback((
     puzzleId: DailyPuzzleId,
-    rating?: DailyPuzzleRating,
+    feedback?: DailyPuzzleFeedback,
   ) => {
     const account = accountService.account;
     if (account) {
@@ -6994,7 +7053,7 @@ export default function App() {
       ) return;
       const previous = cloudDailyPuzzleRatings.ratings;
       const ratings = { ...previous };
-      if (rating) ratings[puzzleId] = rating;
+      if (feedback) ratings[puzzleId] = feedback;
       else delete ratings[puzzleId];
       setCloudDailyPuzzleRatings({ userId: account.userId, ratings });
       void upsertCloudDailyPuzzleRatings(account.userId, ratings).catch(
@@ -7015,7 +7074,7 @@ export default function App() {
     }
 
     const ratings = { ...localDailyPuzzleRatings };
-    if (rating) ratings[puzzleId] = rating;
+    if (feedback) ratings[puzzleId] = feedback;
     else delete ratings[puzzleId];
     try {
       persistLocalDailyPuzzleRatings(ratings);
@@ -9729,15 +9788,18 @@ export default function App() {
               dailyGivenUpPuzzleId.current === state.puzzleId
             }
             dailyCompletionMs={dailyCompletionMs}
-            dailyRating={
+            dailyFeedback={
               state.puzzleId && isDailyPuzzleId(state.puzzleId)
                 ? dailyPuzzleRatings[state.puzzleId]
                 : undefined
             }
-            onDailyRating={
+            onDailyFeedback={
               state.puzzleId && isDailyPuzzleId(state.puzzleId)
-                ? (rating) =>
-                  recordDailyPuzzleRating(state.puzzleId as DailyPuzzleId, rating)
+                ? (feedback) =>
+                  recordDailyPuzzleFeedback(
+                    state.puzzleId as DailyPuzzleId,
+                    feedback,
+                  )
                 : undefined
             }
             onNextPuzzle={nextPuzzle}

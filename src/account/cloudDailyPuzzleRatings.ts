@@ -7,7 +7,7 @@ import { supabase } from "./supabase";
 const DAILY_PUZZLE_RATINGS_SAVE_ID = "__daily_puzzle_ratings_v1__";
 
 interface DailyPuzzleRatingsPayload {
-  version: 1;
+  version: 1 | 2;
   ratings: DailyPuzzleRatings;
 }
 
@@ -32,7 +32,7 @@ export const upsertCloudDailyPuzzleRatings = async (
 ) => {
   if (!supabase) throw new Error("Account services are not configured.");
   const payload: DailyPuzzleRatingsPayload = {
-    version: 1,
+    version: 2,
     ratings: normalizeDailyPuzzleRatings(ratings),
   };
   const { error } = await supabase.from("game_saves").upsert({

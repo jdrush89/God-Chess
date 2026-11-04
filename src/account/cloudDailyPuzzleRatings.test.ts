@@ -37,7 +37,10 @@ describe("cloud Daily puzzle ratings", () => {
           version: 1,
           ratings: {
             "daily-2026-10-19": "up",
-            "daily-2026-10-20": "down",
+            "daily-2026-10-20": {
+              rating: "down",
+              difficulty: "hard",
+            },
             unknown: "up",
           },
         },
@@ -46,8 +49,11 @@ describe("cloud Daily puzzle ratings", () => {
     });
 
     await expect(loadCloudDailyPuzzleRatings("user-1")).resolves.toEqual({
-      "daily-2026-10-19": "up",
-      "daily-2026-10-20": "down",
+      "daily-2026-10-19": { rating: "up" },
+      "daily-2026-10-20": {
+        rating: "down",
+        difficulty: "hard",
+      },
     });
   });
 
@@ -55,16 +61,22 @@ describe("cloud Daily puzzle ratings", () => {
     mocks.upsert.mockResolvedValue({ error: null });
 
     await upsertCloudDailyPuzzleRatings("user-1", {
-      "daily-2026-10-19": "up",
+      "daily-2026-10-19": {
+        rating: "up",
+        difficulty: "medium",
+      },
     });
 
     expect(mocks.upsert).toHaveBeenCalledWith(expect.objectContaining({
       user_id: "user-1",
       id: "__daily_puzzle_ratings_v1__",
       game: {
-        version: 1,
+        version: 2,
         ratings: {
-          "daily-2026-10-19": "up",
+          "daily-2026-10-19": {
+            rating: "up",
+            difficulty: "medium",
+          },
         },
       },
     }));
