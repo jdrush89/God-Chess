@@ -39,7 +39,7 @@ describe("daily puzzles", () => {
     expect(state.history.some((entry) => /simulation/i.test(entry))).toBe(false);
     expect(puzzle?.hint).not.toMatch(/simulation/i);
     expect(puzzle?.hint).toMatch(
-      /^Start by moving a (king|queen|rook|bishop|knight|pawn)\./,
+      /^Start by moving .+\./,
     );
     expect(puzzle?.abilityHint).toMatch(
       /^The winning CPU line used .+\.$/,
@@ -63,7 +63,7 @@ describe("daily puzzles", () => {
     expect(state.pending).toBeUndefined();
     expect(state.upgradeQueue).toHaveLength(0);
     expect(puzzle.hint).toMatch(
-      /^Start by moving a (king|queen|rook|bishop|knight|pawn)\./,
+      /^Start by moving .+\./,
     );
     expect(puzzle.abilityHint).toMatch(
       /^The winning CPU line (used .+|did not require a named God ability)\.$/,
@@ -164,6 +164,12 @@ describe("daily puzzles", () => {
     expect(completedTurns).toEqual({ white: 4, black: 5 });
     expect(state.puzzlePlayerTurnsRemaining).toBe(0);
     expect(state.puzzleFailed).toBe(false);
+  });
+
+  it("names every piece moved by the November 4 opening Escort", () => {
+    expect(DAILY_PUZZLE_BY_ID["daily-2026-11-04"]?.hint).toBe(
+      "Start by moving a king and a knight. Find the strongest continuation from there.",
+    );
   });
 
   it("adjudicates the November 2 checkmate before opening final upgrades", () => {
