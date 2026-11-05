@@ -1732,7 +1732,7 @@ function PendingAbilityChoices({
             >
               Give black
             </button>
-            <button className="text-button" onClick={() => dispatch({ type: "barter" })}>
+            <button className="secondary-button" onClick={() => dispatch({ type: "barter" })}>
               Decline
             </button>
           </>
