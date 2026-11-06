@@ -52,6 +52,7 @@ const MAX_ACTIONS_PER_NODE = 64;
 const MAX_PER_ABILITY = 18;
 const MAX_FRONTIER = 150;
 const MAX_COMPLETED = 420;
+const MAX_MATE_IN_TWO_PIECES = 16;
 
 const godDraftValue: Record<GodId, number> = {
   quetzacoatl: 9.3,
@@ -627,7 +628,7 @@ const bestSparseMateInTwo = (
   if (
     state.phase !== "play" ||
     state.aiDifficulty < 10 ||
-    Object.keys(state.board).length > 12
+    Object.keys(state.board).length > MAX_MATE_IN_TWO_PIECES
   ) return undefined;
 
   const enemy = opposite(color);
