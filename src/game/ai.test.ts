@@ -657,6 +657,43 @@ describe("Divine AI", () => {
     expect(airStrikeCaptureThreatValue(state, "white")).toBe(0);
   });
 
+  it("finds the forced rook mate in two in the November 5 Daily", () => {
+    const daily = DAILY_PUZZLE_BY_ID["daily-2026-11-05"]!;
+    let state = daily.createState();
+
+    const firstMove = chooseAiPlan(state, () => 0);
+    expect(firstMove).toEqual([
+      { type: "select-god", godId: "medusa" },
+      { type: "select-ability", abilityId: "captivate" },
+      { type: "square", square: "h1" },
+      { type: "square", square: "b1" },
+    ]);
+    state = firstMove.reduce(gameReducer, state);
+
+    state = chooseAiPlan(state, () => 0).reduce(gameReducer, state);
+    while (state.phase === "upgrade") {
+      state = chooseAiPlan(state, () => 0).reduce(gameReducer, state);
+    }
+
+    const checkmate = chooseAiPlan(state, () => 0);
+    expect(checkmate).toEqual([
+      { type: "select-god", godId: "leonidas" },
+      { type: "select-ability", abilityId: "royal-step" },
+      { type: "square", square: "c8" },
+      { type: "square", square: "a8" },
+    ]);
+    state = checkmate.reduce(gameReducer, state);
+    expect(state).toMatchObject({
+      phase: "gameover",
+      winner: "white",
+      result: {
+        kind: "winner",
+        winner: "white",
+        reason: "checkmate",
+      },
+    });
+  });
+
   it("captures the hanging Pick a Fight knight when the apparent defender is unpinned", () => {
     const puzzle = PUZZLE_BY_ID["provoked-fury"];
     let state = puzzle.createState();
