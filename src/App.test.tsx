@@ -964,6 +964,33 @@ describe("game startup", () => {
     expect(screen.getByRole("button", { name: /view result/i })).toBeTruthy();
   });
 
+  it("scores the stored Daily solution as par on its final player turn", async () => {
+    const daily = currentDailyPuzzle()!;
+    const solvedState = daily.solutionActions.reduce(
+      gameReducer,
+      daily.createState("Solver"),
+    );
+    expect(solvedState.puzzlePlayerTurnsRemaining).toBe(0);
+    window.localStorage.setItem(LEGACY_SAVE_KEY, JSON.stringify({
+      version: 1,
+      savedAt: new Date().toISOString(),
+      state: solvedState,
+    }));
+
+    render(<App />);
+    openPlayOption("Load");
+    fireEvent.click(screen.getByRole("button", { name: /load saved game/i }));
+
+    const shareCard = await screen.findByLabelText(
+      /daily share card/i,
+      {},
+      { timeout: 1400 },
+    );
+    expect(within(shareCard).getByText("Par")).toBeTruthy();
+    expect(within(shareCard).getByText("Final player turn")).toBeTruthy();
+    expect(within(shareCard).queryByText("Birdie")).toBeNull();
+  });
+
   it("resets and replays the Daily solution after giving up without awarding completion", async () => {
     vi.useFakeTimers();
     const daily = currentDailyPuzzle()!;

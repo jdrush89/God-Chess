@@ -768,11 +768,11 @@ const finishTurn = (state: GameState, description: string) => {
 
   const endingColor = state.activeColor;
   const keepsTurn = state.bonusTurn === endingColor;
-  if (
+  const completedGame = (
     state.phase === "gameover" &&
     !state.puzzleEscapeAbilityId &&
     !state.puzzleEscapeAny
-  ) return;
+  );
   if (
     state.gameMode === "puzzle" &&
     endingColor !== state.aiColor &&
@@ -780,8 +780,11 @@ const finishTurn = (state: GameState, description: string) => {
     state.puzzlePlayerTurnsRemaining !== undefined
   ) {
     state.puzzlePlayerTurnsRemaining = Math.max(0, state.puzzlePlayerTurnsRemaining - 1);
-    if (state.puzzlePlayerTurnsRemaining === 0) state.puzzleFailed = true;
+    if (state.puzzlePlayerTurnsRemaining === 0 && !completedGame) {
+      state.puzzleFailed = true;
+    }
   }
+  if (completedGame) return;
   if (
     state.gameMode === "puzzle" &&
     (state.puzzleEscapeAbilityId || state.puzzleEscapeAny) &&

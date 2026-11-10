@@ -90,6 +90,7 @@ describe("daily puzzles", () => {
     expect(dailyPuzzleResultMatches(puzzle, state)).toBe(true);
     expect(state.result).toEqual(puzzle.targetResult);
     expect(completedPlayerTurns).toBe(puzzle.playerTurns);
+    expect(state.puzzlePlayerTurnsRemaining).toBe(0);
     expect(state.puzzleFailed).toBe(false);
   });
 
@@ -217,14 +218,14 @@ describe("daily puzzles", () => {
     );
   });
 
-  it("accepts the November 1 king capture even though its UI turn counter remains positive", () => {
+  it("counts the November 1 king capture as the solver's final turn", () => {
     const puzzle = DAILY_PUZZLE_BY_ID["daily-2026-11-01"]!;
     const result = puzzle.solutionActions.reduce(gameReducer, puzzle.createState());
 
     expect(result.result).toEqual(puzzle.targetResult);
     expect(result.result).toMatchObject({ kind: "winner", reason: "king-death" });
     expect(result.puzzleFailed).toBe(false);
-    expect(result.puzzlePlayerTurnsRemaining).toBeGreaterThan(0);
+    expect(result.puzzlePlayerTurnsRemaining).toBe(0);
   });
 
   it("keeps the November 1 solution valid against the current level 10 CPU", () => {
