@@ -614,6 +614,26 @@ describe("Divine AI", () => {
     expect(kingSquare(state.board, "black")).not.toBe("e7");
   });
 
+  it("moves the King away from the upgradeable Rage threat in the November 10 Daily", () => {
+    let state = createDailyPuzzleGame("daily-2026-11-10");
+    for (const action of [
+      { type: "select-god", godId: "kangus" },
+      { type: "select-ability", abilityId: "ritual-sacrifice" },
+      { type: "square", square: "e4" },
+      { type: "square", square: "e5" },
+    ] as const) {
+      state = gameReducer(state, action);
+    }
+
+    expect(state.activeColor).toBe("black");
+    expect(kingSquare(state.board, "black")).toBe("f7");
+    const response = chooseAiPlan(state, () => 0);
+    state = response.reduce(gameReducer, state);
+
+    expect(kingSquare(state.board, "black")).toBeTruthy();
+    expect(kingSquare(state.board, "black")).not.toBe("f7");
+  });
+
   it("only treats a piece as Air Strike exposed when the carrier can land beyond it", () => {
     const corner = createGame(2, { mode: "ai", aiDifficulty: 10 });
     corner.phase = "play";

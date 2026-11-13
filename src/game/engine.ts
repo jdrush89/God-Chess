@@ -951,6 +951,26 @@ const leverageHireTargets = (
   return !isInCheck(hiredBoard, state.activeColor, state.bananas);
 });
 
+const rageResolutionLeavesKingSafe = (
+  state: GameState,
+  source: Square,
+  destination: Square,
+) => {
+  const board = source === destination
+    ? structuredClone(state.board)
+    : applyMove(
+      state.board,
+      { from: source, to: destination },
+      state.enPassant,
+    ).board;
+  for (const adjacent of adjacentSquares(destination)) {
+    if (board[adjacent]?.controller !== state.activeColor) {
+      delete board[adjacent];
+    }
+  }
+  return !isInCheck(board, state.activeColor, state.bananas);
+};
+
 const compelledLuredSquares = (state: GameState) =>
   Object.entries(state.board)
     .filter(([source, candidate]) => {
@@ -1454,6 +1474,17 @@ const sourceTargets = (state: GameState, square: Square) => {
       ignoreCheck: true,
       bananas: state.bananas,
     }));
+  }
+  if (abilityId === "rage" && level >= 3) {
+    return constrainLure(
+      pseudoTargets(state.board, square, {
+        enPassant: state.enPassant,
+        bananas: state.bananas,
+      }).filter((target) =>
+        distance(square, target) === 1 &&
+        rageResolutionLeavesKingSafe(state, square, target)
+      ),
+    );
   }
   if (abilityId === "pick-a-fight") {
     return constrainLure(allSquares.filter((target) => {
@@ -2864,9 +2895,8 @@ const handleSquare = (state: GameState, square: Square) => {
     state.selectedSquare = square;
     state.pending = { ...state.pending, step: "rage-destination", source: square };
     state.legalTargets = [
-      square,
-      ...legalTargets(state.board, square, { enPassant: state.enPassant, bananas: state.bananas })
-        .filter((target) => distance(square, target) === 1),
+      ...(rageResolutionLeavesKingSafe(state, square, square) ? [square] : []),
+      ...sourceTargets(state, square),
     ];
     state.notice = "Rage: move up to 1 legal space, or choose the piece’s current space.";
     return;

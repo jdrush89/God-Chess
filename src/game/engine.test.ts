@@ -1349,6 +1349,44 @@ describe("game flow", () => {
     expect(availableClassicActions(preCommit)).toContainEqual({ type: "cancel" });
   });
 
+  it("allows a level 3 Rage King move next to an enemy King it will capture", () => {
+    let state = createGame(1);
+    state.phase = "play";
+    state.activeColor = "white";
+    state.players.white.gods = ["kangus"];
+    state.players.white.orbs.black = 3;
+    state.players.white.upgrades.rage = 3;
+    state.board = {
+      d4: testPiece("king", "white", "white-king"),
+      f4: testPiece("king", "black", "black-king"),
+    };
+
+    state = gameReducer(state, { type: "select-god", godId: "kangus" });
+    state = gameReducer(state, { type: "select-ability", abilityId: "rage" });
+    state = gameReducer(state, { type: "square", square: "d4" });
+
+    expect(state.pending?.step).toBe("rage-destination");
+    expect(state.legalTargets).toContain("e4");
+
+    state = gameReducer(state, { type: "square", square: "e4" });
+    state = gameReducer(state, {
+      type: "rage-resolve",
+      spareFriendly: false,
+    });
+
+    expect(state.board.e4?.id).toBe("white-king");
+    expect(state.board.f4).toBeUndefined();
+    expect(state).toMatchObject({
+      phase: "gameover",
+      winner: "white",
+      result: {
+        kind: "winner",
+        winner: "white",
+        reason: "king-death",
+      },
+    });
+  });
+
   it("prevents Rage from capturing the acting player's King", () => {
     let state = createGame(1);
     state.phase = "play";

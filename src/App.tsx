@@ -2035,6 +2035,9 @@ function UpgradePanel({
 }) {
   const [godPreviewLevel, setGodPreviewLevel] = useState<number>();
   const [selectedAbilityId, setSelectedAbilityId] = useState<string>();
+  const [upgradeScrollRequest, setUpgradeScrollRequest] = useState(0);
+  const upgradePanelRef = useRef<HTMLElement>(null);
+  const selectedAbilityCardRef = useRef<HTMLDivElement>(null);
   const presentedGodId = presentation?.godId ?? selectedGodId;
   const selectedGod = presentedGodId ? GOD_BY_ID[presentedGodId] : undefined;
   const selectedOwner: Color = presentation?.color ??
@@ -2069,8 +2072,44 @@ function UpgradePanel({
     ),
   );
 
+  useEffect(() => {
+    if (!upgradeScrollRequest) return;
+    let secondFrame = 0;
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        const panel = upgradePanelRef.current;
+        const card = selectedAbilityCardRef.current;
+        if (!panel || !card) return;
+        const panelRect = panel.getBoundingClientRect();
+        const cardRect = card.getBoundingClientRect();
+        const hiddenBelow = Math.max(0, cardRect.bottom - panelRect.bottom + 8);
+        const hiddenAbove = Math.max(0, panelRect.top - cardRect.top + 8);
+        if (!hiddenBelow && !hiddenAbove) return;
+        panel.scrollTo({
+          behavior: "smooth",
+          top: Math.max(0, panel.scrollTop + hiddenBelow - hiddenAbove),
+        });
+      });
+    });
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      if (secondFrame) window.cancelAnimationFrame(secondFrame);
+    };
+  }, [upgradeScrollRequest]);
+
+  const previewUpgrade = (godId: GodId, abilityId: string, level: number) => {
+    setGodPreviewLevel(Math.min(3, level + 1));
+    setSelectedAbilityId(abilityId);
+    setUpgradeScrollRequest((request) => request + 1);
+    dispatch({
+      type: "preview-upgrade",
+      godId,
+      abilityId,
+    });
+  };
+
   return (
-    <aside className="action-panel upgrade-panel">
+    <aside className="action-panel upgrade-panel" ref={upgradePanelRef}>
       <div className="panel-heading">
         <span>DIVINE UPGRADE</span>
         <small>ROUND {state.round}</small>
@@ -2112,17 +2151,10 @@ function UpgradePanel({
                         active={selected}
                         selectable={level < 3}
                         disabled={level >= 3}
+                        cardRef={selected ? selectedAbilityCardRef : undefined}
                         footerLabel={`CURRENT LVL ${level}`}
                         footerAction={level >= 3 ? "MAX LEVEL" : `SELECT LVL ${level + 1}`}
-                        onClick={() => {
-                          setGodPreviewLevel(Math.min(3, level + 1));
-                          setSelectedAbilityId(ability.id);
-                          dispatch({
-                            type: "preview-upgrade",
-                            godId: god.id,
-                            abilityId: ability.id,
-                          });
-                        }}
+                        onClick={() => previewUpgrade(god.id, ability.id, level)}
                         onDoubleClick={() => {
                           dispatch({ type: "upgrade", abilityId: ability.id });
                         }}
@@ -2199,17 +2231,10 @@ function UpgradePanel({
                   highlighted={presentation?.abilityId === ability.id}
                   selectable={canUpgrade}
                   disabled={!readOnly && level >= 3}
+                  cardRef={selected ? selectedAbilityCardRef : undefined}
                   footerLabel={`CURRENT LVL ${level}`}
                   footerAction={readOnly ? "VIEW ONLY" : level >= 3 ? "MAX LEVEL" : `SELECT LVL ${level + 1}`}
-                  onClick={() => {
-                    setGodPreviewLevel(Math.min(3, level + 1));
-                    setSelectedAbilityId(ability.id);
-                    dispatch({
-                      type: "preview-upgrade",
-                      godId: selectedGod.id,
-                      abilityId: ability.id,
-                    });
-                  }}
+                  onClick={() => previewUpgrade(selectedGod.id, ability.id, level)}
                   onDoubleClick={() => {
                     dispatch({ type: "upgrade", abilityId: ability.id });
                   }}

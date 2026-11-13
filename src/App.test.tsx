@@ -533,6 +533,11 @@ beforeAll(() => {
     writable: true,
     value: () => ({}),
   });
+  Object.defineProperty(HTMLElement.prototype, "scrollTo", {
+    configurable: true,
+    writable: true,
+    value: () => undefined,
+  });
 });
 
 afterEach(() => {
@@ -3287,7 +3292,7 @@ describe("game startup", () => {
     expect(screen.queryByRole("button", { name: /^quick draft$/i })).toBeNull();
   });
 
-  it("lists every ability with costs and level previews while choosing an upgrade", () => {
+  it("lists every ability with costs and level previews while choosing an upgrade", async () => {
     let savedState = createGame(1);
     (["quetzacoatl", "chiron", "midas", "death", "artemis", "medusa"] as const).forEach((godId) => {
       savedState = gameReducer(savedState, { type: "draft", godId });
@@ -3307,6 +3312,16 @@ describe("game startup", () => {
 
     const airLiftCard = screen.getByText("Air Lift").closest(".ability-card");
     expect(airLiftCard).toBeTruthy();
+    const upgradePanel = document.querySelector(".upgrade-panel") as HTMLElement;
+    const scrollTo = vi.spyOn(upgradePanel, "scrollTo");
+    vi.spyOn(upgradePanel, "getBoundingClientRect").mockReturnValue({
+      top: 100,
+      bottom: 600,
+    } as DOMRect);
+    vi.spyOn(airLiftCard as HTMLElement, "getBoundingClientRect").mockReturnValue({
+      top: 700,
+      bottom: 1000,
+    } as DOMRect);
     expect(within(airLiftCard as HTMLElement).getByText("Air Lift")
       .classList.contains("ability-card-title")).toBe(true);
     expect(within(airLiftCard as HTMLElement).getByLabelText("3 white orbs")).toBeTruthy();
@@ -3342,6 +3357,12 @@ describe("game startup", () => {
       name: /^air lift/i,
     });
     fireEvent.click(airLiftControl);
+    await waitFor(() =>
+      expect(scrollTo).toHaveBeenCalledWith({
+        behavior: "smooth",
+        top: 408,
+      })
+    );
     expect(within(airLiftCard as HTMLElement).getByText(/King may teleport within 4 spaces/i))
       .toBeTruthy();
     const confirm = within(airLiftCard as HTMLElement).getByRole("button", {

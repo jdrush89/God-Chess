@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 import { AbilityRules } from "./UpgradePreview";
 import type { Ability, GodId } from "./game/types";
 import { godSkin, type GodSkinId } from "./godSkins";
@@ -53,6 +53,7 @@ export function PlayerAbilityCard({
   footerAction,
   highlighted = false,
   showCost = true,
+  cardRef,
   onClick,
   onDoubleClick,
   children,
@@ -67,12 +68,14 @@ export function PlayerAbilityCard({
   footerAction?: string;
   highlighted?: boolean;
   showCost?: boolean;
+  cardRef?: Ref<HTMLDivElement>;
   onClick: () => void;
   onDoubleClick?: () => void;
   children?: ReactNode;
 }) {
   return (
     <div
+      ref={cardRef}
       className={`ability-card ${active ? "active" : ""} ${highlighted ? "opponent-selecting" : ""} ${disabled ? "disabled" : ""} ${!selectable && !disabled ? "read-only" : ""}`}
       data-ability-id={ability.id}
     >
