@@ -411,8 +411,50 @@ const winningEscortTurn = (
     : undefined;
 };
 
+const winningRageTurn = (
+  state: GameState,
+  color: Color,
+): AiTurnPlan | undefined => {
+  if (state.phase === "gameover") return undefined;
+  const turn = state.activeColor === color ? state : hypotheticalTurnFor(state, color);
+  const godId = turn.players[color].gods.find((candidate) =>
+    !turn.rested.includes(candidate) &&
+    GOD_BY_ID[candidate].abilities.some((ability) => ability.id === "rage")
+  );
+  if (!godId) return undefined;
+
+  const prefix: GameAction[] = [
+    { type: "select-god", godId },
+    { type: "select-ability", abilityId: "rage" },
+  ];
+  const selected = prefix.reduce(simulateClassicAction, turn);
+  if (selected.selectedAbility !== "rage") return undefined;
+  const plan = enumerateCompleteTurnPlans({
+    state: selected,
+    availableActions: availableClassicActions,
+    reduce: simulateClassicAction,
+    signature: classicPlanStateSignature,
+    isComplete: isCompleteClassicTurn,
+    acceptComplete: (_initial, next) =>
+      next.phase === "gameover" &&
+      next.winner === color &&
+      Boolean(kingSquare(next.board, color)) &&
+      !kingSquare(next.board, opposite(color)),
+    limits: {
+      maxDepth: 5,
+      maxStates: 50_000,
+      maxActionsPerState: 256,
+      maxPlans: 1,
+    },
+  })[0];
+  return plan
+    ? { state: plan.state, actions: [...prefix, ...plan.actions] }
+    : undefined;
+};
+
 const hasImmediateWinningTurn = (state: GameState, color: Color) =>
   Boolean(winningEscortTurn(state, color)) ||
+  Boolean(winningRageTurn(state, color)) ||
   hasWinningAirStrikeTurn(state, color) ||
   hasWinningTurn(state, color);
 
@@ -503,7 +545,7 @@ const hasWinningRageTurnAfterUpgrade = (
 
   const turn = resolveMandatoryUpgradesFavoring(state, color, "rage");
   if (!turn || turn.phase !== "play" || turn.activeColor !== color) return false;
-  return hasWinningTurn(turn, color);
+  return Boolean(winningRageTurn(turn, color));
 };
 
 const bestAirStrikeSafetyPlan = (
@@ -671,6 +713,10 @@ const bestOptimalPlan = (
     ? winningEscortTurn(state, color)
     : undefined;
   if (escortWin) return escortWin;
+  const rageWin = state.aiDifficulty >= 8
+    ? winningRageTurn(state, color)
+    : undefined;
+  if (rageWin) return rageWin;
   const immediateWin = plans.find((plan) => {
     if (plan.state.phase === "gameover" && plan.state.winner === color) return true;
     if (!isInCheck(plan.state.board, opposite(color), plan.state.bananas)) {
