@@ -2542,6 +2542,43 @@ describe("game startup", () => {
     expect(screen.getByText("WINNING LINE MISSED")).toBeTruthy();
   });
 
+  it("distinguishes an early Daily CPU win from exhausting the turn limit", async () => {
+    vi.useFakeTimers();
+    const daily = currentDailyPuzzle(new Date("2026-11-16T12:00:00"))!;
+    const state = daily.createState("Solver");
+    state.phase = "gameover";
+    state.winner = state.aiColor;
+    state.result = {
+      kind: "winner",
+      winner: state.aiColor!,
+      reason: "king-death",
+    };
+    state.puzzlePlayerTurnsRemaining = 3;
+    const gameProps = {
+      dispatch: vi.fn(),
+      onSaveAndQuit: vi.fn(),
+      onRestart: vi.fn(),
+      onRestartPuzzle: vi.fn(),
+      onNextPuzzle: vi.fn(),
+      undoEnabled: false,
+      canUndo: false,
+      onUndo: vi.fn(),
+      onOpenSettings: vi.fn(),
+    };
+
+    render(<GameScreen state={state} {...gameProps} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+
+    expect(screen.getByText("DIVINE AI VICTORY")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /your king was lost/i })).toBeTruthy();
+    expect(screen.getByText(/3 player turns remained; the turn limit was not exhausted/i))
+      .toBeTruthy();
+    expect(screen.queryByText(/objective was not reached within the turn limit/i))
+      .toBeNull();
+  });
+
   it("completes a defensive puzzle immediately without starting an AI reply", async () => {
     const puzzle = PUZZLES.find((candidate) =>
       candidate.id === "last-second-flight"

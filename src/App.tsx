@@ -4805,6 +4805,11 @@ export function GameScreen({
   const dailyTurnsRemaining = dailyPuzzle
     ? state.puzzlePlayerTurnsRemaining ?? 0
     : 0;
+  const dailyEndedByCpu = Boolean(
+    dailyPuzzle &&
+    state.phase === "gameover" &&
+    state.winner === state.aiColor,
+  );
   const dailyGolfScore = dailyGolfScoreForTurnsRemaining(
     dailyTurnsRemaining,
   );
@@ -5689,11 +5694,15 @@ export function GameScreen({
         <div className="modal-backdrop">
           <section className="gameover-modal">
             <div className="victory-crown"><Crosshair size={38} /></div>
-            <p className="eyebrow">WINNING LINE MISSED</p>
-            <h2>Try the position again</h2>
+            <p className="eyebrow">
+              {dailyEndedByCpu ? "DIVINE AI VICTORY" : "WINNING LINE MISSED"}
+            </p>
+            <h2>{dailyEndedByCpu ? "Your King was lost" : "Try the position again"}</h2>
             <p>
               {customPuzzle
                 ? "The objective was not reached within the configured turn limit. Retry from the original custom position."
+                : dailyEndedByCpu
+                ? `The level 10 Divine AI won before the objective was completed. ${dailyTurnsRemaining} player turn${dailyTurnsRemaining === 1 ? "" : "s"} remained; the turn limit was not exhausted.`
                 : dailyPuzzle
                 ? "The puzzle objective was not reached within the turn limit. Retry and look for a stronger continuation."
                 : "The level 10 Divine AI found its best response. Use the hint or restart from the original position."}
