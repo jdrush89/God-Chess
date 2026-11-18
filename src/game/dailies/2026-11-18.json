@@ -1,0 +1,638 @@
+{
+  "schema": 1,
+  "date": "2026-11-18",
+  "resultSummary": "White checkmated in 99 turns.",
+  "playerColor": "white",
+  "playerTurns": 3,
+  "targetResult": {
+    "kind": "winner",
+    "winner": "white",
+    "reason": "checkmate"
+  },
+  "solutionActions": [
+    {
+      "type": "select-god",
+      "godId": "artemis"
+    },
+    {
+      "type": "select-ability",
+      "abilityId": "take-cover"
+    },
+    {
+      "type": "square",
+      "square": "c3"
+    },
+    {
+      "type": "square",
+      "square": "c2"
+    },
+    {
+      "type": "select-god",
+      "godId": "chiron"
+    },
+    {
+      "type": "select-ability",
+      "abilityId": "gallop"
+    },
+    {
+      "type": "square",
+      "square": "b3"
+    },
+    {
+      "type": "square",
+      "square": "b4"
+    },
+    {
+      "type": "preview-upgrade",
+      "godId": "death",
+      "abilityId": "marked"
+    },
+    {
+      "type": "upgrade",
+      "abilityId": "marked"
+    },
+    {
+      "type": "preview-upgrade",
+      "godId": "leonidas",
+      "abilityId": "royal-step"
+    },
+    {
+      "type": "upgrade",
+      "abilityId": "royal-step"
+    },
+    {
+      "type": "select-god",
+      "godId": "artemis"
+    },
+    {
+      "type": "select-ability",
+      "abilityId": "take-cover"
+    },
+    {
+      "type": "square",
+      "square": "c2"
+    },
+    {
+      "type": "square",
+      "square": "c1"
+    },
+    {
+      "type": "select-god",
+      "godId": "leonidas"
+    },
+    {
+      "type": "select-ability",
+      "abilityId": "royal-step"
+    },
+    {
+      "type": "square",
+      "square": "b4"
+    },
+    {
+      "type": "square",
+      "square": "a4"
+    },
+    {
+      "type": "select-god",
+      "godId": "midas"
+    },
+    {
+      "type": "select-ability",
+      "abilityId": "barter"
+    },
+    {
+      "type": "square",
+      "square": "c1"
+    },
+    {
+      "type": "square",
+      "square": "a3"
+    },
+    {
+      "type": "barter",
+      "give": "white"
+    }
+  ],
+  "state": {
+    "phase": "play",
+    "gameMode": "local",
+    "aiDifficulty": 10,
+    "board": {
+      "h2": {
+        "id": "white-pawn-7",
+        "type": "pawn",
+        "color": "white",
+        "controller": "white",
+        "hasMoved": false,
+        "status": {}
+      },
+      "e3": {
+        "id": "white-pawn-4",
+        "type": "pawn",
+        "color": "white",
+        "controller": "white",
+        "hasMoved": true,
+        "status": {}
+      },
+      "g1": {
+        "id": "white-king-4",
+        "type": "king",
+        "color": "white",
+        "controller": "white",
+        "hasMoved": true,
+        "status": {}
+      },
+      "f6": {
+        "id": "white-bishop-2",
+        "type": "bishop",
+        "color": "white",
+        "controller": "white",
+        "hasMoved": true,
+        "status": {}
+      },
+      "e5": {
+        "id": "white-rook-7",
+        "type": "rook",
+        "color": "white",
+        "controller": "white",
+        "hasMoved": true,
+        "status": {}
+      },
+      "d3": {
+        "id": "white-queen-3",
+        "type": "queen",
+        "color": "white",
+        "controller": "white",
+        "hasMoved": true,
+        "status": {}
+      },
+      "c3": {
+        "id": "black-pawn-7",
+        "type": "pawn",
+        "color": "black",
+        "controller": "white",
+        "hasMoved": true,
+        "status": {
+          "hired": true
+        }
+      },
+      "b3": {
+        "id": "black-king-4",
+        "type": "king",
+        "color": "black",
+        "controller": "black",
+        "hasMoved": true,
+        "status": {}
+      }
+    },
+    "players": {
+      "white": {
+        "name": "White Level 10 CPU",
+        "color": "white",
+        "gods": [
+          "artemis",
+          "midas",
+          "death"
+        ],
+        "godSkins": {
+          "artemis": "base",
+          "midas": "base",
+          "death": "base"
+        },
+        "orbs": {
+          "white": 3,
+          "black": 5
+        },
+        "graveyard": [
+          {
+            "piece": {
+              "id": "white-pawn-6",
+              "type": "pawn",
+              "color": "white",
+              "controller": "white",
+              "hasMoved": true,
+              "status": {}
+            },
+            "capturedOnTurn": 8,
+            "capturedFrom": "f5"
+          },
+          {
+            "piece": {
+              "id": "white-pawn-5",
+              "type": "pawn",
+              "color": "white",
+              "controller": "white",
+              "hasMoved": true,
+              "status": {}
+            },
+            "capturedOnTurn": 11,
+            "capturedFrom": "f3"
+          },
+          {
+            "piece": {
+              "id": "white-bishop-5",
+              "type": "bishop",
+              "color": "white",
+              "controller": "white",
+              "hasMoved": true,
+              "status": {}
+            },
+            "capturedOnTurn": 14,
+            "capturedFrom": "d3"
+          },
+          {
+            "piece": {
+              "id": "white-knight-1",
+              "type": "knight",
+              "color": "white",
+              "controller": "white",
+              "hasMoved": true,
+              "status": {
+                "movedThisTurn": true
+              }
+            },
+            "capturedOnTurn": 23,
+            "capturedFrom": "b7"
+          },
+          {
+            "piece": {
+              "id": "white-knight-6",
+              "type": "knight",
+              "color": "white",
+              "controller": "white",
+              "hasMoved": true,
+              "status": {}
+            },
+            "capturedOnTurn": 32,
+            "capturedFrom": "f4"
+          },
+          {
+            "piece": {
+              "id": "white-pawn-3",
+              "type": "pawn",
+              "color": "white",
+              "controller": "white",
+              "hasMoved": true,
+              "status": {}
+            },
+            "capturedOnTurn": 76,
+            "capturedFrom": "c6"
+          },
+          {
+            "piece": {
+              "id": "white-rook-0",
+              "type": "rook",
+              "color": "white",
+              "controller": "white",
+              "hasMoved": true,
+              "status": {}
+            },
+            "capturedOnTurn": 77,
+            "capturedFrom": "d1"
+          },
+          {
+            "piece": {
+              "id": "white-pawn-1",
+              "type": "pawn",
+              "color": "white",
+              "controller": "white",
+              "hasMoved": true,
+              "status": {}
+            },
+            "capturedOnTurn": 78,
+            "capturedFrom": "b5"
+          },
+          {
+            "piece": {
+              "id": "white-pawn-0",
+              "type": "pawn",
+              "color": "white",
+              "controller": "white",
+              "hasMoved": true,
+              "status": {}
+            },
+            "capturedOnTurn": 86,
+            "capturedFrom": "a3"
+          },
+          {
+            "piece": {
+              "id": "white-pawn-2",
+              "type": "pawn",
+              "color": "white",
+              "controller": "white",
+              "hasMoved": false,
+              "status": {}
+            },
+            "capturedOnTurn": 90,
+            "capturedFrom": "c2"
+          }
+        ],
+        "upgrades": {
+          "take-cover": 3,
+          "stealth": 3,
+          "snipe": 3,
+          "barter": 3,
+          "military-funding": 3,
+          "leverage": 3,
+          "marked": 2,
+          "resurrect": 2,
+          "siphon": 2
+        }
+      },
+      "black": {
+        "name": "Black Level 10 CPU",
+        "color": "black",
+        "gods": [
+          "chiron",
+          "ares",
+          "leonidas"
+        ],
+        "godSkins": {
+          "chiron": "base",
+          "ares": "base",
+          "leonidas": "base"
+        },
+        "orbs": {
+          "white": 5,
+          "black": 46
+        },
+        "graveyard": [
+          {
+            "piece": {
+              "id": "black-knight-6",
+              "type": "knight",
+              "color": "black",
+              "controller": "black",
+              "hasMoved": true,
+              "status": {}
+            },
+            "capturedOnTurn": 7,
+            "capturedFrom": "f5"
+          },
+          {
+            "piece": {
+              "id": "black-bishop-2",
+              "type": "bishop",
+              "color": "black",
+              "controller": "white",
+              "hasMoved": true,
+              "status": {
+                "hired": true
+              }
+            },
+            "capturedOnTurn": 14,
+            "capturedFrom": "e4"
+          },
+          {
+            "piece": {
+              "id": "black-pawn-3",
+              "type": "pawn",
+              "color": "black",
+              "controller": "black",
+              "hasMoved": true,
+              "status": {}
+            },
+            "capturedOnTurn": 15,
+            "capturedFrom": "e4"
+          },
+          {
+            "piece": {
+              "id": "black-queen-3",
+              "type": "queen",
+              "color": "black",
+              "controller": "black",
+              "hasMoved": true,
+              "status": {}
+            },
+            "capturedOnTurn": 19,
+            "capturedFrom": "e4"
+          },
+          {
+            "piece": {
+              "id": "black-pawn-4",
+              "type": "pawn",
+              "color": "black",
+              "controller": "white",
+              "hasMoved": false,
+              "status": {
+                "hired": true
+              }
+            },
+            "capturedOnTurn": 22,
+            "capturedFrom": "e7"
+          },
+          {
+            "piece": {
+              "id": "black-pawn-1",
+              "type": "pawn",
+              "color": "black",
+              "controller": "black",
+              "hasMoved": false,
+              "status": {}
+            },
+            "capturedOnTurn": 23,
+            "capturedFrom": "b7"
+          },
+          {
+            "piece": {
+              "id": "black-knight-1",
+              "type": "knight",
+              "color": "black",
+              "controller": "black",
+              "hasMoved": false,
+              "status": {}
+            },
+            "capturedOnTurn": 41,
+            "capturedFrom": "b8"
+          },
+          {
+            "piece": {
+              "id": "black-bishop-5",
+              "type": "bishop",
+              "color": "black",
+              "controller": "white",
+              "hasMoved": true,
+              "status": {
+                "hired": true
+              }
+            },
+            "capturedOnTurn": 42,
+            "capturedFrom": "b8"
+          },
+          {
+            "piece": {
+              "id": "black-pawn-5",
+              "type": "pawn",
+              "color": "black",
+              "controller": "black",
+              "hasMoved": true,
+              "status": {}
+            },
+            "capturedOnTurn": 43,
+            "capturedFrom": "f5"
+          },
+          {
+            "piece": {
+              "id": "black-rook-7",
+              "type": "rook",
+              "color": "black",
+              "controller": "white",
+              "hasMoved": true,
+              "status": {
+                "hired": true
+              }
+            },
+            "capturedOnTurn": 44,
+            "capturedFrom": "f6"
+          },
+          {
+            "piece": {
+              "id": "black-pawn-2",
+              "type": "pawn",
+              "color": "black",
+              "controller": "black",
+              "hasMoved": true,
+              "status": {}
+            },
+            "capturedOnTurn": 45,
+            "capturedFrom": "c6"
+          },
+          {
+            "piece": {
+              "id": "black-pawn-6",
+              "type": "pawn",
+              "color": "black",
+              "controller": "black",
+              "hasMoved": true,
+              "status": {}
+            },
+            "capturedOnTurn": 49,
+            "capturedFrom": "f6"
+          },
+          {
+            "piece": {
+              "id": "black-rook-0",
+              "type": "rook",
+              "color": "black",
+              "controller": "white",
+              "hasMoved": true,
+              "status": {
+                "hired": true
+              }
+            },
+            "capturedOnTurn": 58,
+            "capturedFrom": "f8"
+          },
+          {
+            "piece": {
+              "id": "black-pawn-0",
+              "type": "pawn",
+              "color": "black",
+              "controller": "black",
+              "hasMoved": true,
+              "status": {}
+            },
+            "capturedOnTurn": 63,
+            "capturedFrom": "e6"
+          }
+        ],
+        "upgrades": {
+          "gallop": 3,
+          "mount": 3,
+          "charge": 3,
+          "threaten": 3,
+          "pick-a-fight": 3,
+          "cull-the-weak": 3,
+          "royal-step": 2,
+          "march-home": 2,
+          "escort": 2
+        }
+      }
+    },
+    "activeColor": "white",
+    "whitePlayer": 1,
+    "draft": {
+      "order": [
+        "white",
+        "black",
+        "black",
+        "white",
+        "white",
+        "black"
+      ],
+      "pickIndex": 6,
+      "available": [
+        "quetzacoatl",
+        "anubis",
+        "teles",
+        "kangus",
+        "medusa",
+        "salem"
+      ]
+    },
+    "rested": [
+      "midas",
+      "ares",
+      "death",
+      "leonidas"
+    ],
+    "round": 16,
+    "turn": 95,
+    "upgradeQueue": [],
+    "legalTargets": [],
+    "bananas": [],
+    "stealth": {
+      "white": [],
+      "black": []
+    },
+    "orbAnimations": [],
+    "nextOrbAnimationId": 77,
+    "captureAnimations": [],
+    "nextCaptureAnimationId": 29,
+    "nextPresentationId": 339,
+    "matchStats": {
+      "version": 1,
+      "gamesPlayed": 1,
+      "stalemates": 0,
+      "wins": [],
+      "seats": {},
+      "currentGame": {
+        "seats": {}
+      }
+    },
+    "history": [
+      "Black used Royal Step with Leonidas: King at b2 -> b3.",
+      "White used Siphon with Death: stole 2 white orbs.",
+      "Black used Threaten with Ares: King at c2 -> b2.",
+      "White used Barter with Midas: gave a white orb to complete the trade.",
+      "Black upgraded Cull the Weak with Ares to level 3.",
+      "White upgraded Leverage with Midas to level 3.",
+      "Black used Royal Step with Leonidas: King at b2 -> c2.",
+      "White used Take Cover with Artemis: Queen at c5 -> d4.",
+      "Black used Threaten with Ares: King at a3 -> b2.",
+      "White used Leverage with Midas: hired Pawn at c4.",
+      "Black used Gallop with Chiron: King at a4 -> a3.",
+      "White used Resurrect with Death: completed with one revived piece.",
+      "Black upgraded Threaten with Ares to level 3.",
+      "White upgraded Military Funding with Midas to level 3.",
+      "Black used Gallop with Chiron: King at b5 -> a4.",
+      "White used Barter with Midas: gave a black orb to complete the trade.",
+      "Black used Royal Step with Leonidas: Pawn at c5 -> c4.",
+      "White used Take Cover with Artemis: Queen at f5 -> d3.",
+      "Black used Pick a Fight with Ares: Pawn at h7 -> c5.",
+      "White used Resurrect with Death: completed with one revived piece.",
+      "Black upgraded Charge with Chiron to level 3.",
+      "White upgraded Barter with Midas to level 3.",
+      "Black used Royal Step with Leonidas: King at c6 -> b5.",
+      "White used Siphon with Death: stole 2 white orbs.",
+      "Death claimed the marked rook on d1.",
+      "Black used Gallop with Chiron: King at d6 -> c6.",
+      "White used Take Cover with Artemis: Rook at f1 -> d1.",
+      "Black used Threaten with Ares: King at e7 -> d6.",
+      "White used Barter with Midas: gave a white orb to complete the trade.",
+      "Black upgraded Mount with Chiron to level 3."
+    ],
+    "notice": "White to act. Choose an available god.",
+    "lastAction": "Black used Royal Step with Leonidas: King at b2 -> b3."
+  }
+}
